@@ -20,6 +20,7 @@ from visual_engineer_api.api.runner_protocol import router as runner_protocol_ro
 from visual_engineer_api.api.runners import router as runners_router
 from visual_engineer_api.api.runs import router as runs_router
 from visual_engineer_api.api.tasks import router as tasks_router
+from visual_engineer_api.api.workspaces import router as workspaces_router
 from visual_engineer_api.core.config import get_settings
 from visual_engineer_api.db.session import get_engine
 from visual_engineer_api.services.runner import RunnerService
@@ -92,10 +93,11 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="VisualEngineer API",
-        version="0.3.0",
+        version="0.4.0",
         description=(
-            "Phase 3 Control Plane API for governed planning and a browser-orchestrated "
-            "repository-free Local Runner. Plan approval never dispatches execution."
+            "Phase 4 Control Plane API for governed planning, independent Execution Grants, "
+            "and Runner-owned isolated fixture workspaces. Plan approval alone never "
+            "authorizes execution."
         ),
         lifespan=lifespan,
     )
@@ -211,6 +213,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks_router)
     app.include_router(runs_router)
     app.include_router(runners_router)
+    app.include_router(workspaces_router)
     app.include_router(runner_protocol_router)
     return app
 

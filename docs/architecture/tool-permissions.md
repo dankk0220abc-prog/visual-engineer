@@ -2,24 +2,23 @@
 
 ## Principles
 
-Permissions are deny-by-default, Run-scoped, non-transitive, and elevated only
-by an explicit future human grant. Repository content, a Task objective, a
-Deployment Pack, or a prior approval cannot grant a capability.
+Permissions are deny-by-default, scope-bound, non-transitive, and elevated
+only by an explicit independent human Grant. Repository content, a Task
+objective, a Deployment Pack, or Plan approval cannot grant a capability.
 
-Phase 2 implements only Level 0 repository intelligence. Phase 3 additionally
-implements repository-free execution-plane capabilities, not a higher
-repository level. It has no generic tool executor. The fixed Git reader is a
-narrow historical Control Plane capability, not a shell tool.
+Phase 2 implements Level 0 repository intelligence. Phase 3 additionally
+implements repository-free execution-plane capabilities. Phase 4 implements
+Level 1 only for the synthetic fixture and still has no generic tool executor.
 
 ## Levels
 
-| Level                    | Capability                                                                                                            | Status          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | --------------- |
-| 0: Read only             | Fixed metadata and selected committed-object reads inside one exact allowlisted Git root. No target command or write. | **Implemented** |
-| 1: Isolated write        | Edit exact approved paths in a newly created isolated worktree.                                                       | Not implemented |
-| 2: Controlled validation | Run allowlisted install/format/lint/test/build/browser schemas in isolation.                                          | Not implemented |
-| 3: Branch and commit     | Create a scoped branch and local commit after gates.                                                                  | Not implemented |
-| 4: Pull request          | Push the approved branch and create/update a PR.                                                                      | Not implemented |
+| Level                    | Capability                                                                                                            | Status           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0: Read only             | Fixed metadata and selected committed-object reads inside one exact allowlisted Git root. No target command or write. | **Implemented**  |
+| 1: Isolated write        | Edit exact approved UTF-8 paths in a Runner-owned isolated fixture worktree.                                          | **Fixture only** |
+| 2: Controlled validation | Run allowlisted install/format/lint/test/build/browser schemas in isolation.                                          | Not implemented  |
+| 3: Branch and commit     | Create a scoped branch and local commit after gates.                                                                  | Not implemented  |
+| 4: Pull request          | Push the approved branch and create/update a PR.                                                                      | Not implemented  |
 
 ## Phase 3 repository-free capabilities
 
@@ -37,6 +36,31 @@ Deployment Pack, or repository instruction cannot dispatch a Job or broaden
 authority. System Diagnostic returns only redacted runtime facts; Controlled
 Wait uses async time and cancellation. Neither accesses project code,
 filesystem content, a shell, subprocess executor, Git, or public network.
+
+## Implemented fixture-only Level 1
+
+The authority chain is approved exact Plan/Snapshot, pending Execution Grant,
+separate local-user approve, Workspace binding, typed Job/Envelope, and fenced
+Attempt. The server-derived Grant fixes:
+
+```text
+repository = fixture-repository-v1 at exact revision
+allowed paths = sandbox/**
+denied paths = .git, .env, credential/token/key/certificate classes
+operations = prepare/list/read/write/status/diff/rollback/discard
+max changed files = 8
+max total submitted write bytes = 128 KiB
+max one text file / diff = 32 KiB
+workspace TTL = 20 minutes
+network = none
+shell/source write/Git delivery = false
+```
+
+Only Runner knows the source path. The source is read-only and every write
+occurs in a detached Runner-owned worktree. List/read/create/compare-and-swap
+replace are descriptor-rooted and bounded. Fixed Git status/diff, immutable
+checkpoints, initial-baseline rollback, and UUID-only discard complete the
+scope. There is no delete/rename/binary tool or target command.
 
 ## Implemented Level 0 controls
 
@@ -64,15 +88,18 @@ flowchart LR
     L0["Level 0 Run"] --> S["Committed HEAD Snapshot"]
     S --> P["Deterministic Plan"]
     P --> A{"Human decision"}
-    A -->|"approve"| R["Approved record only"]
+    A -->|"approve"| R["Approved Plan record only"]
     A -->|"reject + reason"| J["Rejected terminal state"]
-    R -. "no Phase 2 transition" .-> X["Execution unavailable"]
+    R -->|"explicit new request"| G["Pending Execution Grant"]
+    G --> D{"Separate human decision"}
+    D -->|"approve"| X["Exact fixture Workspace authority"]
+    D -->|"reject + reason"| J
 ```
 
-Approval binds an exact Plan version and fingerprint as a governance record.
-It does not elevate the Run, create a worktree, execute validation, write a
-file, change Git, call GitHub, or deploy. A future level-elevation protocol
-must be designed and authorized separately.
+Plan approval binds an exact Plan version and fingerprint as a governance
+record. It does not elevate the Run or create a worktree. Only a separately
+approved immutable Grant can authorize the implemented fixture tools. It
+cannot authorize target validation, source Git changes, GitHub, or deployment.
 
 ## Always prohibited
 
@@ -90,8 +117,8 @@ must be designed and authorized separately.
 CreativeDeploy is internal Customer 0. The only allowed historical Phase 2 access is the
 API container's exact read-only bind mount and the fixed scanner operations
 above. Web and database services receive no mount. The user personally
-rejected the stale Plan. Phase 3 Runner and base Compose receive no
-CreativeDeploy mount or locator.
+rejected the stale Plan. Phase 3 Runner, Phase 4 fixture Runner, and base
+Compose receive no CreativeDeploy mount or locator.
 
 Disallowed actions include reading real environment/credential contents,
 installing dependencies, running target builds/tests/formatters/generators,
@@ -102,6 +129,7 @@ against the real repository.
 ## Future enforcement requirement
 
 Foundation plan string validation blocks obvious policy violations but is not
-a complete security system. Any later execution requires closed typed tool
-schemas, independent runtime authorization, path and argument confinement,
-resource/network limits, attributable results, and recovery checkpoints.
+a complete security system. Any later non-fixture access or target command
+requires a new independent runtime authorization, path/argument confinement,
+resource/network limits, attributable results, and recovery design. A maximum-
+depth security audit is mandatory before Phase 5.

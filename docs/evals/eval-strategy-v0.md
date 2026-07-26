@@ -3,7 +3,7 @@
 ## Purpose
 
 Evaluation asks whether VisualEngineer is correct, safe, governed, and
-reproducible, not whether it emits plausible text. Phase 3 has no LLM,
+reproducible, not whether it emits plausible text. Phase 4 has no LLM,
 production dataset, Agent score, or leaderboard. Plan generation and all
 current eval expectations are deterministic.
 
@@ -26,7 +26,10 @@ current eval expectations are deterministic.
    concurrency, leases, fencing, cancellation, retry, liveness, redaction, and
    stable failure classification.
 9. **Execution plane:** real outbound Runner success/cancellation and abrupt
-   loss/recovery without repository or public-network authority.
+   loss/recovery without public-network authority.
+10. **Isolated Workspace:** Grant separation, exact revision, source
+    isolation, descriptor paths, atomic text writes, budgets, checkpoints,
+    rollback, disposal, and interruption recovery.
 
 ## Versioned datasets
 
@@ -60,6 +63,13 @@ classification cases. Every record declares schema/dataset version, expected
 outcome, failure category, and one or more existing test-function mappings.
 The validator rejects a missing or stale mapping.
 
+`evals/datasets/workspace-tools-v0.1.jsonl` adds 15 deterministic cases for
+Grant approval/revocation/expiry, path/sensitive/symlink/special-file denial,
+compare-and-swap conflict, atomic interruption, cancellation, file/byte/diff
+budgets, source isolation, Checkpoint/diff, rollback, disposal, stale Lease,
+and stable failure classification. Every case maps to executable tests; no
+model score or inferred outcome is stored.
+
 ## Failure taxonomy
 
 | Class                       | Examples                                                                    |
@@ -83,6 +93,9 @@ The validator rejects a missing or stale mapping.
 | `permission_boundary`       | Envelope/capability authority is expanded                                   |
 | `retry_exhausted`           | retry budget is ignored or misclassified                                    |
 | `control_plane_unavailable` | transient API failure is retried incorrectly                                |
+| `workspace_identity`        | Workspace, Handle, Runner, revision, registry, or root identity mismatches  |
+| `content_conflict`          | expected absence/hash/inode changed before atomic commit                    |
+| `cleanup_boundary`          | rollback/discard affects unknown, source, or sibling data                   |
 
 Failures stay visible in the active ExecPlan with root cause, fix, and
 regression. Checks must not be deleted, skipped, weakened, or reclassified as
@@ -90,16 +103,17 @@ success.
 
 ## Ground-truth fixture
 
-The fixture contains no real secret. Synthetic markers make forbidden reads or
-execution observable. Before/after `HEAD` and a hash of full porcelain status
-prove the E2E mount did not change target state. Absence of lifecycle marker
-files proves parsed script names were not run. Tests compare selected
-`package.json` metadata to the committed blob while the worktree version is
-maliciously different.
+The fixtures contain no real secret. Synthetic markers make forbidden reads or
+execution observable. Phase 4 adds normal/Unicode text, fake sensitive files,
+external/sensitive/nested symlinks, binary/oversized content, malicious
+instructions, dirty/untracked source data, a hook, gitlink, LFS pointer, and
+collision cases; tests add FIFO, socket, hard link, and replacement races.
+Before/after exact `HEAD`, status hash, and full lstat/content fingerprint
+including `.git` prove the source did not change.
 
 ## Release gate
 
-Phase 3 passes only when:
+Phase 4 passes only when:
 
 - all deterministic dataset records validate;
 - backend and frontend behavior tests pass at their configured coverage gates;
@@ -108,12 +122,18 @@ Phase 3 passes only when:
 - Playwright approve/reject flows pass with real services, both viewports,
   axe, persistence, and no overflow;
 - target `HEAD`/status and lifecycle markers are unchanged;
-- the historical Customer 0 rejection remains separate and Phase 3 never
+- the historical Customer 0 rejection remains separate and Phase 4 never
   accesses CreativeDeploy;
 - concurrent claim and stale fencing pass on real PostgreSQL;
 - real Runner Playwright diagnostic/cancellation passes at both viewports;
 - chaos proves offline, expiry, requeue, new Attempt, stale denial, recovery,
   success, and source integrity;
+- real browser flows independently approve a Grant, prepare/read/write/diff/
+  checkpoint/rollback/discard a fixture Workspace at desktop and 390 px with
+  axe, persistence, and no overflow;
+- workspace chaos proves interruption before atomic commit, old-or-complete
+  contents, safe retry, stale fencing, no residual worktree, and unchanged
+  source/`.git`;
 - Compose inspection proves the Runner network, mounts, user, capabilities,
   root filesystem, and no published port; and
 - current verification evidence records exact commands and limitations.

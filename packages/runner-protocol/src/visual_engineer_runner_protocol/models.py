@@ -17,6 +17,10 @@ from pydantic import (
 RUNNER_PROTOCOL_VERSION: Literal[1] = 1
 RUNNER_PROTOCOL_PREFIX = "/api/v1/runner-protocol/v1"
 MAX_PROTOCOL_PAYLOAD_BYTES = 64 * 1024
+MAX_WORKSPACE_TEXT_BYTES = 32 * 1024
+MAX_WORKSPACE_DIFF_BYTES = 32 * 1024
+MAX_POLICY_PATH_BYTES = 512
+MAX_POLICY_PATH_COMPONENTS = 32
 
 DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 VersionText = Annotated[
@@ -28,6 +32,7 @@ VersionText = Annotated[
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$",
     ),
 ]
+OpaqueText = Annotated[str, StringConstraints(strip_whitespace=False)]
 
 
 class StrictModel(BaseModel):
@@ -48,11 +53,27 @@ class RunnerStatus(StrEnum):
 class Capability(StrEnum):
     SYSTEM_DIAGNOSTIC_V1 = "system_diagnostic_v1"
     CONTROLLED_WAIT_V1 = "controlled_wait_v1"
+    WORKSPACE_PREPARE_V1 = "workspace_prepare_v1"
+    WORKSPACE_LIST_V1 = "workspace_list_v1"
+    WORKSPACE_READ_TEXT_V1 = "workspace_read_text_v1"
+    WORKSPACE_WRITE_TEXT_V1 = "workspace_write_text_v1"
+    WORKSPACE_STATUS_V1 = "workspace_status_v1"
+    WORKSPACE_DIFF_V1 = "workspace_diff_v1"
+    WORKSPACE_ROLLBACK_V1 = "workspace_rollback_v1"
+    WORKSPACE_DISCARD_V1 = "workspace_discard_v1"
 
 
 class JobKind(StrEnum):
     SYSTEM_DIAGNOSTIC_V1 = "system_diagnostic_v1"
     CONTROLLED_WAIT_V1 = "controlled_wait_v1"
+    WORKSPACE_PREPARE_V1 = "workspace_prepare_v1"
+    WORKSPACE_LIST_V1 = "workspace_list_v1"
+    WORKSPACE_READ_TEXT_V1 = "workspace_read_text_v1"
+    WORKSPACE_WRITE_TEXT_V1 = "workspace_write_text_v1"
+    WORKSPACE_STATUS_V1 = "workspace_status_v1"
+    WORKSPACE_DIFF_V1 = "workspace_diff_v1"
+    WORKSPACE_ROLLBACK_V1 = "workspace_rollback_v1"
+    WORKSPACE_DISCARD_V1 = "workspace_discard_v1"
 
 
 class JobState(StrEnum):
@@ -94,6 +115,7 @@ class EventType(StrEnum):
 
 class RepositoryAccess(StrEnum):
     NONE = "none"
+    ISOLATED_WORKSPACE = "isolated_workspace"
 
 
 class NetworkPolicy(StrEnum):
@@ -110,6 +132,63 @@ class FailureCode(StrEnum):
     CONTROL_PLANE_UNAVAILABLE = "control_plane_unavailable"
     LEASE_LOST = "lease_lost"
     RETRY_EXHAUSTED = "retry_exhausted"
+    REPOSITORY_UNAVAILABLE = "repository_unavailable"
+    SOURCE_NOT_READ_ONLY = "source_not_read_only"
+    SOURCE_REVISION_MISMATCH = "source_revision_mismatch"
+    WORKSPACE_NOT_FOUND = "workspace_not_found"
+    WORKSPACE_IDENTITY_MISMATCH = "workspace_identity_mismatch"
+    WORKSPACE_STATE_INVALID = "workspace_state_invalid"
+    PATH_INVALID = "path_invalid"
+    PATH_DENIED = "path_denied"
+    SENSITIVE_PATH_DENIED = "sensitive_path_denied"
+    SYMLINK_DENIED = "symlink_denied"
+    HARDLINK_DENIED = "hardlink_denied"
+    NOT_REGULAR_FILE = "not_regular_file"
+    BINARY_DENIED = "binary_denied"
+    INVALID_UTF8 = "invalid_utf8"
+    FILE_TOO_LARGE = "file_too_large"
+    FILE_COUNT_BUDGET_EXCEEDED = "file_count_budget_exceeded"
+    TOTAL_WRITE_BUDGET_EXCEEDED = "total_write_budget_exceeded"
+    DIFF_BUDGET_EXCEEDED = "diff_budget_exceeded"
+    CONTENT_CONFLICT = "content_conflict"
+    EXPECTED_ABSENT_CONFLICT = "expected_absent_conflict"
+    ATOMIC_WRITE_FAILED = "atomic_write_failed"
+    WORKSPACE_CANCELLED = "workspace_cancelled"
+
+
+class WorkspaceOperation(StrEnum):
+    PREPARE = "prepare"
+    LIST = "list"
+    READ_TEXT = "read_text"
+    WRITE_TEXT = "write_text"
+    STATUS = "status"
+    DIFF = "diff"
+    ROLLBACK = "rollback"
+    DISCARD = "discard"
+
+
+class WorkspaceWriteMode(StrEnum):
+    CREATE = "create"
+    REPLACE = "replace"
+
+
+class WorkspaceEntryType(StrEnum):
+    DIRECTORY = "directory"
+    TEXT = "text"
+    BINARY = "binary"
+    SYMLINK = "symlink"
+    GITLINK = "gitlink"
+    SPECIAL = "special"
+
+
+class WorkspaceStatusCode(StrEnum):
+    MODIFIED = "modified"
+    ADDED = "added"
+    DELETED = "deleted"
+    RENAMED = "renamed"
+    COPIED = "copied"
+    UNTRACKED = "untracked"
+    TYPE_CHANGED = "type_changed"
 
 
 class SystemDiagnosticJobSpec(StrictModel):
@@ -121,8 +200,187 @@ class ControlledWaitJobSpec(StrictModel):
     duration_ms: int = Field(ge=100, le=10_000)
 
 
+def _validate_relative_policy_value(value: str, *, allow_glob: bool) -> str:
+    if not value or "\x00" in value or value.startswith("/") or "\\" in value:
+        raise ValueError("policy paths must be relative POSIX paths")
+    if len(value.encode("utf-8")) > MAX_POLICY_PATH_BYTES:
+        raise ValueError("policy path exceeds its byte limit")
+    components = value.split("/")
+    if len(components) > MAX_POLICY_PATH_COMPONENTS or any(
+        not component
+        or component in {".", ".."}
+        or any(ord(character) < 32 or ord(character) == 127 for character in component)
+        for component in components
+    ):
+        raise ValueError("policy path contains an invalid component")
+    if not allow_glob and any(character in value for character in "*?["):
+        raise ValueError("relative paths cannot contain glob syntax")
+    if allow_glob:
+        for component in components:
+            if any(character in component for character in "?["):
+                raise ValueError("only literal, star, and double-star components are supported")
+            if "**" in component and component != "**":
+                raise ValueError("double-star must occupy a complete path component")
+    return value
+
+
+class ExecutionGrantPolicy(StrictModel):
+    id: uuid.UUID
+    grant_version: Literal[1] = 1
+    task_id: uuid.UUID | None = None
+    run_id: uuid.UUID | None = None
+    plan_id: uuid.UUID
+    repository_handle_id: uuid.UUID
+    repository_opaque_handle: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=8,
+            max_length=120,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ]
+    source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    snapshot_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    allowed_operations: list[WorkspaceOperation] = Field(min_length=1, max_length=8)
+    allowed_paths: list[str] = Field(min_length=1, max_length=20)
+    denied_paths: list[str] = Field(min_length=1, max_length=50)
+    max_files_changed: int = Field(ge=1, le=100)
+    max_total_write_bytes: int = Field(ge=1, le=1024 * 1024)
+    max_single_file_bytes: int = Field(ge=1, le=MAX_WORKSPACE_TEXT_BYTES)
+    max_diff_bytes: int = Field(ge=1, le=MAX_WORKSPACE_DIFF_BYTES)
+    workspace_ttl_seconds: int = Field(ge=60, le=24 * 60 * 60)
+    network_policy: Literal["none"] = "none"
+    shell_access: Literal[False] = False
+    git_delivery_access: Literal[False] = False
+    source_repository_write_access: Literal[False] = False
+    expires_at: datetime
+    policy_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+    @field_validator("expires_at")
+    @classmethod
+    def require_expiry_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("execution grant expiry must be timezone-aware")
+        return value
+
+    @field_validator("allowed_operations")
+    @classmethod
+    def require_unique_operations(cls, value: list[WorkspaceOperation]) -> list[WorkspaceOperation]:
+        if len(set(value)) != len(value):
+            raise ValueError("allowed operations must be unique")
+        return sorted(value, key=str)
+
+    @field_validator("allowed_paths", "denied_paths")
+    @classmethod
+    def validate_policy_paths(cls, value: list[str]) -> list[str]:
+        normalized = [
+            _validate_relative_policy_value(item.strip(), allow_glob=True) for item in value
+        ]
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("policy paths must be unique")
+        return sorted(normalized)
+
+    @model_validator(mode="after")
+    def validate_budgets_and_scope(self) -> "ExecutionGrantPolicy":
+        if self.max_single_file_bytes > self.max_total_write_bytes:
+            raise ValueError("single-file budget cannot exceed total-write budget")
+        if self.allowed_paths == ["**"] or "**" in self.allowed_paths:
+            raise ValueError("an unbounded repository-wide path is prohibited")
+        return self
+
+
+class WorkspaceBoundJobSpec(StrictModel):
+    kind: JobKind
+    workspace_id: uuid.UUID
+    execution_grant: ExecutionGrantPolicy
+
+
+class WorkspacePrepareJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_PREPARE_V1] = JobKind.WORKSPACE_PREPARE_V1
+
+
+class WorkspaceListJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_LIST_V1] = JobKind.WORKSPACE_LIST_V1
+    relative_directory: str
+    depth: int = Field(ge=1, le=4)
+    max_entries: int = Field(ge=1, le=500)
+
+    @field_validator("relative_directory")
+    @classmethod
+    def validate_relative_directory(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+
+class WorkspaceReadTextJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_READ_TEXT_V1] = JobKind.WORKSPACE_READ_TEXT_V1
+    relative_path: str
+    max_bytes: int = Field(ge=1, le=MAX_WORKSPACE_TEXT_BYTES)
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_relative_path(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+
+class WorkspaceWriteTextJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_WRITE_TEXT_V1] = JobKind.WORKSPACE_WRITE_TEXT_V1
+    mode: WorkspaceWriteMode
+    relative_path: str
+    content: OpaqueText
+    expected_absent: Literal[True] | None = None
+    expected_sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_relative_path(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+    @model_validator(mode="after")
+    def validate_write_precondition(self) -> "WorkspaceWriteTextJobSpec":
+        content_bytes = len(self.content.encode("utf-8"))
+        if content_bytes > MAX_WORKSPACE_TEXT_BYTES:
+            raise ValueError("write content exceeds protocol text limit")
+        if content_bytes > self.execution_grant.max_single_file_bytes:
+            raise ValueError("write content exceeds execution grant single-file budget")
+        if self.mode == WorkspaceWriteMode.CREATE:
+            if self.expected_absent is not True or self.expected_sha256 is not None:
+                raise ValueError("create requires expected_absent=true only")
+        elif self.expected_sha256 is None or self.expected_absent is not None:
+            raise ValueError("replace requires expected_sha256 only")
+        return self
+
+
+class WorkspaceStatusJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_STATUS_V1] = JobKind.WORKSPACE_STATUS_V1
+
+
+class WorkspaceDiffJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_DIFF_V1] = JobKind.WORKSPACE_DIFF_V1
+
+
+class WorkspaceRollbackJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_ROLLBACK_V1] = JobKind.WORKSPACE_ROLLBACK_V1
+    target: Literal["initial"] = "initial"
+
+
+class WorkspaceDiscardJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_DISCARD_V1] = JobKind.WORKSPACE_DISCARD_V1
+
+
+WorkspaceJobSpec = (
+    WorkspacePrepareJobSpec
+    | WorkspaceListJobSpec
+    | WorkspaceReadTextJobSpec
+    | WorkspaceWriteTextJobSpec
+    | WorkspaceStatusJobSpec
+    | WorkspaceDiffJobSpec
+    | WorkspaceRollbackJobSpec
+    | WorkspaceDiscardJobSpec
+)
+
 JobSpec = Annotated[
-    SystemDiagnosticJobSpec | ControlledWaitJobSpec,
+    SystemDiagnosticJobSpec | ControlledWaitJobSpec | WorkspaceJobSpec,
     Field(discriminator="kind"),
 ]
 
@@ -131,12 +389,14 @@ class PermissionEnvelope(StrictModel):
     id: uuid.UUID
     envelope_version: Literal[1] = 1
     job_id: uuid.UUID
-    authorization_source: Literal["local_user_job_dispatch"] = "local_user_job_dispatch"
-    allowed_capabilities: list[Capability] = Field(min_length=1, max_length=2)
-    repository_access: Literal[RepositoryAccess.NONE] = RepositoryAccess.NONE
+    authorization_source: Literal["local_user_job_dispatch", "execution_grant"] = (
+        "local_user_job_dispatch"
+    )
+    allowed_capabilities: list[Capability] = Field(min_length=1, max_length=10)
+    repository_access: RepositoryAccess = RepositoryAccess.NONE
     shell_access: Literal[False] = False
     network_policy: Literal[NetworkPolicy.CONTROL_PLANE_ONLY] = NetworkPolicy.CONTROL_PLANE_ONLY
-    max_runtime_seconds: int = Field(ge=1, le=60)
+    max_runtime_seconds: int = Field(ge=1, le=120)
     lease_seconds: int = Field(ge=2, le=60)
     max_attempts: int = Field(ge=1, le=5)
     max_result_bytes: int = Field(ge=256, le=64 * 1024)
@@ -164,7 +424,7 @@ class RegisterRequest(StrictModel):
     display_name: DisplayName
     protocol_version: Literal[1] = RUNNER_PROTOCOL_VERSION
     software_version: VersionText
-    capabilities: list[Capability] = Field(min_length=1, max_length=2)
+    capabilities: list[Capability] = Field(min_length=1, max_length=10)
 
     @field_validator("capabilities")
     @classmethod
@@ -189,12 +449,69 @@ class HeartbeatRequest(StrictModel):
     runner_id: uuid.UUID
     protocol_version: Literal[1] = RUNNER_PROTOCOL_VERSION
     software_version: VersionText
+    capabilities: list[Capability] | None = None
+
+    @field_validator("capabilities")
+    @classmethod
+    def normalize_capabilities(cls, value: list[Capability] | None) -> list[Capability] | None:
+        if value is None:
+            return None
+        if not 1 <= len(value) <= 10:
+            raise ValueError("capabilities must contain between 1 and 10 items")
+        unique = sorted(set(value), key=str)
+        if len(unique) != len(value):
+            raise ValueError("capabilities must be unique")
+        return unique
 
 
 class HeartbeatResponse(StrictModel):
     runner_id: uuid.UUID
     status: RunnerStatus
     server_time: datetime
+
+
+class RepositoryRegistrationRequest(StrictModel):
+    runner_id: uuid.UUID
+    opaque_handle: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=8,
+            max_length=120,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ]
+    display_name: DisplayName
+    vcs_kind: Literal["git"] = "git"
+    capabilities: list[Literal["committed_head_read", "isolated_workspace"]] = Field(
+        min_length=2, max_length=2
+    )
+    current_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    current_branch: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+        | None
+    ) = None
+    source_is_dirty: bool
+    dirty_path_count: int = Field(ge=0, le=10_000)
+    metadata_version: Literal[1] = 1
+
+    @field_validator("capabilities")
+    @classmethod
+    def require_repository_capabilities(
+        cls, value: list[str]
+    ) -> list[Literal["committed_head_read", "isolated_workspace"]]:
+        expected = {"committed_head_read", "isolated_workspace"}
+        if set(value) != expected or len(value) != len(expected):
+            raise ValueError("repository capabilities must match the Phase 4 closed set")
+        return ["committed_head_read", "isolated_workspace"]
+
+
+class RepositoryRegistrationResponse(StrictModel):
+    repository_handle_id: uuid.UUID
+    opaque_handle: str
+    status: Literal["available"]
+    current_revision: str
+    last_verified_at: datetime
 
 
 class LeaseIdentity(StrictModel):
@@ -262,7 +579,7 @@ class DiagnosticResult(StrictModel):
             pattern=r"^[A-Za-z0-9._-]+$",
         ),
     ]
-    capability_list: list[Capability] = Field(min_length=1, max_length=2)
+    capability_list: list[Capability] = Field(min_length=1, max_length=10)
     started_at: datetime
     completed_at: datetime
     duration_ms: float = Field(ge=0, le=60_000)
@@ -292,8 +609,190 @@ class ControlledWaitResult(StrictModel):
         return self
 
 
+class WorkspaceCheckpointPayload(StrictModel):
+    source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    tree_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    diff_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    changed_paths: list[str] = Field(max_length=100)
+    changed_file_count: int = Field(ge=0, le=100)
+    total_diff_bytes: int = Field(ge=0, le=MAX_WORKSPACE_DIFF_BYTES)
+    diff: OpaqueText
+
+    @field_validator("changed_paths")
+    @classmethod
+    def validate_changed_paths(cls, value: list[str]) -> list[str]:
+        normalized = [_validate_relative_policy_value(item, allow_glob=False) for item in value]
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("changed paths must be unique")
+        return sorted(normalized)
+
+    @model_validator(mode="after")
+    def validate_checkpoint(self) -> "WorkspaceCheckpointPayload":
+        if self.changed_file_count != len(self.changed_paths):
+            raise ValueError("changed-file count must match changed paths")
+        if len(self.diff.encode("utf-8")) != self.total_diff_bytes:
+            raise ValueError("diff byte count must match its content")
+        return self
+
+
+class WorkspacePrepareResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_PREPARE_V1] = JobKind.WORKSPACE_PREPARE_V1
+    workspace_id: uuid.UUID
+    repository_handle_id: uuid.UUID
+    source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    workspace_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    initial_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    current_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+
+class WorkspaceEntry(StrictModel):
+    relative_path: str
+    entry_type: WorkspaceEntryType
+    size: int = Field(ge=0, le=1024 * 1024 * 1024)
+    sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_relative_path(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+
+class WorkspaceListResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_LIST_V1] = JobKind.WORKSPACE_LIST_V1
+    workspace_id: uuid.UUID
+    relative_directory: str
+    entries: list[WorkspaceEntry] = Field(max_length=500)
+    truncated: bool
+
+    @field_validator("relative_directory")
+    @classmethod
+    def validate_relative_directory(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+
+class WorkspaceReadTextResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_READ_TEXT_V1] = JobKind.WORKSPACE_READ_TEXT_V1
+    workspace_id: uuid.UUID
+    relative_path: str
+    content: OpaqueText
+    sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    size: int = Field(ge=0, le=MAX_WORKSPACE_TEXT_BYTES)
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_relative_path(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+    @model_validator(mode="after")
+    def validate_content_size(self) -> "WorkspaceReadTextResult":
+        if len(self.content.encode("utf-8")) != self.size:
+            raise ValueError("read byte count must match content")
+        return self
+
+
+class WorkspaceWriteTextResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_WRITE_TEXT_V1] = JobKind.WORKSPACE_WRITE_TEXT_V1
+    workspace_id: uuid.UUID
+    relative_path: str
+    operation: WorkspaceWriteMode
+    sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    size: int = Field(ge=0, le=MAX_WORKSPACE_TEXT_BYTES)
+    current_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    changed_file_count: int = Field(ge=0, le=100)
+    total_written_bytes: int = Field(ge=0, le=1024 * 1024)
+    checkpoint: WorkspaceCheckpointPayload
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_relative_path(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+
+class WorkspaceStatusEntry(StrictModel):
+    relative_path: str
+    status: WorkspaceStatusCode
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_relative_path(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+
+class WorkspaceStatusResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_STATUS_V1] = JobKind.WORKSPACE_STATUS_V1
+    workspace_id: uuid.UUID
+    entries: list[WorkspaceStatusEntry] = Field(max_length=100)
+    changed_file_count: int = Field(ge=0, le=100)
+    current_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+    @model_validator(mode="after")
+    def validate_changed_count(self) -> "WorkspaceStatusResult":
+        if self.changed_file_count != len(self.entries):
+            raise ValueError("changed-file count must match status entries")
+        return self
+
+
+class WorkspaceDiffResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_DIFF_V1] = JobKind.WORKSPACE_DIFF_V1
+    workspace_id: uuid.UUID
+    diff: OpaqueText
+    diff_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    changed_paths: list[str] = Field(max_length=100)
+    total_diff_bytes: int = Field(ge=0, le=MAX_WORKSPACE_DIFF_BYTES)
+    current_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    checkpoint: WorkspaceCheckpointPayload
+
+    @field_validator("changed_paths")
+    @classmethod
+    def validate_changed_paths(cls, value: list[str]) -> list[str]:
+        normalized = [_validate_relative_policy_value(item, allow_glob=False) for item in value]
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("changed paths must be unique")
+        return sorted(normalized)
+
+    @model_validator(mode="after")
+    def validate_diff_size(self) -> "WorkspaceDiffResult":
+        if len(self.diff.encode("utf-8")) != self.total_diff_bytes:
+            raise ValueError("diff byte count must match content")
+        if self.changed_paths != self.checkpoint.changed_paths:
+            raise ValueError("diff and checkpoint paths must match")
+        return self
+
+
+class WorkspaceRollbackResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_ROLLBACK_V1] = JobKind.WORKSPACE_ROLLBACK_V1
+    workspace_id: uuid.UUID
+    clean: Literal[True] = True
+    current_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    removed_created_paths: list[str] = Field(max_length=100)
+
+    @field_validator("removed_created_paths")
+    @classmethod
+    def validate_removed_paths(cls, value: list[str]) -> list[str]:
+        normalized = [_validate_relative_policy_value(item, allow_glob=False) for item in value]
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("removed paths must be unique")
+        return sorted(normalized)
+
+
+class WorkspaceDiscardResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_DISCARD_V1] = JobKind.WORKSPACE_DISCARD_V1
+    workspace_id: uuid.UUID
+    discarded: Literal[True] = True
+    idempotent: bool
+
+
 ResultPayload = Annotated[
-    DiagnosticResult | ControlledWaitResult,
+    DiagnosticResult
+    | ControlledWaitResult
+    | WorkspacePrepareResult
+    | WorkspaceListResult
+    | WorkspaceReadTextResult
+    | WorkspaceWriteTextResult
+    | WorkspaceStatusResult
+    | WorkspaceDiffResult
+    | WorkspaceRollbackResult
+    | WorkspaceDiscardResult,
     Field(discriminator="kind"),
 ]
 

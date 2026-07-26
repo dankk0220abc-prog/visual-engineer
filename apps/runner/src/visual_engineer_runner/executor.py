@@ -2,9 +2,12 @@ import asyncio
 import platform
 import re
 import sys
+import threading
 import time
+import uuid
 from datetime import UTC, datetime
 
+from visual_engineer_runner.workspace_manager import WorkspaceManager
 from visual_engineer_runner_protocol import (
     RUNNER_PROTOCOL_VERSION,
     Capability,
@@ -14,6 +17,7 @@ from visual_engineer_runner_protocol import (
     JobSpec,
     ResultPayload,
     SystemDiagnosticJobSpec,
+    WorkspaceBoundJobSpec,
 )
 
 
@@ -38,6 +42,9 @@ async def execute_job(
     *,
     software_version: str,
     capabilities: list[Capability],
+    workspace_manager: WorkspaceManager | None = None,
+    operation_id: uuid.UUID | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> ResultPayload:
     if isinstance(spec, SystemDiagnosticJobSpec):
         started_at = datetime.now(UTC)
@@ -69,5 +76,14 @@ async def execute_job(
             elapsed_duration_ms=round((time.perf_counter() - started) * 1000, 3),
             started_at=started_at,
             completed_at=completed_at,
+        )
+    if isinstance(spec, WorkspaceBoundJobSpec):
+        if workspace_manager is None or operation_id is None or cancel_event is None:
+            raise ValueError("workspace executor dependencies are unavailable")
+        return await asyncio.to_thread(
+            workspace_manager.execute,
+            spec,
+            operation_id=operation_id,
+            cancel_event=cancel_event,
         )
     raise ValueError("unsupported typed Job")

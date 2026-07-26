@@ -4,11 +4,12 @@
 
 VisualEngineer is a governed AI design-engineering and delivery system for
 enterprise frontend teams. Its V1 destination is a human-controlled path from
-a bounded frontend request to an evidence-backed change. The current Phase 3
-product stops much earlier: it can complete the governed Phase 2 planning flow
-and separately orchestrate a repository-free Local Runner for a typed
-diagnostic or controlled wait. It cannot execute a plan or access project
-code.
+a bounded frontend request to an evidence-backed change. The current Phase 4
+product stops at one synthetic fixture: it can complete the governed Phase 2
+planning flow, orchestrate the Phase 3 repository-free Jobs, and separately
+authorize closed text-file operations in a Runner-owned exact-revision fixture
+Workspace. It cannot execute target commands, access CreativeDeploy, write a
+source repository, or deliver Git.
 
 The system must distinguish facts, policy, decisions, and future intent. A
 stored locator is not authorization, repository text is not an instruction,
@@ -24,7 +25,7 @@ delivery owners need to:
 2. review the committed repository facts used for planning;
 3. inspect assumptions, risk, scope, non-goals, and validation evidence;
 4. revise and decide an exact plan version;
-5. eventually authorize isolated implementation under a separate permission
+5. authorize isolated fixture implementation under a separate permission
    boundary; and
 6. distinguish failures and missing evidence from success.
 
@@ -55,7 +56,7 @@ There is no executable Deployment Pack runtime. Repository content can narrow
 future work but cannot elevate permission, expand a Runner Envelope, or bypass
 approval.
 
-## Implemented through Phase 3
+## Implemented through Phase 4
 
 The current product provides:
 
@@ -92,7 +93,20 @@ The current product provides:
 - browser Registry, Dispatch, Job detail, progress, cancellation, result, and
   Timeline; and
 - an internal Runner-only Docker network, non-root/read-only container,
-  dynamic local bootstrap, smoke, E2E, and chaos verification.
+  dynamic local bootstrap, smoke, E2E, and chaos verification;
+- opaque Repository Handles registered from Runner-local configuration without
+  exposing absolute paths;
+- immutable Execution Grants with separate human decision, exact
+  Plan/Snapshot/revision binding, canonical hash, paths, budgets, TTL, and
+  literal no-network/no-shell/no-source-write/no-delivery fields;
+- Runner-owned bare mirror and detached exact-revision Workspace for only the
+  read-only synthetic fixture;
+- descriptor-rooted bounded list/read/create/compare-and-swap replace of UTF-8
+  text plus fixed status/diff;
+- immutable Workspace events/checkpoints, baseline rollback, exact idempotent
+  discard, interruption recovery, and source-integrity evidence; and
+- Repository, Execution Grant, Workspace, typed-tool, diff, checkpoint,
+  rollback, discard, and Timeline browser surfaces.
 
 The plan source is always `deterministic_policy`, and
 `execution_available` is always `false`.
@@ -104,24 +118,23 @@ uses an API-only, exact-repository read-only bind mount. The Snapshot is based
 on committed `HEAD`; dirty and untracked contents are not read. The resulting
 Plan was submitted for human decision and rejected after its Snapshot became
 stale. Rejection did not trigger execution or modify CreativeDeploy. Phase 3
-does not mount, scan, read, or modify CreativeDeploy.
+and Phase 4 Runner paths do not mount, scan, read, or modify CreativeDeploy.
 
 CreativeDeploy is not an external enterprise customer. This case provides no
 adoption, time-saving, quality-improvement, financial, production-usage, or
 production-deployment evidence.
 
-## Intended V1 beyond Phase 3
+## Intended V1 beyond Phase 4
 
 V1 is not complete until a separately authorized system can:
 
-- create a new isolated worktree for an approved plan;
-- enforce typed write and validation tools at runtime;
-- preserve checkpoints and recover from bounded failures;
+- safely extend a separately authorized workspace beyond the synthetic fixture;
+- execute separately approved closed validation commands without a shell;
 - show attributable tool and browser-validation evidence;
 - obtain a distinct final delivery approval; and
 - perform an explicitly allowed branch, commit, or pull-request action.
 
-These are future requirements, not Phase 3 capabilities.
+These are future requirements, not Phase 4 capabilities.
 
 ## Quality attributes
 
@@ -143,14 +156,14 @@ These are future requirements, not Phase 3 capabilities.
 
 Future deployments may measure time to pull request, verification pass rate,
 interventions, rollback success, accessibility findings, cost, acceptance, and
-adoption. Phase 3 has no production baseline or outcome metric.
+adoption. Phase 4 has no production baseline or outcome metric.
 
 The repository does not demonstrate an LLM/Agents SDK runtime, production
-security, multi-user isolation, repository reading/writing by Runner, isolated
-worktrees, target command execution, pull-request delivery, remote CI success,
-automatic repair, rollback, external-customer adoption, or production
-deployment. The current Local Runner is a narrow typed execution-plane
-foundation, not an autonomous coding Agent.
+security, multi-user isolation, real customer-repository execution,
+CreativeDeploy writes, target command/test execution, Git/pull-request
+delivery, remote CI success, automatic repair, external-customer adoption, or
+production deployment. The current Local Runner is a narrow fixture-only
+typed execution plane, not an autonomous coding Agent.
 
 ## Acceptance source
 

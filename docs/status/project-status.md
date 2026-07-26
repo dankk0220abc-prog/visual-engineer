@@ -1,160 +1,130 @@
 # Project Status
 
-- Phase: Phase 3 — Browser-Orchestrated Local Runner Foundation
-- Overall status: COMPLETE LOCALLY; REMOTE CI NOT RUN
-- Last updated: 2026-07-26
-- Branch: `feat/phase-3-browser-orchestrated-local-runner`
-- Foundation base: `d136418158d9f5ffc4f2f8ba993ca48e837ed59b`
-- Phase 2 closure on main: `336b46d`
+- Phase: Phase 4 — Runner-Owned Isolated Workspace + Scoped Typed File Tools
+- Overall status: IMPLEMENTED; FULL PRE-CHECKPOINT LOCAL GATE PASSES; STAGED
+  REVIEW, CHECKPOINT, AND POST-CHECKPOINT GATE PENDING; REMOTE CI NOT RUN
+- Last updated: 2026-07-27
+- Branch: `feat/phase-4-isolated-workspace-tools`
+- Phase 4 baseline / main: `7590f9d`
+- Remote: none
 
 ## Product position
 
-VisualEngineer is a governed AI design-engineering and delivery system for
-enterprise frontend teams, limited to Design Implementation, Design-System
-Migration, and Frontend Quality Remediation packages.
+VisualEngineer is a governed AI design-engineering and delivery system limited
+to Design Implementation, Design-System Migration, and Frontend Quality
+Remediation packages.
 
-Phase 2 provides durable Level 0 repository investigation and deterministic
-plan approval. Phase 3 separately provides a browser-orchestrated,
-repository-free Local Runner for typed System Diagnostic and Controlled Wait.
-It has no LLM, code writer, target command executor, worktree, Git/PR, or
-deployment capability. Approval never dispatches a Runner Job.
+Phase 2 provides durable Level 0 committed-repository investigation and
+deterministic Plan approval. Phase 3 provides a browser-orchestrated outbound
+Local Runner with typed repository-free Jobs, PostgreSQL leases, fencing,
+cancellation, and recovery. Phase 4 adds Level 1 only for the versioned
+synthetic fixture: a separate Execution Grant authorizes closed UTF-8 tools in
+a Runner-owned isolated Workspace. Plan approval alone still causes no
+execution.
 
-CreativeDeploy is internal Customer 0 and Design Partner 0. It is not an
-external enterprise customer and provides no production, adoption,
-time-saving, or outcome data.
+CreativeDeploy remains internal Customer 0 and Design Partner 0, not an
+external enterprise customer. Phase 4 does not mount, read, write, test, build,
+clean, or otherwise access it.
 
 ## Implemented
 
-- PostgreSQL Run, RepositorySnapshot, Plan, ApprovalDecision, and AuditEvent
-  entities with Alembic upgrade/downgrade.
-- Closed Run/Plan state policy, immutable Snapshot trigger, optimistic version,
-  idempotency, stale-version conflicts, rejection reason, and serialized final
-  decision.
-- Canonical allowlisted exact-Git-root validation and a fixed no-shell
-  committed-object scanner.
-- Dirty/untracked metadata-only handling; sensitive, secret-like, binary,
-  dependency, symlink, submodule, LFS, file/count/byte, and timeout controls.
-- Stable normalized Snapshot fingerprint and untrusted instruction provenance.
-- Deterministic fingerprint-bound Plan creation, bounded revision, Foundation
-  policy validation, typed display-only validation steps, and
-  `execution_available = false`.
-- Versioned `/api/v1` Run/Snapshot/Plan/decision/audit/cancel endpoints,
-  request IDs, stable errors, structured governance logs, and generated
-  TypeScript contract.
-- Task Run history and Run console with repository intelligence, dirty/safety
-  signals, deterministic Plan review/revision/submission/decision, conflict
-  handling, explicit non-execution warnings, and Audit Timeline.
-- API-only read-only synthetic and Customer 0 Compose overrides, non-root API
-  image with Git, fixture generator, deterministic eval dataset, Make gates,
-  and CI definitions.
-- Pure Runner Protocol v1 with strict schemas, canonical Envelope hashing,
-  typed results, error codes, and 64 KiB request bounds.
-- Runner, immutable PermissionEnvelope, RunnerJob, RunnerJobAttempt, and
-  RunnerJobEvent PostgreSQL entities and reversible Alembic migration.
-- Dynamic high-entropy bootstrap, per-Runner digest-only token, constant-time
-  authentication, credential volume, heartbeat-derived liveness, and
-  revocation.
-- Server-derived fixed-authority Envelopes, transactional `SKIP LOCKED` claim,
-  one-active-attempt constraint, leases, fencing, cancellation, retry budget,
-  advisory-locked reaper, offline and recovery.
-- Independent outbound non-root Runner with in-process repository-free typed
-  executors, renewal/progress/cancellation, bounded backoff, and graceful
-  shutdown.
-- Browser Registry, immutable Dispatch preview, Job/Attempt/lease evidence,
-  progress, cancellation distinction, typed result, and Timeline.
-- Internal Runner/API-only Docker network, no Runner port, database/Web
-  network, repository/CreativeDeploy/developer/SSH/Docker-socket mount, shell,
-  or public-network path.
+- Runner-registered opaque Repository Handle with display/revision/dirty
+  metadata and no Control Plane host path.
+- Immutable Execution Grant and one independent local-user decision, bound to
+  an approved exact Plan/Snapshot/revision and server-derived narrow policy.
+- RepositoryHandle, Grant/Decision, Workspace/Event/Checkpoint persistence,
+  RunnerJob bindings, additive reversible Alembic migration, and generated
+  OpenAPI/TypeScript contracts.
+- Workspace state machine, typed action APIs, request-ID idempotency, stable
+  policy/conflict codes, and per-Lease authority revalidation.
+- Runner-only exact fixture read-only bind plus dedicated persistent
+  mirror/workspace/registry volumes; API, Web, and PostgreSQL get no mount.
+- Fixed-argument no-shell Git boundary for source verification, managed bare
+  mirror, detached exact-revision worktree, bounded status/diff, baseline
+  restore, and disposal.
+- Descriptor-rooted POSIX path parsing and no-follow directory walks;
+  sensitive/symlink/hard-link/non-regular/binary/invalid/oversize denial.
+- Atomic UTF-8 create/replace with expected absence/hash, inode check, fsync,
+  post-write hash, interruption cleanup, and completed-write retry
+  reconciliation.
+- Eight closed Workspace jobs: prepare, list, read, write, status, diff,
+  rollback, and discard.
+- Immutable bounded Checkpoints, initial-baseline rollback with created-file
+  ledger, and registry-bound exact idempotent discard.
+- Repository, Execution Grant, Workspace list/detail, typed tool, write
+  preflight, diff/checkpoint, and Timeline Web surfaces.
+- Versioned adversarial fixture, real-stack seed/smoke/E2E/chaos harnesses,
+  static workspace security checks, and 15-case deterministic workspace Eval
+  dataset.
 
 ## Current local evidence
 
-- Backend/Runner/protocol: 76 tests on real PostgreSQL, 83.92% total API source
-  coverage in the focused Phase 3 run.
-- Frontend: 32 tests; 82.89% statements, 74.60% branches, 85.00% functions,
-  and 84.36% lines.
-- Scanner security: 7 focused cases, including stable fingerprint, total
-  budget, timeout, and oversized symlink metadata.
-- Eval records: 43 deterministic cases across three datasets, including
-  Runner test mappings and no model scores.
-- Playwright: ten real-stack flows across desktop and 390px. Phase 3 uses a
-  real Runner for diagnostic success and controlled-wait cancellation, with
-  persistence, axe WCAG 2 A/AA, and horizontal-overflow assertions.
-- Approval concurrency: independent PostgreSQL approve/reject transactions
-  produce one winner, one stable conflict, and one decision row.
-- Migration: empty PostgreSQL upgrade/downgrade/upgrade coverage is present.
-- Chaos: actual abrupt Runner loss produced offline, `lease_expired`, requeue,
-  stale completion `409`, a second Attempt, recovery, success, and unchanged
-  source status.
-- Runtime isolation: Runner UID/GID 10001, read-only root filesystem,
-  capability drop, no-new-privileges, no port, one 0600 credential volume, API
-  readiness 200, and denied database/Web DNS and public HTTPS. Combined service
-  logs contained no bootstrap token.
-- Remote GitHub Actions have not run and are not represented as verified.
+- Phase 3 was independently accepted: local verify/smoke/chaos passed, runtime
+  isolation was inspected, and main fast-forwarded without a merge commit.
+- Backend/API/Runner/Protocol suite: 101 passed with 82.29% combined coverage,
+  one upstream Starlette/httpx deprecation warning, and no skips.
+- Frontend unit suite: 39 passed with 72.11% statement, 66.56% branch, 71.89%
+  function, and 74.15% line coverage.
+- Real Playwright suite: 12 passed in 50.9 seconds in the final aggregate gate.
+  Phase 4 passed its browser flow at desktop and 390 px with axe and
+  no-overflow checks.
+- Workspace smoke completed the real prepare/read/replace/create/deny/status/
+  diff/three-Checkpoint/rollback/discard flow and proved the full source plus
+  `.git` fingerprint unchanged.
+- Workspace chaos stopped Runner during prepare and before atomic commit,
+  produced two Attempts for each interrupted Job, fenced two stale leases,
+  recovered the complete write, rolled back, discarded with no residual
+  Workspace, and preserved the full source fingerprint.
+- Workspace security passed 25 focused tests and its static checker; the
+  broader Runner security target passed 42 tests and secret scanning found no
+  high-confidence secret.
+- Contract drift, production Web build, all Compose variants, real PostgreSQL
+  upgrade/downgrade/upgrade, and Eval validation (58 cases plus 7 scanner
+  tests) passed.
 
-Exact final command results belong in
-[`../evidence/phase-3-verification.md`](../evidence/phase-3-verification.md).
+The aggregate `make verify` passed. Staged review, the single checkpoint
+commit, and post-commit gates remain in progress. No remote CI result is
+claimed.
 
-## Customer 0 state
+## Current boundaries
 
-- Task: `d71b708b-597e-448d-a41c-90df41c602f0`.
-- Run: `447510d7-695c-46ec-baad-9a0f750ce965`.
-- Snapshot fingerprint:
-  `41c0ff6896e97d22b876e7bfe9d31f6f260998a74a2b0ddbcdb3620be1a53797`.
-- Plan: v1, `deterministic_policy`, `rejected`.
-- Run: `rejected`.
-- Local page:
-  `http://127.0.0.1:13001/runs/447510d7-695c-46ec-baad-9a0f750ce965`.
-
-CreativeDeploy branch, `HEAD`, full status hash, and diff-stat hash were
-identical before/after. The API ran non-root with the exact target mount
-read-only; Web and database had no target mount.
-
-The user subsequently rejected Plan v1 in the browser because CreativeDeploy
-`HEAD` had advanced beyond the persisted Snapshot revision. Read-only API and
-database checks verified one `local_user` rejection, the required non-empty
-reason, matching rejected Run/Plan states, and a final `plan_rejected` Audit
-Event. No execution, tool, write, Git, or pull-request event exists. The
-rejection did not execute the Plan, and the closure neither rescanned nor
-modified CreativeDeploy. See
-[`../evidence/phase-2-human-rejection.md`](../evidence/phase-2-human-rejection.md).
+- Fixture Workspace writes only; source repository and CreativeDeploy writes
+  are forbidden.
+- No LLM, OpenAI Agents SDK, prompt-selected tools, or Agent Trace.
+- No shell, arbitrary subprocess, target repository install/build/test/lint/
+  typecheck/browser command, package lifecycle, or public network.
+- No file delete/rename tool, binary write, submodule initialization, or LFS
+  fetch.
+- No target branch, commit, push, PR, merge, deployment, remote CI evidence,
+  authentication, multi-tenancy, or production hardening.
 
 ## Known limitations
 
-- No LLM or OpenAI Agents SDK.
-- No Agent Trace, model planning, or autonomous coding Agent.
-- Runner has no code-writing, generic shell, repository read/write, repository
-  command, or target validation execution.
-- No isolated worktree, checkpoint, repair loop, or rollback executor.
-- No branch/commit/push/PR/merge or remote CI result.
-- No authentication, authorization, tenancy, rate limiting, or public-safe
-  exposure.
-- No production migration release process, secrets service, backup/restore,
-  hardened hostile-code sandbox, or production deployment.
-- Local long-lived bearer tokens and Docker internal networking are not final
-  enterprise workload identity, Secret Manager, rotation, or egress policy.
-- PostgreSQL polling is intentionally bounded local scheduling, not a
-  high-throughput or multi-region queue.
-- Plan string policy is Foundation validation, not independent runtime
-  enforcement.
-- Approval does not grant future execution authority.
-- No external enterprise customer, production usage, adoption, time saving, or
-  measured outcome.
+- Python does not expose portable `openat2`/`renameat2` pathname-CAS semantics.
+  Phase 4 uses descriptor walks, no-follow/type/link/inode checks, and makes
+  Runner the sole workspace-volume writer; it is not a hostile multi-tenant
+  sandbox.
+- Git output is bounded before persistence/return, but a child process may
+  briefly allocate an over-budget diff before rejection.
+- Case-collision fixture coverage is conditional on filesystem support.
+- Workspace expiry precedes Grant expiry by ten minutes for typed discard. An
+  expired or revoked Grant fences all Jobs, and Phase 4 has no privileged
+  garbage collector.
+- Local bearer tokens, Docker internal networking, and synthetic fixtures are
+  development controls, not production identity or certification.
 
 ## Technical debt
 
-- Track the upstream FastAPI/Starlette TestClient migration from `httpx` to
-  `httpx2`; the suite has one non-failing deprecation warning.
-- Pin GitHub Actions to immutable commit SHAs before a public/high-assurance
-  release.
-- Add authentication and deployment hardening before any network exposure.
-- Define retention and classification only when future tool/artifact/trace
-  entities have real behavior.
+- Track the upstream Starlette TestClient/httpx deprecation.
+- Pin GitHub Actions to immutable commit SHAs before public/high-assurance use.
+- Add filesystem quotas, streaming output bounds, authenticated identities,
+  retention, backup/restore, and incident response before broader exposure.
 
 ## Recommended next milestone
 
-Phase 4 should design isolated-worktree readiness as a separate permission
-elevation: exact repository authorization, worktree lifecycle, descriptor-safe
-typed file reads/writes, independent runtime policy, checkpoints, resource and
-network controls, and evidence. It must preserve Plan-versus-execution
-separation and must not add shell, Git delivery, or broader repository access
-without their own reviewed milestones.
+Before any Phase 5 implementation, run one maximum-depth security audit of
+descriptor/syscall behavior, registry and mirror ownership, workspace cleanup,
+Grant/Lease authorization, resource isolation, container egress, and all
+source-integrity evidence. Only after acceptance should one new maximum safe
+batch consider closed, separately approved target validation commands; Git
+delivery remains later.

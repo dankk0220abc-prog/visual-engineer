@@ -12,10 +12,16 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH="/app/apps/runner/src:/app/packages/runner-protocol/src"
-RUN groupadd --system --gid 10001 runner \
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --system --gid 10001 runner \
   && useradd --system --uid 10001 --gid runner --no-create-home runner \
-  && mkdir -p /var/lib/visual-engineer-runner \
-  && chown runner:runner /var/lib/visual-engineer-runner
+  && mkdir -p \
+    /var/lib/visual-engineer-runner/mirrors \
+    /var/lib/visual-engineer-runner/workspaces \
+    /var/lib/visual-engineer-runner/registry \
+  && chown -R runner:runner /var/lib/visual-engineer-runner
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY packages/runner-protocol/src packages/runner-protocol/src

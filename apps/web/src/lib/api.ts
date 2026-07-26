@@ -75,6 +75,53 @@ type RunnerJobEventsOperation = OperationAt<
   "/api/v1/runner-jobs/{job_id}/events",
   "get"
 >;
+type RepositoryListOperation = OperationAt<"/api/v1/repositories", "get">;
+type EligibleContextListOperation = OperationAt<
+  "/api/v1/execution-grants/eligible-contexts",
+  "get"
+>;
+type ExecutionGrantListOperation = OperationAt<
+  "/api/v1/execution-grants",
+  "get"
+>;
+type ExecutionGrantCreateOperation = OperationAt<
+  "/api/v1/execution-grants",
+  "post"
+>;
+type ExecutionGrantDecisionOperation = OperationAt<
+  "/api/v1/execution-grants/{grant_id}/decisions",
+  "post"
+>;
+type ExecutionGrantRevokeOperation = OperationAt<
+  "/api/v1/execution-grants/{grant_id}/revoke",
+  "post"
+>;
+type WorkspaceListOperation = OperationAt<"/api/v1/workspaces", "get">;
+type WorkspaceCreateOperation = OperationAt<"/api/v1/workspaces", "post">;
+type WorkspaceDetailOperation = OperationAt<
+  "/api/v1/workspaces/{workspace_id}",
+  "get"
+>;
+type WorkspaceDirectoryOperation = OperationAt<
+  "/api/v1/workspaces/{workspace_id}/actions/list",
+  "post"
+>;
+type WorkspaceReadOperation = OperationAt<
+  "/api/v1/workspaces/{workspace_id}/actions/read-text",
+  "post"
+>;
+type WorkspaceWriteOperation = OperationAt<
+  "/api/v1/workspaces/{workspace_id}/actions/write-text",
+  "post"
+>;
+type WorkspaceEventsOperation = OperationAt<
+  "/api/v1/workspaces/{workspace_id}/events",
+  "get"
+>;
+type WorkspaceCheckpointsOperation = OperationAt<
+  "/api/v1/workspaces/{workspace_id}/checkpoints",
+  "get"
+>;
 
 export type Task = JsonResponse<TaskDetailOperation, 200>;
 export type CreateTaskInput = JsonRequest<TaskCreateOperation>;
@@ -104,6 +151,11 @@ type RunnerListPayload = JsonResponse<RunnerListOperation, 200>;
 export type Runner = JsonResponse<RunnerDetailOperation, 200>;
 type RunnerJobListPayload = JsonResponse<RunnerJobListOperation, 200>;
 export type RunnerJob = JsonResponse<RunnerJobDetailOperation, 200>;
+type WorkspaceListResult = Extract<
+  NonNullable<RunnerJob["result"]>,
+  { kind: "workspace_list_v1" }
+>;
+export type WorkspaceEntry = WorkspaceListResult["entries"][number];
 export type CreateRunnerJobInput = JsonRequest<RunnerJobCreateOperation>;
 type CreatedRunnerJob = JsonResponse<RunnerJobCreateOperation, 201>;
 type RunnerJobEventListPayload = JsonResponse<RunnerJobEventsOperation, 200>;
@@ -112,6 +164,34 @@ export type RunnerJobEvent = RunnerJobEventListPayload extends {
 }
   ? Item
   : never;
+type RepositoryListPayload = JsonResponse<RepositoryListOperation, 200>;
+export type RepositoryHandle = RepositoryListPayload["items"][number];
+type EligibleContextListPayload = JsonResponse<
+  EligibleContextListOperation,
+  200
+>;
+export type EligibleExecutionContext =
+  EligibleContextListPayload["items"][number];
+type ExecutionGrantListPayload = JsonResponse<ExecutionGrantListOperation, 200>;
+export type ExecutionGrant = ExecutionGrantListPayload["items"][number];
+export type CreateExecutionGrantInput =
+  JsonRequest<ExecutionGrantCreateOperation>;
+export type ExecutionGrantDecisionInput =
+  JsonRequest<ExecutionGrantDecisionOperation>;
+type WorkspaceListPayload = JsonResponse<WorkspaceListOperation, 200>;
+export type Workspace = WorkspaceListPayload["items"][number];
+export type WorkspaceAction = JsonResponse<WorkspaceDirectoryOperation, 200>;
+export type WorkspaceListInput = JsonRequest<WorkspaceDirectoryOperation>;
+export type WorkspaceReadInput = JsonRequest<WorkspaceReadOperation>;
+export type WorkspaceWriteInput = JsonRequest<WorkspaceWriteOperation>;
+type WorkspaceEventListPayload = JsonResponse<WorkspaceEventsOperation, 200>;
+export type WorkspaceEvent = WorkspaceEventListPayload["items"][number];
+type WorkspaceCheckpointListPayload = JsonResponse<
+  WorkspaceCheckpointsOperation,
+  200
+>;
+export type WorkspaceCheckpoint =
+  WorkspaceCheckpointListPayload["items"][number];
 
 export type HealthCheck = "live" | "ready";
 export type RepositoryKind = CreateTaskInput extends {
@@ -491,6 +571,208 @@ export async function listRunnerJobEvents(
 ): Promise<RunnerJobEvent[]> {
   const { data } = await request<RunnerJobEventListPayload>(
     `/api/v1/runner-jobs/${encodeURIComponent(jobId)}/events`,
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function listRepositories(): Promise<RepositoryHandle[]> {
+  const { data } = await request<RepositoryListPayload>(
+    "/api/v1/repositories",
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function listEligibleExecutionContexts(): Promise<
+  EligibleExecutionContext[]
+> {
+  const { data } = await request<EligibleContextListPayload>(
+    "/api/v1/execution-grants/eligible-contexts",
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function listExecutionGrants(): Promise<ExecutionGrant[]> {
+  const { data } = await request<ExecutionGrantListPayload>(
+    "/api/v1/execution-grants",
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function createExecutionGrant(
+  input: CreateExecutionGrantInput,
+): Promise<ExecutionGrant> {
+  const { data } = await request<
+    JsonResponse<ExecutionGrantCreateOperation, 201>
+  >("/api/v1/execution-grants", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function decideExecutionGrant(
+  grantId: string,
+  input: ExecutionGrantDecisionInput,
+): Promise<ExecutionGrant> {
+  const { data } = await request<
+    JsonResponse<ExecutionGrantDecisionOperation, 200>
+  >(`/api/v1/execution-grants/${encodeURIComponent(grantId)}/decisions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function revokeExecutionGrant(
+  grantId: string,
+): Promise<ExecutionGrant> {
+  const { data } = await request<
+    JsonResponse<ExecutionGrantRevokeOperation, 200>
+  >(`/api/v1/execution-grants/${encodeURIComponent(grantId)}/revoke`, {
+    method: "POST",
+    headers: { "X-Request-ID": crypto.randomUUID() },
+  });
+  return data;
+}
+
+export async function listWorkspaces(): Promise<Workspace[]> {
+  const { data } = await request<WorkspaceListPayload>("/api/v1/workspaces", {
+    cache: "no-store",
+  });
+  return data.items;
+}
+
+export async function getWorkspace(workspaceId: string): Promise<Workspace> {
+  const { data } = await request<JsonResponse<WorkspaceDetailOperation, 200>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}`,
+    {
+      cache: "no-store",
+    },
+  );
+  return data;
+}
+
+export async function createWorkspace(
+  grantId: string,
+): Promise<WorkspaceAction> {
+  const { data } = await request<JsonResponse<WorkspaceCreateOperation, 201>>(
+    "/api/v1/workspaces",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify({ grant_id: grantId }),
+    },
+  );
+  return data;
+}
+
+async function workspaceAction(
+  workspaceId: string,
+  action: "status" | "diff" | "rollback" | "discard",
+): Promise<WorkspaceAction> {
+  const { data } = await request<WorkspaceAction>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/actions/${action}`,
+    {
+      method: "POST",
+      headers: { "X-Request-ID": crypto.randomUUID() },
+    },
+  );
+  return data;
+}
+
+export async function listWorkspaceDirectory(
+  workspaceId: string,
+  input: WorkspaceListInput,
+): Promise<WorkspaceAction> {
+  const { data } = await request<WorkspaceAction>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/actions/list`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return data;
+}
+
+export async function readWorkspaceText(
+  workspaceId: string,
+  input: WorkspaceReadInput,
+): Promise<WorkspaceAction> {
+  const { data } = await request<WorkspaceAction>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/actions/read-text`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return data;
+}
+
+export async function writeWorkspaceText(
+  workspaceId: string,
+  input: WorkspaceWriteInput,
+): Promise<WorkspaceAction> {
+  const { data } = await request<WorkspaceAction>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/actions/write-text`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return data;
+}
+
+export const getWorkspaceStatus = (workspaceId: string) =>
+  workspaceAction(workspaceId, "status");
+export const getWorkspaceDiff = (workspaceId: string) =>
+  workspaceAction(workspaceId, "diff");
+export const rollbackWorkspace = (workspaceId: string) =>
+  workspaceAction(workspaceId, "rollback");
+export const discardWorkspace = (workspaceId: string) =>
+  workspaceAction(workspaceId, "discard");
+
+export async function listWorkspaceEvents(
+  workspaceId: string,
+): Promise<WorkspaceEvent[]> {
+  const { data } = await request<WorkspaceEventListPayload>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/events`,
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function listWorkspaceCheckpoints(
+  workspaceId: string,
+): Promise<WorkspaceCheckpoint[]> {
+  const { data } = await request<WorkspaceCheckpointListPayload>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/checkpoints`,
     { cache: "no-store" },
   );
   return data.items;

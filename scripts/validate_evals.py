@@ -5,6 +5,7 @@ from typing import Any
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DATASETS = sorted((REPOSITORY_ROOT / "evals/datasets").glob("*.jsonl"))
 RUNNER_DATASET = "runner-protocol-v0.1.jsonl"
+WORKSPACE_DATASET = "workspace-tools-v0.1.jsonl"
 RUNNER_FAILURE_CATEGORIES = {
     "authentication",
     "concurrency",
@@ -16,12 +17,32 @@ RUNNER_FAILURE_CATEGORIES = {
     "secret_boundary",
     "state_transition",
 }
+WORKSPACE_FAILURE_CATEGORIES = {
+    "atomicity",
+    "budget",
+    "cancellation",
+    "content_conflict",
+    "disposal",
+    "evidence",
+    "grant",
+    "none",
+    "path",
+    "protocol",
+    "rollback",
+    "source_isolation",
+    "stale_lease",
+    "symlink",
+}
 
 
-def validate_runner_case(
+def validate_mapped_case(
     dataset: Path,
     line_number: int,
     value: dict[str, Any],
+    *,
+    dataset_version: str,
+    failure_categories: set[str],
+    label: str,
 ) -> None:
     required = {
         "case_id",
@@ -34,20 +55,22 @@ def validate_runner_case(
         "test_mapping",
     }
     if not required.issubset(value):
-        raise SystemExit(f"{dataset.name}:{line_number}: invalid Runner eval case shape")
-    if value["schema_version"] != 1 or value["dataset_version"] != "runner-protocol-v0.1":
-        raise SystemExit(f"{dataset.name}:{line_number}: unsupported Runner eval version")
+        raise SystemExit(f"{dataset.name}:{line_number}: invalid {label} eval case shape")
+    if value["schema_version"] != 1 or value["dataset_version"] != dataset_version:
+        raise SystemExit(f"{dataset.name}:{line_number}: unsupported {label} eval version")
+    if not isinstance(value["category"], str) or not isinstance(value["input"], dict):
+        raise SystemExit(f"{dataset.name}:{line_number}: invalid {label} category or input")
     expected = value["expected"]
     if not isinstance(expected, dict) or not isinstance(expected.get("outcome"), str):
-        raise SystemExit(f"{dataset.name}:{line_number}: Runner expected outcome is required")
-    if value["failure_category"] not in RUNNER_FAILURE_CATEGORIES:
-        raise SystemExit(f"{dataset.name}:{line_number}: unknown Runner failure category")
+        raise SystemExit(f"{dataset.name}:{line_number}: {label} expected outcome is required")
+    if value["failure_category"] not in failure_categories:
+        raise SystemExit(f"{dataset.name}:{line_number}: unknown {label} failure category")
     mappings = value["test_mapping"]
     if not isinstance(mappings, list) or not mappings:
-        raise SystemExit(f"{dataset.name}:{line_number}: Runner test mapping is required")
+        raise SystemExit(f"{dataset.name}:{line_number}: {label} test mapping is required")
     for mapping in mappings:
         if not isinstance(mapping, str) or "::" not in mapping:
-            raise SystemExit(f"{dataset.name}:{line_number}: invalid Runner test mapping")
+            raise SystemExit(f"{dataset.name}:{line_number}: invalid {label} test mapping")
         relative_path, function_name = mapping.split("::", 1)
         test_path = REPOSITORY_ROOT / relative_path
         if (
@@ -55,7 +78,7 @@ def validate_runner_case(
             or not function_name.startswith("test_")
             or f"def {function_name}(" not in test_path.read_text(encoding="utf-8")
         ):
-            raise SystemExit(f"{dataset.name}:{line_number}: unmapped Runner test {mapping}")
+            raise SystemExit(f"{dataset.name}:{line_number}: unmapped {label} test {mapping}")
 
 
 def main() -> None:
@@ -69,7 +92,23 @@ def main() -> None:
             if not isinstance(value, dict):
                 raise SystemExit(f"{dataset.name}:{line_number}: invalid eval case shape")
             if dataset.name == RUNNER_DATASET:
-                validate_runner_case(dataset, line_number, value)
+                validate_mapped_case(
+                    dataset,
+                    line_number,
+                    value,
+                    dataset_version="runner-protocol-v0.1",
+                    failure_categories=RUNNER_FAILURE_CATEGORIES,
+                    label="Runner",
+                )
+            elif dataset.name == WORKSPACE_DATASET:
+                validate_mapped_case(
+                    dataset,
+                    line_number,
+                    value,
+                    dataset_version="workspace-tools-v0.1",
+                    failure_categories=WORKSPACE_FAILURE_CATEGORIES,
+                    label="Workspace",
+                )
             if "case_id" in value:
                 required = {"case_id", "category", "input", "expected"}
                 case_id = value["case_id"]

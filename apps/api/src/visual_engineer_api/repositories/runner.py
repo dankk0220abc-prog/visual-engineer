@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from visual_engineer_api.models.runner import (
@@ -11,6 +11,7 @@ from visual_engineer_api.models.runner import (
     RunnerJobAttempt,
     RunnerJobEvent,
 )
+from visual_engineer_api.models.workspace import RepositoryHandle
 
 
 class RunnerRepository:
@@ -72,6 +73,7 @@ class RunnerRepository:
     def claimable_job(
         self,
         capabilities: list[str],
+        runner_id: uuid.UUID,
     ) -> RunnerJob | None:
         return self._session.scalar(
             select(RunnerJob)
@@ -79,6 +81,15 @@ class RunnerRepository:
                 RunnerJob.state == "queued",
                 RunnerJob.attempt_count < RunnerJob.max_attempts,
                 RunnerJob.kind.in_(capabilities),
+                or_(
+                    RunnerJob.repository_handle_id.is_(None),
+                    RunnerJob.repository_handle_id.in_(
+                        select(RepositoryHandle.id).where(
+                            RepositoryHandle.runner_id == runner_id,
+                            RepositoryHandle.status == "available",
+                        )
+                    ),
+                ),
             )
             .order_by(RunnerJob.created_at.asc(), RunnerJob.id.asc())
             .with_for_update(skip_locked=True)

@@ -7,7 +7,7 @@ and Frontend Quality Remediation work for governed frontend teams. V1 is not a
 promise of arbitrary language, repository, backend, infrastructure, or general
 software-engineering support.
 
-## Implemented Foundation through Phase 3
+## Implemented Foundation through Phase 4
 
 - Task create/list/detail with bounded validation and idempotency.
 - Level 0 `read_only` Run creation and durable state.
@@ -37,6 +37,16 @@ software-engineering support.
   results, offline/expired/requeue evidence, and Timeline.
 - Non-root/read-only Runner container on a dedicated internal API-only network,
   plus real Runner E2E and chaos recovery.
+- Opaque Runner-registered Repository Handle for one exact read-only synthetic
+  fixture without Control Plane host paths.
+- Separate immutable and independently approved Execution Grant bound to the
+  exact Plan, Snapshot, revision, operations, paths, budgets, and TTL.
+- Runner-owned bare mirror, detached fixture Workspace, and registry in
+  dedicated volumes unavailable to API, Web, and PostgreSQL.
+- Descriptor-rooted bounded UTF-8 list/read/create/replace, fixed status/diff,
+  Checkpoints, initial-baseline rollback, and exact idempotent discard.
+- Browser surfaces and real-stack smoke/E2E/abrupt-loss recovery with full
+  source and `.git` fingerprint comparison.
 
 ## Reserved V1 seams
 
@@ -44,9 +54,7 @@ These remain deliberate future seams, not placeholder capabilities:
 
 - an LLM/Agents SDK planning runtime;
 - model invocation and model-specific evaluation;
-- isolated worktree lifecycle and scoped file writes;
-- typed execution tools and independent runtime policy enforcement;
-- checkpoints, artifacts, detailed tool traces, and rollback;
+- non-fixture isolated workspaces;
 - controlled target-repository install/build/test/lint/browser commands;
 - separate final-change approval;
 - branch, local commit, remote push, and pull request.
@@ -65,16 +73,16 @@ for future typed tool schemas and runtime authorization.
   recovery.
 - Broader source-control providers and governed release workflows.
 
-## Explicitly out of scope in Phase 3
+## Explicitly out of scope in Phase 4
 
 - Any LLM API or OpenAI Agents SDK.
 - Generic shell or target-repository command execution.
 - Reading dirty, untracked, sensitive, or symlink-target file content from the
   working tree.
-- Target-repository writes, worktrees, dependency installation, code changes,
-  Git state changes, or cleanup.
-- Any target-repository mount, scan, read, locator, or file content in Runner;
-  any CreativeDeploy access from Phase 3.
+- Source-repository or CreativeDeploy writes, dependency installation, target
+  commands/tests/builds, or arbitrary cleanup.
+- Any real customer repository mount in Runner; Phase 4 only mounts the
+  versioned synthetic fixture read-only.
 - GitHub credentials, clone, push, PR, merge, tag, or deployment.
 - Automatic approval or treating plan approval as execution authority.
 - Authentication, multi-tenancy, public exposure, or production use.
@@ -84,8 +92,8 @@ for future typed tool schemas and runtime authorization.
 
 ## Boundary test
 
-If a proposed change requires repository write access, executing a target
-command, a credential, an LLM, an isolated worktree, a remote integration, or
-an effect caused by plan approval, it is outside Phase 3. Repository read
-access by Runner is also outside Phase 3. Each requires a new reviewed
-milestone and explicit authority.
+If a proposed change requires a real repository, source write, target command,
+credential, LLM, remote integration, Git delivery, or an effect caused by plan
+approval, it is outside Phase 4. Each requires a new reviewed milestone and
+explicit authority. The fixture's Grant and opaque handle cannot be reused to
+authorize it.

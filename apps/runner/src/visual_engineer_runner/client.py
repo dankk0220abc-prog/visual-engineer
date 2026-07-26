@@ -19,6 +19,8 @@ from visual_engineer_runner_protocol import (
     RegisterRequest,
     RegisterResponse,
     RenewRequest,
+    RepositoryRegistrationRequest,
+    RepositoryRegistrationResponse,
     StartRequest,
 )
 
@@ -75,6 +77,19 @@ class ControlPlaneClient:
             "POST",
             f"{RUNNER_PROTOCOL_PREFIX}/heartbeat",
             HeartbeatResponse,
+            payload=payload,
+            token=token,
+        )
+
+    async def register_repository(
+        self,
+        payload: RepositoryRegistrationRequest,
+        token: SecretStr,
+    ) -> RepositoryRegistrationResponse:
+        return await self._request(
+            "POST",
+            f"{RUNNER_PROTOCOL_PREFIX}/repositories/register",
+            RepositoryRegistrationResponse,
             payload=payload,
             token=token,
         )

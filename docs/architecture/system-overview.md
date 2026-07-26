@@ -1,7 +1,7 @@
 # System Overview
 
-VisualEngineer Phase 3 is a local, single-user governed planning and
-repository-free execution foundation. Solid nodes below are implemented.
+VisualEngineer Phase 4 is a local, single-user governed planning and
+fixture-only isolated execution foundation. Solid nodes below are implemented.
 Dashed nodes are future V1 boundaries.
 
 ```mermaid
@@ -15,7 +15,11 @@ flowchart TB
     P["Deterministic Plan Generator"]
     Q["Runner Registry / Queue / Lease Policy"]
     LR["Independent Local Runner"]
-    E["Typed Diagnostic / Wait Executor"]
+    E["Closed Typed Executors"]
+    HND["Opaque Fixture Handle"]
+    SRC["Exact read-only synthetic source"]
+    M["Runner-owned bare mirror"]
+    IW["Detached isolated Workspace"]
     O["OpenAPI and generated TypeScript"]
 
     H -->|"create Task and Run; revise or decide Plan"| W
@@ -28,20 +32,23 @@ flowchart TB
     Q --> D
     LR -->|"outbound protocol v1"| Q
     LR --> E
+    LR --> HND
+    HND --> SRC
+    LR --> M
+    M --> IW
+    E --> IW
     A -->|"source contract"| O
     O -->|"typed client input"| W
 
     subgraph Future["Future - not implemented"]
-        IW["Isolated worktree"]
-        T["Typed repository tools"]
         B["Controlled browser validation"]
         G["GitHub pull request"]
+        C["Target repository commands"]
     end
 
-    E -. "separate future authorization" .-> IW
-    IW -. "scoped work" .-> T
-    T -. "future evidence" .-> B
-    T -. "future final approval" .-> G
+    IW -. "future separate authority" .-> C
+    C -. "future evidence" .-> B
+    C -. "future final approval" .-> G
 ```
 
 ## Implemented responsibilities
@@ -74,10 +81,12 @@ Runner Job.
 
 The independent long-running Runner makes outbound calls only. It persists its
 credential in a dedicated Docker volume, validates every Envelope, and invokes
-one in-process typed executor. System Diagnostic returns a redacted closed
-schema; Controlled Wait exercises renewal/progress/cancellation. Runner has no
-repository, shell, subprocess executor, worktree, Git, database/Web network,
-Docker socket, inbound port, or public network.
+one closed typed executor. System Diagnostic and Controlled Wait remain
+repository-free. For Phase 4 only, Runner maps an opaque handle to the exact
+read-only synthetic fixture, owns a bare mirror/detached worktree/registry, and
+executes descriptor-safe UTF-8 file tools plus fixed Git status/diff/restore/
+discard. It has no shell, arbitrary command, target command, Docker socket,
+inbound port, database/Web network, or public network.
 
 ### Repository Scanner
 
@@ -107,10 +116,11 @@ still requires typed tool schemas and an independent runtime policy layer.
 ### PostgreSQL
 
 PostgreSQL stores Task, Run, RepositorySnapshot, Plan, ApprovalDecision,
-AuditEvent, Runner, PermissionEnvelope, RunnerJob, RunnerJobAttempt, and
-RunnerJobEvent. Alembic owns schema history. Row locks and uniqueness serialize
-final plan decisions and Runner claims. Database triggers reject Snapshot and
-PermissionEnvelope mutation.
+AuditEvent, Runner, PermissionEnvelope, RunnerJob, RunnerJobAttempt,
+RunnerJobEvent, RepositoryHandle, ExecutionGrant/Decision, Workspace/Event,
+and Checkpoint. Alembic owns schema history. Row locks and uniqueness serialize
+decisions, claims, and workspace actions. Database triggers reject Snapshot,
+PermissionEnvelope, Execution Grant policy, and Checkpoint mutation.
 
 ### Contract
 
@@ -150,8 +160,8 @@ The historical Phase 2 Customer 0 override mounts only the exact CreativeDeploy 
 the API at `/repositories/customer0/creative-deploy` with `read_only: true`.
 The Web and database receive no repository mount. The API runs as a non-root
 user. The host path is supplied only at invocation and is not committed.
-The Phase 3 base platform and Runner do not use this override and do not mount,
-scan, read, or modify CreativeDeploy.
+The Phase 3 base platform and Phase 4 fixture Runner do not use this override
+and do not mount, scan, read, or modify CreativeDeploy.
 
 ## Runner dispatch sequence
 
@@ -178,6 +188,37 @@ sequenceDiagram
     Runner->>API: Typed complete or cancelled acknowledgement
     API->>DB: Terminal state + sanitized evidence
 ```
+
+## Phase 4 workspace sequence
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web
+    participant API
+    participant DB as PostgreSQL
+    participant Runner
+    participant Source as Read-only fixture
+
+    Runner->>API: Register opaque Handle + committed revision
+    User->>Web: Create pending Grant from approved Plan
+    User->>Web: Separately approve exact Grant
+    API->>DB: Immutable policy + decision
+    User->>Web: Create Workspace
+    API->>DB: Bound typed prepare Job
+    Runner->>Source: Verify read-only root and exact revision
+    Runner->>Runner: Populate bare mirror; detached worktree
+    Runner->>API: Fenced ready result + fingerprints
+    User->>Web: Typed read/create/replace/status/diff
+    API->>DB: Fenced results, events, checkpoints
+    User->>Web: Baseline rollback; exact discard
+    Runner->>API: Verified clean/discarded evidence
+    Note over Source: HEAD, status, contents, and .git remain unchanged
+```
+
+The source, mirror, workspace, and registry mounts exist only in Runner. See
+[`isolated-workspaces.md`](isolated-workspaces.md) for budgets and platform
+limits.
 
 ## Deployment posture
 

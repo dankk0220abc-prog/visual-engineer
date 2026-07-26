@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import threading
 
 from pydantic import SecretStr
 
@@ -9,6 +10,7 @@ from visual_engineer_runner.config import RunnerSettings
 from visual_engineer_runner.credentials import CredentialStore, RunnerCredential
 from visual_engineer_runner.evidence import PermissionEnvelopeDeniedError, validate_assignment
 from visual_engineer_runner.executor import execute_job
+from visual_engineer_runner.workspace_manager import WorkspaceExecutionError, WorkspaceManager
 from visual_engineer_runner_protocol import (
     RUNNER_PROTOCOL_VERSION,
     CancelledRequest,
@@ -24,12 +26,23 @@ from visual_engineer_runner_protocol import (
     RegisterRequest,
     RenewRequest,
     StartRequest,
+    WorkspaceBoundJobSpec,
 )
 
 LOGGER = logging.getLogger("visual_engineer_runner")
 CAPABILITIES = [
     Capability.CONTROLLED_WAIT_V1,
     Capability.SYSTEM_DIAGNOSTIC_V1,
+]
+WORKSPACE_CAPABILITIES = [
+    Capability.WORKSPACE_PREPARE_V1,
+    Capability.WORKSPACE_LIST_V1,
+    Capability.WORKSPACE_READ_TEXT_V1,
+    Capability.WORKSPACE_WRITE_TEXT_V1,
+    Capability.WORKSPACE_STATUS_V1,
+    Capability.WORKSPACE_DIFF_V1,
+    Capability.WORKSPACE_ROLLBACK_V1,
+    Capability.WORKSPACE_DISCARD_V1,
 ]
 
 
@@ -40,11 +53,17 @@ class RunnerLifecycle:
         client: ControlPlaneClient,
         credentials: CredentialStore,
         *,
+        workspace_manager: WorkspaceManager | None = None,
         sleep: object = asyncio.sleep,
     ) -> None:
         self._settings = settings
         self._client = client
         self._credentials = credentials
+        self._workspace_manager = workspace_manager
+        self._capabilities = [
+            *CAPABILITIES,
+            *(WORKSPACE_CAPABILITIES if settings.repository_handles else []),
+        ]
         self._stop = asyncio.Event()
         self._sleep = sleep
         self._backoff_attempt = 0
@@ -61,11 +80,13 @@ class RunnerLifecycle:
                 credential = credential or await self._ensure_credential()
                 now = loop.time()
                 if now >= next_heartbeat:
+                    await self._register_repositories(credential)
                     await self._client.heartbeat(
                         HeartbeatRequest(
                             runner_id=credential.runner_id,
                             protocol_version=RUNNER_PROTOCOL_VERSION,
                             software_version=self._settings.software_version,
+                            capabilities=self._capabilities,
                         ),
                         credential.token,
                     )
@@ -88,7 +109,7 @@ class RunnerLifecycle:
                     self._credentials.clear()
                     credential = None
                 await self._backoff()
-            except (ValueError, OSError) as exc:
+            except (ValueError, OSError, WorkspaceExecutionError) as exc:
                 LOGGER.error(
                     "runner local state error",
                     extra={"event": "runner_local_error", "error_type": type(exc).__name__},
@@ -107,7 +128,7 @@ class RunnerLifecycle:
                 display_name=self._settings.display_name,
                 protocol_version=RUNNER_PROTOCOL_VERSION,
                 software_version=self._settings.software_version,
-                capabilities=CAPABILITIES,
+                capabilities=self._capabilities,
             ),
             bootstrap,
         )
@@ -122,6 +143,22 @@ class RunnerLifecycle:
             extra={"event": "runner_registered", "runner_id": str(response.runner_id)[:8]},
         )
         return credential
+
+    async def _register_repositories(self, credential: RunnerCredential) -> None:
+        if not self._settings.repository_handles:
+            return
+        if self._workspace_manager is None:
+            raise ValueError("Workspace Manager is unavailable")
+        for request in await asyncio.to_thread(
+            self._workspace_manager.registration_requests,
+            credential.runner_id,
+        ):
+            response = await self._client.register_repository(request, credential.token)
+            if (
+                response.opaque_handle != request.opaque_handle
+                or response.current_revision != request.current_revision
+            ):
+                raise ValueError("Repository registration response is inconsistent")
 
     async def _execute_assignment(
         self,
@@ -160,11 +197,15 @@ class RunnerLifecycle:
             )
             return
 
+        cancel_event = threading.Event()
         execution = asyncio.create_task(
             execute_job(
                 assignment.job,
                 software_version=self._settings.software_version,
-                capabilities=CAPABILITIES,
+                capabilities=self._capabilities,
+                workspace_manager=self._workspace_manager,
+                operation_id=assignment.job_id,
+                cancel_event=cancel_event,
             )
         )
         renewal_interval = max(
@@ -183,11 +224,18 @@ class RunnerLifecycle:
                     credential.token,
                 )
                 if renewed.cancel_requested:
-                    execution.cancel()
-                    try:
-                        await execution
-                    except asyncio.CancelledError:
-                        pass
+                    cancel_event.set()
+                    if isinstance(assignment.job, WorkspaceBoundJobSpec):
+                        try:
+                            await execution
+                        except WorkspaceExecutionError:
+                            pass
+                    else:
+                        execution.cancel()
+                        try:
+                            await execution
+                        except asyncio.CancelledError:
+                            pass
                     await self._client.cancelled(
                         assignment.job_id,
                         CancelledRequest(**identity),
@@ -220,10 +268,23 @@ class RunnerLifecycle:
                 credential.token,
             )
         except ControlPlaneError:
+            cancel_event.set()
             if not execution.done():
                 execution.cancel()
             raise
+        except WorkspaceExecutionError as exc:
+            cancel_event.set()
+            await self._client.fail(
+                assignment.job_id,
+                FailRequest(
+                    **identity,
+                    error_code=exc.code,
+                    error_message=None,
+                ),
+                credential.token,
+            )
         except Exception as exc:
+            cancel_event.set()
             if not execution.done():
                 execution.cancel()
             LOGGER.error(

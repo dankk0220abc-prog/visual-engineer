@@ -52,7 +52,12 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The active Phase 3 plan is
+The active Phase 4 plan is
+[`docs/exec-plans/phase-4-isolated-workspace-tools.md`](docs/exec-plans/phase-4-isolated-workspace-tools.md).
+It must preserve explicit evidence for source-tree/`.git` integrity,
+descriptor-safe file operations, Execution Grant authority, Lease fencing,
+atomic interruption recovery, rollback ownership, and disposal confinement.
+The completed Phase 3 record remains at
 [`docs/exec-plans/phase-3-browser-orchestrated-local-runner.md`](docs/exec-plans/phase-3-browser-orchestrated-local-runner.md).
 The completed Phase 2 record remains at
 [`docs/exec-plans/phase-2-readonly-repository-intelligence.md`](docs/exec-plans/phase-2-readonly-repository-intelligence.md).

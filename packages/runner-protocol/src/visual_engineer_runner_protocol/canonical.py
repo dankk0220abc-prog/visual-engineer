@@ -25,3 +25,13 @@ def compute_permission_policy_hash(value: BaseModel | dict[str, Any]) -> str:
 
 def permission_policy_hash_matches(value: BaseModel | dict[str, Any], expected: str) -> bool:
     return hmac.compare_digest(compute_permission_policy_hash(value), expected)
+
+
+def compute_execution_grant_policy_hash(value: BaseModel | dict[str, Any]) -> str:
+    payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
+    payload.pop("policy_hash", None)
+    return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
+
+
+def execution_grant_policy_hash_matches(value: BaseModel | dict[str, Any], expected: str) -> bool:
+    return hmac.compare_digest(compute_execution_grant_policy_hash(value), expected)

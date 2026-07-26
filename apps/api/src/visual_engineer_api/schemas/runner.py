@@ -1,18 +1,19 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from visual_engineer_runner_protocol import (
     Capability,
+    ControlledWaitJobSpec,
     JobKind,
-    JobSpec,
     JobState,
     NetworkPolicy,
     RepositoryAccess,
     ResultPayload,
     RunnerStatus,
+    SystemDiagnosticJobSpec,
 )
 
 
@@ -84,6 +85,11 @@ class RunnerJobResponse(BaseModel):
     state: JobState
     requested_by: str
     parameters: dict[str, Any]
+    execution_grant_id: uuid.UUID | None
+    workspace_id: uuid.UUID | None
+    repository_handle_id: uuid.UUID | None
+    source_revision: str | None
+    execution_policy_hash: str | None
     active_attempt_id: uuid.UUID | None
     attempt_count: int
     max_attempts: int
@@ -127,4 +133,7 @@ class RunnerJobEventListResponse(BaseModel):
     total: int
 
 
-RunnerJobCreate = JobSpec
+RunnerJobCreate = Annotated[
+    SystemDiagnosticJobSpec | ControlledWaitJobSpec,
+    Field(discriminator="kind"),
+]

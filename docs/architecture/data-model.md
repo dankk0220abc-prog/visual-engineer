@@ -2,7 +2,8 @@
 
 PostgreSQL and Alembic are authoritative for all implemented durable state.
 Timestamps are timezone-aware UTC. API enums and database checks enforce the
-Phase 2 planning and Phase 3 Runner boundaries independently.
+Phase 2 planning, Phase 3 Runner, and Phase 4 workspace boundaries
+independently.
 
 ## Task
 
@@ -87,17 +88,18 @@ configured threshold.
 ## PermissionEnvelope
 
 PermissionEnvelope is one-to-one with RunnerJob and stores version,
-authorization source, allowed capabilities, literal repository-none,
-shell-false and Control-Plane-only network policy, runtime/lease/retry/result
-budgets, issue/expiry timestamps, canonical policy hash, and creation time.
-A database trigger rejects update and delete.
+authorization source, allowed capabilities, literal repository access
+(`none` or `isolated_workspace`), shell-false and Control-Plane-only network
+policy, runtime/lease/retry/result budgets, issue/expiry timestamps, canonical
+policy hash, and creation time. A database trigger rejects update and delete.
 
 ## RunnerJob and RunnerJobAttempt
 
 RunnerJob stores the closed Job kind/state, immutable Envelope link,
 `requested_by=local_user`, typed normalized parameters, active Attempt pointer,
-attempt budget/count, typed sanitized result or stable error, optimistic
-version, and timestamps.
+attempt budget/count, optional immutable Execution Grant/Workspace/Repository
+Handle/revision/policy bindings, typed sanitized result or stable error,
+optimistic version, and timestamps.
 
 RunnerJobAttempt stores Job/Runner identity, positive attempt number, random
 Lease UUID, closed Attempt state, lease deadline, heartbeat/start/completion,
@@ -110,6 +112,40 @@ RunnerJobEvent stores nullable Runner/Job/Attempt links, a closed event type,
 monotonic per-Job sequence, request ID, allowlisted bounded metadata, and
 timestamp. It records current typed execution audit, not a future Agent Trace.
 Heartbeats do not append an event on every poll.
+
+## RepositoryHandle
+
+RepositoryHandle stores Runner identity, an opaque locally configured handle,
+display name, `git` kind, available/unavailable/revoked status, closed
+`committed_head_read`/`isolated_workspace` capabilities, optional current
+revision/branch, dirty boolean and bounded count, last verification,
+metadata version, and timestamps. It never stores a host path.
+
+## ExecutionGrant and ExecutionGrantDecision
+
+ExecutionGrant is bound to an approved Plan, Run, Task, Repository Handle,
+exact source revision, and Snapshot fingerprint. Immutable policy fields hold
+the eight closed operations, controlled allowed/denied path lists, file/write/
+diff budgets, Workspace TTL, literal network-none/shell-false/source-write-
+false/Git-delivery-false authority, expiry, version, and canonical SHA-256
+policy hash. Only status/decision timing may change through the service;
+PostgreSQL rejects policy update/delete.
+
+ExecutionGrantDecision records one approve/reject outcome, reason where
+required, `local_user` actor, request ID, and timestamp. A unique Grant
+constraint prevents competing decisions.
+
+## Workspace, WorkspaceEvent, and WorkspaceCheckpoint
+
+Workspace binds Grant, Runner, Repository Handle, and exact revision. It stores
+only state, workspace/initial/current fingerprints, changed-file and cumulative
+write counts, an allowlisted created-path ledger, active Attempt, expiry,
+timestamps, and sanitized error. No Runner filesystem path is stored.
+
+WorkspaceEvent uses a monotonic per-Workspace sequence, closed event type,
+request ID, strict bounded metadata, and timestamp. WorkspaceCheckpoint is
+immutable and stores source revision, tree/diff fingerprints, bounded allowed
+relative paths, count/size, and bounded textual diff evidence.
 
 ## Relationships
 
@@ -125,6 +161,14 @@ erDiagram
     RUNNER_JOB ||--|| PERMISSION_ENVELOPE : "immutable authority"
     RUNNER_JOB ||--o{ RUNNER_JOB_ATTEMPT : "retries"
     RUNNER_JOB ||--o{ RUNNER_JOB_EVENT : "execution timeline"
+    RUNNER ||--o{ REPOSITORY_HANDLE : "local registrations"
+    PLAN ||--o{ EXECUTION_GRANT : "separate authority"
+    REPOSITORY_HANDLE ||--o{ EXECUTION_GRANT : "exact source"
+    EXECUTION_GRANT ||--o| EXECUTION_GRANT_DECISION : "one human decision"
+    EXECUTION_GRANT ||--o{ WORKSPACE : "isolated copies"
+    WORKSPACE ||--o{ WORKSPACE_EVENT : "typed timeline"
+    WORKSPACE ||--o{ WORKSPACE_CHECKPOINT : "immutable evidence"
+    RUNNER_JOB }o--o| WORKSPACE : "bound operation"
 ```
 
 ## Database guarantees and service guarantees
@@ -133,12 +177,14 @@ Database constraints enforce valid enums, fixed permission/source/execution
 values, non-negative counts, Run-scoped Plan versions, one Snapshot per Run,
 one decision per Plan, and immutable Snapshot rows.
 
-For Runner state, database checks enforce closed enums/bounds; foreign keys
-preserve identity; a partial unique index enforces one active Attempt; and an
-immutability trigger protects Envelopes. The service adds capability matching,
-canonical hash validation, `SKIP LOCKED` claim, transition order, three-part
-fencing, deadlines, idempotency, cancellation, retry, result redaction, and
-event ordering.
+For Runner/workspace state, database checks enforce closed enums/bounds;
+foreign keys preserve identity; a partial unique index enforces one active
+Attempt; and immutability triggers protect Envelopes, Grant policy,
+WorkspaceEvents, and Checkpoints. The service locks the Grant and enforces one
+non-terminal Workspace per Grant. It also adds capability
+matching, canonical hash validation, current Plan/Snapshot/Handle binding,
+`SKIP LOCKED` claim, transition order, three-part fencing, deadlines,
+idempotency, cancellation, retry, result redaction, and event ordering.
 
 The service additionally enforces transition order, Task/Run/Plan association,
 latest-version semantics, snapshot-fingerprint binding, editable revision
@@ -148,6 +194,6 @@ evidence.
 
 ## Future entities
 
-Typed repository ToolCall, isolated-worktree Checkpoint, Artifact, Agent Trace,
-and EvalResult tables remain future work. They should be added only with a
-real workflow, retention policy, constraints, and evidence.
+Agent Trace, general Artifact, controlled command result, final-delivery
+decision, and EvalResult tables remain future work. They should be added only
+with a real workflow, retention policy, constraints, and evidence.

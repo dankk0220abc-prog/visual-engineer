@@ -8,8 +8,11 @@ from visual_engineer_api.db.base import Base
 from visual_engineer_api.models import (  # noqa: F401
     ApprovalDecision,
     AuditEvent,
+    ExecutionGrant,
+    ExecutionGrantDecision,
     PermissionEnvelope,
     Plan,
+    RepositoryHandle,
     RepositorySnapshot,
     Run,
     Runner,
@@ -17,6 +20,9 @@ from visual_engineer_api.models import (  # noqa: F401
     RunnerJobAttempt,
     RunnerJobEvent,
     Task,
+    Workspace,
+    WorkspaceCheckpoint,
+    WorkspaceEvent,
 )
 
 config = context.config

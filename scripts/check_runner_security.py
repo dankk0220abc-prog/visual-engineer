@@ -54,6 +54,34 @@ def main() -> None:
         if marker in executor_source:
             raise SystemExit(f"Runner executor contains prohibited marker: {marker}")
 
+    git_boundary = RUNNER_ROOT / "git_ops.py"
+    for path in sorted(RUNNER_ROOT.glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "subprocess" in imports(path) and path != git_boundary:
+            raise SystemExit(
+                f"{path.relative_to(REPOSITORY_ROOT)} imports subprocess outside git_ops.py"
+            )
+        for marker in ("shell=True", "os.system(", "Popen("):
+            if marker in source:
+                raise SystemExit(
+                    f"{path.relative_to(REPOSITORY_ROOT)} contains prohibited marker: {marker}"
+                )
+    git_source = git_boundary.read_text(encoding="utf-8")
+    required_git_controls = (
+        "subprocess.run(",
+        "shell=False",
+        "GIT_TERMINAL_PROMPT",
+        "GIT_OPTIONAL_LOCKS",
+        "core.hooksPath=/dev/null",
+        "credential.helper=",
+        "diff.external=",
+        "protocol.allow=never",
+        "protocol.file.allow=always",
+    )
+    missing_git_controls = [value for value in required_git_controls if value not in git_source]
+    if missing_git_controls:
+        raise SystemExit(f"Runner fixed Git boundary is missing controls: {missing_git_controls}")
+
     compose = (REPOSITORY_ROOT / "compose.yaml").read_text(encoding="utf-8")
     required = (
         "runner-control:",

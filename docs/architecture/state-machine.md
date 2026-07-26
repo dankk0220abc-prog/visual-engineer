@@ -141,3 +141,61 @@ PostgreSQL advisory lock prevents duplicate reaper passes.
 - Repeated user cancel is idempotent while pending or complete.
 - Completion after cancellation returns `completion_after_cancel`.
 - Heartbeats update `last_seen_at` without creating an event per heartbeat.
+
+## Phase 4 Execution Grant lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> approved: separate local-user approve
+    pending --> rejected: separate reasoned reject
+    pending --> expired: TTL
+    approved --> revoked: explicit revoke
+    approved --> expired: TTL
+```
+
+Policy fields never transition: a PostgreSQL trigger rejects updates and
+deletes. Decision, revocation, and expiry services may change status only.
+Plan approval creates neither a Grant nor an approval decision. A rejected,
+revoked, or expired Grant cannot dispatch or complete a Runner Job.
+
+## Phase 4 Workspace lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> requested
+    requested --> preparing: fenced Runner start
+    preparing --> ready: exact workspace verified
+    requested --> failed
+    preparing --> failed
+    ready --> active: typed tool
+    active --> sealing: diff starts
+    ready --> sealing: diff starts
+    sealing --> sealed: bounded diff + checkpoint
+    sealing --> failed
+    ready --> rollback_requested: explicit rollback
+    active --> rollback_requested: explicit rollback
+    sealed --> rollback_requested: explicit rollback
+    rollback_requested --> rolled_back: clean baseline verified
+    rollback_requested --> failed
+    sealed --> discard_requested
+    rolled_back --> discard_requested
+    failed --> discard_requested
+    expired --> discard_requested
+    discard_requested --> discarded: exact worktree removed
+    discard_requested --> failed
+    requested --> expired: TTL
+    preparing --> expired: TTL
+    ready --> expired: TTL
+    active --> expired: TTL
+```
+
+One non-terminal Workspace may exist per Grant. Every action verifies the
+Workspace/Runner/Handle/revision/Grant/policy binding and its allowed source
+state under a row lock. Workspace expiry precedes Grant expiry, leaving a
+bounded discard window. Grant revocation/expiry fences all Jobs and is never
+bypassed for cleanup.
+
+Successful create/replace and diff append immutable Checkpoints. Rollback is
+initial-baseline-only and must return clean status plus the original tree hash.
+Discard is idempotent only after the exact disposal Job has durable evidence.

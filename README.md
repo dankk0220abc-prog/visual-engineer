@@ -22,17 +22,18 @@ The product separates a governed **VisualEngineer Core** from a customer
 deterministic-plan, approval, and audit boundaries. A Deployment Pack supplies
 a repository profile, customer constraints, allowed future validation,
 design-system context, acceptance criteria, test strategy, and project
-playbook. Isolated workspaces, executable tools, recovery, and delivery
-integrations remain future capabilities.
+playbook. Phase 4 implements one fixture-only isolated-workspace path; target
+commands and delivery integrations remain future capabilities.
 
 ## Current state
 
 The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
-read-only repository intelligence, and the Phase 3 browser-orchestrated Local
-Runner foundation. A local user can complete the Phase 2 planning flow or open
-`/runners`, review a registered Runner, dispatch one of two repository-free
-typed Jobs, observe fenced attempts and durable events, and cancel a controlled
-wait. Plan approval never dispatches a Runner Job.
+read-only repository intelligence, Phase 3 browser-orchestrated Local Runner,
+and Phase 4 Runner-owned isolated workspaces for the synthetic adversarial
+fixture. A local user can independently approve a narrow Execution Grant,
+prepare an exact detached workspace, use closed UTF-8 file tools, inspect
+bounded status/diff/checkpoints, roll back to baseline, and discard it. Plan
+approval never creates or approves an Execution Grant.
 
 The implemented target is:
 
@@ -48,9 +49,16 @@ The implemented target is:
   Envelopes;
 - PostgreSQL Runner registry, durable Job queue, `SKIP LOCKED` claim, Attempts,
   leases, cancellation, retries, reaper, fencing, and typed events;
-- an independent outbound non-root Runner that executes only System Diagnostic
-  and Controlled Wait with no repository, shell, worktree, Git, or public
-  network;
+- an independent outbound non-root Runner with repository-free diagnostic/wait
+  Jobs and one fixture-only opaque Repository Handle;
+- immutable, independently decided Execution Grants bound to an approved
+  Plan/Snapshot/revision with `sandbox/**`, denied sensitive paths, budgets,
+  no network, no shell, no source write, and no Git delivery;
+- Runner-owned bare mirror and detached exact-revision workspaces in dedicated
+  volumes, with dirty/untracked source exclusion and no hook/submodule/LFS
+  execution;
+- descriptor-rooted list/read/create/compare-and-swap replace, fixed Git
+  status/diff, immutable checkpoints, baseline rollback, and exact discard;
 - browser Runner registry, dispatch, Job detail, progress, result, cancellation,
   offline/retry evidence, and Timeline;
 - generated OpenAPI-to-TypeScript contract artifacts;
@@ -62,11 +70,12 @@ The implemented target is:
 - concrete product, architecture, permission, security, and evaluation
   documents.
 
-Explicitly not implemented: OpenAI Agents SDK, LLM calls, Agent Trace,
-code-writing or general shell tools, target-repository access or command
-execution, isolated target worktrees, approval-triggered execution, GitHub PR
-creation, remote CI evidence, automated visual comparison or repair,
-authentication, public hosting, or production deployment.
+Explicitly not implemented: OpenAI Agents SDK, LLM calls, Agent Trace, general
+shell, target-repository commands/tests/build/package lifecycle, any
+CreativeDeploy workspace/write, source-repository write, binary/delete/rename
+tools, Git commit/push/PR delivery, remote CI evidence, automated visual
+comparison or repair, authentication, multi-tenancy, public hosting, or
+production deployment.
 
 CreativeDeploy is internal Customer 0 and Design Partner 0: the first real
 usage target for shaping the Deployment Pack. Its Phase 2 path is an API-only
@@ -85,20 +94,23 @@ flowchart LR
     A --> Q["Runner registry, policy, queue, leases"]
     Q --> D
     R["Local Runner: outbound polling only"] --> Q
-    R --> X["Typed diagnostic / wait executor"]
+    R --> X["Closed typed executors"]
+    R --> M["Runner-owned mirror + detached fixture workspace"]
+    M --> F["Descriptor-safe UTF-8 file tools"]
     A --> S["Historical Phase 2 bounded read-only scanner"]
     S -. "optional exact read-only override" .-> T["Allowlisted repository"]
     A -. "OpenAPI export" .-> C["Generated TypeScript contract"]
     C -. "typed client input" .-> W
-    X -. "Phase 4 only" .-> I["Future isolated worktree"]
-    X -. "not implemented" .-> G["Future GitHub integration"]
+    X -. "not implemented" .-> G["Future target commands / Git delivery"]
 ```
 
 FastAPI OpenAPI is the HTTP contract source. The browser never accesses the
 database or target repository directly. Runner Protocol v1 is shared as a pure
-Pydantic package. The Phase 3 base platform has no repository mount; the
-Runner has only the API-facing internal network and its credential volume.
-Phase 2's optional read-only scanner override remains historical and separate.
+Pydantic package. The Phase 3 base platform has no repository mount. Phase 4's
+fixture profile gives only Runner one exact read-only source mount plus
+dedicated mirror, workspace, and registry volumes; API, Web, and PostgreSQL get
+none. Phase 2's optional read-only scanner override remains historical and
+separate.
 
 ## Local development
 
@@ -116,7 +128,8 @@ documentation at `http://localhost:8000/docs`, liveness at
 `http://localhost:8000/health/ready`. The Runner console is
 `http://localhost:3000/runners`. Startup generates an ignored high-entropy
 local Bootstrap Token without printing it and waits for the Runner to become
-online.
+online. Phase 4 browser pages are `/repositories`, `/execution-grants`,
+`/workspaces`, and `/workspaces/{id}`.
 
 Stop project services with:
 
@@ -139,11 +152,12 @@ make test
 make build
 make contracts-check
 make migration-check
+make workspace-security-check
 make security-check
 make eval
 make e2e
-make runner-smoke
-make runner-chaos-check
+make workspace-smoke
+make workspace-chaos-check
 make verify
 ```
 
@@ -151,7 +165,7 @@ Backend integration and migration tests must use PostgreSQL. Playwright must
 exercise the real web/API/database stack rather than a mocked API. Contract
 generation must be repeatable and leave no diff. See the current evidence
 before treating any check as passed:
-[`docs/evidence/phase-3-verification.md`](docs/evidence/phase-3-verification.md).
+[`docs/evidence/phase-4-verification.md`](docs/evidence/phase-4-verification.md).
 
 To run the internal Customer 0 case after all synthetic gates pass:
 
@@ -169,8 +183,10 @@ approves, rejects, installs, builds, tests, or modifies CreativeDeploy.
 
 The local target uses `docker compose` services for `db`, `api`, `web`, and
 `runner`, with explicit health checks and a migration step. Runner is
-non-root, read-only, capability-free, has no published port, and joins only
-the internal `runner-control` network. Intended commands are:
+non-root, root-filesystem-read-only, capability-free, has no published port,
+and joins only the internal `runner-control` network. The fixture override
+mounts one exact synthetic source read-only only into Runner and adds separate
+managed volumes. Intended commands are:
 
 ```sh
 docker compose config
@@ -189,10 +205,12 @@ This project remains local-only and single-user. It must not be exposed
 publicly. A locator alone grants no access: Level 0 reads require a canonical
 allowlisted local Git root, and target repositories remain read-only.
 Repository text is untrusted data, not an instruction source. Human plan
-approval is a durable governance decision, not Runner dispatch permission.
-Phase 3 Envelopes are server-derived and fixed to no repository, no shell, and
-Control-Plane-only network. Local bearer tokens are not a production identity
-scheme. Never add real secrets. Read
+approval is a durable governance decision, not execution permission. A
+separate immutable Grant authorizes only the exact fixture Workspace scope;
+every typed Job is lease-fenced and revalidates it. Descriptor confinement is
+deliberately conservative but does not claim hostile multi-tenant syscall
+isolation. Local bearer tokens are not a production identity scheme. Never add
+real secrets. Read
 [`SECURITY.md`](SECURITY.md) before integration work.
 
 ## Documentation
@@ -200,12 +218,15 @@ scheme. Never add real secrets. Read
 - [Product contract](docs/product/product-contract.md)
 - [V1 boundaries](docs/product/v1-boundaries.md)
 - [System overview](docs/architecture/system-overview.md)
+- [Isolated workspaces](docs/architecture/isolated-workspaces.md)
 - [Runner Protocol v1](docs/architecture/runner-protocol.md)
 - [Run state machine](docs/architecture/state-machine.md)
 - [Data model](docs/architecture/data-model.md)
 - [Tool permissions](docs/architecture/tool-permissions.md)
 - [Threat model](docs/security/threat-model-v0.md)
 - [Runner threat model](docs/security/runner-threat-model.md)
+- [Workspace threat model](docs/security/workspace-threat-model.md)
+- [Phase 4 ExecPlan](docs/exec-plans/phase-4-isolated-workspace-tools.md)
 - [Phase 3 ExecPlan](docs/exec-plans/phase-3-browser-orchestrated-local-runner.md)
 - [Phase 2 ExecPlan](docs/exec-plans/phase-2-readonly-repository-intelligence.md)
 - [Foundation ExecPlan](docs/exec-plans/phase-0-1-foundation.md)
@@ -213,9 +234,12 @@ scheme. Never add real secrets. Read
 - [Environment audit](docs/evidence/phase-0-1-environment-audit.md)
 - [Phase 2 verification evidence](docs/evidence/phase-2-verification.md)
 - [Phase 3 verification evidence](docs/evidence/phase-3-verification.md)
+- [Phase 4 verification evidence](docs/evidence/phase-4-verification.md)
 - [Local development runbook](docs/runbooks/local-development.md)
 - [Local Runner runbook](docs/runbooks/local-runner.md)
 - [Runner recovery runbook](docs/runbooks/runner-recovery.md)
+- [Workspace lifecycle runbook](docs/runbooks/workspace-lifecycle.md)
+- [Workspace recovery runbook](docs/runbooks/workspace-recovery.md)
 - [Customer 0 read-only runbook](docs/runbooks/customer0-readonly-investigation.md)
 - [CreativeDeploy Customer 0 evidence](docs/deployment-cases/creative-deploy/phase-2-readonly-evidence.md)
 - [Evaluation strategy](docs/evals/eval-strategy-v0.md)

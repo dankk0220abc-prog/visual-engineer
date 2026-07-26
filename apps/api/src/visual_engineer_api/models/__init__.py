@@ -13,12 +13,23 @@ from visual_engineer_api.models.runner import (
     RunnerJobEvent,
 )
 from visual_engineer_api.models.task import Task
+from visual_engineer_api.models.workspace import (
+    ExecutionGrant,
+    ExecutionGrantDecision,
+    RepositoryHandle,
+    Workspace,
+    WorkspaceCheckpoint,
+    WorkspaceEvent,
+)
 
 __all__ = [
     "ApprovalDecision",
     "AuditEvent",
+    "ExecutionGrant",
+    "ExecutionGrantDecision",
     "PermissionEnvelope",
     "Plan",
+    "RepositoryHandle",
     "RepositorySnapshot",
     "Run",
     "Runner",
@@ -26,4 +37,7 @@ __all__ = [
     "RunnerJobAttempt",
     "RunnerJobEvent",
     "Task",
+    "Workspace",
+    "WorkspaceCheckpoint",
+    "WorkspaceEvent",
 ]

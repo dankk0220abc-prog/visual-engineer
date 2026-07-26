@@ -2,7 +2,7 @@
 
 ## Current security posture
 
-VisualEngineer is currently a Phase 3 local, single-user development project.
+VisualEngineer is currently a Phase 4 local, single-user development project.
 It has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
 the web or API services to the public Internet.
@@ -13,11 +13,19 @@ policy-selected committed `HEAD` objects; dirty and untracked content is not
 read. A locator alone grants no filesystem, command, write, or network
 authority.
 
-The Phase 3 base platform does not mount a target repository. Its independent
-Runner accepts only two closed typed Jobs and has no repository, shell,
-worktree, Git, Docker socket, inbound port, database/Web network, or public
-network. Its immutable server-derived Envelope is fixed to repository `none`,
-shell `false`, and Control-Plane-only network.
+The Phase 3 base platform remains repository-free. The Phase 4 fixture profile
+gives only the independent Runner one exact synthetic Git source bind,
+read-only, plus dedicated managed mirror/workspace/registry volumes. API, Web,
+and PostgreSQL get none. Runner has no shell, arbitrary command, Docker socket,
+inbound port, database/Web network, or public network.
+
+Execution requires an immutable server-derived Grant, a separate local-user
+decision, and a fenced typed Job. The Grant is bound to the approved
+Plan/Snapshot/revision, `sandbox/**`, sensitive-path denials, strict budgets,
+network `none`, and false shell/source-write/Git-delivery fields. File access
+is descriptor-rooted and no-follow; status/diff/rollback/discard use fixed
+operations. This is fixture-only and is not a hostile multi-tenant or
+production sandbox.
 
 ## Reporting a vulnerability
 
@@ -42,7 +50,7 @@ contact address and response SLA remain `PLANNED`.
 - Redact secrets and connection strings from errors, traces, test artifacts,
   and structured logs.
 - No OpenAI, GitHub, Figma, cloud, or production credential is required in
-  Phase 3.
+  Phase 4.
 - `.env.runner.local` is ignored local bootstrap state. The Bootstrap Token
   must never be printed or stored in PostgreSQL. Per-Runner Tokens are returned
   once, persisted only in the dedicated Runner volume, and stored in the
@@ -51,11 +59,12 @@ contact address and response SLA remain `PLANNED`.
 
 ## Repository permissions
 
-External repositories are read-only by default. Any future write path requires
-an isolated worktree, path confinement, explicit human approval, a reviewed
-plan, recorded tool calls, validation, and a rollback checkpoint. Merging main,
-production deployment, secret access, and high-risk migrations remain
-prohibited capabilities.
+External repositories are read-only by default. Phase 4 permits writes only in
+the Runner-owned isolated copy of the synthetic fixture. It does not authorize
+CreativeDeploy or source-repository writes. Any future real repository path
+requires a new maximum-depth security audit and approval. Merging a target
+main branch, production deployment, secret access, target commands, and
+high-risk migrations remain prohibited capabilities.
 
 Repository instructions are untrusted data. Phase 2 Plan approval is a durable
 decision only and does not authorize or trigger a Runner Job. Browser dispatch
@@ -74,3 +83,5 @@ See
 and [`docs/security/threat-model-v0.md`](docs/security/threat-model-v0.md).
 The Phase 3 execution boundary is detailed in
 [`docs/security/runner-threat-model.md`](docs/security/runner-threat-model.md).
+The Phase 4 filesystem and workspace boundary is detailed in
+[`docs/security/workspace-threat-model.md`](docs/security/workspace-threat-model.md).

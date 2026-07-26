@@ -13,6 +13,9 @@ flowchart LR
     HUMAN["Local human decision"]
     RUNNER["Local Runner: typed execution boundary"]
     CRED["Dedicated credential volume"]
+    HANDLE["Runner-local opaque Handle map"]
+    SOURCE["Exact synthetic source: read-only"]
+    STATE["Runner mirror/workspace/registry volumes"]
 
     B -->|"bounded HTTP"| API
     API -->|"parameterized transactions"| DB
@@ -22,6 +25,9 @@ flowchart LR
     HUMAN -->|"exact Plan decision"| API
     RUNNER -->|"outbound protocol v1 only"| API
     CRED -->|"Runner Token only"| RUNNER
+    HANDLE --> RUNNER
+    SOURCE -->|"Runner only"| RUNNER
+    RUNNER --> STATE
 ```
 
 The operator is trusted for this local phase. Browser/API fields and all
@@ -94,7 +100,7 @@ relative path, committed blob/hash, risk label, and matched rule class. Text
 requesting secret access, disabled tests, permission elevation, push, merge,
 or deployment has no policy effect.
 
-There is no LLM in Phase 3. This provenance boundary is still enforced and
+There is no LLM in Phase 4. This provenance boundary is still enforced and
 evaluated so a future model cannot silently inherit repository authority.
 
 ## Plan and approval boundary
@@ -106,12 +112,13 @@ permission elevation, automatic merge, production deploy, authentication/
 payment modification, or high-risk database migration.
 
 This string policy is intentionally not represented as complete security.
-Future execution requires typed tool schemas and an independent runtime policy
-engine.
+Phase 4 execution uses typed schemas and an independent immutable Execution
+Grant; future target commands require another reviewed authority layer.
 
 Only the latest submitted Plan can receive a final decision. PostgreSQL row
 locks and uniqueness ensure one concurrent winner. Approval sets a terminal
-Phase 2 state and does not execute or authorize code.
+Phase 2 state and does not execute or authorize code. Phase 4 requires a new
+pending Grant and a second local-user approve/reject decision.
 
 ## Runner identity and protocol boundary
 
@@ -130,10 +137,13 @@ Phase 2 state and does not execute or authorize code.
 
 ## Permission and lease boundary
 
-The browser submits only a Job kind and typed parameters. The Control Plane
-derives an immutable Envelope with repository none, shell false, and
-Control-Plane-only network. PostgreSQL rejects mutation; Runner recomputes the
-canonical hash and validates expiry/capability/authority before start.
+The browser submits only a typed action. The Control Plane derives an immutable
+Envelope. Repository-free Jobs use repository none. Workspace Jobs use only
+`isolated_workspace` and bind an approved immutable Grant, Runner, Handle,
+Workspace, exact revision, and policy hash. Shell remains false and transport
+is Control-Plane-only; the Grant's target network is none. PostgreSQL rejects
+policy mutation; API and Runner revalidate status, expiry, hashes, bindings,
+capability, and authority throughout the Lease.
 
 Claim uses `FOR UPDATE SKIP LOCKED`; a partial unique index permits one active
 Attempt. Every mutation verifies authenticated Runner, active Attempt, Lease
@@ -144,14 +154,39 @@ reaper expires/requeues or fails attempts within a finite retry budget.
 ## Runner container boundary
 
 Runner is non-root with read-only root filesystem, all capabilities dropped,
-no-new-privileges, tmpfs `/tmp`, no published port, and only its credential
-volume. It joins only the internal `runner-control` network shared with API.
-It has no default/database/Web network, target/customer/developer mount,
-CreativeDeploy, Docker socket, SSH material, or public-network path.
+no-new-privileges, tmpfs `/tmp`, no published port, and dedicated credential,
+mirror, workspace, and registry volumes. It joins only the internal
+`runner-control` network shared with API. The Phase 4 override adds one exact
+synthetic source bind as read-only. It has no default/database/Web network,
+customer/developer-parent mount, CreativeDeploy, Docker socket, SSH material,
+or public-network path.
 
-System Diagnostic and Controlled Wait are in-process typed executors. There is
-no arbitrary command, shell, subprocess executor, filesystem content access,
-dynamic plugin, Git, build, test, browser, or repository operation.
+System Diagnostic and Controlled Wait remain in-process. Workspace tools are
+closed filesystem operations, and `git_ops.py` is the sole fixed Git subprocess
+boundary. There is no arbitrary command, shell, target build/test/browser
+command, dynamic plugin, package lifecycle, or Git delivery operation.
+
+## Workspace filesystem boundary
+
+- The Control Plane stores an opaque handle, never a Runner host path.
+- Mirror population copies only committed objects for the exact approved
+  revision; dirty/untracked content, hooks, submodule worktrees, and LFS
+  objects are excluded.
+- Relative POSIX paths are bounded and resolved by descriptor-relative
+  no-follow directory walks, not string authority.
+- `.git`, sensitive classes, symlinks, hard links, non-regular files, binary,
+  invalid UTF-8, oversized content, and budget overflow fail closed.
+- Create/replace use exclusive mode-0600 same-directory temp files, fsync,
+  atomic link/rename, inode/hash revalidation, and deterministic crash retry.
+- Rollback removes only ledger-owned created files and requires the initial
+  tree fingerprint; discard resolves a Workspace UUID and validates registry
+  plus root device/inode.
+
+Python lacks portable `openat2`/`renameat2` pathname-CAS interfaces. The
+deployed local design therefore makes Runner the only workspace-volume writer
+and uses conservative conflict checks; it is not a hostile same-UID writer or
+multi-tenant sandbox guarantee. See the
+[Workspace threat model](workspace-threat-model.md).
 
 ## Customer 0 mount boundary
 
@@ -170,8 +205,8 @@ The real repository is verified through mount inspection and before/after
 read-only Git observations. A write probe is not performed against
 CreativeDeploy.
 
-This override is historical Phase 2 evidence. Phase 3 base Compose and Runner
-do not use it.
+This override is historical Phase 2 evidence. Phase 3 base Compose and the
+Phase 4 fixture Runner do not use it.
 
 ## Network and public-exposure boundary
 
@@ -184,7 +219,7 @@ network.
 ## Evidence boundary
 
 Adversarial fixtures contain synthetic markers only. Passing local tests and
-Compose checks prove the declared local Phase 3 behavior, not production
+Compose checks prove the declared local Phase 4 behavior, not production
 security certification. CreativeDeploy is internal Customer 0, not external
 enterprise adoption or outcome evidence.
 

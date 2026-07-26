@@ -6,6 +6,9 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "任务" },
   { href: "/runners", label: "Runners" },
+  { href: "/repositories", label: "Repositories" },
+  { href: "/execution-grants", label: "Grants" },
+  { href: "/workspaces", label: "Workspaces" },
 ];
 
 export function MainNavigation() {
@@ -16,14 +19,14 @@ export function MainNavigation() {
       className="border-b border-slate-200 bg-white/90 backdrop-blur"
       aria-label="主导航"
     >
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           className="text-sm font-bold tracking-wide text-slate-950 outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
         >
           VisualEngineer
         </Link>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
           {links.map((link) => {
             const current =
               link.href === "/"

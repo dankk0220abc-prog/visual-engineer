@@ -3,10 +3,10 @@
 ## Purpose and boundary
 
 Runner Protocol v1 is the versioned contract between the VisualEngineer
-Control Plane and a repository-free Local Runner. It supports only registration,
-liveness, dispatch, fenced attempts, progress, cancellation, and typed terminal
-results. It does not carry repository locators, file content, shell commands,
-Git operations, arbitrary tools, LLM messages, or Agent traces.
+Control Plane and a Local Runner. It supports registration, liveness,
+dispatch, fenced attempts, progress, cancellation, typed terminal results, and
+Phase 4's closed fixture Workspace jobs. It never carries a host repository
+path, shell command, arbitrary subprocess, LLM message, or Agent trace.
 
 The canonical Python contract lives in `packages/runner-protocol/`. That package
 contains only Pydantic schemas, enums, constants, canonical serialization,
@@ -71,7 +71,7 @@ unique index permits at most one `leased` or `running` Attempt per Job.
 ## Permission Envelope
 
 The browser never submits an Envelope. The Control Plane derives one from the
-closed Job kind and fixes:
+closed Job kind. Repository-free Jobs fix:
 
 ```text
 repository_access = none
@@ -89,6 +89,15 @@ The Runner recomputes the hash and validates version, expiry, capability, and
 every fixed authority field before it starts. A Deployment Pack cannot expand
 these values.
 
+Workspace Jobs instead fix
+`repository_access=isolated_workspace`, preserve shell false and
+Control-Plane-only transport, and bind one immutable Execution Grant,
+Repository Handle, Workspace, source revision, and Grant policy hash. The
+Grant itself fixes network `none`, source write false, Git delivery false,
+paths, operations, budgets, and expiry. Control Plane revalidates approved
+status and all bindings at claim/start/renew/progress/terminal mutation; Runner
+recomputes both hashes before filesystem work.
+
 ## Typed jobs and results
 
 `system_diagnostic_v1` has no parameters. Its result may include only Runner
@@ -102,6 +111,25 @@ the lease and checks cancellation while waiting.
 
 Both result variants reject unknown fields, secret-like values, absolute paths,
 oversized serialization, and kind mismatch.
+
+Phase 4 adds eight strict Workspace specs/results:
+
+| Kind                      | Closed behavior                                             |
+| ------------------------- | ----------------------------------------------------------- |
+| `workspace_prepare_v1`    | exact local Handle, mirror, detached revision, fingerprints |
+| `workspace_list_v1`       | bounded relative directory/depth/entries                    |
+| `workspace_read_text_v1`  | bounded allowed regular UTF-8 file + SHA-256                |
+| `workspace_write_text_v1` | create-absent or expected-hash replace only                 |
+| `workspace_status_v1`     | bounded fixed Git status                                    |
+| `workspace_diff_v1`       | allowed-path textual diff + hash + Checkpoint payload       |
+| `workspace_rollback_v1`   | initial baseline only                                       |
+| `workspace_discard_v1`    | registry-bound exact worktree disposal                      |
+
+Workspace policy/text/diff limits are 512 path bytes, 32 path components,
+32-KiB single text/diff, and 64-KiB serialized protocol payload/result.
+Unknown fields, control characters, absolute paths, unbounded globs, invalid
+UTF-8/binary content, absolute-path-like or secret-like result strings, and
+kind mismatches are rejected.
 
 ## Idempotency and terminal behavior
 
@@ -122,6 +150,12 @@ Public errors use stable codes and a request ID:
 - payload bound: `protocol_payload_too_large`;
 - availability: `runner_registration_unavailable`.
 
+Workspace failures additionally use a closed `FailureCode` taxonomy, including
+path/sensitive/symlink/hardlink/non-regular/binary/size/budget denials,
+expected-absent and `content_conflict`, source/revision/workspace identity,
+atomic write, diff, cancellation, and envelope/policy errors. Arbitrary
+exception text never becomes a public error.
+
 Messages do not include tokens, authorization headers, host paths, database
 details, arbitrary exception text, or customer content.
 
@@ -132,5 +166,7 @@ schema changes must remain additive only where strict clients can safely
 ignore nothing; otherwise a new URL and protocol version are required.
 OpenAPI is exported from FastAPI and generated TypeScript is checked for drift.
 
-Agent Trace is a future, separate concept. `RunnerJobEvent` records current
-typed execution facts only.
+Agent Trace is a future, separate concept. `RunnerJobEvent` and
+`WorkspaceEvent` record current typed execution facts only. Adding a shell,
+target command, Git delivery, or new authority field requires a separately
+reviewed protocol version/ADR; it is not an additive Phase 4 change.

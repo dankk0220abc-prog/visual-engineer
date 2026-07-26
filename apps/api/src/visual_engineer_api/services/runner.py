@@ -19,7 +19,13 @@ from visual_engineer_api.models.runner import (
     RunnerJobAttempt,
     RunnerJobEvent,
 )
+from visual_engineer_api.models.workspace import (
+    Workspace,
+    WorkspaceCheckpoint,
+    WorkspaceEvent,
+)
 from visual_engineer_api.repositories.runner import RunnerRepository
+from visual_engineer_api.repositories.workspace import WorkspaceRepository
 from visual_engineer_api.schemas.runner import (
     ActiveJobSummary,
     PermissionEnvelopeResponse,
@@ -39,7 +45,10 @@ from visual_engineer_runner_protocol import (
     ClaimResponse,
     CompleteRequest,
     ControlledWaitJobSpec,
+    ControlledWaitResult,
+    DiagnosticResult,
     EventType,
+    ExecutionGrantPolicy,
     FailRequest,
     HeartbeatRequest,
     HeartbeatResponse,
@@ -56,7 +65,19 @@ from visual_engineer_runner_protocol import (
     RunnerStatus,
     StartRequest,
     SystemDiagnosticJobSpec,
+    WorkspaceBoundJobSpec,
+    WorkspaceCheckpointPayload,
+    WorkspaceDiffResult,
+    WorkspaceDiscardResult,
+    WorkspaceJobSpec,
+    WorkspaceListResult,
+    WorkspacePrepareResult,
+    WorkspaceReadTextResult,
+    WorkspaceRollbackResult,
+    WorkspaceStatusResult,
+    WorkspaceWriteTextResult,
     compute_permission_policy_hash,
+    execution_grant_policy_hash_matches,
     validate_result_payload,
     validate_safe_error_message,
 )
@@ -66,6 +87,7 @@ from visual_engineer_runner_protocol import (
 
 LOGGER = logging.getLogger("visual_engineer_api.runner")
 RESULT_ADAPTER: TypeAdapter[ResultPayload] = TypeAdapter(ResultPayload)
+JOB_SPEC_ADAPTER: TypeAdapter[JobSpec] = TypeAdapter(JobSpec)
 REAPER_ADVISORY_LOCK = 8_617_203_003
 
 
@@ -101,6 +123,7 @@ class RunnerService:
     def __init__(self, session: Session, settings: Settings | None = None) -> None:
         self._session = session
         self._runners = RunnerRepository(session)
+        self._workspaces = WorkspaceRepository(session)
         self._settings = settings or get_settings()
 
     def register(
@@ -195,6 +218,8 @@ class RunnerService:
         meaningful_transition = runner.status != "online"
         runner.last_seen_at = now
         runner.software_version = payload.software_version
+        if payload.capabilities is not None:
+            runner.capabilities = [capability.value for capability in payload.capabilities]
         runner.status = "online"
         runner.version += 1
         if meaningful_transition:
@@ -259,30 +284,83 @@ class RunnerService:
         return self._runner_response(runner)
 
     def create_job(self, spec: JobSpec, *, request_id: str) -> RunnerJobResponse:
+        if isinstance(spec, WorkspaceBoundJobSpec):
+            raise RunnerServiceError(
+                "execution_grant_required",
+                "Workspace Jobs can only be created by typed Workspace actions",
+                category="policy",
+            )
+        return self._create_job(spec, request_id=request_id)
+
+    def create_workspace_job(
+        self,
+        spec: WorkspaceJobSpec,
+        *,
+        request_id: str,
+    ) -> RunnerJobResponse:
+        grant = spec.execution_grant
+        if not execution_grant_policy_hash_matches(grant, grant.policy_hash):
+            raise RunnerServiceError(
+                "execution_grant_hash_mismatch",
+                "Execution Grant policy hash is invalid",
+                category="policy",
+            )
+        if grant.expires_at <= utc_now():
+            raise RunnerServiceError(
+                "execution_grant_expired",
+                "Execution Grant is expired",
+                category="conflict",
+            )
+        expected_operation = spec.kind.value.removeprefix("workspace_").removesuffix("_v1")
+        if expected_operation not in {item.value for item in grant.allowed_operations}:
+            raise RunnerServiceError(
+                "operation_not_granted",
+                "Workspace operation is outside the Execution Grant",
+                category="policy",
+            )
+        return self._create_job(spec, request_id=request_id)
+
+    def _create_job(self, spec: JobSpec, *, request_id: str) -> RunnerJobResponse:
         now = utc_now()
         job_id = uuid.uuid4()
         envelope_id = uuid.uuid4()
         kind = JobKind(spec.kind)
-        max_runtime = (
-            10
-            if isinstance(spec, SystemDiagnosticJobSpec)
-            else min(60, math.ceil(spec.duration_ms / 1000) + 5)
-        )
+        workspace_spec = spec if isinstance(spec, WorkspaceBoundJobSpec) else None
+        if isinstance(spec, SystemDiagnosticJobSpec):
+            max_runtime = 10
+        elif isinstance(spec, ControlledWaitJobSpec):
+            max_runtime = min(60, math.ceil(spec.duration_ms / 1000) + 5)
+        elif kind == JobKind.WORKSPACE_PREPARE_V1:
+            max_runtime = 120
+        elif kind in {
+            JobKind.WORKSPACE_ROLLBACK_V1,
+            JobKind.WORKSPACE_DISCARD_V1,
+        }:
+            max_runtime = 60
+        else:
+            max_runtime = 30
+        envelope_expiry = now + timedelta(seconds=self._settings.runner_envelope_ttl_seconds)
+        if workspace_spec is not None:
+            envelope_expiry = min(envelope_expiry, workspace_spec.execution_grant.expires_at)
         envelope_values: dict[str, Any] = {
             "id": envelope_id,
             "envelope_version": 1,
             "job_id": job_id,
-            "authorization_source": "local_user_job_dispatch",
+            "authorization_source": (
+                "execution_grant" if workspace_spec is not None else "local_user_job_dispatch"
+            ),
             "allowed_capabilities": [kind.value],
-            "repository_access": "none",
+            "repository_access": ("isolated_workspace" if workspace_spec is not None else "none"),
             "shell_access": False,
             "network_policy": "control_plane_only",
             "max_runtime_seconds": max_runtime,
             "lease_seconds": self._settings.runner_lease_seconds,
             "max_attempts": self._settings.runner_job_max_attempts,
-            "max_result_bytes": self._settings.runner_max_result_bytes,
+            "max_result_bytes": (
+                64 * 1024 if workspace_spec is not None else self._settings.runner_max_result_bytes
+            ),
             "issued_at": now,
-            "expires_at": now + timedelta(seconds=self._settings.runner_envelope_ttl_seconds),
+            "expires_at": envelope_expiry,
             "policy_hash": "0" * 64,
         }
         draft = ProtocolPermissionEnvelope.model_validate(envelope_values)
@@ -297,6 +375,23 @@ class RunnerService:
             permission_envelope_id=envelope_id,
             requested_by="local_user",
             parameters=parameters,
+            execution_grant_id=(
+                workspace_spec.execution_grant.id if workspace_spec is not None else None
+            ),
+            workspace_id=(workspace_spec.workspace_id if workspace_spec is not None else None),
+            repository_handle_id=(
+                workspace_spec.execution_grant.repository_handle_id
+                if workspace_spec is not None
+                else None
+            ),
+            source_revision=(
+                workspace_spec.execution_grant.source_revision
+                if workspace_spec is not None
+                else None
+            ),
+            execution_policy_hash=(
+                workspace_spec.execution_grant.policy_hash if workspace_spec is not None else None
+            ),
             attempt_count=0,
             max_attempts=protocol_envelope.max_attempts,
             version=1,
@@ -372,10 +467,40 @@ class RunnerService:
                         server_time=now,
                     )
 
-        job = self._runners.claimable_job(runner.capabilities)
+        job = self._runners.claimable_job(runner.capabilities, runner.id)
         if job is None:
             self._session.commit()
             return ClaimResponse(assignment=None, server_time=now)
+        if job.workspace_id is not None:
+            try:
+                self._require_workspace_authority(job, runner, now)
+            except RunnerServiceError as exc:
+                transition_job(job, "failed")
+                job.error_code = exc.code
+                job.error_message = exc.message
+                job.completed_at = now
+                self._event(
+                    EventType.POLICY_DENIED,
+                    request_id=request_id,
+                    runner_id=runner.id,
+                    job_id=job.id,
+                    metadata={"reason_code": exc.code},
+                )
+                self._event(
+                    EventType.JOB_FAILED,
+                    request_id=request_id,
+                    runner_id=runner.id,
+                    job_id=job.id,
+                    metadata={"error_code": exc.code},
+                )
+                self._workspace_job_failed(
+                    job,
+                    error_code=exc.code,
+                    error_message=exc.message,
+                    request_id=request_id,
+                )
+                self._session.commit()
+                return ClaimResponse(assignment=None, server_time=now)
         envelope = self._required_envelope(job)
         if envelope.expires_at <= now:
             transition_job(job, "failed")
@@ -396,6 +521,13 @@ class RunnerService:
                 job_id=job.id,
                 metadata={"error_code": "envelope_expired"},
             )
+            if job.workspace_id is not None:
+                self._workspace_job_failed(
+                    job,
+                    error_code="envelope_expired",
+                    error_message=job.error_message,
+                    request_id=request_id,
+                )
             self._session.commit()
             return ClaimResponse(assignment=None, server_time=now)
 
@@ -457,6 +589,8 @@ class RunnerService:
         attempt.started_at = now
         attempt.last_heartbeat_at = now
         attempt.leased_until = now + timedelta(seconds=envelope.lease_seconds)
+        if job.workspace_id is not None:
+            self._workspace_job_started(job, attempt, request_id=request_id)
         self._event(
             EventType.JOB_STARTED,
             request_id=request_id,
@@ -616,13 +750,24 @@ class RunnerService:
         job.result = payload.result.model_dump(mode="json")
         job.completed_at = now
         job.active_attempt_id = None
+        if job.workspace_id is not None:
+            self._workspace_job_completed(
+                job,
+                payload.result,
+                request_id=request_id,
+                now=now,
+            )
         self._event(
             EventType.JOB_SUCCEEDED,
             request_id=request_id,
             runner_id=authenticated.id,
             job_id=job.id,
             attempt_id=attempt.id,
-            metadata={"duration_ms": _result_duration(payload.result)},
+            metadata=(
+                {"duration_ms": _result_duration(payload.result)}
+                if job.workspace_id is None
+                else {"kind": job.kind}
+            ),
         )
         self._session.commit()
         self._log_event(
@@ -676,12 +821,34 @@ class RunnerService:
         job.error_message = safe_message or "Runner reported a typed failure"
         job.completed_at = now
         job.active_attempt_id = None
+        if job.workspace_id is not None:
+            self._workspace_job_failed(
+                job,
+                error_code=payload.error_code.value,
+                error_message=job.error_message,
+                request_id=request_id,
+            )
         if payload.error_code.value in {
             "policy_denied",
             "unsupported_capability",
             "envelope_expired",
             "envelope_hash_mismatch",
             "result_rejected",
+            "path_invalid",
+            "path_denied",
+            "sensitive_path_denied",
+            "symlink_denied",
+            "hardlink_denied",
+            "not_regular_file",
+            "binary_denied",
+            "invalid_utf8",
+            "file_too_large",
+            "file_count_budget_exceeded",
+            "total_write_budget_exceeded",
+            "diff_budget_exceeded",
+            "content_conflict",
+            "expected_absent_conflict",
+            "workspace_state_invalid",
         }:
             self._event(
                 EventType.POLICY_DENIED,
@@ -738,6 +905,8 @@ class RunnerService:
         attempt.completed_at = now
         job.completed_at = now
         job.active_attempt_id = None
+        if job.workspace_id is not None:
+            self._workspace_job_cancelled(job, request_id=request_id)
         self._event(
             EventType.CANCEL_ACKNOWLEDGED,
             request_id=request_id,
@@ -773,6 +942,8 @@ class RunnerService:
         if job.state == "queued":
             transition_job(job, "cancelled")
             job.completed_at = now
+            if job.workspace_id is not None:
+                self._workspace_job_cancelled(job, request_id=request_id)
         else:
             transition_job(job, "cancel_requested")
         attempt = (
@@ -838,6 +1009,10 @@ class RunnerService:
             attempt.error_code = "lease_expired"
             attempt.error_message = "Runner lease expired"
             job.active_attempt_id = None
+            if job.workspace_id is not None:
+                workspace = self._workspaces.get_workspace(job.workspace_id, lock=True)
+                if workspace is not None:
+                    workspace.active_attempt_id = None
             expired_count += 1
             self._event(
                 EventType.LEASE_EXPIRED,
@@ -853,6 +1028,8 @@ class RunnerService:
             if job.state == "cancel_requested":
                 transition_job(job, "cancelled")
                 job.completed_at = now
+                if job.workspace_id is not None:
+                    self._workspace_job_cancelled(job, request_id=request_id)
                 continue
             if job.attempt_count < job.max_attempts:
                 transition_job(job, "queued")
@@ -871,6 +1048,13 @@ class RunnerService:
                 job.error_message = "Runner Job retry budget was exhausted"
                 job.completed_at = now
                 failed_count += 1
+                if job.workspace_id is not None:
+                    self._workspace_job_failed(
+                        job,
+                        error_code="retry_exhausted",
+                        error_message=job.error_message,
+                        request_id=request_id,
+                    )
                 self._event(
                     EventType.JOB_FAILED,
                     request_id=request_id,
@@ -923,12 +1107,15 @@ class RunnerService:
             or attempt.state not in {"leased", "running"}
         ):
             self._stale_lease()
-        if attempt.leased_until <= utc_now():
+        now = utc_now()
+        if attempt.leased_until <= now:
             self._stale_lease()
         if job.state not in {"leased", "running"} and not (
             allow_cancel_requested and job.state == "cancel_requested"
         ):
             self._stale_lease()
+        if job.workspace_id is not None:
+            self._require_workspace_authority(job, authenticated, now)
         return job, attempt, self._required_envelope(job)
 
     def _idempotent_terminal_attempt(
@@ -947,6 +1134,482 @@ class RunnerService:
         ):
             self._stale_lease()
         return attempt
+
+    def _require_workspace_authority(
+        self,
+        job: RunnerJob,
+        runner: Runner,
+        now: datetime,
+    ) -> ExecutionGrantPolicy:
+        if (
+            job.execution_grant_id is None
+            or job.workspace_id is None
+            or job.repository_handle_id is None
+            or job.source_revision is None
+            or job.execution_policy_hash is None
+        ):
+            raise RunnerServiceError(
+                "workspace_binding_missing",
+                "Workspace Job binding is incomplete",
+                category="policy",
+            )
+        authority = self._workspaces.approved_grant_for_job(
+            job.execution_grant_id,
+            job.workspace_id,
+            now,
+        )
+        if authority is None:
+            raise RunnerServiceError(
+                "execution_grant_inactive",
+                "Execution Grant is revoked, expired, or unavailable",
+                category="conflict",
+            )
+        grant, workspace = authority
+        handle = self._workspaces.get_repository_handle(job.repository_handle_id, lock=True)
+        cleanup_job = job.kind == JobKind.WORKSPACE_DISCARD_V1.value
+        if (
+            handle is None
+            or handle.status != "available"
+            or handle.runner_id != runner.id
+            or handle.current_revision != grant.source_revision
+            or workspace.runner_id != runner.id
+            or workspace.repository_handle_id != handle.id
+            or workspace.source_revision != grant.source_revision
+            or job.repository_handle_id != grant.repository_handle_id
+            or job.source_revision != grant.source_revision
+            or job.execution_policy_hash != grant.policy_hash
+            or (
+                not cleanup_job
+                and (
+                    workspace.expires_at <= now
+                    or workspace.state in {"discarded", "failed", "expired"}
+                )
+            )
+        ):
+            raise RunnerServiceError(
+                "workspace_authority_mismatch",
+                "Workspace, Runner, revision, or Grant binding is stale",
+                category="conflict",
+            )
+        values = {
+            "id": grant.id,
+            "grant_version": grant.grant_version,
+            "task_id": grant.task_id,
+            "run_id": grant.run_id,
+            "plan_id": grant.plan_id,
+            "repository_handle_id": grant.repository_handle_id,
+            "repository_opaque_handle": handle.opaque_handle,
+            "source_revision": grant.source_revision,
+            "snapshot_fingerprint": grant.snapshot_fingerprint,
+            "allowed_operations": grant.allowed_operations,
+            "allowed_paths": grant.allowed_paths,
+            "denied_paths": grant.denied_paths,
+            "max_files_changed": grant.max_files_changed,
+            "max_total_write_bytes": grant.max_total_write_bytes,
+            "max_single_file_bytes": grant.max_single_file_bytes,
+            "max_diff_bytes": grant.max_diff_bytes,
+            "workspace_ttl_seconds": grant.workspace_ttl_seconds,
+            "network_policy": grant.network_policy,
+            "shell_access": grant.shell_access,
+            "git_delivery_access": grant.git_delivery_access,
+            "source_repository_write_access": grant.source_repository_write_access,
+            "expires_at": grant.expires_at,
+            "policy_hash": grant.policy_hash,
+        }
+        try:
+            policy = ExecutionGrantPolicy.model_validate(values)
+            stored_spec = JOB_SPEC_ADAPTER.validate_python({"kind": job.kind, **job.parameters})
+        except ValidationError as exc:
+            raise RunnerServiceError(
+                "execution_grant_invalid",
+                "Stored Execution Grant policy is invalid",
+                category="policy",
+            ) from exc
+        if (
+            not execution_grant_policy_hash_matches(policy, policy.policy_hash)
+            or not isinstance(stored_spec, WorkspaceBoundJobSpec)
+            or stored_spec.workspace_id != workspace.id
+            or stored_spec.execution_grant.model_dump(mode="json") != policy.model_dump(mode="json")
+        ):
+            raise RunnerServiceError(
+                "execution_grant_hash_mismatch",
+                "Execution Grant policy hash or Job copy is invalid",
+                category="policy",
+            )
+        return policy
+
+    def _workspace_job_started(
+        self,
+        job: RunnerJob,
+        attempt: RunnerJobAttempt,
+        *,
+        request_id: str,
+    ) -> None:
+        if job.workspace_id is None:
+            return
+        workspace = self._workspaces.get_workspace(job.workspace_id, lock=True)
+        if workspace is None:
+            raise RunnerServiceError(
+                "workspace_not_found",
+                "Workspace was not found",
+                category="conflict",
+            )
+        if job.kind == JobKind.WORKSPACE_PREPARE_V1.value:
+            if workspace.state not in {"requested", "preparing"}:
+                self._conflict(
+                    "workspace_state_invalid",
+                    "Workspace cannot be prepared from its current state",
+                )
+            workspace.state = "preparing"
+        elif job.kind == JobKind.WORKSPACE_DIFF_V1.value:
+            if workspace.state not in {"ready", "active", "sealed"}:
+                self._conflict(
+                    "workspace_state_invalid",
+                    "Workspace diff is unavailable from its current state",
+                )
+            if workspace.state != "sealed":
+                workspace.state = "sealing"
+        elif job.kind == JobKind.WORKSPACE_ROLLBACK_V1.value:
+            if workspace.state != "rollback_requested":
+                self._conflict(
+                    "workspace_state_invalid",
+                    "Workspace rollback was not requested",
+                )
+        elif job.kind == JobKind.WORKSPACE_DISCARD_V1.value:
+            if workspace.state != "discard_requested":
+                self._conflict(
+                    "workspace_state_invalid",
+                    "Workspace discard was not requested",
+                )
+        else:
+            allowed_states = {"ready", "active", "sealed", "rolled_back"}
+            if workspace.state not in allowed_states:
+                self._conflict(
+                    "workspace_state_invalid",
+                    "Workspace tool is unavailable from its current state",
+                )
+            if job.kind == JobKind.WORKSPACE_WRITE_TEXT_V1.value and workspace.state not in {
+                "ready",
+                "active",
+            }:
+                self._conflict(
+                    "workspace_state_invalid",
+                    "A sealed or rolled-back Workspace cannot be written",
+                )
+            if workspace.state == "ready":
+                workspace.state = "active"
+        workspace.active_attempt_id = attempt.id
+        self._workspace_event(
+            workspace,
+            "tool_started",
+            request_id=request_id,
+            metadata={"job_id": str(job.id), "kind": job.kind},
+        )
+
+    def _workspace_job_completed(
+        self,
+        job: RunnerJob,
+        result: ResultPayload,
+        *,
+        request_id: str,
+        now: datetime,
+    ) -> None:
+        if job.workspace_id is None:
+            return
+        workspace = self._workspaces.get_workspace(job.workspace_id, lock=True)
+        if workspace is None:
+            raise RunnerServiceError(
+                "workspace_not_found",
+                "Workspace was not found",
+                category="conflict",
+            )
+        workspace.active_attempt_id = None
+        workspace.error_code = None
+        workspace.error_message = None
+        if isinstance(result, WorkspacePrepareResult):
+            if (
+                result.workspace_id != workspace.id
+                or result.repository_handle_id != workspace.repository_handle_id
+                or result.source_revision != workspace.source_revision
+                or result.initial_tree_hash != result.current_tree_hash
+            ):
+                raise RunnerServiceError(
+                    "workspace_result_mismatch",
+                    "Workspace preparation result does not match its binding",
+                    category="policy",
+                )
+            workspace.workspace_fingerprint = result.workspace_fingerprint
+            workspace.initial_tree_hash = result.initial_tree_hash
+            workspace.current_tree_hash = result.current_tree_hash
+            workspace.state = "ready"
+            self._workspace_event(
+                workspace,
+                "mirror_prepared",
+                request_id=request_id,
+                metadata={"source_revision": result.source_revision},
+            )
+            self._workspace_event(
+                workspace,
+                "workspace_prepared",
+                request_id=request_id,
+                metadata={"state": workspace.state},
+            )
+        elif isinstance(result, (WorkspaceListResult, WorkspaceReadTextResult)):
+            if workspace.state == "ready":
+                workspace.state = "active"
+        elif isinstance(result, WorkspaceStatusResult):
+            workspace.current_tree_hash = result.current_tree_hash
+            workspace.changed_file_count = result.changed_file_count
+            if workspace.state == "ready":
+                workspace.state = "active"
+        elif isinstance(result, WorkspaceWriteTextResult):
+            workspace.current_tree_hash = result.current_tree_hash
+            workspace.changed_file_count = result.changed_file_count
+            workspace.total_written_bytes = result.total_written_bytes
+            if result.operation.value == "create":
+                workspace.created_paths = sorted(
+                    set([*workspace.created_paths, result.relative_path])
+                )
+            workspace.state = "active"
+            self._create_workspace_checkpoint(
+                workspace,
+                result.checkpoint,
+                request_id=request_id,
+            )
+        elif isinstance(result, WorkspaceDiffResult):
+            workspace.current_tree_hash = result.current_tree_hash
+            workspace.changed_file_count = len(result.changed_paths)
+            workspace.state = "sealed"
+            workspace.sealed_at = now
+            self._create_workspace_checkpoint(
+                workspace,
+                result.checkpoint,
+                request_id=request_id,
+            )
+            self._workspace_event(
+                workspace,
+                "diff_generated",
+                request_id=request_id,
+                metadata={
+                    "diff_hash": result.diff_hash,
+                    "changed_file_count": len(result.changed_paths),
+                },
+            )
+            self._workspace_event(
+                workspace,
+                "workspace_sealed",
+                request_id=request_id,
+                metadata={"state": workspace.state},
+            )
+        elif isinstance(result, WorkspaceRollbackResult):
+            if (
+                not result.clean
+                or workspace.initial_tree_hash is None
+                or result.current_tree_hash != workspace.initial_tree_hash
+            ):
+                raise RunnerServiceError(
+                    "rollback_verification_failed",
+                    "Workspace rollback did not restore the initial baseline",
+                    category="policy",
+                )
+            workspace.current_tree_hash = result.current_tree_hash
+            workspace.changed_file_count = 0
+            workspace.total_written_bytes = 0
+            workspace.created_paths = []
+            workspace.state = "rolled_back"
+            self._workspace_event(
+                workspace,
+                "rollback_completed",
+                request_id=request_id,
+                metadata={"state": workspace.state},
+            )
+        elif isinstance(result, WorkspaceDiscardResult):
+            workspace.state = "discarded"
+            workspace.discarded_at = now
+            self._workspace_event(
+                workspace,
+                "workspace_discarded",
+                request_id=request_id,
+                metadata={"state": workspace.state},
+            )
+        else:
+            raise RunnerServiceError(
+                "workspace_result_mismatch",
+                "Workspace Job returned an incompatible result",
+                category="policy",
+            )
+        self._workspace_event(
+            workspace,
+            "tool_succeeded",
+            request_id=request_id,
+            metadata={"job_id": str(job.id), "kind": job.kind, "state": workspace.state},
+        )
+
+    def _workspace_job_failed(
+        self,
+        job: RunnerJob,
+        *,
+        error_code: str,
+        error_message: str,
+        request_id: str,
+    ) -> None:
+        if job.workspace_id is None:
+            return
+        workspace = self._workspaces.get_workspace(job.workspace_id, lock=True)
+        if workspace is None:
+            return
+        workspace.active_attempt_id = None
+        denial_codes = {
+            "path_invalid",
+            "path_denied",
+            "sensitive_path_denied",
+            "symlink_denied",
+            "hardlink_denied",
+            "not_regular_file",
+            "binary_denied",
+            "invalid_utf8",
+            "file_too_large",
+            "file_count_budget_exceeded",
+            "total_write_budget_exceeded",
+            "diff_budget_exceeded",
+            "content_conflict",
+            "expected_absent_conflict",
+            "workspace_state_invalid",
+        }
+        if job.kind == JobKind.WORKSPACE_PREPARE_V1.value or error_code not in denial_codes:
+            workspace.state = "failed"
+            workspace.error_code = error_code[:64]
+            workspace.error_message = error_message[:500]
+            event_type = "workspace_failed"
+        else:
+            if workspace.state == "sealing":
+                workspace.state = "sealed" if workspace.sealed_at is not None else "active"
+            event_type = "tool_denied"
+        self._workspace_event(
+            workspace,
+            event_type,
+            request_id=request_id,
+            metadata={
+                "job_id": str(job.id),
+                "kind": job.kind,
+                "error_code": error_code,
+                "state": workspace.state,
+            },
+        )
+
+    def _workspace_job_cancelled(
+        self,
+        job: RunnerJob,
+        *,
+        request_id: str,
+    ) -> None:
+        if job.workspace_id is None:
+            return
+        workspace = self._workspaces.get_workspace(job.workspace_id, lock=True)
+        if workspace is None:
+            return
+        workspace.active_attempt_id = None
+        if job.kind in {
+            JobKind.WORKSPACE_PREPARE_V1.value,
+            JobKind.WORKSPACE_ROLLBACK_V1.value,
+            JobKind.WORKSPACE_DISCARD_V1.value,
+        }:
+            workspace.state = "failed"
+            workspace.error_code = "workspace_cancelled"
+            workspace.error_message = "Workspace operation was cancelled"
+            event_type = "workspace_failed"
+        else:
+            if workspace.state == "sealing":
+                workspace.state = "sealed" if workspace.sealed_at is not None else "active"
+            event_type = "tool_denied"
+        self._workspace_event(
+            workspace,
+            event_type,
+            request_id=request_id,
+            metadata={
+                "job_id": str(job.id),
+                "kind": job.kind,
+                "reason_code": "workspace_cancelled",
+                "state": workspace.state,
+            },
+        )
+
+    def _create_workspace_checkpoint(
+        self,
+        workspace: Workspace,
+        payload: WorkspaceCheckpointPayload,
+        *,
+        request_id: str,
+    ) -> None:
+        sequence = self._workspaces.next_checkpoint_sequence(workspace.id)
+        checkpoint = WorkspaceCheckpoint(
+            workspace_id=workspace.id,
+            sequence=sequence,
+            source_revision=payload.source_revision,
+            tree_fingerprint=payload.tree_fingerprint,
+            diff_hash=payload.diff_hash,
+            changed_paths=payload.changed_paths,
+            changed_file_count=payload.changed_file_count,
+            total_diff_bytes=payload.total_diff_bytes,
+            diff_artifact=payload.diff,
+        )
+        self._workspaces.add(checkpoint)
+        self._session.flush()
+        self._workspace_event(
+            workspace,
+            "checkpoint_created",
+            request_id=request_id,
+            metadata={
+                "checkpoint_sequence": sequence,
+                "diff_hash": payload.diff_hash,
+                "changed_file_count": payload.changed_file_count,
+            },
+        )
+
+    def _workspace_event(
+        self,
+        workspace: Workspace,
+        event_type: str,
+        *,
+        request_id: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        allowed = {
+            "changed_file_count",
+            "checkpoint_sequence",
+            "diff_hash",
+            "error_code",
+            "job_id",
+            "kind",
+            "operation",
+            "policy_hash",
+            "reason_code",
+            "relative_path",
+            "source_revision",
+            "state",
+            "total_written_bytes",
+        }
+        sanitized: dict[str, Any] = {}
+        for key, value in metadata.items():
+            if key not in allowed:
+                continue
+            if isinstance(value, str):
+                if key == "relative_path" and value.startswith("/"):
+                    continue
+                sanitized[key] = value[:128]
+            elif isinstance(value, (bool, int, float)):
+                sanitized[key] = value
+        self._workspaces.add(
+            WorkspaceEvent(
+                workspace_id=workspace.id,
+                runner_id=workspace.runner_id,
+                event_type=event_type,
+                sequence=self._workspaces.next_workspace_event_sequence(workspace.id),
+                request_id=request_id[:128],
+                details=sanitized,
+            )
+        )
+        self._session.flush()
 
     def _required_envelope(self, job: RunnerJob) -> PermissionEnvelope:
         envelope = self._runners.get_envelope(job.permission_envelope_id)
@@ -981,13 +1644,14 @@ class RunnerService:
 
     def _assignment(self, job: RunnerJob, attempt: RunnerJobAttempt) -> JobAssignment:
         envelope = self._required_envelope(job)
-        spec: JobSpec
-        if job.kind == JobKind.SYSTEM_DIAGNOSTIC_V1.value:
-            spec = SystemDiagnosticJobSpec()
-        else:
-            spec = ControlledWaitJobSpec(
-                duration_ms=int(job.parameters["duration_ms"]),
-            )
+        try:
+            spec = JOB_SPEC_ADAPTER.validate_python({"kind": job.kind, **job.parameters})
+        except ValidationError as exc:
+            raise RunnerServiceError(
+                "stored_job_spec_invalid",
+                "Stored Runner Job specification is invalid",
+                category="internal",
+            ) from exc
         return JobAssignment(
             job_id=job.id,
             attempt_id=attempt.id,
@@ -1050,6 +1714,11 @@ class RunnerService:
             state=JobState(job.state),
             requested_by=job.requested_by,
             parameters=job.parameters,
+            execution_grant_id=job.execution_grant_id,
+            workspace_id=job.workspace_id,
+            repository_handle_id=job.repository_handle_id,
+            source_revision=job.source_revision,
+            execution_policy_hash=job.execution_policy_hash,
             active_attempt_id=job.active_attempt_id,
             attempt_count=job.attempt_count,
             max_attempts=job.max_attempts,
@@ -1220,9 +1889,11 @@ def _identifier_hint(value: uuid.UUID | None) -> str | None:
 
 
 def _result_duration(result: ResultPayload) -> float:
-    if hasattr(result, "duration_ms"):
+    if isinstance(result, DiagnosticResult):
         return float(result.duration_ms)
-    return float(result.elapsed_duration_ms)
+    if isinstance(result, ControlledWaitResult):
+        return float(result.elapsed_duration_ms)
+    return 0.0
 
 
 def _sanitize_event_metadata(metadata: dict[str, Any]) -> dict[str, Any]:

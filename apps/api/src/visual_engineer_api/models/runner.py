@@ -62,17 +62,26 @@ class PermissionEnvelope(Base):
         UniqueConstraint("job_id", name="uq_permission_envelopes_job_id"),
         CheckConstraint("envelope_version = 1", name="ck_permission_envelopes_version"),
         CheckConstraint(
-            "authorization_source = 'local_user_job_dispatch'",
+            "authorization_source IN ('local_user_job_dispatch', 'execution_grant')",
             name="ck_permission_envelopes_authorization_source",
         ),
-        CheckConstraint("repository_access = 'none'", name="ck_permission_envelopes_repository"),
+        CheckConstraint(
+            "repository_access IN ('none', 'isolated_workspace')",
+            name="ck_permission_envelopes_repository",
+        ),
+        CheckConstraint(
+            "(authorization_source = 'local_user_job_dispatch' AND repository_access = 'none') "
+            "OR (authorization_source = 'execution_grant' "
+            "AND repository_access = 'isolated_workspace')",
+            name="ck_permission_envelopes_authority_repository",
+        ),
         CheckConstraint("shell_access = false", name="ck_permission_envelopes_shell"),
         CheckConstraint(
             "network_policy = 'control_plane_only'",
             name="ck_permission_envelopes_network",
         ),
         CheckConstraint(
-            "max_runtime_seconds BETWEEN 1 AND 60",
+            "max_runtime_seconds BETWEEN 1 AND 120",
             name="ck_permission_envelopes_runtime",
         ),
         CheckConstraint("lease_seconds BETWEEN 2 AND 60", name="ck_permission_envelopes_lease"),
@@ -98,7 +107,7 @@ class PermissionEnvelope(Base):
         String(64), nullable=False, default="local_user_job_dispatch"
     )
     allowed_capabilities: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    repository_access: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
+    repository_access: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
     shell_access: Mapped[bool] = mapped_column(nullable=False, default=False)
     network_policy: Mapped[str] = mapped_column(
         String(32), nullable=False, default="control_plane_only"
@@ -119,7 +128,10 @@ class RunnerJob(Base):
     __tablename__ = "runner_jobs"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('system_diagnostic_v1', 'controlled_wait_v1')",
+            "kind IN ('system_diagnostic_v1', 'controlled_wait_v1', "
+            "'workspace_prepare_v1', 'workspace_list_v1', 'workspace_read_text_v1', "
+            "'workspace_write_text_v1', 'workspace_status_v1', 'workspace_diff_v1', "
+            "'workspace_rollback_v1', 'workspace_discard_v1')",
             name="ck_runner_jobs_kind",
         ),
         CheckConstraint(
@@ -134,11 +146,22 @@ class RunnerJob(Base):
             name="ck_runner_jobs_attempt_budget",
         ),
         CheckConstraint("version >= 1", name="ck_runner_jobs_version"),
+        CheckConstraint(
+            "(kind IN ('system_diagnostic_v1', 'controlled_wait_v1') "
+            "AND execution_grant_id IS NULL AND workspace_id IS NULL "
+            "AND repository_handle_id IS NULL AND source_revision IS NULL "
+            "AND execution_policy_hash IS NULL) OR "
+            "(kind LIKE 'workspace_%' AND execution_grant_id IS NOT NULL "
+            "AND workspace_id IS NOT NULL AND repository_handle_id IS NOT NULL "
+            "AND source_revision IS NOT NULL AND execution_policy_hash IS NOT NULL)",
+            name="ck_runner_jobs_workspace_binding",
+        ),
         UniqueConstraint(
             "permission_envelope_id",
             name="uq_runner_jobs_permission_envelope_id",
         ),
         Index("ix_runner_jobs_state_created_at", "state", "created_at"),
+        Index("ix_runner_jobs_workspace_created_at", "workspace_id", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -153,6 +176,19 @@ class RunnerJob(Base):
         String(32), nullable=False, default="local_user", server_default="local_user"
     )
     parameters: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    execution_grant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("execution_grants.id", ondelete="RESTRICT"),
+    )
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE")
+    )
+    repository_handle_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("repository_handles.id", ondelete="RESTRICT"),
+    )
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    execution_policy_hash: Mapped[str | None] = mapped_column(String(64))
     active_attempt_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(

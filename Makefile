@@ -2,11 +2,12 @@ SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
 TEST_DATABASE_URL ?= postgresql+psycopg://visualengineer:visualengineer-test-local@localhost:55433/visualengineer_test
+WORKSPACE_FIXTURE_REPOSITORY_PATH ?= $(CURDIR)/.runtime/workspace-fixture
 
-.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-runner test-web build build-web e2e eval verify platform-up platform-down platform-logs runner-status runner-smoke runner-chaos-check up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
+.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-runner test-web build build-web e2e eval verify platform-up platform-down platform-logs runner-status runner-smoke runner-chaos-check workspace-smoke workspace-chaos-check workspace-security-check up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
 
 help:
-	@echo "VisualEngineer Phase 3 commands: bootstrap platform-up runner-smoke verify platform-down"
+	@echo "VisualEngineer Phase 4 commands: bootstrap platform-up workspace-smoke workspace-chaos-check verify platform-down"
 
 bootstrap:
 	uv sync --frozen
@@ -77,7 +78,8 @@ build: build-web
 docker-config:
 	docker compose config --quiet
 	docker compose --profile test config --quiet
-	E2E_REPOSITORY_PATH=/tmp/visualengineer-synthetic docker compose -f compose.yaml -f infra/compose.e2e.yaml config --quiet
+	WORKSPACE_FIXTURE_REPOSITORY_PATH=/tmp/visualengineer-workspace docker compose -f compose.yaml -f infra/compose.workspace.yaml config --quiet
+	E2E_REPOSITORY_PATH=/tmp/visualengineer-synthetic WORKSPACE_FIXTURE_REPOSITORY_PATH=/tmp/visualengineer-workspace docker compose -f compose.yaml -f infra/compose.workspace.yaml -f infra/compose.e2e.yaml config --quiet
 	CUSTOMER0_REPOSITORY_PATH=/tmp/visualengineer-customer0 docker compose -f compose.yaml -f infra/compose.customer0.yaml config --quiet
 
 security-check:
@@ -85,6 +87,10 @@ security-check:
 	uv run python scripts/check_runner_security.py
 	uv run pytest apps/api/tests/test_repository_scanner.py --no-cov -q
 	./scripts/run-runner-security-tests.sh
+
+workspace-security-check:
+	uv run pytest apps/runner/tests/test_workspace_tools.py packages/runner-protocol/tests --no-cov -q
+	uv run python scripts/check_workspace_security.py
 
 eval:
 	uv run python scripts/validate_evals.py
@@ -106,22 +112,26 @@ verify:
 	$(MAKE) docker-config
 	$(MAKE) migration-check
 	$(MAKE) e2e
+	$(MAKE) workspace-chaos-check
+	$(MAKE) workspace-security-check
 	$(MAKE) security-check
 	$(MAKE) eval
 	git diff --check
 
 platform-up:
+	uv run python scripts/create_workspace_fixture.py
 	uv run python scripts/ensure_runner_bootstrap.py
-	docker compose --env-file .env.runner.local up -d --build --wait db api web runner
+	WORKSPACE_FIXTURE_REPOSITORY_PATH="$(WORKSPACE_FIXTURE_REPOSITORY_PATH)" docker compose --env-file .env.runner.local -f compose.yaml -f infra/compose.workspace.yaml up -d --build --wait db api web runner
 	$(MAKE) runner-status
+	WORKSPACE_API_BASE_URL="http://127.0.0.1:$${API_PUBLISHED_PORT:-8000}" WORKSPACE_DATABASE_URL="postgresql+psycopg://$${POSTGRES_USER:-visualengineer}:$${POSTGRES_PASSWORD:-visualengineer-local}@127.0.0.1:$${POSTGRES_PUBLISHED_PORT:-5432}/$${POSTGRES_DB:-visualengineer}" uv run python scripts/seed_workspace_e2e.py
 	@echo "VisualEngineer Web Console: http://127.0.0.1:$${WEB_PUBLISHED_PORT:-3000}"
-	@echo "Runner Console: http://127.0.0.1:$${WEB_PUBLISHED_PORT:-3000}/runners"
+	@echo "Workspace Console: http://127.0.0.1:$${WEB_PUBLISHED_PORT:-3000}/workspaces"
 
 platform-down:
-	docker compose down
+	WORKSPACE_FIXTURE_REPOSITORY_PATH="$(WORKSPACE_FIXTURE_REPOSITORY_PATH)" docker compose -f compose.yaml -f infra/compose.workspace.yaml down
 
 platform-logs:
-	docker compose logs --tail=200 -f api web runner db
+	WORKSPACE_FIXTURE_REPOSITORY_PATH="$(WORKSPACE_FIXTURE_REPOSITORY_PATH)" docker compose -f compose.yaml -f infra/compose.workspace.yaml logs --tail=200 -f api web runner db
 
 runner-status:
 	uv run python scripts/runner_status.py
@@ -131,6 +141,12 @@ runner-smoke: platform-up
 
 runner-chaos-check:
 	./scripts/run-runner-chaos-check.sh
+
+workspace-smoke: platform-up
+	uv run python scripts/workspace_smoke.py
+
+workspace-chaos-check:
+	./scripts/run-workspace-chaos-check.sh
 
 up: platform-up
 

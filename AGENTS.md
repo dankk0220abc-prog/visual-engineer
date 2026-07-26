@@ -10,8 +10,8 @@ later. Explicit user instructions override this file.
   and backend tests.
 - `apps/web/`: Next.js App Router console, frontend tests, and Playwright
   configuration.
-- `apps/runner/`: independent outbound Local Runner and repository-free typed
-  executors.
+- `apps/runner/`: independent outbound Local Runner, fixed Git boundary,
+  descriptor-safe workspace filesystem, and closed typed executors.
 - `packages/api-contract/`: generated OpenAPI specification and generated
   TypeScript types. Treat generated outputs as derived artifacts.
 - `packages/runner-protocol/`: pure versioned Pydantic protocol, canonical
@@ -23,7 +23,7 @@ later. Explicit user instructions override this file.
 - `infra/`: container definitions and infrastructure configuration.
 - `scripts/`: small, reviewed project automation.
 - `.github/workflows/`: CI definitions only; no deployment workflow belongs in
-  Phase 3.
+  Phase 4.
 
 ## Stack and authority
 
@@ -48,11 +48,11 @@ later. Explicit user instructions override this file.
   and project playbook.
 - CreativeDeploy is Customer 0 and Design Partner 0, not an external enterprise
   customer or evidence of production adoption.
-- Phase 2 approval is a durable decision only. Phase 3 Runner dispatch is a
-  separate browser action and grants only its immutable Envelope. Never
-  describe approval as execution authority, or planned repository tools,
-  worktree, repair, rollback, GitHub, or deployment capability as implemented
-  without executable evidence.
+- Plan approval is a durable decision only. Phase 4 execution requires a
+  separate immutable, independently approved Execution Grant and a typed
+  browser action. Never describe approval as execution authority or planned
+  target commands, GitHub, or deployment capability as implemented without
+  executable evidence.
 
 ## Standard workflow
 
@@ -76,6 +76,7 @@ make test
 make build
 make contracts-check
 make migration-check
+make workspace-security-check
 make security-check
 make eval
 make e2e
@@ -86,6 +87,8 @@ make platform-logs
 make runner-status
 make runner-smoke
 make runner-chaos-check
+make workspace-smoke
+make workspace-chaos-check
 ```
 
 Do not report a command as passing unless it ran in the current worktree and
@@ -116,13 +119,32 @@ the evidence file for the active phase.
   reads.
 - Package scripts and Make targets may be parsed into typed metadata but must
   never be executed against a target repository in Phase 2.
-- Phase 3 Runner jobs are a closed discriminated union. Do not add an arbitrary
-  command, shell string, dynamic import, plugin hook, filesystem/repository
-  tool, Docker socket, or subprocess-backed executor.
-- A Phase 3 Permission Envelope is server-derived, immutable, canonical-hashed,
-  and fixed to `repository_access=none`, `shell_access=false`, and
-  `network_policy=control_plane_only`. Browser input and Deployment Packs may
-  not submit or broaden it.
+- Runner jobs are a closed discriminated union. Phase 4 adds only prepare,
+  list, UTF-8 read/create/compare-and-swap replace, fixed status/diff,
+  baseline rollback, and discard. Do not add an arbitrary command, shell
+  string, dynamic import, plugin hook, Docker socket, or general subprocess
+  executor.
+- A Permission Envelope is server-derived, immutable, and canonical-hashed.
+  Phase 4 workspace Envelopes bind one approved Grant, Runner, Repository
+  Handle, Workspace, source revision, and policy hash. Browser input and
+  Deployment Packs may not submit or broaden it.
+- Only Runner local configuration maps an opaque Repository Handle to an exact
+  path. Never persist or return that path from API/Web, and never allow a user
+  to create a handle from a path.
+- Only Runner may receive the exact synthetic fixture mount, read-only. API,
+  Web, and PostgreSQL receive no source/mirror/workspace mount. Keep mirror,
+  workspace, and registry in separate Runner-owned volumes.
+- File authority starts from an opened Workspace root. Preserve bounded POSIX
+  parsing, descriptor-relative component walks, `O_DIRECTORY`,
+  `O_NOFOLLOW`, type/link-count checks, same-directory atomic writes, expected
+  hashes, post-write verification, and fail-closed behavior. Do not replace
+  this with string `resolve()` plus ordinary write.
+- The sole Runner subprocess boundary is fixed Git in `git_ops.py` with
+  argument arrays, no shell, bounded timeouts, sanitized configuration, and no
+  hooks/helpers/network. Do not execute target repository commands.
+- Rollback is initial-baseline-only and may remove only same-Workspace
+  ledger-recorded created files. Discard accepts only a Workspace UUID and may
+  remove only its registry-bound worktree.
 - Every Attempt mutation must validate authenticated Runner ID, active Attempt
   ID, high-entropy Lease ID, lease deadline, revocation, and state under a
   database lock. A stale identity returns `409` without mutation.
@@ -176,9 +198,9 @@ Only commit generated output after its source and verification are included.
 - Repository security tests must preserve target `HEAD` and status and assert
   that synthetic secret, dirty, untracked, symlink-target, and lifecycle
   markers do not leak or execute.
-- Playwright smoke tests use the real web, API, and PostgreSQL stack; do not
-  replace that flow with API mocks. Phase 3 flows also require the real Runner
-  container.
+- Playwright smoke tests use the real Web, API, PostgreSQL, and Runner; do not
+  replace that flow with API or Runner mocks. Phase 4 also requires the exact
+  read-only adversarial fixture and full source/`.git` fingerprint comparison.
 - Chaos tests must use their exact isolated Compose project and compare source
   status before/after. A graceful SIGTERM may finish active work and is not a
   valid simulation of abrupt Runner loss; use a bounded immediate stop for
@@ -205,9 +227,10 @@ Only commit generated output after its source and verification are included.
 ## External repository permissions
 
 - External repositories are read-only by default.
-- The Phase 3 base platform and Runner have no external-repository access at
-  all. Never mount CreativeDeploy, a customer repository, `~/Developer`, SSH,
-  or Docker socket into Runner.
+- The Phase 4 Runner may access only the versioned synthetic fixture through
+  its exact read-only mount. Never mount CreativeDeploy, a customer
+  repository, a parent development directory, SSH, or Docker socket into
+  Runner.
 - Do not read real `.env` files, credentials, certificates, tokens, or secret
   stores in an external repository.
 - Customer 0 mounts must be API-only, bind-mounted read-only, limited to the
@@ -215,9 +238,9 @@ Only commit generated output after its source and verification are included.
   variable, and inspected without a write probe against the real repository.
 - A real Customer 0 plan must stop at `awaiting_plan_approval`; an agent must
   not approve or reject on the user's behalf.
-- Any future target-repository write requires an isolated worktree, a bounded
-  approved plan, explicit human approval, path confinement, an audit trail, and
-  a rollback checkpoint.
+- Phase 4 isolated writes are synthetic-fixture-only. Any future real target
+  repository requires a new maximum-depth security audit and explicit
+  approval; an existing fixture Grant cannot authorize it.
 - Tool levels are defined in
   `docs/architecture/tool-permissions.md`. Do not infer a higher level from a
   task description.

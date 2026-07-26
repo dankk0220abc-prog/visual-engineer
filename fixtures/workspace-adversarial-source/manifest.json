@@ -1,0 +1,25 @@
+{
+  "fixture_version": "workspace-adversarial-v0.1",
+  "builder": "scripts/create_workspace_fixture.py",
+  "contains_real_secret": false,
+  "source_mount": "runner_only_read_only",
+  "dynamic_cases": ["fifo", "unix_socket", "case_collision_when_supported"],
+  "required_cases": [
+    "normal_text",
+    "create_directory",
+    "sensitive_path",
+    "symlink_escape",
+    "symlink_sensitive",
+    "nested_symlink",
+    "binary",
+    "oversized_text",
+    "malicious_agents",
+    "dirty_tracked_source",
+    "untracked_source",
+    "source_hook",
+    "gitlink",
+    "lfs_pointer",
+    "path_collision",
+    "unicode_path"
+  ]
+}

@@ -21,4 +21,5 @@ traces/
 *.trace.zip
 *.log
 *.tsbuildinfo
+.runtime/
 postgres-data/

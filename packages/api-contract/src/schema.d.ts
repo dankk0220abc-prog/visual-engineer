@@ -4,6 +4,126 @@
  */
 
 export interface paths {
+  "/api/v1/execution-grants": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List immutable Execution Grants */
+    get: operations["list_execution_grants_api_v1_execution_grants_get"];
+    put?: never;
+    /** Derive a pending narrow Grant from an approved current Plan */
+    post: operations["create_execution_grant_api_v1_execution_grants_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/execution-grants/eligible-contexts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List approved non-stale Plan and Repository contexts */
+    get: operations["list_eligible_execution_contexts_api_v1_execution_grants_eligible_contexts_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/execution-grants/{grant_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get one immutable Execution Grant and its decision */
+    get: operations["get_execution_grant_api_v1_execution_grants__grant_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/execution-grants/{grant_id}/decisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Independently approve or reason-reject a pending Grant */
+    post: operations["decide_execution_grant_api_v1_execution_grants__grant_id__decisions_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/execution-grants/{grant_id}/revoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Revoke a pending or approved Execution Grant */
+    post: operations["revoke_execution_grant_api_v1_execution_grants__grant_id__revoke_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/repositories": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Runner-registered opaque Repository Handles */
+    get: operations["list_repositories_api_v1_repositories_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/repositories/{repository_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get a Repository Handle without a Runner host path */
+    get: operations["get_repository_api_v1_repositories__repository_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/runner-jobs": {
     parameters: {
       query?: never;
@@ -220,6 +340,23 @@ export interface paths {
     put?: never;
     /** Register a Local Runner with the one-time bootstrap credential */
     post: operations["register_runner_api_v1_runner_protocol_v1_register_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/repositories/register": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Register one Runner-local opaque Repository Handle without its path */
+    post: operations["register_repository_api_v1_runner_protocol_v1_repositories_register_post"];
     delete?: never;
     options?: never;
     head?: never;
@@ -485,6 +622,194 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/workspaces": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List isolated Runner-owned Workspaces */
+    get: operations["list_workspaces_api_v1_workspaces_get"];
+    put?: never;
+    /** Request an exact-revision Runner-owned isolated Workspace */
+    post: operations["create_workspace_api_v1_workspaces_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Workspace state without exposing its Runner path */
+    get: operations["get_workspace_api_v1_workspaces__workspace_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/actions/diff": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Workspace Diff */
+    post: operations["workspace_diff_api_v1_workspaces__workspace_id__actions_diff_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/actions/discard": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Workspace Discard */
+    post: operations["workspace_discard_api_v1_workspaces__workspace_id__actions_discard_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/actions/list": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** List Workspace Directory */
+    post: operations["list_workspace_directory_api_v1_workspaces__workspace_id__actions_list_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/actions/read-text": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Read Workspace Text */
+    post: operations["read_workspace_text_api_v1_workspaces__workspace_id__actions_read_text_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/actions/rollback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Workspace Rollback */
+    post: operations["workspace_rollback_api_v1_workspaces__workspace_id__actions_rollback_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/actions/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Workspace Status */
+    post: operations["workspace_status_api_v1_workspaces__workspace_id__actions_status_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/actions/write-text": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Write Workspace Text */
+    post: operations["write_workspace_text_api_v1_workspaces__workspace_id__actions_write_text_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/checkpoints": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Workspace Checkpoints */
+    get: operations["list_workspace_checkpoints_api_v1_workspaces__workspace_id__checkpoints_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspaces/{workspace_id}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Workspace Events */
+    get: operations["list_workspace_events_api_v1_workspaces__workspace_id__events_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health/live": {
     parameters: {
       query?: never;
@@ -644,7 +969,17 @@ export interface components {
      * Capability
      * @enum {string}
      */
-    Capability: "system_diagnostic_v1" | "controlled_wait_v1";
+    Capability:
+      | "system_diagnostic_v1"
+      | "controlled_wait_v1"
+      | "workspace_prepare_v1"
+      | "workspace_list_v1"
+      | "workspace_read_text_v1"
+      | "workspace_write_text_v1"
+      | "workspace_status_v1"
+      | "workspace_diff_v1"
+      | "workspace_rollback_v1"
+      | "workspace_discard_v1";
     /** ClaimRequest */
     ClaimRequest: {
       /**
@@ -682,7 +1017,15 @@ export interface components {
       /** Result */
       result:
         | components["schemas"]["DiagnosticResult"]
-        | components["schemas"]["ControlledWaitResult"];
+        | components["schemas"]["ControlledWaitResult"]
+        | components["schemas"]["WorkspacePrepareResult"]
+        | components["schemas"]["WorkspaceListResult"]
+        | components["schemas"]["WorkspaceReadTextResult"]
+        | components["schemas"]["WorkspaceWriteTextResult"]
+        | components["schemas"]["WorkspaceStatusResult"]
+        | components["schemas"]["WorkspaceDiffResult"]
+        | components["schemas"]["WorkspaceRollbackResult"]
+        | components["schemas"]["WorkspaceDiscardResult"];
       /**
        * Runner Id
        * Format: uuid
@@ -773,6 +1116,46 @@ export interface components {
        */
       started_at: string;
     };
+    /** EligibleExecutionContextListResponse */
+    EligibleExecutionContextListResponse: {
+      /** Items */
+      items: components["schemas"]["EligibleExecutionContextResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** EligibleExecutionContextResponse */
+    EligibleExecutionContextResponse: {
+      /**
+       * Plan Id
+       * Format: uuid
+       */
+      plan_id: string;
+      /** Plan Version */
+      plan_version: number;
+      /** Repository Display Name */
+      repository_display_name: string;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+      /** Snapshot Fingerprint */
+      snapshot_fingerprint: string;
+      /** Source Revision */
+      source_revision: string;
+      /**
+       * Task Id
+       * Format: uuid
+       */
+      task_id: string;
+      /** Task Title */
+      task_title: string;
+    };
     /** ErrorBody */
     ErrorBody: {
       /** Code */
@@ -793,6 +1176,250 @@ export interface components {
       /** @description Stable, non-sensitive error information */
       error: components["schemas"]["ErrorBody"];
     };
+    /** ExecutionGrantCreate */
+    ExecutionGrantCreate: {
+      /**
+       * Plan Id
+       * Format: uuid
+       */
+      plan_id: string;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+    };
+    /** ExecutionGrantDecisionCreate */
+    ExecutionGrantDecisionCreate: {
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: "approve" | "reject";
+      /** Reason */
+      reason?: string | null;
+    };
+    /** ExecutionGrantDecisionResponse */
+    ExecutionGrantDecisionResponse: {
+      /**
+       * Actor Type
+       * @constant
+       */
+      actor_type: "local_user";
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: "approve" | "reject";
+      /**
+       * Grant Id
+       * Format: uuid
+       */
+      grant_id: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Reason */
+      reason: string | null;
+      /** Request Id */
+      request_id: string;
+    };
+    /** ExecutionGrantListResponse */
+    ExecutionGrantListResponse: {
+      /** Items */
+      items: components["schemas"]["ExecutionGrantResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** ExecutionGrantPolicy */
+    ExecutionGrantPolicy: {
+      /** Allowed Operations */
+      allowed_operations: components["schemas"]["WorkspaceOperation"][];
+      /** Allowed Paths */
+      allowed_paths: string[];
+      /** Denied Paths */
+      denied_paths: string[];
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /**
+       * Git Delivery Access
+       * @default false
+       * @constant
+       */
+      git_delivery_access: false;
+      /**
+       * Grant Version
+       * @default 1
+       * @constant
+       */
+      grant_version: 1;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Max Diff Bytes */
+      max_diff_bytes: number;
+      /** Max Files Changed */
+      max_files_changed: number;
+      /** Max Single File Bytes */
+      max_single_file_bytes: number;
+      /** Max Total Write Bytes */
+      max_total_write_bytes: number;
+      /**
+       * Network Policy
+       * @default none
+       * @constant
+       */
+      network_policy: "none";
+      /**
+       * Plan Id
+       * Format: uuid
+       */
+      plan_id: string;
+      /** Policy Hash */
+      policy_hash: string;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /** Repository Opaque Handle */
+      repository_opaque_handle: string;
+      /** Run Id */
+      run_id?: string | null;
+      /**
+       * Shell Access
+       * @default false
+       * @constant
+       */
+      shell_access: false;
+      /** Snapshot Fingerprint */
+      snapshot_fingerprint: string;
+      /**
+       * Source Repository Write Access
+       * @default false
+       * @constant
+       */
+      source_repository_write_access: false;
+      /** Source Revision */
+      source_revision: string;
+      /** Task Id */
+      task_id?: string | null;
+      /** Workspace Ttl Seconds */
+      workspace_ttl_seconds: number;
+    };
+    /** ExecutionGrantResponse */
+    ExecutionGrantResponse: {
+      /** Allowed Operations */
+      allowed_operations: components["schemas"]["WorkspaceOperation"][];
+      /** Allowed Paths */
+      allowed_paths: string[];
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Decided At */
+      decided_at: string | null;
+      decision?: components["schemas"]["ExecutionGrantDecisionResponse"] | null;
+      /** Denied Paths */
+      denied_paths: string[];
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /**
+       * Git Delivery Access
+       * @constant
+       */
+      git_delivery_access: false;
+      /**
+       * Grant Version
+       * @constant
+       */
+      grant_version: 1;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Max Diff Bytes */
+      max_diff_bytes: number;
+      /** Max Files Changed */
+      max_files_changed: number;
+      /** Max Single File Bytes */
+      max_single_file_bytes: number;
+      /** Max Total Write Bytes */
+      max_total_write_bytes: number;
+      /**
+       * Network Policy
+       * @constant
+       */
+      network_policy: "none";
+      /**
+       * Plan Id
+       * Format: uuid
+       */
+      plan_id: string;
+      /** Policy Hash */
+      policy_hash: string;
+      /** Repository Display Name */
+      repository_display_name: string;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /**
+       * Requested At
+       * Format: date-time
+       */
+      requested_at: string;
+      /** Run Id */
+      run_id: string | null;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /**
+       * Shell Access
+       * @constant
+       */
+      shell_access: false;
+      /** Snapshot Fingerprint */
+      snapshot_fingerprint: string;
+      /**
+       * Source Repository Write Access
+       * @constant
+       */
+      source_repository_write_access: false;
+      /** Source Revision */
+      source_revision: string;
+      status: components["schemas"]["ExecutionGrantStatus"];
+      /** Task Id */
+      task_id: string | null;
+      /** Workspace Ttl Seconds */
+      workspace_ttl_seconds: number;
+    };
+    /**
+     * ExecutionGrantStatus
+     * @enum {string}
+     */
+    ExecutionGrantStatus:
+      "pending" | "approved" | "rejected" | "revoked" | "expired";
     /** FailRequest */
     FailRequest: {
       /**
@@ -827,7 +1454,29 @@ export interface components {
       | "runner_internal_error"
       | "control_plane_unavailable"
       | "lease_lost"
-      | "retry_exhausted";
+      | "retry_exhausted"
+      | "repository_unavailable"
+      | "source_not_read_only"
+      | "source_revision_mismatch"
+      | "workspace_not_found"
+      | "workspace_identity_mismatch"
+      | "workspace_state_invalid"
+      | "path_invalid"
+      | "path_denied"
+      | "sensitive_path_denied"
+      | "symlink_denied"
+      | "hardlink_denied"
+      | "not_regular_file"
+      | "binary_denied"
+      | "invalid_utf8"
+      | "file_too_large"
+      | "file_count_budget_exceeded"
+      | "total_write_budget_exceeded"
+      | "diff_budget_exceeded"
+      | "content_conflict"
+      | "expected_absent_conflict"
+      | "atomic_write_failed"
+      | "workspace_cancelled";
     /** HealthResponse */
     HealthResponse: {
       /** Status */
@@ -835,6 +1484,8 @@ export interface components {
     };
     /** HeartbeatRequest */
     HeartbeatRequest: {
+      /** Capabilities */
+      capabilities?: components["schemas"]["Capability"][] | null;
       /**
        * Protocol Version
        * @default 1
@@ -875,7 +1526,15 @@ export interface components {
       /** Job */
       job:
         | components["schemas"]["SystemDiagnosticJobSpec"]
-        | components["schemas"]["ControlledWaitJobSpec"];
+        | components["schemas"]["ControlledWaitJobSpec"]
+        | components["schemas"]["WorkspacePrepareJobSpec"]
+        | components["schemas"]["WorkspaceListJobSpec"]
+        | components["schemas"]["WorkspaceReadTextJobSpec"]
+        | components["schemas"]["WorkspaceWriteTextJobSpec"]
+        | components["schemas"]["WorkspaceStatusJobSpec"]
+        | components["schemas"]["WorkspaceDiffJobSpec"]
+        | components["schemas"]["WorkspaceRollbackJobSpec"]
+        | components["schemas"]["WorkspaceDiscardJobSpec"];
       /**
        * Job Id
        * Format: uuid
@@ -897,7 +1556,17 @@ export interface components {
      * JobKind
      * @enum {string}
      */
-    JobKind: "system_diagnostic_v1" | "controlled_wait_v1";
+    JobKind:
+      | "system_diagnostic_v1"
+      | "controlled_wait_v1"
+      | "workspace_prepare_v1"
+      | "workspace_list_v1"
+      | "workspace_read_text_v1"
+      | "workspace_write_text_v1"
+      | "workspace_status_v1"
+      | "workspace_diff_v1"
+      | "workspace_rollback_v1"
+      | "workspace_discard_v1";
     /**
      * JobState
      * @enum {string}
@@ -967,9 +1636,9 @@ export interface components {
       /**
        * Authorization Source
        * @default local_user_job_dispatch
-       * @constant
+       * @enum {string}
        */
-      authorization_source: "local_user_job_dispatch";
+      authorization_source: "local_user_job_dispatch" | "execution_grant";
       /**
        * Envelope Version
        * @default 1
@@ -1012,12 +1681,8 @@ export interface components {
       network_policy: "control_plane_only";
       /** Policy Hash */
       policy_hash: string;
-      /**
-       * Repository Access
-       * @default none
-       * @constant
-       */
-      repository_access: "none";
+      /** @default none */
+      repository_access: components["schemas"]["RepositoryAccess"];
       /**
        * Shell Access
        * @default false
@@ -1279,12 +1944,132 @@ export interface components {
      * RepositoryAccess
      * @enum {string}
      */
-    RepositoryAccess: "none";
+    RepositoryAccess: "none" | "isolated_workspace";
+    /** RepositoryHandleListResponse */
+    RepositoryHandleListResponse: {
+      /** Items */
+      items: components["schemas"]["RepositoryHandleResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** RepositoryHandleResponse */
+    RepositoryHandleResponse: {
+      /** Capabilities */
+      capabilities: ("committed_head_read" | "isolated_workspace")[];
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Current Branch */
+      current_branch: string | null;
+      /** Current Revision */
+      current_revision: string | null;
+      /** Dirty Path Count */
+      dirty_path_count: number;
+      /** Display Name */
+      display_name: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Last Verified At */
+      last_verified_at: string | null;
+      /**
+       * Metadata Version
+       * @constant
+       */
+      metadata_version: 1;
+      /** Opaque Handle */
+      opaque_handle: string;
+      /** Runner Display Name */
+      runner_display_name: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Source Is Dirty */
+      source_is_dirty: boolean;
+      status: components["schemas"]["RepositoryHandleStatus"];
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /**
+       * Vcs Kind
+       * @constant
+       */
+      vcs_kind: "git";
+    };
+    /**
+     * RepositoryHandleStatus
+     * @enum {string}
+     */
+    RepositoryHandleStatus: "available" | "unavailable" | "revoked";
     /**
      * RepositoryKind
      * @enum {string}
      */
     RepositoryKind: "local_path" | "github";
+    /** RepositoryRegistrationRequest */
+    RepositoryRegistrationRequest: {
+      /** Capabilities */
+      capabilities: ("committed_head_read" | "isolated_workspace")[];
+      /** Current Branch */
+      current_branch?: string | null;
+      /** Current Revision */
+      current_revision: string;
+      /** Dirty Path Count */
+      dirty_path_count: number;
+      /** Display Name */
+      display_name: string;
+      /**
+       * Metadata Version
+       * @default 1
+       * @constant
+       */
+      metadata_version: 1;
+      /** Opaque Handle */
+      opaque_handle: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Source Is Dirty */
+      source_is_dirty: boolean;
+      /**
+       * Vcs Kind
+       * @default git
+       * @constant
+       */
+      vcs_kind: "git";
+    };
+    /** RepositoryRegistrationResponse */
+    RepositoryRegistrationResponse: {
+      /** Current Revision */
+      current_revision: string;
+      /**
+       * Last Verified At
+       * Format: date-time
+       */
+      last_verified_at: string;
+      /** Opaque Handle */
+      opaque_handle: string;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /**
+       * Status
+       * @constant
+       */
+      status: "available";
+    };
     /** RepositoryStatusValidationStep */
     RepositoryStatusValidationStep: {
       /**
@@ -1485,6 +2270,10 @@ export interface components {
       error_code: string | null;
       /** Error Message */
       error_message: string | null;
+      /** Execution Grant Id */
+      execution_grant_id: string | null;
+      /** Execution Policy Hash */
+      execution_policy_hash: string | null;
       /**
        * Id
        * Format: uuid
@@ -1498,6 +2287,8 @@ export interface components {
         [key: string]: unknown;
       };
       permission_envelope: components["schemas"]["PermissionEnvelopeResponse"];
+      /** Repository Handle Id */
+      repository_handle_id: string | null;
       /** Requested By */
       requested_by: string;
       /** Result */
@@ -1505,8 +2296,18 @@ export interface components {
         | (
             | components["schemas"]["DiagnosticResult"]
             | components["schemas"]["ControlledWaitResult"]
+            | components["schemas"]["WorkspacePrepareResult"]
+            | components["schemas"]["WorkspaceListResult"]
+            | components["schemas"]["WorkspaceReadTextResult"]
+            | components["schemas"]["WorkspaceWriteTextResult"]
+            | components["schemas"]["WorkspaceStatusResult"]
+            | components["schemas"]["WorkspaceDiffResult"]
+            | components["schemas"]["WorkspaceRollbackResult"]
+            | components["schemas"]["WorkspaceDiscardResult"]
           )
         | null;
+      /** Source Revision */
+      source_revision: string | null;
       state: components["schemas"]["JobState"];
       /**
        * Updated At
@@ -1515,6 +2316,8 @@ export interface components {
       updated_at: string;
       /** Version */
       version: number;
+      /** Workspace Id */
+      workspace_id: string | null;
     };
     /** RunnerListResponse */
     RunnerListResponse: {
@@ -1730,6 +2533,628 @@ export interface components {
      * @enum {string}
      */
     TaskStatus: "draft";
+    /** WorkspaceActionResponse */
+    WorkspaceActionResponse: {
+      job: components["schemas"]["RunnerJobResponse"];
+      workspace: components["schemas"]["WorkspaceResponse"];
+    };
+    /** WorkspaceCheckpointListResponse */
+    WorkspaceCheckpointListResponse: {
+      /** Items */
+      items: components["schemas"]["WorkspaceCheckpointResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** WorkspaceCheckpointPayload */
+    WorkspaceCheckpointPayload: {
+      /** Changed File Count */
+      changed_file_count: number;
+      /** Changed Paths */
+      changed_paths: string[];
+      /** Diff */
+      diff: string;
+      /** Diff Hash */
+      diff_hash: string;
+      /** Source Revision */
+      source_revision: string;
+      /** Total Diff Bytes */
+      total_diff_bytes: number;
+      /** Tree Fingerprint */
+      tree_fingerprint: string;
+    };
+    /** WorkspaceCheckpointResponse */
+    WorkspaceCheckpointResponse: {
+      /** Changed File Count */
+      changed_file_count: number;
+      /** Changed Paths */
+      changed_paths: string[];
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Diff Artifact */
+      diff_artifact: string;
+      /** Diff Hash */
+      diff_hash: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Sequence */
+      sequence: number;
+      /** Source Revision */
+      source_revision: string;
+      /** Total Diff Bytes */
+      total_diff_bytes: number;
+      /** Tree Fingerprint */
+      tree_fingerprint: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceCreate */
+    WorkspaceCreate: {
+      /**
+       * Grant Id
+       * Format: uuid
+       */
+      grant_id: string;
+    };
+    /** WorkspaceDiffJobSpec */
+    WorkspaceDiffJobSpec: {
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_diff_v1";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceDiffResult */
+    WorkspaceDiffResult: {
+      /** Changed Paths */
+      changed_paths: string[];
+      checkpoint: components["schemas"]["WorkspaceCheckpointPayload"];
+      /** Current Tree Hash */
+      current_tree_hash: string;
+      /** Diff */
+      diff: string;
+      /** Diff Hash */
+      diff_hash: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_diff_v1";
+      /** Total Diff Bytes */
+      total_diff_bytes: number;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceDiscardJobSpec */
+    WorkspaceDiscardJobSpec: {
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_discard_v1";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceDiscardResult */
+    WorkspaceDiscardResult: {
+      /**
+       * Discarded
+       * @default true
+       * @constant
+       */
+      discarded: true;
+      /** Idempotent */
+      idempotent: boolean;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_discard_v1";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceEntry */
+    WorkspaceEntry: {
+      entry_type: components["schemas"]["WorkspaceEntryType"];
+      /** Relative Path */
+      relative_path: string;
+      /** Sha256 */
+      sha256?: string | null;
+      /** Size */
+      size: number;
+    };
+    /**
+     * WorkspaceEntryType
+     * @enum {string}
+     */
+    WorkspaceEntryType:
+      "directory" | "text" | "binary" | "symlink" | "gitlink" | "special";
+    /** WorkspaceEventListResponse */
+    WorkspaceEventListResponse: {
+      /** Items */
+      items: components["schemas"]["WorkspaceEventResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** WorkspaceEventResponse */
+    WorkspaceEventResponse: {
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Event Type */
+      event_type: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Metadata */
+      metadata: {
+        [key: string]: unknown;
+      };
+      /** Request Id */
+      request_id: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Sequence */
+      sequence: number;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceListAction */
+    WorkspaceListAction: {
+      /**
+       * Depth
+       * @default 2
+       */
+      depth: number;
+      /**
+       * Max Entries
+       * @default 200
+       */
+      max_entries: number;
+      /** Relative Directory */
+      relative_directory: string;
+    };
+    /** WorkspaceListJobSpec */
+    WorkspaceListJobSpec: {
+      /** Depth */
+      depth: number;
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_list_v1";
+      /** Max Entries */
+      max_entries: number;
+      /** Relative Directory */
+      relative_directory: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceListResponse */
+    WorkspaceListResponse: {
+      /** Items */
+      items: components["schemas"]["WorkspaceResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** WorkspaceListResult */
+    WorkspaceListResult: {
+      /** Entries */
+      entries: components["schemas"]["WorkspaceEntry"][];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_list_v1";
+      /** Relative Directory */
+      relative_directory: string;
+      /** Truncated */
+      truncated: boolean;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /**
+     * WorkspaceOperation
+     * @enum {string}
+     */
+    WorkspaceOperation:
+      | "prepare"
+      | "list"
+      | "read_text"
+      | "write_text"
+      | "status"
+      | "diff"
+      | "rollback"
+      | "discard";
+    /** WorkspacePrepareJobSpec */
+    WorkspacePrepareJobSpec: {
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_prepare_v1";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspacePrepareResult */
+    WorkspacePrepareResult: {
+      /** Current Tree Hash */
+      current_tree_hash: string;
+      /** Initial Tree Hash */
+      initial_tree_hash: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_prepare_v1";
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /** Source Revision */
+      source_revision: string;
+      /** Workspace Fingerprint */
+      workspace_fingerprint: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceReadTextAction */
+    WorkspaceReadTextAction: {
+      /**
+       * Max Bytes
+       * @default 32768
+       */
+      max_bytes: number;
+      /** Relative Path */
+      relative_path: string;
+    };
+    /** WorkspaceReadTextJobSpec */
+    WorkspaceReadTextJobSpec: {
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_read_text_v1";
+      /** Max Bytes */
+      max_bytes: number;
+      /** Relative Path */
+      relative_path: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceReadTextResult */
+    WorkspaceReadTextResult: {
+      /** Content */
+      content: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_read_text_v1";
+      /** Relative Path */
+      relative_path: string;
+      /** Sha256 */
+      sha256: string;
+      /** Size */
+      size: number;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceResponse */
+    WorkspaceResponse: {
+      /** Active Attempt Id */
+      active_attempt_id: string | null;
+      /** Changed File Count */
+      changed_file_count: number;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Created Paths */
+      created_paths: string[];
+      /** Current Tree Hash */
+      current_tree_hash: string | null;
+      /** Discarded At */
+      discarded_at: string | null;
+      /** Error Code */
+      error_code: string | null;
+      /** Error Message */
+      error_message: string | null;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /**
+       * Grant Id
+       * Format: uuid
+       */
+      grant_id: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Initial Tree Hash */
+      initial_tree_hash: string | null;
+      /** Latest Job Id */
+      latest_job_id?: string | null;
+      /** Latest Job Kind */
+      latest_job_kind?: string | null;
+      /** Latest Job State */
+      latest_job_state?: string | null;
+      /** Max Diff Bytes */
+      max_diff_bytes: number;
+      /** Max Files Changed */
+      max_files_changed: number;
+      /** Max Single File Bytes */
+      max_single_file_bytes: number;
+      /** Max Total Write Bytes */
+      max_total_write_bytes: number;
+      /** Repository Display Name */
+      repository_display_name: string;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /** Runner Display Name */
+      runner_display_name: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Sealed At */
+      sealed_at: string | null;
+      /** Source Revision */
+      source_revision: string;
+      state: components["schemas"]["WorkspaceState"];
+      /** Total Written Bytes */
+      total_written_bytes: number;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Workspace Fingerprint */
+      workspace_fingerprint: string | null;
+    };
+    /** WorkspaceRollbackJobSpec */
+    WorkspaceRollbackJobSpec: {
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_rollback_v1";
+      /**
+       * Target
+       * @default initial
+       * @constant
+       */
+      target: "initial";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceRollbackResult */
+    WorkspaceRollbackResult: {
+      /**
+       * Clean
+       * @default true
+       * @constant
+       */
+      clean: true;
+      /** Current Tree Hash */
+      current_tree_hash: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_rollback_v1";
+      /** Removed Created Paths */
+      removed_created_paths: string[];
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /**
+     * WorkspaceState
+     * @enum {string}
+     */
+    WorkspaceState:
+      | "requested"
+      | "preparing"
+      | "ready"
+      | "active"
+      | "sealing"
+      | "sealed"
+      | "rollback_requested"
+      | "rolled_back"
+      | "discard_requested"
+      | "discarded"
+      | "failed"
+      | "expired";
+    /**
+     * WorkspaceStatusCode
+     * @enum {string}
+     */
+    WorkspaceStatusCode:
+      | "modified"
+      | "added"
+      | "deleted"
+      | "renamed"
+      | "copied"
+      | "untracked"
+      | "type_changed";
+    /** WorkspaceStatusEntry */
+    WorkspaceStatusEntry: {
+      /** Relative Path */
+      relative_path: string;
+      status: components["schemas"]["WorkspaceStatusCode"];
+    };
+    /** WorkspaceStatusJobSpec */
+    WorkspaceStatusJobSpec: {
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_status_v1";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceStatusResult */
+    WorkspaceStatusResult: {
+      /** Changed File Count */
+      changed_file_count: number;
+      /** Current Tree Hash */
+      current_tree_hash: string;
+      /** Entries */
+      entries: components["schemas"]["WorkspaceStatusEntry"][];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_status_v1";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /**
+     * WorkspaceWriteMode
+     * @enum {string}
+     */
+    WorkspaceWriteMode: "create" | "replace";
+    /** WorkspaceWriteTextAction */
+    WorkspaceWriteTextAction: {
+      /** Content */
+      content: string;
+      /** Expected Absent */
+      expected_absent?: true | null;
+      /** Expected Sha256 */
+      expected_sha256?: string | null;
+      mode: components["schemas"]["WorkspaceWriteMode"];
+      /** Relative Path */
+      relative_path: string;
+    };
+    /** WorkspaceWriteTextJobSpec */
+    WorkspaceWriteTextJobSpec: {
+      /** Content */
+      content: string;
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /** Expected Absent */
+      expected_absent?: true | null;
+      /** Expected Sha256 */
+      expected_sha256?: string | null;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_write_text_v1";
+      mode: components["schemas"]["WorkspaceWriteMode"];
+      /** Relative Path */
+      relative_path: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceWriteTextResult */
+    WorkspaceWriteTextResult: {
+      /** Changed File Count */
+      changed_file_count: number;
+      checkpoint: components["schemas"]["WorkspaceCheckpointPayload"];
+      /** Current Tree Hash */
+      current_tree_hash: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_write_text_v1";
+      operation: components["schemas"]["WorkspaceWriteMode"];
+      /** Relative Path */
+      relative_path: string;
+      /** Sha256 */
+      sha256: string;
+      /** Size */
+      size: number;
+      /** Total Written Bytes */
+      total_written_bytes: number;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
   };
   responses: never;
   parameters: never;
@@ -1739,6 +3164,470 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  list_execution_grants_api_v1_execution_grants_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionGrantListResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_execution_grant_api_v1_execution_grants_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExecutionGrantCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionGrantResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_eligible_execution_contexts_api_v1_execution_grants_eligible_contexts_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EligibleExecutionContextListResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_execution_grant_api_v1_execution_grants__grant_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        grant_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionGrantResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  decide_execution_grant_api_v1_execution_grants__grant_id__decisions_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        grant_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExecutionGrantDecisionCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionGrantResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  revoke_execution_grant_api_v1_execution_grants__grant_id__revoke_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        grant_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionGrantResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_repositories_api_v1_repositories_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RepositoryHandleListResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_repository_api_v1_repositories__repository_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        repository_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RepositoryHandleResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
   list_runner_jobs_api_v1_runner_jobs_get: {
     parameters: {
       query?: never;
@@ -2660,6 +4549,86 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RegisterResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  register_repository_api_v1_runner_protocol_v1_repositories_register_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RepositoryRegistrationRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RepositoryRegistrationResponse"];
         };
       };
       /** @description Invalid Runner credential */
@@ -3677,6 +5646,714 @@ export interface operations {
         };
       };
       /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_workspaces_api_v1_workspaces_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceListResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_workspace_api_v1_workspaces_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WorkspaceCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceActionResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_workspace_api_v1_workspaces__workspace_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  workspace_diff_api_v1_workspaces__workspace_id__actions_diff_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceActionResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  workspace_discard_api_v1_workspaces__workspace_id__actions_discard_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceActionResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_workspace_directory_api_v1_workspaces__workspace_id__actions_list_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WorkspaceListAction"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceActionResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  read_workspace_text_api_v1_workspaces__workspace_id__actions_read_text_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WorkspaceReadTextAction"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceActionResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  workspace_rollback_api_v1_workspaces__workspace_id__actions_rollback_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceActionResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  workspace_status_api_v1_workspaces__workspace_id__actions_status_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceActionResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  write_workspace_text_api_v1_workspaces__workspace_id__actions_write_text_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WorkspaceWriteTextAction"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceActionResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_workspace_checkpoints_api_v1_workspaces__workspace_id__checkpoints_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceCheckpointListResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_workspace_events_api_v1_workspaces__workspace_id__events_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceEventListResponse"];
+        };
+      };
+      /** @description Revoked Runner or Handle */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Workspace entity not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State, hash, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Execution policy denied the action */
       422: {
         headers: {
           [name: string]: unknown;

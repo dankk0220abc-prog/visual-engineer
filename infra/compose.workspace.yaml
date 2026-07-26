@@ -1,0 +1,23 @@
+services:
+  runner:
+    environment:
+      RUNNER_REPOSITORY_HANDLES: >-
+        {"fixture-repository-v1":{"path":"/repositories/fixture","display_name":"Phase 4 Adversarial Fixture"}}
+      RUNNER_MIRROR_ROOT: /var/lib/visual-engineer-runner/mirrors
+      RUNNER_WORKSPACE_ROOT: /var/lib/visual-engineer-runner/workspaces
+      RUNNER_REGISTRY_ROOT: /var/lib/visual-engineer-runner/registry
+      RUNNER_REQUIRE_SOURCE_READ_ONLY: "true"
+    volumes:
+      - runner-credentials:/var/lib/visual-engineer-runner
+      - runner-mirrors:/var/lib/visual-engineer-runner/mirrors
+      - runner-workspaces:/var/lib/visual-engineer-runner/workspaces
+      - runner-registry:/var/lib/visual-engineer-runner/registry
+      - type: bind
+        source: ${WORKSPACE_FIXTURE_REPOSITORY_PATH:?Set WORKSPACE_FIXTURE_REPOSITORY_PATH}
+        target: /repositories/fixture
+        read_only: true
+
+volumes:
+  runner-mirrors:
+  runner-workspaces:
+  runner-registry:

@@ -8,6 +8,10 @@ from visual_engineer_api.db.session import get_db
 from visual_engineer_api.models.runner import Runner
 from visual_engineer_api.schemas.error import ErrorResponse
 from visual_engineer_api.services.runner import RunnerService, RunnerServiceError
+from visual_engineer_api.services.workspace import (
+    WorkspaceService,
+    WorkspaceServiceError,
+)
 from visual_engineer_runner_protocol import (
     RUNNER_PROTOCOL_PREFIX,
     CancelledRequest,
@@ -22,6 +26,8 @@ from visual_engineer_runner_protocol import (
     RegisterRequest,
     RegisterResponse,
     RenewRequest,
+    RepositoryRegistrationRequest,
+    RepositoryRegistrationResponse,
     StartRequest,
 )
 
@@ -64,7 +70,9 @@ def _bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def _raise_service_error(error: RunnerServiceError) -> NoReturn:
+def _raise_service_error(
+    error: RunnerServiceError | WorkspaceServiceError,
+) -> NoReturn:
     status_code = {
         "auth": status.HTTP_401_UNAUTHORIZED,
         "forbidden": status.HTTP_403_FORBIDDEN,
@@ -137,6 +145,28 @@ def heartbeat(
             request_id=_request_id(request),
         )
     except RunnerServiceError as exc:
+        _raise_service_error(exc)
+
+
+@router.post(
+    "/repositories/register",
+    response_model=RepositoryRegistrationResponse,
+    responses=PROTOCOL_ERRORS,
+    summary="Register one Runner-local opaque Repository Handle without its path",
+)
+def register_repository(
+    payload: RepositoryRegistrationRequest,
+    request: Request,
+    db: DatabaseSession,
+    authenticated: AuthenticatedRunner,
+) -> RepositoryRegistrationResponse:
+    try:
+        return WorkspaceService(db).register_repository(
+            authenticated,
+            payload,
+            request_id=_request_id(request),
+        )
+    except WorkspaceServiceError as exc:
         _raise_service_error(exc)
 
 

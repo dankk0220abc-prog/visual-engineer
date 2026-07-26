@@ -6,6 +6,7 @@ from visual_engineer_runner.client import ControlPlaneClient
 from visual_engineer_runner.config import RunnerSettings
 from visual_engineer_runner.credentials import CredentialStore
 from visual_engineer_runner.lifecycle import RunnerLifecycle
+from visual_engineer_runner.workspace_manager import WorkspaceManager
 
 
 async def async_main() -> None:
@@ -19,6 +20,7 @@ async def async_main() -> None:
         settings,
         client,
         CredentialStore(settings.credential_path),
+        workspace_manager=WorkspaceManager(settings),
     )
     loop = asyncio.get_running_loop()
     for signal_name in (signal.SIGINT, signal.SIGTERM):

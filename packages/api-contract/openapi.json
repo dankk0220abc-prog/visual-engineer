@@ -191,7 +191,18 @@
         "type": "object"
       },
       "Capability": {
-        "enum": ["system_diagnostic_v1", "controlled_wait_v1"],
+        "enum": [
+          "system_diagnostic_v1",
+          "controlled_wait_v1",
+          "workspace_prepare_v1",
+          "workspace_list_v1",
+          "workspace_read_text_v1",
+          "workspace_write_text_v1",
+          "workspace_status_v1",
+          "workspace_diff_v1",
+          "workspace_rollback_v1",
+          "workspace_discard_v1"
+        ],
         "title": "Capability",
         "type": "string"
       },
@@ -255,7 +266,15 @@
             "discriminator": {
               "mapping": {
                 "controlled_wait_v1": "#/components/schemas/ControlledWaitResult",
-                "system_diagnostic_v1": "#/components/schemas/DiagnosticResult"
+                "system_diagnostic_v1": "#/components/schemas/DiagnosticResult",
+                "workspace_diff_v1": "#/components/schemas/WorkspaceDiffResult",
+                "workspace_discard_v1": "#/components/schemas/WorkspaceDiscardResult",
+                "workspace_list_v1": "#/components/schemas/WorkspaceListResult",
+                "workspace_prepare_v1": "#/components/schemas/WorkspacePrepareResult",
+                "workspace_read_text_v1": "#/components/schemas/WorkspaceReadTextResult",
+                "workspace_rollback_v1": "#/components/schemas/WorkspaceRollbackResult",
+                "workspace_status_v1": "#/components/schemas/WorkspaceStatusResult",
+                "workspace_write_text_v1": "#/components/schemas/WorkspaceWriteTextResult"
               },
               "propertyName": "kind"
             },
@@ -265,6 +284,30 @@
               },
               {
                 "$ref": "#/components/schemas/ControlledWaitResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspacePrepareResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceListResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceReadTextResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceWriteTextResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceStatusResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceDiffResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceRollbackResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceDiscardResult"
               }
             ],
             "title": "Result"
@@ -368,7 +411,7 @@
             "items": {
               "$ref": "#/components/schemas/Capability"
             },
-            "maxItems": 2,
+            "maxItems": 10,
             "minItems": 1,
             "title": "Capability List",
             "type": "array"
@@ -432,6 +475,81 @@
         "title": "DiagnosticResult",
         "type": "object"
       },
+      "EligibleExecutionContextListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EligibleExecutionContextResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "EligibleExecutionContextListResponse",
+        "type": "object"
+      },
+      "EligibleExecutionContextResponse": {
+        "properties": {
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "plan_version": {
+            "title": "Plan Version",
+            "type": "integer"
+          },
+          "repository_display_name": {
+            "title": "Repository Display Name",
+            "type": "string"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "snapshot_fingerprint": {
+            "title": "Snapshot Fingerprint",
+            "type": "string"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_title": {
+            "title": "Task Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "run_id",
+          "task_id",
+          "plan_version",
+          "task_title",
+          "repository_handle_id",
+          "repository_display_name",
+          "source_revision",
+          "snapshot_fingerprint"
+        ],
+        "title": "EligibleExecutionContextResponse",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -476,6 +594,507 @@
         "required": ["error"],
         "title": "ErrorResponse",
         "type": "object"
+      },
+      "ExecutionGrantCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          }
+        },
+        "required": ["plan_id", "repository_handle_id"],
+        "title": "ExecutionGrantCreate",
+        "type": "object"
+      },
+      "ExecutionGrantDecisionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": ["decision"],
+        "title": "ExecutionGrantDecisionCreate",
+        "type": "object"
+      },
+      "ExecutionGrantDecisionResponse": {
+        "properties": {
+          "actor_type": {
+            "const": "local_user",
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "type": "string"
+          },
+          "grant_id": {
+            "format": "uuid",
+            "title": "Grant Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "grant_id",
+          "decision",
+          "reason",
+          "actor_type",
+          "request_id",
+          "created_at"
+        ],
+        "title": "ExecutionGrantDecisionResponse",
+        "type": "object"
+      },
+      "ExecutionGrantListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionGrantResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "ExecutionGrantListResponse",
+        "type": "object"
+      },
+      "ExecutionGrantPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_operations": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceOperation"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Allowed Operations",
+            "type": "array"
+          },
+          "allowed_paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Allowed Paths",
+            "type": "array"
+          },
+          "denied_paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Denied Paths",
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "git_delivery_access": {
+            "const": false,
+            "default": false,
+            "title": "Git Delivery Access",
+            "type": "boolean"
+          },
+          "grant_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Grant Version",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "max_diff_bytes": {
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Max Diff Bytes",
+            "type": "integer"
+          },
+          "max_files_changed": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Max Files Changed",
+            "type": "integer"
+          },
+          "max_single_file_bytes": {
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Max Single File Bytes",
+            "type": "integer"
+          },
+          "max_total_write_bytes": {
+            "maximum": 1048576.0,
+            "minimum": 1.0,
+            "title": "Max Total Write Bytes",
+            "type": "integer"
+          },
+          "network_policy": {
+            "const": "none",
+            "default": "none",
+            "title": "Network Policy",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "policy_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Hash",
+            "type": "string"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "repository_opaque_handle": {
+            "maxLength": 120,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Repository Opaque Handle",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "shell_access": {
+            "const": false,
+            "default": false,
+            "title": "Shell Access",
+            "type": "boolean"
+          },
+          "snapshot_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshot Fingerprint",
+            "type": "string"
+          },
+          "source_repository_write_access": {
+            "const": false,
+            "default": false,
+            "title": "Source Repository Write Access",
+            "type": "boolean"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "workspace_ttl_seconds": {
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Workspace Ttl Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "plan_id",
+          "repository_handle_id",
+          "repository_opaque_handle",
+          "source_revision",
+          "snapshot_fingerprint",
+          "allowed_operations",
+          "allowed_paths",
+          "denied_paths",
+          "max_files_changed",
+          "max_total_write_bytes",
+          "max_single_file_bytes",
+          "max_diff_bytes",
+          "workspace_ttl_seconds",
+          "expires_at",
+          "policy_hash"
+        ],
+        "title": "ExecutionGrantPolicy",
+        "type": "object"
+      },
+      "ExecutionGrantResponse": {
+        "properties": {
+          "allowed_operations": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceOperation"
+            },
+            "title": "Allowed Operations",
+            "type": "array"
+          },
+          "allowed_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Paths",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionGrantDecisionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "denied_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Denied Paths",
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "git_delivery_access": {
+            "const": false,
+            "title": "Git Delivery Access",
+            "type": "boolean"
+          },
+          "grant_version": {
+            "const": 1,
+            "title": "Grant Version",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "max_diff_bytes": {
+            "title": "Max Diff Bytes",
+            "type": "integer"
+          },
+          "max_files_changed": {
+            "title": "Max Files Changed",
+            "type": "integer"
+          },
+          "max_single_file_bytes": {
+            "title": "Max Single File Bytes",
+            "type": "integer"
+          },
+          "max_total_write_bytes": {
+            "title": "Max Total Write Bytes",
+            "type": "integer"
+          },
+          "network_policy": {
+            "const": "none",
+            "title": "Network Policy",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "policy_hash": {
+            "title": "Policy Hash",
+            "type": "string"
+          },
+          "repository_display_name": {
+            "title": "Repository Display Name",
+            "type": "string"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "shell_access": {
+            "const": false,
+            "title": "Shell Access",
+            "type": "boolean"
+          },
+          "snapshot_fingerprint": {
+            "title": "Snapshot Fingerprint",
+            "type": "string"
+          },
+          "source_repository_write_access": {
+            "const": false,
+            "title": "Source Repository Write Access",
+            "type": "boolean"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionGrantStatus"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "workspace_ttl_seconds": {
+            "title": "Workspace Ttl Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "grant_version",
+          "task_id",
+          "run_id",
+          "plan_id",
+          "repository_handle_id",
+          "repository_display_name",
+          "runner_id",
+          "source_revision",
+          "snapshot_fingerprint",
+          "allowed_operations",
+          "allowed_paths",
+          "denied_paths",
+          "max_files_changed",
+          "max_total_write_bytes",
+          "max_single_file_bytes",
+          "max_diff_bytes",
+          "workspace_ttl_seconds",
+          "network_policy",
+          "shell_access",
+          "git_delivery_access",
+          "source_repository_write_access",
+          "status",
+          "policy_hash",
+          "requested_at",
+          "decided_at",
+          "expires_at",
+          "created_at"
+        ],
+        "title": "ExecutionGrantResponse",
+        "type": "object"
+      },
+      "ExecutionGrantStatus": {
+        "enum": ["pending", "approved", "rejected", "revoked", "expired"],
+        "title": "ExecutionGrantStatus",
+        "type": "string"
       },
       "FailRequest": {
         "additionalProperties": false,
@@ -525,7 +1144,29 @@
           "runner_internal_error",
           "control_plane_unavailable",
           "lease_lost",
-          "retry_exhausted"
+          "retry_exhausted",
+          "repository_unavailable",
+          "source_not_read_only",
+          "source_revision_mismatch",
+          "workspace_not_found",
+          "workspace_identity_mismatch",
+          "workspace_state_invalid",
+          "path_invalid",
+          "path_denied",
+          "sensitive_path_denied",
+          "symlink_denied",
+          "hardlink_denied",
+          "not_regular_file",
+          "binary_denied",
+          "invalid_utf8",
+          "file_too_large",
+          "file_count_budget_exceeded",
+          "total_write_budget_exceeded",
+          "diff_budget_exceeded",
+          "content_conflict",
+          "expected_absent_conflict",
+          "atomic_write_failed",
+          "workspace_cancelled"
         ],
         "title": "FailureCode",
         "type": "string"
@@ -544,6 +1185,20 @@
       "HeartbeatRequest": {
         "additionalProperties": false,
         "properties": {
+          "capabilities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Capability"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capabilities"
+          },
           "protocol_version": {
             "const": 1,
             "default": 1,
@@ -606,7 +1261,15 @@
             "discriminator": {
               "mapping": {
                 "controlled_wait_v1": "#/components/schemas/ControlledWaitJobSpec",
-                "system_diagnostic_v1": "#/components/schemas/SystemDiagnosticJobSpec"
+                "system_diagnostic_v1": "#/components/schemas/SystemDiagnosticJobSpec",
+                "workspace_diff_v1": "#/components/schemas/WorkspaceDiffJobSpec",
+                "workspace_discard_v1": "#/components/schemas/WorkspaceDiscardJobSpec",
+                "workspace_list_v1": "#/components/schemas/WorkspaceListJobSpec",
+                "workspace_prepare_v1": "#/components/schemas/WorkspacePrepareJobSpec",
+                "workspace_read_text_v1": "#/components/schemas/WorkspaceReadTextJobSpec",
+                "workspace_rollback_v1": "#/components/schemas/WorkspaceRollbackJobSpec",
+                "workspace_status_v1": "#/components/schemas/WorkspaceStatusJobSpec",
+                "workspace_write_text_v1": "#/components/schemas/WorkspaceWriteTextJobSpec"
               },
               "propertyName": "kind"
             },
@@ -616,6 +1279,30 @@
               },
               {
                 "$ref": "#/components/schemas/ControlledWaitJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspacePrepareJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceListJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceReadTextJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceWriteTextJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceStatusJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceDiffJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceRollbackJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceDiscardJobSpec"
               }
             ],
             "title": "Job"
@@ -652,7 +1339,18 @@
         "type": "object"
       },
       "JobKind": {
-        "enum": ["system_diagnostic_v1", "controlled_wait_v1"],
+        "enum": [
+          "system_diagnostic_v1",
+          "controlled_wait_v1",
+          "workspace_prepare_v1",
+          "workspace_list_v1",
+          "workspace_read_text_v1",
+          "workspace_write_text_v1",
+          "workspace_status_v1",
+          "workspace_diff_v1",
+          "workspace_rollback_v1",
+          "workspace_discard_v1"
+        ],
         "title": "JobKind",
         "type": "string"
       },
@@ -773,14 +1471,14 @@
             "items": {
               "$ref": "#/components/schemas/Capability"
             },
-            "maxItems": 2,
+            "maxItems": 10,
             "minItems": 1,
             "title": "Allowed Capabilities",
             "type": "array"
           },
           "authorization_source": {
-            "const": "local_user_job_dispatch",
             "default": "local_user_job_dispatch",
+            "enum": ["local_user_job_dispatch", "execution_grant"],
             "title": "Authorization Source",
             "type": "string"
           },
@@ -829,7 +1527,7 @@
             "type": "integer"
           },
           "max_runtime_seconds": {
-            "maximum": 60.0,
+            "maximum": 120.0,
             "minimum": 1.0,
             "title": "Max Runtime Seconds",
             "type": "integer"
@@ -846,10 +1544,8 @@
             "type": "string"
           },
           "repository_access": {
-            "const": "none",
-            "default": "none",
-            "title": "Repository Access",
-            "type": "string"
+            "$ref": "#/components/schemas/RepositoryAccess",
+            "default": "none"
           },
           "shell_access": {
             "const": false,
@@ -1384,7 +2080,7 @@
             "items": {
               "$ref": "#/components/schemas/Capability"
             },
-            "maxItems": 2,
+            "maxItems": 10,
             "minItems": 1,
             "title": "Capabilities",
             "type": "array"
@@ -1473,14 +2169,277 @@
         "type": "object"
       },
       "RepositoryAccess": {
-        "enum": ["none"],
+        "enum": ["none", "isolated_workspace"],
         "title": "RepositoryAccess",
+        "type": "string"
+      },
+      "RepositoryHandleListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RepositoryHandleResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "RepositoryHandleListResponse",
+        "type": "object"
+      },
+      "RepositoryHandleResponse": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "enum": ["committed_head_read", "isolated_workspace"],
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Branch"
+          },
+          "current_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Revision"
+          },
+          "dirty_path_count": {
+            "title": "Dirty Path Count",
+            "type": "integer"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Verified At"
+          },
+          "metadata_version": {
+            "const": 1,
+            "title": "Metadata Version",
+            "type": "integer"
+          },
+          "opaque_handle": {
+            "title": "Opaque Handle",
+            "type": "string"
+          },
+          "runner_display_name": {
+            "title": "Runner Display Name",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "source_is_dirty": {
+            "title": "Source Is Dirty",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RepositoryHandleStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "vcs_kind": {
+            "const": "git",
+            "title": "Vcs Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "runner_id",
+          "runner_display_name",
+          "opaque_handle",
+          "display_name",
+          "vcs_kind",
+          "status",
+          "capabilities",
+          "current_revision",
+          "current_branch",
+          "source_is_dirty",
+          "dirty_path_count",
+          "last_verified_at",
+          "metadata_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RepositoryHandleResponse",
+        "type": "object"
+      },
+      "RepositoryHandleStatus": {
+        "enum": ["available", "unavailable", "revoked"],
+        "title": "RepositoryHandleStatus",
         "type": "string"
       },
       "RepositoryKind": {
         "enum": ["local_path", "github"],
         "title": "RepositoryKind",
         "type": "string"
+      },
+      "RepositoryRegistrationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "enum": ["committed_head_read", "isolated_workspace"],
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "current_branch": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Branch"
+          },
+          "current_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Current Revision",
+            "type": "string"
+          },
+          "dirty_path_count": {
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Dirty Path Count",
+            "type": "integer"
+          },
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "metadata_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Metadata Version",
+            "type": "integer"
+          },
+          "opaque_handle": {
+            "maxLength": 120,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Opaque Handle",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "source_is_dirty": {
+            "title": "Source Is Dirty",
+            "type": "boolean"
+          },
+          "vcs_kind": {
+            "const": "git",
+            "default": "git",
+            "title": "Vcs Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runner_id",
+          "opaque_handle",
+          "display_name",
+          "capabilities",
+          "current_revision",
+          "source_is_dirty",
+          "dirty_path_count"
+        ],
+        "title": "RepositoryRegistrationRequest",
+        "type": "object"
+      },
+      "RepositoryRegistrationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "current_revision": {
+            "title": "Current Revision",
+            "type": "string"
+          },
+          "last_verified_at": {
+            "format": "date-time",
+            "title": "Last Verified At",
+            "type": "string"
+          },
+          "opaque_handle": {
+            "title": "Opaque Handle",
+            "type": "string"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "available",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository_handle_id",
+          "opaque_handle",
+          "status",
+          "current_revision",
+          "last_verified_at"
+        ],
+        "title": "RepositoryRegistrationResponse",
+        "type": "object"
       },
       "RepositoryStatusValidationStep": {
         "additionalProperties": false,
@@ -1968,6 +2927,29 @@
             ],
             "title": "Error Message"
           },
+          "execution_grant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Grant Id"
+          },
+          "execution_policy_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Policy Hash"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1988,6 +2970,18 @@
           "permission_envelope": {
             "$ref": "#/components/schemas/PermissionEnvelopeResponse"
           },
+          "repository_handle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Handle Id"
+          },
           "requested_by": {
             "title": "Requested By",
             "type": "string"
@@ -1998,7 +2992,15 @@
                 "discriminator": {
                   "mapping": {
                     "controlled_wait_v1": "#/components/schemas/ControlledWaitResult",
-                    "system_diagnostic_v1": "#/components/schemas/DiagnosticResult"
+                    "system_diagnostic_v1": "#/components/schemas/DiagnosticResult",
+                    "workspace_diff_v1": "#/components/schemas/WorkspaceDiffResult",
+                    "workspace_discard_v1": "#/components/schemas/WorkspaceDiscardResult",
+                    "workspace_list_v1": "#/components/schemas/WorkspaceListResult",
+                    "workspace_prepare_v1": "#/components/schemas/WorkspacePrepareResult",
+                    "workspace_read_text_v1": "#/components/schemas/WorkspaceReadTextResult",
+                    "workspace_rollback_v1": "#/components/schemas/WorkspaceRollbackResult",
+                    "workspace_status_v1": "#/components/schemas/WorkspaceStatusResult",
+                    "workspace_write_text_v1": "#/components/schemas/WorkspaceWriteTextResult"
                   },
                   "propertyName": "kind"
                 },
@@ -2008,6 +3010,30 @@
                   },
                   {
                     "$ref": "#/components/schemas/ControlledWaitResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspacePrepareResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspaceListResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspaceReadTextResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspaceWriteTextResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspaceStatusResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspaceDiffResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspaceRollbackResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspaceDiscardResult"
                   }
                 ]
               },
@@ -2016,6 +3042,17 @@
               }
             ],
             "title": "Result"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Revision"
           },
           "state": {
             "$ref": "#/components/schemas/JobState"
@@ -2028,6 +3065,18 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
           }
         },
         "required": [
@@ -2036,6 +3085,11 @@
           "state",
           "requested_by",
           "parameters",
+          "execution_grant_id",
+          "workspace_id",
+          "repository_handle_id",
+          "source_revision",
+          "execution_policy_hash",
           "active_attempt_id",
           "attempt_count",
           "max_attempts",
@@ -2508,16 +3562,1883 @@
         "enum": ["draft"],
         "title": "TaskStatus",
         "type": "string"
+      },
+      "WorkspaceActionResponse": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/RunnerJobResponse"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceResponse"
+          }
+        },
+        "required": ["workspace", "job"],
+        "title": "WorkspaceActionResponse",
+        "type": "object"
+      },
+      "WorkspaceCheckpointListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceCheckpointResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "WorkspaceCheckpointListResponse",
+        "type": "object"
+      },
+      "WorkspaceCheckpointPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "changed_file_count": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Changed File Count",
+            "type": "integer"
+          },
+          "changed_paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Changed Paths",
+            "type": "array"
+          },
+          "diff": {
+            "title": "Diff",
+            "type": "string"
+          },
+          "diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Diff Hash",
+            "type": "string"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "total_diff_bytes": {
+            "maximum": 32768.0,
+            "minimum": 0.0,
+            "title": "Total Diff Bytes",
+            "type": "integer"
+          },
+          "tree_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Tree Fingerprint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_revision",
+          "tree_fingerprint",
+          "diff_hash",
+          "changed_paths",
+          "changed_file_count",
+          "total_diff_bytes",
+          "diff"
+        ],
+        "title": "WorkspaceCheckpointPayload",
+        "type": "object"
+      },
+      "WorkspaceCheckpointResponse": {
+        "properties": {
+          "changed_file_count": {
+            "title": "Changed File Count",
+            "type": "integer"
+          },
+          "changed_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Paths",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "diff_artifact": {
+            "title": "Diff Artifact",
+            "type": "string"
+          },
+          "diff_hash": {
+            "title": "Diff Hash",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "total_diff_bytes": {
+            "title": "Total Diff Bytes",
+            "type": "integer"
+          },
+          "tree_fingerprint": {
+            "title": "Tree Fingerprint",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "sequence",
+          "source_revision",
+          "tree_fingerprint",
+          "diff_hash",
+          "changed_paths",
+          "changed_file_count",
+          "total_diff_bytes",
+          "diff_artifact",
+          "created_at"
+        ],
+        "title": "WorkspaceCheckpointResponse",
+        "type": "object"
+      },
+      "WorkspaceCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "grant_id": {
+            "format": "uuid",
+            "title": "Grant Id",
+            "type": "string"
+          }
+        },
+        "required": ["grant_id"],
+        "title": "WorkspaceCreate",
+        "type": "object"
+      },
+      "WorkspaceDiffJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "kind": {
+            "const": "workspace_diff_v1",
+            "default": "workspace_diff_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": ["workspace_id", "execution_grant"],
+        "title": "WorkspaceDiffJobSpec",
+        "type": "object"
+      },
+      "WorkspaceDiffResult": {
+        "additionalProperties": false,
+        "properties": {
+          "changed_paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Changed Paths",
+            "type": "array"
+          },
+          "checkpoint": {
+            "$ref": "#/components/schemas/WorkspaceCheckpointPayload"
+          },
+          "current_tree_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Current Tree Hash",
+            "type": "string"
+          },
+          "diff": {
+            "title": "Diff",
+            "type": "string"
+          },
+          "diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Diff Hash",
+            "type": "string"
+          },
+          "kind": {
+            "const": "workspace_diff_v1",
+            "default": "workspace_diff_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "total_diff_bytes": {
+            "maximum": 32768.0,
+            "minimum": 0.0,
+            "title": "Total Diff Bytes",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "diff",
+          "diff_hash",
+          "changed_paths",
+          "total_diff_bytes",
+          "current_tree_hash",
+          "checkpoint"
+        ],
+        "title": "WorkspaceDiffResult",
+        "type": "object"
+      },
+      "WorkspaceDiscardJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "kind": {
+            "const": "workspace_discard_v1",
+            "default": "workspace_discard_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": ["workspace_id", "execution_grant"],
+        "title": "WorkspaceDiscardJobSpec",
+        "type": "object"
+      },
+      "WorkspaceDiscardResult": {
+        "additionalProperties": false,
+        "properties": {
+          "discarded": {
+            "const": true,
+            "default": true,
+            "title": "Discarded",
+            "type": "boolean"
+          },
+          "idempotent": {
+            "title": "Idempotent",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "workspace_discard_v1",
+            "default": "workspace_discard_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": ["workspace_id", "idempotent"],
+        "title": "WorkspaceDiscardResult",
+        "type": "object"
+      },
+      "WorkspaceEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_type": {
+            "$ref": "#/components/schemas/WorkspaceEntryType"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "size": {
+            "maximum": 1073741824.0,
+            "minimum": 0.0,
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": ["relative_path", "entry_type", "size"],
+        "title": "WorkspaceEntry",
+        "type": "object"
+      },
+      "WorkspaceEntryType": {
+        "enum": [
+          "directory",
+          "text",
+          "binary",
+          "symlink",
+          "gitlink",
+          "special"
+        ],
+        "title": "WorkspaceEntryType",
+        "type": "string"
+      },
+      "WorkspaceEventListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceEventResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "WorkspaceEventListResponse",
+        "type": "object"
+      },
+      "WorkspaceEventResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "runner_id",
+          "event_type",
+          "sequence",
+          "request_id",
+          "metadata",
+          "created_at"
+        ],
+        "title": "WorkspaceEventResponse",
+        "type": "object"
+      },
+      "WorkspaceListAction": {
+        "additionalProperties": false,
+        "properties": {
+          "depth": {
+            "default": 2,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Depth",
+            "type": "integer"
+          },
+          "max_entries": {
+            "default": 200,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Max Entries",
+            "type": "integer"
+          },
+          "relative_directory": {
+            "title": "Relative Directory",
+            "type": "string"
+          }
+        },
+        "required": ["relative_directory"],
+        "title": "WorkspaceListAction",
+        "type": "object"
+      },
+      "WorkspaceListJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "depth": {
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Depth",
+            "type": "integer"
+          },
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "kind": {
+            "const": "workspace_list_v1",
+            "default": "workspace_list_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_entries": {
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Max Entries",
+            "type": "integer"
+          },
+          "relative_directory": {
+            "title": "Relative Directory",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "execution_grant",
+          "relative_directory",
+          "depth",
+          "max_entries"
+        ],
+        "title": "WorkspaceListJobSpec",
+        "type": "object"
+      },
+      "WorkspaceListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "WorkspaceListResponse",
+        "type": "object"
+      },
+      "WorkspaceListResult": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceEntry"
+            },
+            "maxItems": 500,
+            "title": "Entries",
+            "type": "array"
+          },
+          "kind": {
+            "const": "workspace_list_v1",
+            "default": "workspace_list_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "relative_directory": {
+            "title": "Relative Directory",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "relative_directory",
+          "entries",
+          "truncated"
+        ],
+        "title": "WorkspaceListResult",
+        "type": "object"
+      },
+      "WorkspaceOperation": {
+        "enum": [
+          "prepare",
+          "list",
+          "read_text",
+          "write_text",
+          "status",
+          "diff",
+          "rollback",
+          "discard"
+        ],
+        "title": "WorkspaceOperation",
+        "type": "string"
+      },
+      "WorkspacePrepareJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "kind": {
+            "const": "workspace_prepare_v1",
+            "default": "workspace_prepare_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": ["workspace_id", "execution_grant"],
+        "title": "WorkspacePrepareJobSpec",
+        "type": "object"
+      },
+      "WorkspacePrepareResult": {
+        "additionalProperties": false,
+        "properties": {
+          "current_tree_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Current Tree Hash",
+            "type": "string"
+          },
+          "initial_tree_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Initial Tree Hash",
+            "type": "string"
+          },
+          "kind": {
+            "const": "workspace_prepare_v1",
+            "default": "workspace_prepare_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "workspace_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Workspace Fingerprint",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "repository_handle_id",
+          "source_revision",
+          "workspace_fingerprint",
+          "initial_tree_hash",
+          "current_tree_hash"
+        ],
+        "title": "WorkspacePrepareResult",
+        "type": "object"
+      },
+      "WorkspaceReadTextAction": {
+        "additionalProperties": false,
+        "properties": {
+          "max_bytes": {
+            "default": 32768,
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          }
+        },
+        "required": ["relative_path"],
+        "title": "WorkspaceReadTextAction",
+        "type": "object"
+      },
+      "WorkspaceReadTextJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "kind": {
+            "const": "workspace_read_text_v1",
+            "default": "workspace_read_text_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_bytes": {
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "execution_grant",
+          "relative_path",
+          "max_bytes"
+        ],
+        "title": "WorkspaceReadTextJobSpec",
+        "type": "object"
+      },
+      "WorkspaceReadTextResult": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "kind": {
+            "const": "workspace_read_text_v1",
+            "default": "workspace_read_text_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size": {
+            "maximum": 32768.0,
+            "minimum": 0.0,
+            "title": "Size",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "relative_path",
+          "content",
+          "sha256",
+          "size"
+        ],
+        "title": "WorkspaceReadTextResult",
+        "type": "object"
+      },
+      "WorkspaceResponse": {
+        "properties": {
+          "active_attempt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Attempt Id"
+          },
+          "changed_file_count": {
+            "title": "Changed File Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Created Paths",
+            "type": "array"
+          },
+          "current_tree_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Tree Hash"
+          },
+          "discarded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discarded At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "grant_id": {
+            "format": "uuid",
+            "title": "Grant Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initial_tree_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Tree Hash"
+          },
+          "latest_job_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Job Id"
+          },
+          "latest_job_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Job Kind"
+          },
+          "latest_job_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Job State"
+          },
+          "max_diff_bytes": {
+            "title": "Max Diff Bytes",
+            "type": "integer"
+          },
+          "max_files_changed": {
+            "title": "Max Files Changed",
+            "type": "integer"
+          },
+          "max_single_file_bytes": {
+            "title": "Max Single File Bytes",
+            "type": "integer"
+          },
+          "max_total_write_bytes": {
+            "title": "Max Total Write Bytes",
+            "type": "integer"
+          },
+          "repository_display_name": {
+            "title": "Repository Display Name",
+            "type": "string"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "runner_display_name": {
+            "title": "Runner Display Name",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "sealed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sealed At"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorkspaceState"
+          },
+          "total_written_bytes": {
+            "title": "Total Written Bytes",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "workspace_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Fingerprint"
+          }
+        },
+        "required": [
+          "id",
+          "grant_id",
+          "runner_id",
+          "runner_display_name",
+          "repository_handle_id",
+          "repository_display_name",
+          "source_revision",
+          "state",
+          "workspace_fingerprint",
+          "initial_tree_hash",
+          "current_tree_hash",
+          "changed_file_count",
+          "total_written_bytes",
+          "max_files_changed",
+          "max_total_write_bytes",
+          "max_single_file_bytes",
+          "max_diff_bytes",
+          "created_paths",
+          "active_attempt_id",
+          "expires_at",
+          "created_at",
+          "updated_at",
+          "sealed_at",
+          "discarded_at",
+          "error_code",
+          "error_message"
+        ],
+        "title": "WorkspaceResponse",
+        "type": "object"
+      },
+      "WorkspaceRollbackJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "kind": {
+            "const": "workspace_rollback_v1",
+            "default": "workspace_rollback_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "const": "initial",
+            "default": "initial",
+            "title": "Target",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": ["workspace_id", "execution_grant"],
+        "title": "WorkspaceRollbackJobSpec",
+        "type": "object"
+      },
+      "WorkspaceRollbackResult": {
+        "additionalProperties": false,
+        "properties": {
+          "clean": {
+            "const": true,
+            "default": true,
+            "title": "Clean",
+            "type": "boolean"
+          },
+          "current_tree_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Current Tree Hash",
+            "type": "string"
+          },
+          "kind": {
+            "const": "workspace_rollback_v1",
+            "default": "workspace_rollback_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "removed_created_paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Removed Created Paths",
+            "type": "array"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "current_tree_hash",
+          "removed_created_paths"
+        ],
+        "title": "WorkspaceRollbackResult",
+        "type": "object"
+      },
+      "WorkspaceState": {
+        "enum": [
+          "requested",
+          "preparing",
+          "ready",
+          "active",
+          "sealing",
+          "sealed",
+          "rollback_requested",
+          "rolled_back",
+          "discard_requested",
+          "discarded",
+          "failed",
+          "expired"
+        ],
+        "title": "WorkspaceState",
+        "type": "string"
+      },
+      "WorkspaceStatusCode": {
+        "enum": [
+          "modified",
+          "added",
+          "deleted",
+          "renamed",
+          "copied",
+          "untracked",
+          "type_changed"
+        ],
+        "title": "WorkspaceStatusCode",
+        "type": "string"
+      },
+      "WorkspaceStatusEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkspaceStatusCode"
+          }
+        },
+        "required": ["relative_path", "status"],
+        "title": "WorkspaceStatusEntry",
+        "type": "object"
+      },
+      "WorkspaceStatusJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "kind": {
+            "const": "workspace_status_v1",
+            "default": "workspace_status_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": ["workspace_id", "execution_grant"],
+        "title": "WorkspaceStatusJobSpec",
+        "type": "object"
+      },
+      "WorkspaceStatusResult": {
+        "additionalProperties": false,
+        "properties": {
+          "changed_file_count": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Changed File Count",
+            "type": "integer"
+          },
+          "current_tree_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Current Tree Hash",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceStatusEntry"
+            },
+            "maxItems": 100,
+            "title": "Entries",
+            "type": "array"
+          },
+          "kind": {
+            "const": "workspace_status_v1",
+            "default": "workspace_status_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "entries",
+          "changed_file_count",
+          "current_tree_hash"
+        ],
+        "title": "WorkspaceStatusResult",
+        "type": "object"
+      },
+      "WorkspaceWriteMode": {
+        "enum": ["create", "replace"],
+        "title": "WorkspaceWriteMode",
+        "type": "string"
+      },
+      "WorkspaceWriteTextAction": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "expected_absent": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Absent"
+          },
+          "expected_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Sha256"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/WorkspaceWriteMode"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          }
+        },
+        "required": ["mode", "relative_path", "content"],
+        "title": "WorkspaceWriteTextAction",
+        "type": "object"
+      },
+      "WorkspaceWriteTextJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "expected_absent": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Absent"
+          },
+          "expected_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Sha256"
+          },
+          "kind": {
+            "const": "workspace_write_text_v1",
+            "default": "workspace_write_text_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/WorkspaceWriteMode"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "execution_grant",
+          "mode",
+          "relative_path",
+          "content"
+        ],
+        "title": "WorkspaceWriteTextJobSpec",
+        "type": "object"
+      },
+      "WorkspaceWriteTextResult": {
+        "additionalProperties": false,
+        "properties": {
+          "changed_file_count": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Changed File Count",
+            "type": "integer"
+          },
+          "checkpoint": {
+            "$ref": "#/components/schemas/WorkspaceCheckpointPayload"
+          },
+          "current_tree_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Current Tree Hash",
+            "type": "string"
+          },
+          "kind": {
+            "const": "workspace_write_text_v1",
+            "default": "workspace_write_text_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/WorkspaceWriteMode"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size": {
+            "maximum": 32768.0,
+            "minimum": 0.0,
+            "title": "Size",
+            "type": "integer"
+          },
+          "total_written_bytes": {
+            "maximum": 1048576.0,
+            "minimum": 0.0,
+            "title": "Total Written Bytes",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "relative_path",
+          "operation",
+          "sha256",
+          "size",
+          "current_tree_hash",
+          "changed_file_count",
+          "total_written_bytes",
+          "checkpoint"
+        ],
+        "title": "WorkspaceWriteTextResult",
+        "type": "object"
       }
     }
   },
   "info": {
-    "description": "Phase 3 Control Plane API for governed planning and a browser-orchestrated repository-free Local Runner. Plan approval never dispatches execution.",
+    "description": "Phase 4 Control Plane API for governed planning, independent Execution Grants, and Runner-owned isolated fixture workspaces. Plan approval alone never authorizes execution.",
     "title": "VisualEngineer API",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/execution-grants": {
+      "get": {
+        "operationId": "list_execution_grants_api_v1_execution_grants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionGrantListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "List immutable Execution Grants",
+        "tags": ["isolated workspaces"]
+      },
+      "post": {
+        "operationId": "create_execution_grant_api_v1_execution_grants_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecutionGrantCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionGrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Derive a pending narrow Grant from an approved current Plan",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/execution-grants/eligible-contexts": {
+      "get": {
+        "operationId": "list_eligible_execution_contexts_api_v1_execution_grants_eligible_contexts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EligibleExecutionContextListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "List approved non-stale Plan and Repository contexts",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/execution-grants/{grant_id}": {
+      "get": {
+        "operationId": "get_execution_grant_api_v1_execution_grants__grant_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Grant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionGrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Get one immutable Execution Grant and its decision",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/execution-grants/{grant_id}/decisions": {
+      "post": {
+        "operationId": "decide_execution_grant_api_v1_execution_grants__grant_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Grant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecutionGrantDecisionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionGrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Independently approve or reason-reject a pending Grant",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/execution-grants/{grant_id}/revoke": {
+      "post": {
+        "operationId": "revoke_execution_grant_api_v1_execution_grants__grant_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Grant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionGrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Revoke a pending or approved Execution Grant",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/repositories": {
+      "get": {
+        "operationId": "list_repositories_api_v1_repositories_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryHandleListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "List Runner-registered opaque Repository Handles",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/repositories/{repository_id}": {
+      "get": {
+        "operationId": "get_repository_api_v1_repositories__repository_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryHandleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Get a Repository Handle without a Runner host path",
+        "tags": ["isolated workspaces"]
+      }
+    },
     "/api/v1/runner-jobs": {
       "get": {
         "operationId": "list_runner_jobs_api_v1_runner_jobs_get",
@@ -3845,6 +6766,113 @@
         "tags": ["runner protocol"]
       }
     },
+    "/api/v1/runner-protocol/v1/repositories/register": {
+      "post": {
+        "operationId": "register_repository_api_v1_runner_protocol_v1_repositories_register_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryRegistrationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Register one Runner-local opaque Repository Handle without its path",
+        "tags": ["runner protocol"]
+      }
+    },
     "/api/v1/runners": {
       "get": {
         "operationId": "list_runners_api_v1_runners_get",
@@ -5136,6 +8164,872 @@
         },
         "summary": "Create a Level 0 committed-HEAD Run",
         "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/workspaces": {
+      "get": {
+        "operationId": "list_workspaces_api_v1_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "List isolated Runner-owned Workspaces",
+        "tags": ["isolated workspaces"]
+      },
+      "post": {
+        "operationId": "create_workspace_api_v1_workspaces_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Request an exact-revision Runner-owned isolated Workspace",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}": {
+      "get": {
+        "operationId": "get_workspace_api_v1_workspaces__workspace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Get Workspace state without exposing its Runner path",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/actions/diff": {
+      "post": {
+        "operationId": "workspace_diff_api_v1_workspaces__workspace_id__actions_diff_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Workspace Diff",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/actions/discard": {
+      "post": {
+        "operationId": "workspace_discard_api_v1_workspaces__workspace_id__actions_discard_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Workspace Discard",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/actions/list": {
+      "post": {
+        "operationId": "list_workspace_directory_api_v1_workspaces__workspace_id__actions_list_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceListAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "List Workspace Directory",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/actions/read-text": {
+      "post": {
+        "operationId": "read_workspace_text_api_v1_workspaces__workspace_id__actions_read_text_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceReadTextAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Read Workspace Text",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/actions/rollback": {
+      "post": {
+        "operationId": "workspace_rollback_api_v1_workspaces__workspace_id__actions_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Workspace Rollback",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/actions/status": {
+      "post": {
+        "operationId": "workspace_status_api_v1_workspaces__workspace_id__actions_status_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Workspace Status",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/actions/write-text": {
+      "post": {
+        "operationId": "write_workspace_text_api_v1_workspaces__workspace_id__actions_write_text_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceWriteTextAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "Write Workspace Text",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/checkpoints": {
+      "get": {
+        "operationId": "list_workspace_checkpoints_api_v1_workspaces__workspace_id__checkpoints_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceCheckpointListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "List Workspace Checkpoints",
+        "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/events": {
+      "get": {
+        "operationId": "list_workspace_events_api_v1_workspaces__workspace_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceEventListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked Runner or Handle"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workspace entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State, hash, or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Execution policy denied the action"
+          }
+        },
+        "summary": "List Workspace Events",
+        "tags": ["isolated workspaces"]
       }
     },
     "/health/live": {

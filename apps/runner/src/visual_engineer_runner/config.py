@@ -1,8 +1,23 @@
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class LocalRepositoryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: Path
+    display_name: str = Field(min_length=1, max_length=120)
+
+    @field_validator("path")
+    @classmethod
+    def require_absolute_path(cls, value: Path) -> Path:
+        if not value.is_absolute():
+            raise ValueError("Runner repository paths must be absolute")
+        return value
 
 
 class RunnerSettings(BaseSettings):
@@ -17,8 +32,16 @@ class RunnerSettings(BaseSettings):
     control_plane_url: str = "http://api:8000"
     bootstrap_token: SecretStr = SecretStr("")
     display_name: str = Field(default="Local Runner", min_length=1, max_length=120)
-    software_version: str = Field(default="0.3.0", pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+    software_version: str = Field(default="0.4.0", pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
     credential_path: Path = Path("/var/lib/visual-engineer-runner/credentials.json")
+    repository_handles: dict[str, LocalRepositoryConfig] = Field(default_factory=dict)
+    mirror_root: Path = Path("/var/lib/visual-engineer-runner/mirrors")
+    workspace_root: Path = Path("/var/lib/visual-engineer-runner/workspaces")
+    registry_root: Path = Path("/var/lib/visual-engineer-runner/registry")
+    require_source_read_only: bool = True
+    git_timeout_seconds: float = Field(default=15.0, ge=1, le=60)
+    workspace_prepare_delay_ms: int = Field(default=0, ge=0, le=10_000)
+    workspace_write_commit_delay_ms: int = Field(default=0, ge=0, le=10_000)
     heartbeat_interval_seconds: float = Field(default=3.0, ge=0.5, le=60)
     poll_interval_seconds: float = Field(default=0.5, ge=0.1, le=10)
     request_timeout_seconds: float = Field(default=10.0, ge=1, le=60)
@@ -42,12 +65,38 @@ class RunnerSettings(BaseSettings):
             raise ValueError("RUNNER_CONTROL_PLANE_URL must be an HTTP(S) origin")
         return normalized
 
-    @field_validator("credential_path")
+    @field_validator("credential_path", "mirror_root", "workspace_root", "registry_root")
     @classmethod
     def require_absolute_credential_path(cls, value: Path) -> Path:
         if not value.is_absolute():
-            raise ValueError("RUNNER_CREDENTIAL_PATH must be absolute")
+            raise ValueError("Runner state paths must be absolute")
         return value
+
+    @field_validator("repository_handles")
+    @classmethod
+    def validate_repository_handles(
+        cls, value: dict[str, LocalRepositoryConfig]
+    ) -> dict[str, LocalRepositoryConfig]:
+        pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,119}$")
+        if len(value) > 16:
+            raise ValueError("At most 16 local Repository Handles are supported")
+        if any(pattern.fullmatch(handle) is None for handle in value):
+            raise ValueError("Runner Repository Handle is invalid")
+        paths = [str(item.path) for item in value.values()]
+        if len(paths) != len(set(paths)):
+            raise ValueError("Runner Repository Handle paths must be unique")
+        return value
+
+    @model_validator(mode="after")
+    def require_distinct_state_roots(self) -> "RunnerSettings":
+        roots = {
+            str(self.mirror_root),
+            str(self.workspace_root),
+            str(self.registry_root),
+        }
+        if len(roots) != 3:
+            raise ValueError("Runner mirror, workspace, and registry roots must be distinct")
+        return self
 
     @field_validator("log_level")
     @classmethod

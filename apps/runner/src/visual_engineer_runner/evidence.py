@@ -6,6 +6,7 @@ from visual_engineer_runner_protocol import (
     JobAssignment,
     NetworkPolicy,
     RepositoryAccess,
+    WorkspaceBoundJobSpec,
     permission_policy_hash_matches,
 )
 
@@ -29,7 +30,12 @@ def validate_assignment(assignment: JobAssignment) -> None:
         raise PermissionEnvelopeDeniedError("envelope_expired")
     if expected_capability not in envelope.allowed_capabilities:
         raise PermissionEnvelopeDeniedError("unsupported_capability")
-    if envelope.repository_access != RepositoryAccess.NONE:
+    expected_repository_access = (
+        RepositoryAccess.ISOLATED_WORKSPACE
+        if isinstance(assignment.job, WorkspaceBoundJobSpec)
+        else RepositoryAccess.NONE
+    )
+    if envelope.repository_access != expected_repository_access:
         raise PermissionEnvelopeDeniedError("repository_access_denied")
     if envelope.shell_access:
         raise PermissionEnvelopeDeniedError("shell_access_denied")
