@@ -26,11 +26,60 @@ type JsonRequest<Operation> = Operation extends {
 type TaskDetailOperation = OperationAt<"/api/v1/tasks/{task_id}", "get">;
 type TaskListOperation = OperationAt<"/api/v1/tasks", "get">;
 type TaskCreateOperation = OperationAt<"/api/v1/tasks", "post">;
+type RunCreateOperation = OperationAt<"/api/v1/tasks/{task_id}/runs", "post">;
+type RunListOperation = OperationAt<"/api/v1/tasks/{task_id}/runs", "get">;
+type RunDetailOperation = OperationAt<"/api/v1/runs/{run_id}", "get">;
+type SnapshotCreateOperation = OperationAt<
+  "/api/v1/runs/{run_id}/snapshot",
+  "post"
+>;
+type SnapshotDetailOperation = OperationAt<
+  "/api/v1/runs/{run_id}/snapshot",
+  "get"
+>;
+type PlanCreateOperation = OperationAt<"/api/v1/runs/{run_id}/plans", "post">;
+type PlanListOperation = OperationAt<"/api/v1/runs/{run_id}/plans", "get">;
+type PlanRevisionOperation = OperationAt<
+  "/api/v1/runs/{run_id}/plans/{version}/revisions",
+  "post"
+>;
+type PlanSubmitOperation = OperationAt<
+  "/api/v1/runs/{run_id}/plans/{version}/submit",
+  "post"
+>;
+type PlanDecisionOperation = OperationAt<
+  "/api/v1/runs/{run_id}/plans/{version}/decisions",
+  "post"
+>;
+type AuditListOperation = OperationAt<
+  "/api/v1/runs/{run_id}/audit-events",
+  "get"
+>;
 
 export type Task = JsonResponse<TaskDetailOperation, 200>;
 export type CreateTaskInput = JsonRequest<TaskCreateOperation>;
 type TaskListPayload = JsonResponse<TaskListOperation, 200>;
 type CreatedTask = JsonResponse<TaskCreateOperation, 201>;
+export type Run = JsonResponse<RunDetailOperation, 200>;
+export type CreateRunInput = JsonRequest<RunCreateOperation>;
+type RunListPayload = JsonResponse<RunListOperation, 200>;
+type CreatedRun = JsonResponse<RunCreateOperation, 201>;
+export type Snapshot = JsonResponse<SnapshotDetailOperation, 200>;
+type CreatedSnapshot = JsonResponse<SnapshotCreateOperation, 201>;
+export type Plan = JsonResponse<PlanSubmitOperation, 200>;
+export type CreatePlanInput = JsonRequest<PlanCreateOperation>;
+export type PlanRevisionInput = JsonRequest<PlanRevisionOperation>;
+export type PlanDecisionInput = JsonRequest<PlanDecisionOperation>;
+type CreatedPlan = JsonResponse<PlanCreateOperation, 201>;
+type RevisedPlan = JsonResponse<PlanRevisionOperation, 201>;
+type PlanListPayload = JsonResponse<PlanListOperation, 200>;
+export type ApprovalDecision = JsonResponse<PlanDecisionOperation, 201>;
+type AuditListPayload = JsonResponse<AuditListOperation, 200>;
+export type AuditEvent = AuditListPayload extends {
+  items: Array<infer Item>;
+}
+  ? Item
+  : never;
 
 export type HealthCheck = "live" | "ready";
 export type RepositoryKind = CreateTaskInput extends {
@@ -190,4 +239,151 @@ export async function createTask(
     task: data as Task,
     replayed: response.headers.get("idempotent-replay") === "true",
   };
+}
+
+export async function listRuns(taskId: string): Promise<Run[]> {
+  const { data } = await request<RunListPayload>(
+    `/api/v1/tasks/${encodeURIComponent(taskId)}/runs`,
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function getRun(runId: string): Promise<Run> {
+  const { data } = await request<Run>(
+    `/api/v1/runs/${encodeURIComponent(runId)}`,
+    { cache: "no-store" },
+  );
+  return data;
+}
+
+export async function startRun(
+  taskId: string,
+  idempotencyKey: string,
+): Promise<{ run: Run; replayed: boolean }> {
+  const input: CreateRunInput = {
+    permission_level: "read_only",
+    snapshot_mode: "git_head",
+  };
+  const { data, response } = await request<CreatedRun>(
+    `/api/v1/tasks/${encodeURIComponent(taskId)}/runs`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return {
+    run: data as Run,
+    replayed: response.headers.get("idempotent-replay") === "true",
+  };
+}
+
+export async function getSnapshot(runId: string): Promise<Snapshot> {
+  const { data } = await request<Snapshot>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/snapshot`,
+    { cache: "no-store" },
+  );
+  return data;
+}
+
+export async function createSnapshot(runId: string): Promise<Snapshot> {
+  const { data } = await request<CreatedSnapshot>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/snapshot`,
+    { method: "POST" },
+  );
+  return data as Snapshot;
+}
+
+export async function listPlans(runId: string): Promise<Plan[]> {
+  const { data } = await request<PlanListPayload>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/plans`,
+    { cache: "no-store" },
+  );
+  return data.items as Plan[];
+}
+
+export async function createPlan(
+  runId: string,
+  input: CreatePlanInput,
+): Promise<Plan> {
+  const { data } = await request<CreatedPlan>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/plans`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  return data as Plan;
+}
+
+export async function revisePlan(
+  runId: string,
+  version: number,
+  input: PlanRevisionInput,
+): Promise<Plan> {
+  const { data } = await request<RevisedPlan>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/plans/${version}/revisions`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  return data as Plan;
+}
+
+export async function submitPlan(
+  runId: string,
+  version: number,
+): Promise<Plan> {
+  const { data } = await request<Plan>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/plans/${version}/submit`,
+    { method: "POST" },
+  );
+  return data;
+}
+
+export async function decidePlan(
+  runId: string,
+  version: number,
+  input: PlanDecisionInput,
+): Promise<ApprovalDecision> {
+  const { data } = await request<ApprovalDecision>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/plans/${version}/decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return data;
+}
+
+export async function listAuditEvents(runId: string): Promise<AuditEvent[]> {
+  const { data } = await request<AuditListPayload>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/audit-events`,
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function cancelRun(runId: string, reason?: string): Promise<Run> {
+  const input: { reason?: string } = reason ? { reason } : {};
+  const { data } = await request<Run>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/cancel`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  return data;
 }

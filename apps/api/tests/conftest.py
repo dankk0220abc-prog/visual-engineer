@@ -40,7 +40,12 @@ def database_url() -> str:
 def db_session(database_url: str) -> Generator[Session, None, None]:
     engine = create_engine(database_url)
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE tasks"))
+        connection.execute(
+            text(
+                "TRUNCATE TABLE audit_events, approval_decisions, plans, "
+                "repository_snapshots, runs, tasks"
+            )
+        )
     with Session(engine) as session:
         yield session
     engine.dispose()

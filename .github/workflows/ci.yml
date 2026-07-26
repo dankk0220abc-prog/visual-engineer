@@ -45,6 +45,9 @@ jobs:
       - run: make lint-api
       - run: make typecheck-api
       - run: make test-api-direct
+      - run: make migration-check
+      - run: make security-check
+      - run: make eval
 
   frontend:
     name: Frontend quality, tests, and build

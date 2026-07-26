@@ -120,15 +120,15 @@ export function Dashboard() {
             VisualEngineer
           </p>
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">
-            Foundation
+            Phase 2
           </span>
         </div>
         <h1 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
           受治理的前端交付任务控制台
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-          VisualEngineer 面向企业前端团队。当前 Foundation
-          只提供可靠的任务登记与状态查询，仓库位置仅作为元数据保存，不会触发代码访问或修改。
+          VisualEngineer 面向企业前端团队。Phase 2 提供任务登记、显式启动的
+          Level 0 committed-HEAD 调查和确定性计划审批；不会执行或修改目标代码。
         </p>
       </header>
 

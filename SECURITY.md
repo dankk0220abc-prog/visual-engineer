@@ -2,13 +2,16 @@
 
 ## Current security posture
 
-VisualEngineer is currently a Foundation-stage, local, single-user development
-project. It has not been hardened for hostile multi-user input, Internet
+VisualEngineer is currently a Phase 2 local, single-user development project.
+It has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
 the web or API services to the public Internet.
 
-The current product scope stores task metadata only. A repository locator is
-untrusted metadata and grants no filesystem or network authority.
+The current product can inspect an explicitly requested canonical local Git
+root only when it is inside `READ_ONLY_REPOSITORY_ROOTS`. Facts come from
+policy-selected committed `HEAD` objects; dirty and untracked content is not
+read. A locator alone grants no filesystem, command, write, or network
+authority.
 
 ## Reporting a vulnerability
 
@@ -32,8 +35,8 @@ contact address and response SLA remain `PLANNED`.
 - Use least-privilege, short-lived credentials when integrations are added.
 - Redact secrets and connection strings from errors, traces, test artifacts,
   and structured logs.
-- No OpenAI, GitHub, Figma, cloud, or production credential is required in the
-  Foundation Sprint.
+- No OpenAI, GitHub, Figma, cloud, or production credential is required in
+  Phase 2.
 
 ## Repository permissions
 
@@ -42,6 +45,9 @@ an isolated worktree, path confinement, explicit human approval, a reviewed
 plan, recorded tool calls, validation, and a rollback checkpoint. Merging main,
 production deployment, secret access, and high-risk migrations remain
 prohibited capabilities.
+
+Repository instructions are untrusted data. Phase 2 Plan approval is a durable
+decision only and does not authorize or trigger code execution.
 
 ## Before broader exposure
 

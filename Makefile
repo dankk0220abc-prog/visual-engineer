@@ -3,7 +3,7 @@ SHELL := /bin/sh
 
 TEST_DATABASE_URL ?= postgresql+psycopg://visualengineer:visualengineer-test-local@localhost:55433/visualengineer_test
 
-.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-web build build-web e2e verify up down logs migration-check docker-config security-check
+.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-web build build-web e2e eval verify up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
 
 help:
 	@echo "VisualEngineer Foundation commands: bootstrap db-up migrate up verify down"
@@ -74,9 +74,16 @@ build: build-web
 docker-config:
 	docker compose config --quiet
 	docker compose --profile test config --quiet
+	E2E_REPOSITORY_PATH=/tmp/visualengineer-synthetic docker compose -f compose.yaml -f infra/compose.e2e.yaml config --quiet
+	CUSTOMER0_REPOSITORY_PATH=/tmp/visualengineer-customer0 docker compose -f compose.yaml -f infra/compose.customer0.yaml config --quiet
 
 security-check:
 	./scripts/check-secrets.sh
+	uv run pytest apps/api/tests/test_repository_scanner.py --no-cov -q
+
+eval:
+	uv run python scripts/validate_evals.py
+	uv run pytest apps/api/tests/test_repository_scanner.py --no-cov -q
 
 migration-check:
 	./scripts/run-migration-check.sh
@@ -95,6 +102,7 @@ verify:
 	$(MAKE) migration-check
 	$(MAKE) e2e
 	$(MAKE) security-check
+	$(MAKE) eval
 	git diff --check
 
 up:
@@ -105,3 +113,23 @@ down:
 
 logs:
 	docker compose logs --tail=200 -f api web db
+
+customer0-up:
+	@test -n "$(CUSTOMER0_REPOSITORY_PATH)" || (echo "Set CUSTOMER0_REPOSITORY_PATH explicitly." >&2; exit 1)
+	POSTGRES_PUBLISHED_PORT="$${CUSTOMER0_DB_PORT:-15434}" \
+	API_PUBLISHED_PORT="$${CUSTOMER0_API_PORT:-18001}" \
+	WEB_PUBLISHED_PORT="$${CUSTOMER0_WEB_PORT:-13001}" \
+	WEB_ORIGIN="http://127.0.0.1:$${CUSTOMER0_WEB_PORT:-13001},http://localhost:$${CUSTOMER0_WEB_PORT:-13001}" \
+	NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:$${CUSTOMER0_API_PORT:-18001}" \
+	CUSTOMER0_REPOSITORY_PATH="$(CUSTOMER0_REPOSITORY_PATH)" \
+	docker compose -p visualengineer-customer0 -f compose.yaml -f infra/compose.customer0.yaml up -d --build --wait db api web
+
+customer0-down:
+	@test -n "$(CUSTOMER0_REPOSITORY_PATH)" || (echo "Set CUSTOMER0_REPOSITORY_PATH explicitly." >&2; exit 1)
+	CUSTOMER0_REPOSITORY_PATH="$(CUSTOMER0_REPOSITORY_PATH)" \
+	docker compose -p visualengineer-customer0 -f compose.yaml -f infra/compose.customer0.yaml down
+
+customer0-readonly-case: customer0-up
+	CUSTOMER0_API_BASE_URL="http://127.0.0.1:$${CUSTOMER0_API_PORT:-18001}" \
+	CUSTOMER0_WEB_BASE_URL="http://127.0.0.1:$${CUSTOMER0_WEB_PORT:-13001}" \
+	uv run python scripts/run_customer0_case.py

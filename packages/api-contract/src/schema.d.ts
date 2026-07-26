@@ -4,6 +4,161 @@
  */
 
 export interface paths {
+  "/api/v1/runs/{run_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get a durable Run */
+    get: operations["get_run_api_v1_runs__run_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runs/{run_id}/audit-events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List sanitized governance Audit Events */
+    get: operations["list_audit_events_api_v1_runs__run_id__audit_events_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runs/{run_id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Cancel a non-terminal Phase 2 Run */
+    post: operations["cancel_run_api_v1_runs__run_id__cancel_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runs/{run_id}/plans": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Plan versions newest first */
+    get: operations["list_plans_api_v1_runs__run_id__plans_get"];
+    put?: never;
+    /** Create a deterministic policy Plan */
+    post: operations["create_plan_api_v1_runs__run_id__plans_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runs/{run_id}/plans/{version}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get a Plan version */
+    get: operations["get_plan_api_v1_runs__run_id__plans__version__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runs/{run_id}/plans/{version}/decisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Approve or reject the latest awaiting Plan without executing code */
+    post: operations["decide_plan_api_v1_runs__run_id__plans__version__decisions_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runs/{run_id}/plans/{version}/revisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a bounded deterministic Plan revision */
+    post: operations["revise_plan_api_v1_runs__run_id__plans__version__revisions_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runs/{run_id}/plans/{version}/submit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Submit the latest Plan for human approval */
+    post: operations["submit_plan_api_v1_runs__run_id__plans__version__submit_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runs/{run_id}/snapshot": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the immutable committed-HEAD Snapshot */
+    get: operations["get_snapshot_api_v1_runs__run_id__snapshot_get"];
+    put?: never;
+    /** Create one immutable committed-HEAD Snapshot */
+    post: operations["create_snapshot_api_v1_runs__run_id__snapshot_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/tasks": {
     parameters: {
       query?: never;
@@ -33,6 +188,24 @@ export interface paths {
     get: operations["get_task_api_v1_tasks__task_id__get"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/tasks/{task_id}/runs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Runs for a Task */
+    get: operations["list_runs_api_v1_tasks__task_id__runs_get"];
+    put?: never;
+    /** Create a Level 0 committed-HEAD Run */
+    post: operations["create_run_api_v1_tasks__task_id__runs_post"];
     delete?: never;
     options?: never;
     head?: never;
@@ -77,6 +250,108 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** ApprovalDecisionResponse */
+    ApprovalDecisionResponse: {
+      /**
+       * Actor Type
+       * @constant
+       */
+      actor_type: "local_user";
+      /** Comment */
+      comment: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      decision: components["schemas"]["DecisionKind"];
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Plan Id
+       * Format: uuid
+       */
+      plan_id: string;
+      /** Request Id */
+      request_id: string;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+    };
+    /** AuditEventListResponse */
+    AuditEventListResponse: {
+      /** Items */
+      items: components["schemas"]["AuditEventResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** AuditEventResponse */
+    AuditEventResponse: {
+      /**
+       * Actor Type
+       * @enum {string}
+       */
+      actor_type: "local_user" | "system";
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Event Type */
+      event_type: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Metadata */
+      metadata: {
+        [key: string]: unknown;
+      };
+      /** Request Id */
+      request_id: string;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+    };
+    /** BrowserValidationStep */
+    BrowserValidationStep: {
+      /**
+       * Check
+       * @enum {string}
+       */
+      check: "responsive" | "accessibility" | "visual_review";
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "browser_check";
+      /**
+       * Viewport
+       * @enum {string}
+       */
+      viewport: "desktop" | "narrow" | "both";
+    };
+    /**
+     * DecisionKind
+     * @enum {string}
+     */
+    DecisionKind: "approve" | "reject";
+    /**
+     * DeliveryPackage
+     * @enum {string}
+     */
+    DeliveryPackage:
+      | "design_implementation"
+      | "design_system_migration"
+      | "frontend_quality_remediation";
     /** ErrorBody */
     ErrorBody: {
       /** Code */
@@ -102,11 +377,313 @@ export interface components {
       /** Status */
       status: string;
     };
+    /** MakeTargetValidationStep */
+    MakeTargetValidationStep: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "make_target";
+      /** Target */
+      target: string;
+    };
+    /** PackageScriptValidationStep */
+    PackageScriptValidationStep: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "package_script";
+      /** Script */
+      script: string;
+      /** Workspace */
+      workspace: string;
+    };
+    /**
+     * PermissionLevel
+     * @enum {string}
+     */
+    PermissionLevel: "read_only";
+    /** PlanCreate */
+    PlanCreate: {
+      delivery_package: components["schemas"]["DeliveryPackage"];
+    };
+    /** PlanDecisionCreate */
+    PlanDecisionCreate: {
+      /** Comment */
+      comment?: string | null;
+      decision: components["schemas"]["DecisionKind"];
+    };
+    /** PlanListResponse */
+    PlanListResponse: {
+      /** Items */
+      items: components["schemas"]["PlanResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** PlanResponse */
+    PlanResponse: {
+      /** Acceptance Criteria */
+      acceptance_criteria: string[];
+      /** Assumptions */
+      assumptions: string[];
+      /** Content Hash */
+      content_hash: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      delivery_package: components["schemas"]["DeliveryPackage"];
+      /** Evidence Requirements */
+      evidence_requirements: string[];
+      /**
+       * Execution Available
+       * @constant
+       */
+      execution_available: false;
+      /** Explicit Non Goals */
+      explicit_non_goals: string[];
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Objective Summary */
+      objective_summary: string;
+      /** Proposed Change Scope */
+      proposed_change_scope: string[];
+      /** Repository Context Summary */
+      repository_context_summary: string;
+      /** Required Future Permission Level */
+      required_future_permission_level: string;
+      /** Risk Items */
+      risk_items: string[];
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+      /** Snapshot Fingerprint */
+      snapshot_fingerprint: string;
+      /**
+       * Source
+       * @constant
+       */
+      source: "deterministic_policy";
+      status: components["schemas"]["PlanStatus"];
+      /** Stop Conditions */
+      stop_conditions: string[];
+      /** Validation Steps */
+      validation_steps: (
+        | components["schemas"]["PackageScriptValidationStep"]
+        | components["schemas"]["MakeTargetValidationStep"]
+        | components["schemas"]["BrowserValidationStep"]
+        | components["schemas"]["RepositoryStatusValidationStep"]
+      )[];
+      /** Version */
+      version: number;
+    };
+    /** PlanRevisionCreate */
+    PlanRevisionCreate: {
+      /** Acceptance Criteria */
+      acceptance_criteria?: string[] | null;
+      /** Assumptions */
+      assumptions?: string[] | null;
+      /** Evidence Requirements */
+      evidence_requirements?: string[] | null;
+      /** Explicit Non Goals */
+      explicit_non_goals?: string[] | null;
+      /** Objective Summary */
+      objective_summary?: string | null;
+      /** Proposed Change Scope */
+      proposed_change_scope?: string[] | null;
+      /** Stop Conditions */
+      stop_conditions?: string[] | null;
+    };
+    /**
+     * PlanStatus
+     * @enum {string}
+     */
+    PlanStatus:
+      "draft" | "awaiting_approval" | "approved" | "rejected" | "superseded";
     /**
      * RepositoryKind
      * @enum {string}
      */
     RepositoryKind: "local_path" | "github";
+    /** RepositoryStatusValidationStep */
+    RepositoryStatusValidationStep: {
+      /**
+       * Expected
+       * @constant
+       */
+      expected: "approved_scope_only";
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "repository_status_check";
+    };
+    /** RunCancelCreate */
+    RunCancelCreate: {
+      /** Reason */
+      reason?: string | null;
+    };
+    /** RunCreate */
+    RunCreate: {
+      /**
+       * Permission Level
+       * @default read_only
+       * @constant
+       */
+      permission_level: "read_only";
+      /**
+       * Snapshot Mode
+       * @default git_head
+       * @constant
+       */
+      snapshot_mode: "git_head";
+    };
+    /** RunListResponse */
+    RunListResponse: {
+      /** Items */
+      items: components["schemas"]["RunResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** RunResponse */
+    RunResponse: {
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Current Plan Version */
+      current_plan_version: number | null;
+      /** Error Code */
+      error_code: string | null;
+      /** Error Message */
+      error_message: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      permission_level: components["schemas"]["PermissionLevel"];
+      snapshot_mode: components["schemas"]["SnapshotMode"];
+      status: components["schemas"]["RunStatus"];
+      /**
+       * Task Id
+       * Format: uuid
+       */
+      task_id: string;
+      /**
+       * Trace Id
+       * Format: uuid
+       */
+      trace_id: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Version */
+      version: number;
+    };
+    /**
+     * RunStatus
+     * @enum {string}
+     */
+    RunStatus:
+      | "created"
+      | "snapshotting"
+      | "snapshot_ready"
+      | "plan_ready"
+      | "awaiting_plan_approval"
+      | "approved"
+      | "rejected"
+      | "failed"
+      | "cancelled";
+    /**
+     * SnapshotMode
+     * @enum {string}
+     */
+    SnapshotMode: "git_head";
+    /** SnapshotResponse */
+    SnapshotResponse: {
+      /** Available Scripts */
+      available_scripts: {
+        [key: string]: unknown;
+      }[];
+      /** Branch Name */
+      branch_name: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Design System Signals */
+      design_system_signals: {
+        [key: string]: unknown;
+      }[];
+      /** Dirty Path Count */
+      dirty_path_count: number;
+      /** Dirty Paths */
+      dirty_paths: {
+        [key: string]: unknown;
+      }[];
+      /** Fingerprint */
+      fingerprint: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Manifest */
+      manifest: {
+        [key: string]: unknown;
+      }[];
+      /** Package Manager */
+      package_manager: string | null;
+      /** Repository Instructions */
+      repository_instructions: {
+        [key: string]: unknown;
+      }[];
+      /** Repository Is Dirty */
+      repository_is_dirty: boolean;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+      /** Safety Findings */
+      safety_findings: {
+        [key: string]: unknown;
+      }[];
+      /** Scan Policy Version */
+      scan_policy_version: string;
+      /** Scanner Version */
+      scanner_version: string;
+      /** Selected File Count */
+      selected_file_count: number;
+      /** Skipped File Count */
+      skipped_file_count: number;
+      /** Source Revision */
+      source_revision: string;
+      /** Tech Stack */
+      tech_stack: {
+        [key: string]: unknown;
+      };
+      /** Test Surfaces */
+      test_surfaces: {
+        [key: string]: unknown;
+      }[];
+      /** Total Selected Bytes */
+      total_selected_bytes: number;
+      /** Tracked File Count */
+      tracked_file_count: number;
+    };
     /** TaskCreate */
     TaskCreate: {
       /** Objective */
@@ -174,6 +751,592 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  get_run_api_v1_runs__run_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_audit_events_api_v1_runs__run_id__audit_events_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuditEventListResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  cancel_run_api_v1_runs__run_id__cancel_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["RunCancelCreate"] | null;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_plans_api_v1_runs__run_id__plans_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlanListResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_plan_api_v1_runs__run_id__plans_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PlanCreate"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlanResponse"];
+        };
+      };
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlanResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_plan_api_v1_runs__run_id__plans__version__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+        version: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlanResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  decide_plan_api_v1_runs__run_id__plans__version__decisions_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+        version: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PlanDecisionCreate"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApprovalDecisionResponse"];
+        };
+      };
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApprovalDecisionResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  revise_plan_api_v1_runs__run_id__plans__version__revisions_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+        version: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PlanRevisionCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlanResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  submit_plan_api_v1_runs__run_id__plans__version__submit_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+        version: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlanResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_snapshot_api_v1_runs__run_id__snapshot_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SnapshotResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_snapshot_api_v1_runs__run_id__snapshot_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SnapshotResponse"];
+        };
+      };
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SnapshotResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
   list_tasks_api_v1_tasks_get: {
     parameters: {
       query?: {
@@ -289,6 +1452,119 @@ export interface operations {
         };
       };
       /** @description Invalid task ID */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_runs_api_v1_tasks__task_id__runs_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunListResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_run_api_v1_tasks__task_id__runs_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        "Idempotency-Key"?: string | null;
+      };
+      path: {
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RunCreate"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunResponse"];
+        };
+      };
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
       422: {
         headers: {
           [name: string]: unknown;

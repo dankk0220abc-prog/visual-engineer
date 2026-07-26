@@ -1,0 +1,9 @@
+services:
+  api:
+    environment:
+      READ_ONLY_REPOSITORY_ROOTS: /repositories/customer0/creative-deploy
+    volumes:
+      - type: bind
+        source: ${CUSTOMER0_REPOSITORY_PATH:?Set CUSTOMER0_REPOSITORY_PATH explicitly}
+        target: /repositories/customer0/creative-deploy
+        read_only: true

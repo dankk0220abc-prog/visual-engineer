@@ -12,7 +12,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH="/app/apps/api/src"
-RUN groupadd --system app && useradd --system --gid app --create-home app
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --system app \
+  && useradd --system --gid app --create-home app
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY apps/api/alembic.ini apps/api/alembic.ini

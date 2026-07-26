@@ -26,7 +26,12 @@ def test_competing_idempotent_creates_converge_on_one_postgresql_row(
 ) -> None:
     engine = create_engine(database_url)
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE tasks"))
+        connection.execute(
+            text(
+                "TRUNCATE TABLE audit_events, approval_decisions, plans, "
+                "repository_snapshots, runs, tasks"
+            )
+        )
 
     payload = TaskCreate(
         title="Concurrent Foundation task",

@@ -1,4 +1,6 @@
+import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,6 +23,15 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000, ge=1, le=65535)
     web_origin: str = "http://localhost:3000,http://127.0.0.1:3000"
     log_level: str = "INFO"
+    read_only_repository_roots: str = "/repositories"
+    repository_scan_max_files: int = Field(default=5000, ge=1, le=100_000)
+    repository_scan_max_selected_files: int = Field(default=250, ge=1, le=5000)
+    repository_scan_max_file_bytes: int = Field(default=256 * 1024, ge=1024, le=10 * 1024 * 1024)
+    repository_scan_max_total_bytes: int = Field(
+        default=5 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024
+    )
+    repository_scan_timeout_seconds: float = Field(default=20.0, ge=0.1, le=120.0)
+    repository_dirty_path_limit: int = Field(default=200, ge=1, le=5000)
 
     @field_validator("database_url")
     @classmethod
@@ -48,6 +59,24 @@ class Settings(BaseSettings):
         if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
             raise ValueError("LOG_LEVEL is invalid")
         return normalized
+
+    @field_validator("read_only_repository_roots")
+    @classmethod
+    def validate_repository_roots(cls, value: str) -> str:
+        roots = [item.strip() for item in value.split(os.pathsep) if item.strip()]
+        if not roots:
+            raise ValueError("READ_ONLY_REPOSITORY_ROOTS must contain at least one path")
+        for root in roots:
+            if "\x00" in root or not Path(root).expanduser().is_absolute():
+                raise ValueError("READ_ONLY_REPOSITORY_ROOTS must contain absolute paths")
+        return os.pathsep.join(roots)
+
+    @property
+    def repository_roots(self) -> tuple[Path, ...]:
+        return tuple(
+            Path(root).expanduser().resolve(strict=False)
+            for root in self.read_only_repository_roots.split(os.pathsep)
+        )
 
 
 @lru_cache

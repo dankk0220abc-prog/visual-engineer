@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Run the verified Foundation web/API/PostgreSQL stack on one local machine.
-This is not a public or production deployment runbook.
+Run the local Foundation and Phase 2 web/API/PostgreSQL stack on one machine.
+This is not a public or production deployment runbook. The base Compose file
+does not mount a target repository; use a reviewed override explicitly.
 
 ## Start
 
@@ -35,6 +36,25 @@ make verify
 This starts and removes project-scoped test/E2E services. It does not remove
 unrelated containers or volumes. Reports, traces, screenshots, coverage, local
 dependencies, and `.env` files are ignored by Git.
+
+The aggregate gate includes format, lint, typecheck, backend and frontend
+tests, contract drift, build, Compose configuration, migration round trip,
+desktop/narrow real-stack Playwright, adversarial repository security, eval
+dataset validation, and `git diff --check`.
+
+Narrow Phase 2 gates are:
+
+```sh
+make security-check
+make eval
+make migration-check
+make e2e
+```
+
+For the internal CreativeDeploy Customer 0 case, first complete all synthetic
+gates and follow
+[`customer0-readonly-investigation.md`](customer0-readonly-investigation.md).
+Do not add the Customer 0 host path to `.env` or any committed file.
 
 ## Diagnose
 

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.responses import Response
 
 from visual_engineer_api.api.health import router as health_router
+from visual_engineer_api.api.runs import router as runs_router
 from visual_engineer_api.api.tasks import router as tasks_router
 from visual_engineer_api.core.config import get_settings
 
@@ -46,10 +47,10 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="VisualEngineer API",
-        version="0.1.0",
+        version="0.2.0",
         description=(
-            "Foundation API for task metadata. Repository locators are stored as inert metadata; "
-            "this service does not access target repositories."
+            "Phase 2 API for governed Level 0 committed-HEAD repository intelligence and "
+            "deterministic plan approval. Approval never executes code."
         ),
     )
     app.add_middleware(
@@ -112,6 +113,7 @@ def create_app() -> FastAPI:
             status_code=exc.status_code,
             code=str(detail.get("code", "http_error")),
             message=str(detail.get("message", "Request failed")),
+            details=detail.get("details") if isinstance(detail.get("details"), list) else None,
         )
 
     @app.exception_handler(Exception)
@@ -135,6 +137,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(tasks_router)
+    app.include_router(runs_router)
     return app
 
 

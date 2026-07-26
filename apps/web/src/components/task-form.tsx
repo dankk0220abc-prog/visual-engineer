@@ -148,7 +148,7 @@ export function TaskForm({
           id="objective"
           name="objective"
           maxLength={4000}
-          placeholder="说明期望结果和验证标准。Foundation 阶段只保存元数据，不会访问仓库。"
+          placeholder="说明期望结果和验证标准。创建 Task 只保存元数据；显式创建 Level 0 Run 后才能只读扫描。"
           {...errorProps("objective")}
         />
         <ErrorMessage error={errors.objective} field="objective" />
@@ -215,7 +215,8 @@ export function TaskForm({
             {...errorProps("repository_locator")}
           />
           <p className="mt-1.5 text-xs leading-5 text-slate-500">
-            仅作为任务元数据保存；当前系统不会读取此位置。
+            创建 Task 时仅保存为元数据。只有显式启动 Level 0 Run，且路径通过
+            allowlist 后，才会读取 committed HEAD。
           </p>
           <ErrorMessage
             error={errors.repository_locator}

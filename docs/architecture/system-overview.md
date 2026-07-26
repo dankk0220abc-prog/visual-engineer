@@ -1,124 +1,134 @@
 # System Overview
 
-VisualEngineer is architected as a governed AI delivery platform for enterprise
-frontend teams. The current solid-line system is only the Foundation task
-registry. Future V1 execution is limited to Design Implementation,
-Design-System Migration, and Frontend Quality Remediation.
-
-## Status legend
-
-- Solid nodes and arrows are implemented Foundation boundaries.
-- Dashed nodes and arrows are future V1 boundaries and are not implemented.
-- Runtime behavior is verified in
-  [`../evidence/phase-0-1-verification.md`](../evidence/phase-0-1-verification.md).
+VisualEngineer Phase 2 is a local, single-user governed planning system. Solid
+nodes below are implemented. Dashed nodes are future V1 boundaries.
 
 ```mermaid
 flowchart TB
-    H["Human operator"]
+    H["Local human operator"]
     W["Next.js console"]
-    A["FastAPI service"]
-    P[("PostgreSQL")]
-    O["OpenAPI export and generated TS types"]
+    A["FastAPI /api/v1"]
+    D[("PostgreSQL")]
+    S["Repository Scanner"]
+    R["Exact allowlisted Git repository (read-only)"]
+    P["Deterministic Plan Generator"]
+    O["OpenAPI and generated TypeScript"]
 
-    H -->|"create and inspect Task"| W
-    W -->|"HTTP /api/v1"| A
-    A -->|"SQLAlchemy transaction"| P
+    H -->|"create Task and Run; revise or decide Plan"| W
+    W -->|"typed HTTP"| A
+    A -->|"transactional state and audit"| D
+    A -->|"Level 0 scan request"| S
+    S -->|"fixed Git reads of HEAD objects"| R
+    A -->|"Task + Snapshot + package"| P
     A -->|"source contract"| O
-    O -->|"typed client"| W
+    O -->|"typed client input"| W
 
-    subgraph Future["Future V1 - not implemented"]
-        CORE["VisualEngineer Core"]
-        DP["Customer Deployment Pack"]
+    subgraph Future["Future - not implemented"]
         AR["Agent Runtime"]
-        AP["Approval policy"]
         IW["Isolated worktree"]
-        BV["Browser validation"]
-        GH["GitHub"]
-        TR["Target repository"]
+        T["Typed execution tools"]
+        B["Controlled browser validation"]
+        G["GitHub pull request"]
     end
 
-    H -. "plan and final approval" .-> AP
-    A -. "durable run orchestration" .-> CORE
-    DP -. "repository profile and constraints" .-> CORE
-    CORE -. "governed execution" .-> AR
-    AP -. "bounded permission grant" .-> AR
-    AR -. "controlled tools" .-> IW
-    IW -. "derived from" .-> TR
-    AR -. "verify" .-> BV
-    AR -. "branch, commit, PR only" .-> GH
+    A -. "separate future authorization" .-> AR
+    AR -. "scoped work" .-> IW
+    AR -. "runtime policy" .-> T
+    T -. "future evidence" .-> B
+    AR -. "future final approval" .-> G
 ```
 
-## Core and Deployment Pack boundary
-
-Future **VisualEngineer Core** owns Task/Run orchestration, approvals, safe
-workspace lifecycle, tool-permission enforcement, validation, traces,
-evaluations, evidence generation, and recovery/rollback boundaries.
-
-A customer **Deployment Pack** provides:
-
-- repository identity and profile;
-- customer and path constraints;
-- allowed commands;
-- design-system and brand context;
-- acceptance criteria;
-- test strategy;
-- a project-specific delivery playbook.
-
-Core remains authoritative for permission and approval. A Deployment Pack is
-untrusted configuration and cannot add capabilities, relax safety policy, or
-claim a command passed. Foundation stores repository metadata only and has no
-runtime Core or executable Deployment Pack implementation.
-
-## Foundation boundaries
+## Implemented responsibilities
 
 ### Web
 
-The web application owns presentation, browser-side form validation, request
-initiation, and user-visible states. It has no direct database, filesystem,
-Docker, shell, external repository, or GitHub access.
+The web application renders Task/Run history, state, permission and snapshot
+mode, committed repository intelligence, safety findings, deterministic Plan
+versions, typed validation steps, decision controls, and the Audit Timeline.
+It owns no database, filesystem, Git, Docker, shell, or target-repository
+access.
 
 ### API
 
-The API owns validation, idempotency, error mapping, request IDs, and task
-operations. API configuration comes from environment variables or conservative
-local defaults. CORS is restricted to configured web origins. Database errors
-must not expose stack traces or connection details.
+The API validates requests, preserves request IDs, applies stable error codes,
+owns Run and Plan state policy, coordinates repository scanning, generates
+deterministic plans, serializes final decisions, writes sanitized audit
+events, and exports OpenAPI. Routes delegate to typed services and
+repositories.
 
-### Database
+### Repository Scanner
 
-PostgreSQL is the durable store. Alembic owns schema evolution. The Foundation
-schema contains only the Task entity; future orchestration entities are
-documented, not created prematurely.
+The scanner:
+
+1. expands and canonically resolves an absolute local path;
+2. verifies allowlist membership, exact Git root, and non-symlink root;
+3. uses fixed no-shell Git argument arrays with prompts, hooks, optional locks,
+   global/system config, and network protocols disabled;
+4. obtains branch, `HEAD`, bounded status paths, and the committed tree;
+5. classifies entries before reading;
+6. reads only policy-selected committed blobs by object ID;
+7. rejects sensitive, binary, oversized, symlink, submodule, and LFS content;
+   and
+8. returns structured facts and a deterministic fingerprint.
+
+No working-tree file is opened. Dirty/untracked content is not read.
+
+### Deterministic Plan Generator
+
+The generator uses only the Task, immutable Snapshot, selected delivery
+package, and versioned product policy. It does not call a model. Plan
+validation steps use a closed schema and are displayed rather than executed.
+Revision validation is a bounded Foundation string policy; future execution
+still requires typed tool schemas and an independent runtime policy layer.
+
+### PostgreSQL
+
+PostgreSQL stores Task, Run, RepositorySnapshot, Plan, ApprovalDecision, and
+AuditEvent. Alembic owns schema history. Row locks and uniqueness serialize
+final plan decisions. A database trigger rejects Snapshot update and delete.
 
 ### Contract
 
-FastAPI's exported OpenAPI JSON is authoritative. TypeScript types are
-generated from it. A drift check regenerates artifacts and requires a clean
-diff.
+FastAPI OpenAPI is authoritative. TypeScript types are generated from it.
+Contract drift regenerates both artifacts and requires no diff.
 
-## Request path
+## Governed request sequence
 
 ```mermaid
 sequenceDiagram
     actor User
     participant Web
     participant API
+    participant Git as Read-only Git repository
     participant DB as PostgreSQL
-    User->>Web: Submit validated task form
-    Web->>API: POST /api/v1/tasks + Idempotency-Key
-    API->>API: Normalize and hash bounded body
-    API->>DB: Transactional insert or replay lookup
-    DB-->>API: Task or unique-key race
-    API-->>Web: 201 created, 200 replay, or stable error
-    Web-->>User: Show task and refresh list/detail
+
+    User->>Web: Start read-only investigation
+    Web->>API: Create Level 0 Run
+    API->>DB: Run created + audit
+    Web->>API: Create Snapshot
+    API->>DB: Run snapshotting + audit
+    API->>Git: Fixed metadata and committed-object reads
+    Git-->>API: HEAD tree and selected blobs
+    API->>DB: Immutable Snapshot + fingerprint + audit
+    Web->>API: Create deterministic Plan
+    API->>DB: Draft Plan bound to fingerprint
+    User->>Web: Revise and submit exact version
+    API->>DB: Supersede old draft; awaiting approval
+    User->>Web: Approve or reject
+    API->>DB: One final decision + terminal Phase 2 state
+    Note over API,Git: No code or command execution follows approval
 ```
 
-The locator remains an inert string throughout this sequence.
+## Customer 0 deployment boundary
+
+The Customer 0 override mounts only the exact CreativeDeploy repository into
+the API at `/repositories/customer0/creative-deploy` with `read_only: true`.
+The Web and database receive no repository mount. The API runs as a non-root
+user. The host path is supplied only at invocation and is not committed.
 
 ## Deployment posture
 
-Foundation Compose is for local development and verification. A local
-migration command may precede API start. Any production design must use a
-single, dedicated release/migration step and non-root workloads, plus
-authentication, secrets management, backups, observability, and hardened
-networking. No production deployment is part of this phase.
+Compose is a local development and verification environment, not a production
+deployment. Authentication, secrets management, tenant isolation, backups,
+high availability, hardened networking, remote CI evidence, and production
+operations remain unimplemented.

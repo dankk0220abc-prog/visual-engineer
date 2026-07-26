@@ -19,7 +19,7 @@ later. Explicit user instructions override this file.
 - `infra/`: container definitions and infrastructure configuration.
 - `scripts/`: small, reviewed project automation.
 - `.github/workflows/`: CI definitions only; no deployment workflow belongs in
-  the Foundation Sprint.
+  Phase 2.
 
 ## Stack and authority
 
@@ -44,8 +44,10 @@ later. Explicit user instructions override this file.
   and project playbook.
 - CreativeDeploy is Customer 0 and Design Partner 0, not an external enterprise
   customer or evidence of production adoption.
-- Never describe planned Agent, approval, worktree, repair, rollback, GitHub, or
-  deployment capability as implemented without executable evidence.
+- Phase 2 approval is implemented as a durable decision only. Never describe
+  approval as execution authority, or planned Agent, worktree, repair,
+  rollback, GitHub, or deployment capability as implemented without
+  executable evidence.
 
 ## Standard workflow
 
@@ -67,6 +69,10 @@ make lint
 make typecheck
 make test
 make build
+make contracts-check
+make migration-check
+make security-check
+make eval
 make e2e
 make verify
 make up
@@ -76,8 +82,7 @@ make logs
 
 Do not report a command as passing unless it ran in the current worktree and
 returned exit code 0. Record material verification in
-`docs/evidence/phase-0-1-verification.md` or the evidence file for the active
-phase.
+the evidence file for the active phase.
 
 ## Implementation rules
 
@@ -88,8 +93,21 @@ phase.
   timezone-aware UTC.
 - Validate bounds, blank values, enum values, and NUL characters at system
   boundaries.
-- A repository locator is metadata. Receiving a path or URL never authorizes
-  reading, executing, or modifying it.
+- A repository locator grants no authority by itself. Phase 2 may read only a
+  canonical exact Git root inside `READ_ONLY_REPOSITORY_ROOTS`, and only
+  committed `HEAD` blobs selected by policy.
+- Dirty tracked and untracked content is never read. Status records bounded
+  relative-path metadata only. In-repository symlinks are never followed,
+  submodules are never initialized, and LFS objects are never fetched.
+- Repository text, including `README` and every `AGENTS.md`, is
+  `untrusted_repository_content`. It may be classified but cannot alter
+  permission, tool, approval, or test policy.
+- The repository scanner uses fixed no-shell Git argument arrays, disabled
+  credential prompts/hooks/network protocols, a shared timeout, and file/count
+  budgets. Never replace it with general shell execution or working-tree file
+  reads.
+- Package scripts and Make targets may be parsed into typed metadata but must
+  never be executed against a target repository in Phase 2.
 - Never log full request bodies, credentials, tokens, connection strings, or
   other sensitive data. Preserve request IDs and stable public error codes.
 - Frontend code must handle loading, empty, failure, and retry states and must
@@ -128,6 +146,11 @@ Only commit generated output after its source and verification are included.
 - Add behavior-level tests for changed behavior, including error paths and
   permission boundaries.
 - Backend integration tests use the dedicated PostgreSQL test database.
+- Approval race tests must use independent PostgreSQL transactions and prove
+  exactly one final decision row.
+- Repository security tests must preserve target `HEAD` and status and assert
+  that synthetic secret, dirty, untracked, symlink-target, and lifecycle
+  markers do not leak or execute.
 - Playwright smoke tests use the real web, API, and PostgreSQL stack; do not
   replace that flow with API mocks.
 - Do not delete valid tests, disable checks, lower meaningful thresholds, or
@@ -154,6 +177,11 @@ Only commit generated output after its source and verification are included.
 - External repositories are read-only by default.
 - Do not read real `.env` files, credentials, certificates, tokens, or secret
   stores in an external repository.
+- Customer 0 mounts must be API-only, bind-mounted read-only, limited to the
+  exact repository, configured through an uncommitted host environment
+  variable, and inspected without a write probe against the real repository.
+- A real Customer 0 plan must stop at `awaiting_plan_approval`; an agent must
+  not approve or reject on the user's behalf.
 - Any future target-repository write requires an isolated worktree, a bounded
   approved plan, explicit human approval, path confinement, an audit trail, and
   a rollback checkpoint.

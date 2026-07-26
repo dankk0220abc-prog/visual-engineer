@@ -5,7 +5,14 @@ from sqlalchemy import engine_from_config, pool
 
 from visual_engineer_api.core.config import get_settings
 from visual_engineer_api.db.base import Base
-from visual_engineer_api.models import Task  # noqa: F401
+from visual_engineer_api.models import (  # noqa: F401
+    ApprovalDecision,
+    AuditEvent,
+    Plan,
+    RepositorySnapshot,
+    Run,
+    Task,
+)
 
 config = context.config
 if config.config_file_name is not None:

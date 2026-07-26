@@ -52,5 +52,7 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The active Foundation plan is
+The active Phase 2 plan is
+[`docs/exec-plans/phase-2-readonly-repository-intelligence.md`](docs/exec-plans/phase-2-readonly-repository-intelligence.md).
+The completed Foundation record remains at
 [`docs/exec-plans/phase-0-1-foundation.md`](docs/exec-plans/phase-0-1-foundation.md).

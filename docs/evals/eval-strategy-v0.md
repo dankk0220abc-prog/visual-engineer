@@ -2,100 +2,102 @@
 
 ## Purpose
 
-Evaluation must determine whether VisualEngineer is correct, safe, useful, and
-recoverable, not merely whether it produces plausible text. Foundation starts
-with deterministic API and browser smoke cases. There is no LLM benchmark,
-production dataset, historical score, or Agent leaderboard yet.
+Evaluation asks whether VisualEngineer is correct, safe, governed, and
+reproducible, not whether it emits plausible text. Phase 2 has no LLM,
+production dataset, Agent score, or leaderboard. Plan generation and all
+current eval expectations are deterministic.
 
-Evaluation is scoped to the three V1 frontend delivery packages: Design
-Implementation, Design-System Migration, and Frontend Quality Remediation.
-Future cases must identify both the delivery package and the versioned customer
-Deployment Pack used.
+## Layers
 
-## Evaluation layers
+1. **Contract:** validation, stable errors, request IDs, idempotency,
+   persistence, OpenAPI, and generated types.
+2. **Database:** real PostgreSQL transitions, constraints, migration
+   upgrade/downgrade/upgrade, immutable Snapshot, and decision race.
+3. **Repository security:** adversarial committed tree, dirty/untracked state,
+   path denial, selection budgets, timeout, provenance, and redaction.
+4. **Determinism:** repeated scan fingerprint and plan content behavior.
+5. **Frontend:** loading/empty/error/retry, state display, safety, revision,
+   decision conflict, and non-execution messaging.
+6. **Real stack:** Web/API/PostgreSQL plus read-only adversarial mount on
+   desktop and 390px, with axe WCAG 2 A/AA and overflow checks.
+7. **Customer 0:** separately recorded read-only CreativeDeploy case, stopped
+   before the human decision.
 
-1. **Deterministic contract checks:** input validation, errors, idempotency,
-   request IDs, pagination, persistence, and migrations.
-2. **Component behavior:** API services, frontend states, accessibility, and
-   generated contract use.
-3. **Real-stack smoke:** browser to web to API to PostgreSQL, including refresh
-   persistence on desktop and narrow viewport.
-4. **Future repository fixtures:** controlled repositories for investigation,
-   prompt injection, permissions, changes, validation, and rollback.
-5. **Future expert review:** blinded rubric assessment of requirement
-   understanding, plan quality, code, design fidelity, and evidence.
+## Versioned datasets
 
-## Future dimensions
+`evals/datasets/foundation-smoke.jsonl` retains the Foundation Task and health
+contract cases.
 
-| Dimension                         | Example measure                                                                    |
-| --------------------------------- | ---------------------------------------------------------------------------------- |
-| Requirement understanding         | Required constraints recalled; contradictions and ambiguity identified.            |
-| Repository investigation accuracy | Cited fact precision/recall; unsupported claim count.                              |
-| Plan quality                      | Correct dependencies, risks, verification, rollback, and scope.                    |
-| Tool selection                    | Minimum sufficient tool/permission; invalid action attempts.                       |
-| Permission adherence              | Unauthorized read/write/execute/egress attempts; approval binding.                 |
-| Code correctness                  | Acceptance behavior, static checks, regression count.                              |
-| Test pass rate                    | Required checks passed without weakened assertions or skips.                       |
-| Visual consistency                | Token/component/layout delta against an approved reference.                        |
-| Responsive behavior               | Critical flow success at defined viewport/content sizes.                           |
-| Accessibility                     | Automated violations plus keyboard/screen-reader task success.                     |
-| Repair success rate               | Valid failures fixed within bounded attempts without regression.                   |
-| Rollback success rate             | State and worktree restored to checkpoint with evidence.                           |
-| Token and cost                    | Input/output/cache tokens and currency per successful run.                         |
-| Latency                           | End-to-end and per-state/tool percentiles.                                         |
-| Human interventions               | Clarifications, approvals, rescues, and manual fixes per run.                      |
-| Failure classification            | Product, model, policy, tool, environment, test, integration, and rollback causes. |
-| Approval-to-PR time               | Elapsed time from exact plan approval to reviewable pull request.                  |
-| First full-pass rate              | Runs passing every required validation before any repair.                          |
-| CI pass rate                      | Required remote checks passing for submitted pull requests.                        |
-| PR acceptance                     | Accepted or merged pull requests under a declared review policy.                   |
-| Actual adoption                   | Active teams, repositories, and completed governed tasks over a defined period.    |
+`evals/datasets/phase2-repository-intelligence.jsonl` defines deterministic
+cases for:
 
-Scores must include evaluator version, dataset revision, run configuration,
-sample count, confidence/uncertainty, failure taxonomy, and evidence references.
-Never report a score from a prompt example or fabricated run.
-No Foundation result establishes a production baseline, improvement
-percentage, external adoption, or customer return on investment.
+- prompt-injection provenance;
+- sensitive-path denial and redaction surfaces;
+- committed-HEAD versus dirty/untracked isolation;
+- symlink escape and symlink metadata budgets;
+- submodule and LFS non-fetch;
+- lifecycle non-execution;
+- binary, file-count, per-file, total-byte, and timeout behavior;
+- traversal, outside-allowlist, symlink-root, and network locator denial;
+- stable fingerprint;
+- immutable Snapshot;
+- concurrent one-winner plan decision; and
+- approval without execution.
 
-## Foundation dataset
+The JSONL contains expected behavior only. The validator rejects duplicate IDs,
+invalid shapes, and fields such as `agent_score`, `result`, or `passed` that
+would fabricate outcomes.
 
-`evals/datasets/foundation-smoke.jsonl` contains deterministic scenario
-definitions, not runtime results. Cases cover:
+## Failure taxonomy
 
-- a legal local-path metadata task;
-- a legal GitHub metadata task;
-- invalid blank/over-limit/enum/NUL fields;
-- equivalent idempotent replay;
-- conflicting idempotency reuse;
-- missing task retrieval;
-- list order and pagination bounds;
-- request-ID and database-readiness behavior.
+| Class                | Examples                                                                    |
+| -------------------- | --------------------------------------------------------------------------- |
+| `contract`           | schema, generated type, request ID, or stable-error mismatch                |
+| `database`           | migration, transaction, uniqueness, immutability, or lock failure           |
+| `path_boundary`      | traversal, allowlist, root, symlink, or locator acceptance error            |
+| `secret_boundary`    | sensitive path/value reaches result, DB, API, audit, or log                 |
+| `snapshot_integrity` | worktree content affects facts/fingerprint or Snapshot mutates              |
+| `execution_boundary` | script, dependency, hook, import, or target command runs                    |
+| `network_boundary`   | submodule, LFS, remote Git, credential, or other egress occurs              |
+| `resource_boundary`  | count, byte, binary, symlink metadata, or deadline is unbounded             |
+| `policy`             | repository text raises permission or invalid Plan reaches approval          |
+| `approval_integrity` | stale/duplicate/racing decision produces invalid state                      |
+| `frontend`           | missing state, accessibility, keyboard, responsive, or persistence behavior |
+| `environment`        | required PostgreSQL, Docker, browser, or tool is unavailable                |
 
-Expected values are stable HTTP behavior and semantic assertions. Runtime tests
-may adapt IDs/timestamps but must not loosen the outcome.
+Failures stay visible in the active ExecPlan with root cause, fix, and
+regression. Checks must not be deleted, skipped, weakened, or reclassified as
+success.
 
-## Dataset hygiene
+## Ground-truth fixture
 
-- Use synthetic repositories, IDs, names, and objectives.
-- Include no personal path, production URL, token, or secret.
-- Version cases in Git and review semantic changes.
-- Keep train/development and held-out evaluation repositories separate once LLM
-  work begins.
-- Store failure artifacts under ignored paths and link only sanitized summaries.
-- Do not tune prompts against every held-out case.
+The fixture contains no real secret. Synthetic markers make forbidden reads or
+execution observable. Before/after `HEAD` and a hash of full porcelain status
+prove the E2E mount did not change target state. Absence of lifecycle marker
+files proves parsed script names were not run. Tests compare selected
+`package.json` metadata to the committed blob while the worktree version is
+maliciously different.
 
-## Foundation release gate
+## Release gate
 
-Foundation passes evaluation only if all deterministic required cases have
-executable tests, the real PostgreSQL/browser smoke succeeds, serious/critical
-accessibility findings meet the declared policy, no unauthorized repository
-access occurs, and verification evidence is recorded. Test definitions alone
-do not satisfy the gate.
+Phase 2 passes only when:
 
-## Future benchmark work
+- all deterministic dataset records validate;
+- backend and frontend behavior tests pass at their configured coverage gates;
+- real PostgreSQL migration and approval concurrency pass;
+- scanner security and fingerprint regressions pass;
+- Playwright approve/reject flows pass with real services, both viewports,
+  axe, persistence, and no overflow;
+- target `HEAD`/status and lifecycle markers are unchanged;
+- the Customer 0 read-only flow stops at awaiting approval; and
+- current verification evidence records exact commands and limitations.
 
-The next evaluation milestone should build small adversarial, non-sensitive
-fixture repositories with ground-truth file maps, injected malicious
-instructions, ambiguous requirements, broken tests, responsive/accessibility
-defects, and reversible changes. It should establish baseline human and
-deterministic-agent results before introducing LLM scoring.
+Remote GitHub Actions are not considered passed unless actually run.
+
+## Future model evaluation
+
+Only after an LLM is deliberately introduced should evaluation add held-out
+repositories, instruction-following and unsupported-claim measures, token/
+latency/cost, blinded expert review, design fidelity, bounded repair, rollback,
+and approval-to-PR metrics. Results must include evaluator and dataset version,
+configuration, sample count, uncertainty, taxonomy, and evidence.

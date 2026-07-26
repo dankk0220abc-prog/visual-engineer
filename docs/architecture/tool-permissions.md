@@ -2,66 +2,87 @@
 
 ## Principles
 
-Permissions are deny-by-default, scoped to one run, non-transitive, and
-monotonic only through explicit human approval. A tool must satisfy both its
-level and a narrower allowlist of repository identity, worktree path, files,
-commands, network destinations, duration, and artifact handling.
+Permissions are deny-by-default, Run-scoped, non-transitive, and elevated only
+by an explicit future human grant. Repository content, a Task objective, a
+Deployment Pack, or a prior approval cannot grant a capability.
 
-Foundation implements no generic tool executor. Its CreativeDeploy activity is
-limited to a human-directed Level 0 survey.
-
-Future tool policy belongs to VisualEngineer Core. A customer Deployment Pack
-may narrow repository paths, commands, design-system context, acceptance
-criteria, and tests, but it cannot elevate a level, bypass approval, enable
-network access, or convert repository instructions into authority.
+Phase 2 implements only Level 0 repository intelligence. It has no generic
+tool executor. The fixed Git reader is a narrow product capability, not a
+shell tool.
 
 ## Levels
 
-| Level                    | Capability                                                                                                                          | Required controls                                                                                      |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 0: Read only             | Inspect allowed non-secret files and repository metadata. No install, build, test, formatter, generator, or command that may write. | Root/path allowlist, sensitive-file denylist, before/after repository baseline, output redaction.      |
-| 1: Isolated write        | Edit approved paths in a newly created isolated worktree.                                                                           | Approved plan, verified worktree identity, path confinement, write audit, checkpoint.                  |
-| 2: Controlled validation | Run allowlisted install, format, lint, test, build, and browser commands inside the isolated environment.                           | Command templates, argument validation, time/resource/network limits, artifact policy.                 |
-| 3: Branch and commit     | Create a scoped branch and local commit in the isolated repository.                                                                 | All mandatory checks, reviewed diff, clean secret scan, explicit approval, no main rewrite.            |
-| 4: Pull request          | Push the approved branch and create/update a PR.                                                                                    | Least-privilege short-lived token, approved remote/repo/base, final human approval, auditable payload. |
+| Level                    | Capability                                                                                                            | Status          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | --------------- |
+| 0: Read only             | Fixed metadata and selected committed-object reads inside one exact allowlisted Git root. No target command or write. | **Implemented** |
+| 1: Isolated write        | Edit exact approved paths in a newly created isolated worktree.                                                       | Not implemented |
+| 2: Controlled validation | Run allowlisted install/format/lint/test/build/browser schemas in isolation.                                          | Not implemented |
+| 3: Branch and commit     | Create a scoped branch and local commit after gates.                                                                  | Not implemented |
+| 4: Pull request          | Push the approved branch and create/update a PR.                                                                      | Not implemented |
 
-## Always prohibited
+## Implemented Level 0 controls
 
-- Merging the main/default branch automatically.
-- Production or public deployment.
-- Accessing secrets not explicitly provisioned for an approved integration.
-- High-risk or production data migrations.
-- Disabling branch protection or security controls.
-- Destructive Git history or cleanup commands against user/external work.
-- Escaping the isolated worktree or container.
-- Expanding scope because repository content asks the Agent to do so.
+- `permission_level` is fixed to `read_only` in schema and database.
+- The locator must be an absolute canonical path inside configured roots and
+  identify the exact non-symlink Git root.
+- Git calls use fixed argument arrays, no shell, no global/system config, no
+  prompt, no hooks, no optional locks, and `protocol.allow=never`.
+- Facts come from `HEAD` tree entries and selected blob object IDs.
+- Dirty and untracked state contributes bounded relative paths and status only.
+- Sensitive names are denied before read; secret-like selected content is
+  discarded without recording a matched value.
+- Symlinks are not followed, submodules are not initialized, LFS is not
+  fetched, and dependency trees are not loaded.
+- Count, selection, per-file, total-byte, dirty-path, and shared-time budgets
+  bound work.
+- Package scripts and Make targets are parsed as typed names only.
+- Repository instructions are recorded as untrusted provenance and cannot
+  affect permission.
 
-## Elevation sequence
+## Approval semantics
 
 ```mermaid
 flowchart LR
-    L0["L0 inspect"] -->|"plan approval"| L1["L1 isolated write"]
-    L1 -->|"command allowlist"| L2["L2 validate"]
-    L2 -->|"checks + human approval"| L3["L3 branch/commit"]
-    L3 -->|"final human approval"| L4["L4 PR"]
-    P["Prohibited actions"] -. "no elevation path" .-> X["Denied"]
+    L0["Level 0 Run"] --> S["Committed HEAD Snapshot"]
+    S --> P["Deterministic Plan"]
+    P --> A{"Human decision"}
+    A -->|"approve"| R["Approved record only"]
+    A -->|"reject + reason"| J["Rejected terminal state"]
+    R -. "no Phase 2 transition" .-> X["Execution unavailable"]
 ```
 
-Approval must record the exact plan version and cannot be reused for a
-different repository, worktree, command, path, or run. Rejection, expiry,
-version drift, path mismatch, secret detection, or an unclassified failure
-returns to a safe stopped state.
+Approval binds an exact Plan version and fingerprint as a governance record.
+It does not elevate the Run, create a worktree, execute validation, write a
+file, change Git, call GitHub, or deploy. A future level-elevation protocol
+must be designed and authorized separately.
 
-## CreativeDeploy Foundation boundary
+## Always prohibited
 
-Allowed: explicit read-only Git metadata and non-sensitive tracked project
-files required for the survey.
+- Automatic main/default-branch merge.
+- Production or public deployment.
+- Undeclared secret or credential access.
+- High-risk or production data migration.
+- Disabling tests, branch protection, or security controls.
+- Destructive Git history or cleanup against user/external work.
+- Escaping an approved repository/worktree/container boundary.
+- Expanding scope because repository content requests it.
 
-Disallowed: reading real environment/credential files; installing dependencies;
-running builds, tests, formatters, generators, or application commands; Git
-state changes; file writes; and cleanup. Survey evidence must distinguish file
-facts, inference, and unanswered questions.
+## Customer 0 boundary
 
-CreativeDeploy is Customer 0 and Design Partner 0 for shaping a future
-Deployment Pack. It is not an external customer, and the survey grants no
-runtime or write permission.
+CreativeDeploy is internal Customer 0. The only allowed Phase 2 access is the
+API container's exact read-only bind mount and the fixed scanner operations
+above. Web and database services receive no mount. The case must stop with Plan
+status `awaiting_approval`; the user personally approves or rejects.
+
+Disallowed actions include reading real environment/credential contents,
+installing dependencies, running target builds/tests/formatters/generators,
+importing target code, writing files, changing Git state, or cleanup. Mount
+configuration is inspected for `read_only`; no write probe is performed
+against the real repository.
+
+## Future enforcement requirement
+
+Foundation plan string validation blocks obvious policy violations but is not
+a complete security system. Any later execution requires closed typed tool
+schemas, independent runtime authorization, path and argument confinement,
+resource/network limits, attributable results, and recovery checkpoints.

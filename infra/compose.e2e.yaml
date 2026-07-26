@@ -1,0 +1,11 @@
+services:
+  api:
+    environment:
+      READ_ONLY_REPOSITORY_ROOTS: /repositories/e2e/adversarial
+      REPOSITORY_SCAN_MAX_FILE_BYTES: 8192
+      REPOSITORY_SCAN_MAX_TOTAL_BYTES: 131072
+    volumes:
+      - type: bind
+        source: ${E2E_REPOSITORY_PATH:?Set E2E_REPOSITORY_PATH to the synthetic fixture}
+        target: /repositories/e2e/adversarial
+        read_only: true

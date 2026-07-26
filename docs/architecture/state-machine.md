@@ -1,80 +1,87 @@
 # Run State Machine
 
-## Foundation reality
+## Implemented Phase 2 lifecycle
 
-The Foundation database formally implements only a Task with status `draft`.
-There is no Run entity, orchestration loop, approval engine, tool executor, or
-rollback engine in this phase. The lifecycle below is a V1 design constraint,
-not a claim of current execution.
-
-## Future Run lifecycle
+The service owns a closed transition table; routes cannot assign state
+directly.
 
 ```mermaid
 stateDiagram-v2
     [*] --> created
-    created --> investigating
-    investigating --> plan_ready
-    investigating --> failed
+    created --> snapshotting
+    snapshotting --> snapshot_ready
+    snapshot_ready --> plan_ready
     plan_ready --> awaiting_plan_approval
     awaiting_plan_approval --> approved
+    awaiting_plan_approval --> rejected
+
+    created --> cancelled
+    snapshotting --> cancelled
+    snapshot_ready --> cancelled
+    plan_ready --> cancelled
     awaiting_plan_approval --> cancelled
-    approved --> executing
-    executing --> validating
-    executing --> failed
-    validating --> awaiting_final_approval
-    validating --> executing: bounded repair approved
-    validating --> failed
-    awaiting_final_approval --> completed
-    awaiting_final_approval --> rollback_required
 
-    created --> cancel_requested
-    investigating --> cancel_requested
-    plan_ready --> cancel_requested
-    awaiting_plan_approval --> cancel_requested
-    approved --> cancel_requested
-    executing --> cancel_requested
-    validating --> cancel_requested
-    awaiting_final_approval --> cancel_requested
-    cancel_requested --> cancelled: no durable change
-    cancel_requested --> rollback_required: durable change exists
-
-    failed --> rollback_required: reversible change exists
-    failed --> [*]: no change to reverse
-    rollback_required --> rolling_back
-    rolling_back --> rolled_back
-    rolling_back --> failed: rollback failure recorded
-    completed --> [*]
-    cancelled --> [*]
-    rolled_back --> [*]
+    snapshotting --> failed
+    snapshot_ready --> failed
+    plan_ready --> failed
 ```
 
-## State meanings and gates
+`approved`, `rejected`, `failed`, and `cancelled` are terminal in Phase 2.
+There is intentionally no `executing` transition.
 
-| State                     | Meaning                                              | Required exit evidence                               |
-| ------------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
-| `created`                 | Run accepted; no repository access yet.              | Policy and target binding.                           |
-| `investigating`           | Level 0 read-only inspection is active.              | Cited facts, uncertainty, unchanged target baseline. |
-| `plan_ready`              | A bounded plan and validation/rollback design exist. | Plan artifact and permission request.                |
-| `awaiting_plan_approval`  | No write is allowed; awaiting human decision.        | Signed/attributed approval or rejection.             |
-| `approved`                | Exact plan and permission ceiling approved.          | Immutable approval reference.                        |
-| `executing`               | Scoped work in an isolated worktree.                 | Tool-call audit and checkpoints.                     |
-| `validating`              | Controlled tests/browser checks are running.         | Command, exit, artifacts, failure class.             |
-| `awaiting_final_approval` | Change and evidence ready for human review.          | Final approval or rollback decision.                 |
-| `completed`               | Authorized deliverable finished.                     | Required checks and delivery evidence.               |
-| `failed`                  | Work cannot safely continue.                         | Root cause, residual changes, recovery option.       |
-| `cancel_requested`        | Cancellation requested; safe point sought.           | Tool quiescence and change assessment.               |
-| `cancelled`               | Stopped with no outstanding reversible change.       | Cleanup evidence.                                    |
-| `rollback_required`       | Durable scoped changes need reversal.                | Checkpoint and approved rollback action.             |
-| `rolling_back`            | Bounded rollback in progress.                        | Audited rollback actions.                            |
-| `rolled_back`             | Scoped changes restored to checkpoint.               | Target status and artifact evidence.                 |
+## State meanings
+
+| State                    | Meaning                                                   | Exit gate                                |
+| ------------------------ | --------------------------------------------------------- | ---------------------------------------- |
+| `created`                | Level 0 Run exists; no repository scan began.             | Explicit Snapshot request.               |
+| `snapshotting`           | Bounded committed-object scan is active.                  | Immutable Snapshot or redacted failure.  |
+| `snapshot_ready`         | One successful Snapshot is durable.                       | Deterministic Plan creation.             |
+| `plan_ready`             | Latest Plan is a reviewable draft.                        | Valid latest-version submission.         |
+| `awaiting_plan_approval` | Latest Plan awaits the local user.                        | One approve or reasoned reject decision. |
+| `approved`               | Exact Plan version was approved as a governance decision. | None in Phase 2.                         |
+| `rejected`               | Exact Plan version was rejected.                          | None in Phase 2.                         |
+| `failed`                 | Run stopped safely with a stable redacted error.          | None in Phase 2.                         |
+| `cancelled`              | User stopped a pre-decision Run.                          | None in Phase 2.                         |
+
+## Plan lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft
+    draft --> superseded: create latest revision
+    draft --> awaiting_approval: submit latest valid version
+    awaiting_approval --> approved: one final approve
+    awaiting_approval --> rejected: one final reject with reason
+```
+
+A revision creates `version + 1`, copies immutable context, applies only
+allowlisted editable fields, recomputes the content hash, and supersedes the
+prior draft. Only the latest draft may be revised or submitted. Only the latest
+awaiting Plan may be decided. An approved Run cannot create another version.
+
+## Conflict and idempotency rules
+
+- Run creation replays only when the same idempotency key represents the same
+  normalized request; otherwise it returns a stable conflict.
+- A completed Snapshot request returns the existing immutable Snapshot.
+- Re-creating the same initial draft returns that draft; subsequent versions
+  use the revision endpoint.
+- Re-submitting the same awaiting Plan is idempotent.
+- An identical final decision and comment replay returns the decision.
+- A stale version returns `409`.
+- A different decision after a winner returns `decision_conflict`.
+- PostgreSQL row locks and the unique `plan_id` decision constraint allow only
+  one winner in a concurrent approve/reject race.
 
 ## Invariants
 
-- Only a human approval can cross into repository-writing execution.
-- Approval binds a plan version, repository/worktree identity, allowed paths,
-  commands, time window, and maximum permission level.
-- Cancellation never silently discards an in-flight external effect.
-- `completed` is impossible with a mandatory failed or missing check.
-- Rollback failure remains `failed`; it must not be relabeled `rolled_back`.
-- Every transition is idempotent, version-checked, timestamped in UTC, and
-  attributable.
+- `permission_level` is always `read_only`.
+- `snapshot_mode` is always `git_head`.
+- One successful immutable Snapshot exists at most once per Run.
+- Every Plan binds that Snapshot fingerprint and has
+  `source = deterministic_policy`.
+- `execution_available` is always false at both API and database boundaries.
+- Rejection requires a non-blank reason.
+- Every material transition appends a sanitized AuditEvent with request ID.
+- Approval records a human decision only; it does not authorize or trigger
+  code execution, a worktree, a command, Git, PR, or deployment action.

@@ -1,6 +1,168 @@
 {
   "components": {
     "schemas": {
+      "ApprovalDecisionResponse": {
+        "properties": {
+          "actor_type": {
+            "const": "local_user",
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/DecisionKind"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "plan_id",
+          "decision",
+          "comment",
+          "actor_type",
+          "request_id",
+          "created_at"
+        ],
+        "title": "ApprovalDecisionResponse",
+        "type": "object"
+      },
+      "AuditEventListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEventResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "AuditEventListResponse",
+        "type": "object"
+      },
+      "AuditEventResponse": {
+        "properties": {
+          "actor_type": {
+            "enum": ["local_user", "system"],
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "event_type",
+          "actor_type",
+          "request_id",
+          "metadata",
+          "created_at"
+        ],
+        "title": "AuditEventResponse",
+        "type": "object"
+      },
+      "BrowserValidationStep": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "enum": ["responsive", "accessibility", "visual_review"],
+            "title": "Check",
+            "type": "string"
+          },
+          "kind": {
+            "const": "browser_check",
+            "title": "Kind",
+            "type": "string"
+          },
+          "viewport": {
+            "enum": ["desktop", "narrow", "both"],
+            "title": "Viewport",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "check", "viewport"],
+        "title": "BrowserValidationStep",
+        "type": "object"
+      },
+      "DecisionKind": {
+        "enum": ["approve", "reject"],
+        "title": "DecisionKind",
+        "type": "string"
+      },
+      "DeliveryPackage": {
+        "enum": [
+          "design_implementation",
+          "design_system_migration",
+          "frontend_quality_remediation"
+        ],
+        "title": "DeliveryPackage",
+        "type": "string"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -57,10 +219,758 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "MakeTargetValidationStep": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "make_target",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "target"],
+        "title": "MakeTargetValidationStep",
+        "type": "object"
+      },
+      "PackageScriptValidationStep": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "package_script",
+            "title": "Kind",
+            "type": "string"
+          },
+          "script": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Script",
+            "type": "string"
+          },
+          "workspace": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Workspace",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "workspace", "script"],
+        "title": "PackageScriptValidationStep",
+        "type": "object"
+      },
+      "PermissionLevel": {
+        "enum": ["read_only"],
+        "title": "PermissionLevel",
+        "type": "string"
+      },
+      "PlanCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "delivery_package": {
+            "$ref": "#/components/schemas/DeliveryPackage"
+          }
+        },
+        "required": ["delivery_package"],
+        "title": "PlanCreate",
+        "type": "object"
+      },
+      "PlanDecisionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/DecisionKind"
+          }
+        },
+        "required": ["decision"],
+        "title": "PlanDecisionCreate",
+        "type": "object"
+      },
+      "PlanListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "PlanListResponse",
+        "type": "object"
+      },
+      "PlanResponse": {
+        "properties": {
+          "acceptance_criteria": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Acceptance Criteria",
+            "type": "array"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "delivery_package": {
+            "$ref": "#/components/schemas/DeliveryPackage"
+          },
+          "evidence_requirements": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Requirements",
+            "type": "array"
+          },
+          "execution_available": {
+            "const": false,
+            "title": "Execution Available",
+            "type": "boolean"
+          },
+          "explicit_non_goals": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Explicit Non Goals",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "objective_summary": {
+            "title": "Objective Summary",
+            "type": "string"
+          },
+          "proposed_change_scope": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Proposed Change Scope",
+            "type": "array"
+          },
+          "repository_context_summary": {
+            "title": "Repository Context Summary",
+            "type": "string"
+          },
+          "required_future_permission_level": {
+            "title": "Required Future Permission Level",
+            "type": "string"
+          },
+          "risk_items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risk Items",
+            "type": "array"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "snapshot_fingerprint": {
+            "title": "Snapshot Fingerprint",
+            "type": "string"
+          },
+          "source": {
+            "const": "deterministic_policy",
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatus"
+          },
+          "stop_conditions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stop Conditions",
+            "type": "array"
+          },
+          "validation_steps": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "browser_check": "#/components/schemas/BrowserValidationStep",
+                  "make_target": "#/components/schemas/MakeTargetValidationStep",
+                  "package_script": "#/components/schemas/PackageScriptValidationStep",
+                  "repository_status_check": "#/components/schemas/RepositoryStatusValidationStep"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/PackageScriptValidationStep"
+                },
+                {
+                  "$ref": "#/components/schemas/MakeTargetValidationStep"
+                },
+                {
+                  "$ref": "#/components/schemas/BrowserValidationStep"
+                },
+                {
+                  "$ref": "#/components/schemas/RepositoryStatusValidationStep"
+                }
+              ]
+            },
+            "title": "Validation Steps",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "version",
+          "status",
+          "source",
+          "snapshot_fingerprint",
+          "delivery_package",
+          "objective_summary",
+          "repository_context_summary",
+          "assumptions",
+          "proposed_change_scope",
+          "explicit_non_goals",
+          "risk_items",
+          "acceptance_criteria",
+          "evidence_requirements",
+          "stop_conditions",
+          "validation_steps",
+          "required_future_permission_level",
+          "execution_available",
+          "content_hash",
+          "created_at"
+        ],
+        "title": "PlanResponse",
+        "type": "object"
+      },
+      "PlanRevisionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptance_criteria": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance Criteria"
+          },
+          "assumptions": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumptions"
+          },
+          "evidence_requirements": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Requirements"
+          },
+          "explicit_non_goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explicit Non Goals"
+          },
+          "objective_summary": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective Summary"
+          },
+          "proposed_change_scope": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Change Scope"
+          },
+          "stop_conditions": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Conditions"
+          }
+        },
+        "title": "PlanRevisionCreate",
+        "type": "object"
+      },
+      "PlanStatus": {
+        "enum": [
+          "draft",
+          "awaiting_approval",
+          "approved",
+          "rejected",
+          "superseded"
+        ],
+        "title": "PlanStatus",
+        "type": "string"
+      },
       "RepositoryKind": {
         "enum": ["local_path", "github"],
         "title": "RepositoryKind",
         "type": "string"
+      },
+      "RepositoryStatusValidationStep": {
+        "additionalProperties": false,
+        "properties": {
+          "expected": {
+            "const": "approved_scope_only",
+            "title": "Expected",
+            "type": "string"
+          },
+          "kind": {
+            "const": "repository_status_check",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "expected"],
+        "title": "RepositoryStatusValidationStep",
+        "type": "object"
+      },
+      "RunCancelCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "RunCancelCreate",
+        "type": "object"
+      },
+      "RunCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "permission_level": {
+            "const": "read_only",
+            "default": "read_only",
+            "title": "Permission Level",
+            "type": "string"
+          },
+          "snapshot_mode": {
+            "const": "git_head",
+            "default": "git_head",
+            "title": "Snapshot Mode",
+            "type": "string"
+          }
+        },
+        "title": "RunCreate",
+        "type": "object"
+      },
+      "RunListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "RunListResponse",
+        "type": "object"
+      },
+      "RunResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_plan_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Plan Version"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "permission_level": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "snapshot_mode": {
+            "$ref": "#/components/schemas/SnapshotMode"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "status",
+          "permission_level",
+          "snapshot_mode",
+          "version",
+          "trace_id",
+          "current_plan_version",
+          "error_code",
+          "error_message",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RunResponse",
+        "type": "object"
+      },
+      "RunStatus": {
+        "enum": [
+          "created",
+          "snapshotting",
+          "snapshot_ready",
+          "plan_ready",
+          "awaiting_plan_approval",
+          "approved",
+          "rejected",
+          "failed",
+          "cancelled"
+        ],
+        "title": "RunStatus",
+        "type": "string"
+      },
+      "SnapshotMode": {
+        "enum": ["git_head"],
+        "title": "SnapshotMode",
+        "type": "string"
+      },
+      "SnapshotResponse": {
+        "properties": {
+          "available_scripts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Available Scripts",
+            "type": "array"
+          },
+          "branch_name": {
+            "title": "Branch Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "design_system_signals": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Design System Signals",
+            "type": "array"
+          },
+          "dirty_path_count": {
+            "title": "Dirty Path Count",
+            "type": "integer"
+          },
+          "dirty_paths": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Dirty Paths",
+            "type": "array"
+          },
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "manifest": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Manifest",
+            "type": "array"
+          },
+          "package_manager": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Manager"
+          },
+          "repository_instructions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Repository Instructions",
+            "type": "array"
+          },
+          "repository_is_dirty": {
+            "title": "Repository Is Dirty",
+            "type": "boolean"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "safety_findings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Safety Findings",
+            "type": "array"
+          },
+          "scan_policy_version": {
+            "title": "Scan Policy Version",
+            "type": "string"
+          },
+          "scanner_version": {
+            "title": "Scanner Version",
+            "type": "string"
+          },
+          "selected_file_count": {
+            "title": "Selected File Count",
+            "type": "integer"
+          },
+          "skipped_file_count": {
+            "title": "Skipped File Count",
+            "type": "integer"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "tech_stack": {
+            "additionalProperties": true,
+            "title": "Tech Stack",
+            "type": "object"
+          },
+          "test_surfaces": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Test Surfaces",
+            "type": "array"
+          },
+          "total_selected_bytes": {
+            "title": "Total Selected Bytes",
+            "type": "integer"
+          },
+          "tracked_file_count": {
+            "title": "Tracked File Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "source_revision",
+          "branch_name",
+          "repository_is_dirty",
+          "dirty_path_count",
+          "dirty_paths",
+          "scanner_version",
+          "scan_policy_version",
+          "fingerprint",
+          "tracked_file_count",
+          "selected_file_count",
+          "skipped_file_count",
+          "total_selected_bytes",
+          "tech_stack",
+          "package_manager",
+          "available_scripts",
+          "test_surfaces",
+          "design_system_signals",
+          "repository_instructions",
+          "safety_findings",
+          "manifest",
+          "created_at"
+        ],
+        "title": "SnapshotResponse",
+        "type": "object"
       },
       "TaskCreate": {
         "additionalProperties": false,
@@ -196,12 +1106,800 @@
     }
   },
   "info": {
-    "description": "Foundation API for task metadata. Repository locators are stored as inert metadata; this service does not access target repositories.",
+    "description": "Phase 2 API for governed Level 0 committed-HEAD repository intelligence and deterministic plan approval. Approval never executes code.",
     "title": "VisualEngineer API",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_api_v1_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Get a durable Run",
+        "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/audit-events": {
+      "get": {
+        "operationId": "list_audit_events_api_v1_runs__run_id__audit_events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditEventListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "List sanitized governance Audit Events",
+        "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/cancel": {
+      "post": {
+        "operationId": "cancel_run_api_v1_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RunCancelCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Cancel a non-terminal Phase 2 Run",
+        "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/plans": {
+      "get": {
+        "operationId": "list_plans_api_v1_runs__run_id__plans_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "List Plan versions newest first",
+        "tags": ["repository intelligence"]
+      },
+      "post": {
+        "operationId": "create_plan_api_v1_runs__run_id__plans_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Create a deterministic policy Plan",
+        "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/plans/{version}": {
+      "get": {
+        "operationId": "get_plan_api_v1_runs__run_id__plans__version__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Get a Plan version",
+        "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/plans/{version}/decisions": {
+      "post": {
+        "operationId": "decide_plan_api_v1_runs__run_id__plans__version__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanDecisionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecisionResponse"
+                }
+              }
+            },
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Approve or reject the latest awaiting Plan without executing code",
+        "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/plans/{version}/revisions": {
+      "post": {
+        "operationId": "revise_plan_api_v1_runs__run_id__plans__version__revisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanRevisionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Create a bounded deterministic Plan revision",
+        "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/plans/{version}/submit": {
+      "post": {
+        "operationId": "submit_plan_api_v1_runs__run_id__plans__version__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Submit the latest Plan for human approval",
+        "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/snapshot": {
+      "get": {
+        "operationId": "get_snapshot_api_v1_runs__run_id__snapshot_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Get the immutable committed-HEAD Snapshot",
+        "tags": ["repository intelligence"]
+      },
+      "post": {
+        "operationId": "create_snapshot_api_v1_runs__run_id__snapshot_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse"
+                }
+              }
+            },
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Create one immutable committed-HEAD Snapshot",
+        "tags": ["repository intelligence"]
+      }
+    },
     "/api/v1/tasks": {
       "get": {
         "operationId": "list_tasks_api_v1_tasks_get",
@@ -376,6 +2074,164 @@
         },
         "summary": "Get a task by ID",
         "tags": ["tasks"]
+      }
+    },
+    "/api/v1/tasks/{task_id}/runs": {
+      "get": {
+        "operationId": "list_runs_api_v1_tasks__task_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "List Runs for a Task",
+        "tags": ["repository intelligence"]
+      },
+      "post": {
+        "operationId": "create_run_api_v1_tasks__task_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Create a Level 0 committed-HEAD Run",
+        "tags": ["repository intelligence"]
       }
     },
     "/health/live": {
