@@ -85,3 +85,59 @@ awaiting Plan may be decided. An approved Run cannot create another version.
 - Every material transition appends a sanitized AuditEvent with request ID.
 - Approval records a human decision only; it does not authorize or trigger
   code execution, a worktree, a command, Git, PR, or deployment action.
+
+## Phase 3 Runner Job lifecycle
+
+Runner Job state is independent of Run/Plan state. Plan approval has no
+transition into this machine.
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued
+    queued --> leased: transactional claim
+    leased --> running: fenced start
+    leased --> cancel_requested: user cancel
+    running --> cancel_requested: user cancel
+    running --> succeeded: typed valid result
+    running --> failed: typed failure
+    cancel_requested --> cancelled: Runner acknowledgement or expired lease
+    leased --> queued: lease expiry and retry remains
+    running --> queued: lease expiry and retry remains
+    leased --> failed: lease expiry exhausts retry
+    running --> failed: lease expiry exhausts retry
+```
+
+`succeeded`, `cancelled`, and `failed` are terminal. Queued cannot become
+succeeded directly. `cancel_requested` cannot become succeeded. Routes call a
+single explicit transition table rather than assigning state freely.
+
+## Runner Attempt lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> leased
+    leased --> running
+    leased --> lease_expired
+    running --> lease_expired
+    running --> succeeded
+    running --> cancelled
+    running --> failed
+```
+
+A Job has at most one active `leased`/`running` Attempt. Claim increments the
+attempt number and issues a new random Lease UUID. Every mutation repeats
+Runner, Attempt, and Lease identity. The service locks and verifies the active
+pointer and deadline; expired or superseded identity returns `409 stale_lease`.
+
+The reaper marks expired Attempts and either requeues the Job, fails it after
+the finite retry budget, or completes an already requested cancellation. A
+PostgreSQL advisory lock prevents duplicate reaper passes.
+
+## Runner idempotency
+
+- Identical repeated start/renew/terminal requests return a replay marker.
+- A different result or failure classification after a terminal write
+  conflicts.
+- Repeated user cancel is idempotent while pending or complete.
+- Completion after cancellation returns `completion_after_cancel`.
+- Heartbeats update `last_seen_at` without creating an event per heartbeat.

@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend quality and PostgreSQL tests
+    name: Backend and PostgreSQL
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -46,8 +46,23 @@ jobs:
       - run: make typecheck-api
       - run: make test-api-direct
       - run: make migration-check
-      - run: make security-check
-      - run: make eval
+
+  runner:
+    name: Local Runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+        with:
+          version: 0.11.30
+          enable-cache: true
+      - run: uv python install 3.12.13
+      - run: uv sync --frozen
+      - run: uv run ruff format --check apps/runner
+      - run: uv run ruff check apps/runner
+      - run: uv run mypy apps/runner
+      - run: uv run pytest apps/runner/tests --no-cov -q
 
   frontend:
     name: Frontend quality, tests, and build
@@ -69,8 +84,8 @@ jobs:
       - run: make test-web
       - run: make build-web
 
-  contract:
-    name: OpenAPI contract drift
+  protocol-contract:
+    name: Runner protocol and OpenAPI contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -89,10 +104,26 @@ jobs:
       - run: uv python install 3.12.13
       - run: uv sync --frozen
       - run: pnpm install --frozen-lockfile
+      - run: uv run pytest packages/runner-protocol/tests --no-cov -q
       - run: make contracts-check
 
+  security-eval:
+    name: Security and deterministic evals
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+        with:
+          version: 0.11.30
+          enable-cache: true
+      - run: uv python install 3.12.13
+      - run: uv sync --frozen
+      - run: make security-check
+      - run: make eval
+
   e2e:
-    name: Docker and Playwright smoke
+    name: Docker and real Runner Playwright
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

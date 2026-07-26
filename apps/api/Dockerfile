@@ -11,7 +11,7 @@ FROM python:3.12.13-slim-bookworm AS runtime
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH="/app/apps/api/src"
+    PYTHONPATH="/app/apps/api/src:/app/packages/runner-protocol/src"
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends git \
   && rm -rf /var/lib/apt/lists/* \
@@ -22,6 +22,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY apps/api/alembic.ini apps/api/alembic.ini
 COPY apps/api/alembic apps/api/alembic
 COPY apps/api/src apps/api/src
+COPY packages/runner-protocol/src packages/runner-protocol/src
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \

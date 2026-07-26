@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     )
     repository_scan_timeout_seconds: float = Field(default=20.0, ge=0.1, le=120.0)
     repository_dirty_path_limit: int = Field(default=200, ge=1, le=5000)
+    runner_bootstrap_token: SecretStr = SecretStr("")
+    runner_online_threshold_seconds: int = Field(default=15, ge=3, le=300)
+    runner_lease_seconds: int = Field(default=6, ge=2, le=60)
+    runner_job_max_attempts: int = Field(default=2, ge=1, le=5)
+    runner_max_result_bytes: int = Field(default=8192, ge=256, le=65_536)
+    runner_envelope_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    runner_reaper_interval_seconds: float = Field(default=1.0, ge=0.25, le=30)
+    runner_reaper_enabled: bool = True
 
     @field_validator("database_url")
     @classmethod

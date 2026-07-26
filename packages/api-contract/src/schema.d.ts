@@ -4,6 +4,279 @@
  */
 
 export interface paths {
+  "/api/v1/runner-jobs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List browser-dispatched Runner Jobs newest first */
+    get: operations["list_runner_jobs_api_v1_runner_jobs_get"];
+    put?: never;
+    /** Create a typed Job and server-derived immutable Permission Envelope */
+    post: operations["create_runner_job_api_v1_runner_jobs_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-jobs/{job_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get a Runner Job, safe lease summary, Envelope, and Attempts */
+    get: operations["get_runner_job_api_v1_runner_jobs__job_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-jobs/{job_id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Request or complete cancellation without allowing later success */
+    post: operations["cancel_runner_job_api_v1_runner_jobs__job_id__cancel_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-jobs/{job_id}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the bounded Runner Job execution timeline */
+    get: operations["list_runner_job_events_api_v1_runner_jobs__job_id__events_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/heartbeat": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Refresh Runner liveness without creating heartbeat event spam */
+    post: operations["heartbeat_api_v1_runner_protocol_v1_heartbeat_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/jobs/claim": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Atomically claim one compatible queued Job */
+    post: operations["claim_job_api_v1_runner_protocol_v1_jobs_claim_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/jobs/{job_id}/cancelled": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Acknowledge cancellation for the active fenced Attempt */
+    post: operations["acknowledge_cancelled_api_v1_runner_protocol_v1_jobs__job_id__cancelled_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/jobs/{job_id}/complete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Store one typed result for the active fenced Attempt */
+    post: operations["complete_job_api_v1_runner_protocol_v1_jobs__job_id__complete_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/jobs/{job_id}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Append one closed, bounded Runner progress event */
+    post: operations["append_job_event_api_v1_runner_protocol_v1_jobs__job_id__events_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/jobs/{job_id}/fail": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Store one typed sanitized failure for the active Attempt */
+    post: operations["fail_job_api_v1_runner_protocol_v1_jobs__job_id__fail_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/jobs/{job_id}/renew": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Renew the active lease and receive cancellation state */
+    post: operations["renew_job_api_v1_runner_protocol_v1_jobs__job_id__renew_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/jobs/{job_id}/start": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start the active fenced Job Attempt */
+    post: operations["start_job_api_v1_runner_protocol_v1_jobs__job_id__start_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runner-protocol/v1/register": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Register a Local Runner with the one-time bootstrap credential */
+    post: operations["register_runner_api_v1_runner_protocol_v1_register_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runners": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the local Runner registry with derived liveness */
+    get: operations["list_runners_api_v1_runners_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runners/{runner_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get one Runner without exposing its credential */
+    get: operations["get_runner_api_v1_runners__runner_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/runners/{runner_id}/revoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Revoke one Runner credential and request cancellation */
+    post: operations["revoke_runner_api_v1_runners__runner_id__revoke_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/runs/{run_id}": {
     parameters: {
       query?: never;
@@ -250,6 +523,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** ActiveJobSummary */
+    ActiveJobSummary: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      kind: components["schemas"]["JobKind"];
+      state: components["schemas"]["JobState"];
+    };
     /** ApprovalDecisionResponse */
     ApprovalDecisionResponse: {
       /**
@@ -339,6 +622,105 @@ export interface components {
        */
       viewport: "desktop" | "narrow" | "both";
     };
+    /** CancelledRequest */
+    CancelledRequest: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+    };
+    /**
+     * Capability
+     * @enum {string}
+     */
+    Capability: "system_diagnostic_v1" | "controlled_wait_v1";
+    /** ClaimRequest */
+    ClaimRequest: {
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /**
+       * Wait Seconds
+       * @default 0
+       */
+      wait_seconds: number;
+    };
+    /** ClaimResponse */
+    ClaimResponse: {
+      assignment: components["schemas"]["JobAssignment"] | null;
+      /**
+       * Server Time
+       * Format: date-time
+       */
+      server_time: string;
+    };
+    /** CompleteRequest */
+    CompleteRequest: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /** Result */
+      result:
+        | components["schemas"]["DiagnosticResult"]
+        | components["schemas"]["ControlledWaitResult"];
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+    };
+    /** ControlledWaitJobSpec */
+    ControlledWaitJobSpec: {
+      /** Duration Ms */
+      duration_ms: number;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "controlled_wait_v1";
+    };
+    /** ControlledWaitResult */
+    ControlledWaitResult: {
+      /**
+       * Completed At
+       * Format: date-time
+       */
+      completed_at: string;
+      /** Elapsed Duration Ms */
+      elapsed_duration_ms: number;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "controlled_wait_v1";
+      /** Requested Duration Ms */
+      requested_duration_ms: number;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+    };
     /**
      * DecisionKind
      * @enum {string}
@@ -352,6 +734,45 @@ export interface components {
       | "design_implementation"
       | "design_system_migration"
       | "frontend_quality_remediation";
+    /** DiagnosticResult */
+    DiagnosticResult: {
+      /** Architecture */
+      architecture: string;
+      /** Capability List */
+      capability_list: components["schemas"]["Capability"][];
+      /**
+       * Completed At
+       * Format: date-time
+       */
+      completed_at: string;
+      /** Duration Ms */
+      duration_ms: number;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "system_diagnostic_v1";
+      /**
+       * Os Family
+       * @enum {string}
+       */
+      os_family: "linux" | "darwin" | "windows" | "other";
+      /**
+       * Protocol Version
+       * @default 1
+       * @constant
+       */
+      protocol_version: 1;
+      /** Python Version */
+      python_version: string;
+      /** Runner Software Version */
+      runner_software_version: string;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+    };
     /** ErrorBody */
     ErrorBody: {
       /** Code */
@@ -372,10 +793,145 @@ export interface components {
       /** @description Stable, non-sensitive error information */
       error: components["schemas"]["ErrorBody"];
     };
+    /** FailRequest */
+    FailRequest: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      error_code: components["schemas"]["FailureCode"];
+      /** Error Message */
+      error_message?: string | null;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+    };
+    /**
+     * FailureCode
+     * @enum {string}
+     */
+    FailureCode:
+      | "policy_denied"
+      | "unsupported_capability"
+      | "envelope_expired"
+      | "envelope_hash_mismatch"
+      | "result_rejected"
+      | "runner_internal_error"
+      | "control_plane_unavailable"
+      | "lease_lost"
+      | "retry_exhausted";
     /** HealthResponse */
     HealthResponse: {
       /** Status */
       status: string;
+    };
+    /** HeartbeatRequest */
+    HeartbeatRequest: {
+      /**
+       * Protocol Version
+       * @default 1
+       * @constant
+       */
+      protocol_version: 1;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Software Version */
+      software_version: string;
+    };
+    /** HeartbeatResponse */
+    HeartbeatResponse: {
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /**
+       * Server Time
+       * Format: date-time
+       */
+      server_time: string;
+      status: components["schemas"]["RunnerStatus"];
+    };
+    /** JobAssignment */
+    JobAssignment: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /** Attempt Number */
+      attempt_number: number;
+      /** Job */
+      job:
+        | components["schemas"]["SystemDiagnosticJobSpec"]
+        | components["schemas"]["ControlledWaitJobSpec"];
+      /**
+       * Job Id
+       * Format: uuid
+       */
+      job_id: string;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /**
+       * Leased Until
+       * Format: date-time
+       */
+      leased_until: string;
+      permission_envelope: components["schemas"]["PermissionEnvelope"];
+    };
+    /**
+     * JobKind
+     * @enum {string}
+     */
+    JobKind: "system_diagnostic_v1" | "controlled_wait_v1";
+    /**
+     * JobState
+     * @enum {string}
+     */
+    JobState:
+      | "queued"
+      | "leased"
+      | "running"
+      | "cancel_requested"
+      | "succeeded"
+      | "cancelled"
+      | "failed";
+    /** LeaseMutationResponse */
+    LeaseMutationResponse: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /** Cancel Requested */
+      cancel_requested: boolean;
+      /**
+       * Idempotent Replay
+       * @default false
+       */
+      idempotent_replay: boolean;
+      /**
+       * Job Id
+       * Format: uuid
+       */
+      job_id: string;
+      /** Leased Until */
+      leased_until: string | null;
+      state: components["schemas"]["JobState"];
     };
     /** MakeTargetValidationStep */
     MakeTargetValidationStep: {
@@ -387,6 +943,11 @@ export interface components {
       /** Target */
       target: string;
     };
+    /**
+     * NetworkPolicy
+     * @enum {string}
+     */
+    NetworkPolicy: "control_plane_only";
     /** PackageScriptValidationStep */
     PackageScriptValidationStep: {
       /**
@@ -398,6 +959,119 @@ export interface components {
       script: string;
       /** Workspace */
       workspace: string;
+    };
+    /** PermissionEnvelope */
+    PermissionEnvelope: {
+      /** Allowed Capabilities */
+      allowed_capabilities: components["schemas"]["Capability"][];
+      /**
+       * Authorization Source
+       * @default local_user_job_dispatch
+       * @constant
+       */
+      authorization_source: "local_user_job_dispatch";
+      /**
+       * Envelope Version
+       * @default 1
+       * @constant
+       */
+      envelope_version: 1;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Issued At
+       * Format: date-time
+       */
+      issued_at: string;
+      /**
+       * Job Id
+       * Format: uuid
+       */
+      job_id: string;
+      /** Lease Seconds */
+      lease_seconds: number;
+      /** Max Attempts */
+      max_attempts: number;
+      /** Max Result Bytes */
+      max_result_bytes: number;
+      /** Max Runtime Seconds */
+      max_runtime_seconds: number;
+      /**
+       * Network Policy
+       * @default control_plane_only
+       * @constant
+       */
+      network_policy: "control_plane_only";
+      /** Policy Hash */
+      policy_hash: string;
+      /**
+       * Repository Access
+       * @default none
+       * @constant
+       */
+      repository_access: "none";
+      /**
+       * Shell Access
+       * @default false
+       * @constant
+       */
+      shell_access: false;
+    };
+    /** PermissionEnvelopeResponse */
+    PermissionEnvelopeResponse: {
+      /** Allowed Capabilities */
+      allowed_capabilities: components["schemas"]["Capability"][];
+      /** Authorization Source */
+      authorization_source: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Envelope Version */
+      envelope_version: number;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Issued At
+       * Format: date-time
+       */
+      issued_at: string;
+      /**
+       * Job Id
+       * Format: uuid
+       */
+      job_id: string;
+      /** Lease Seconds */
+      lease_seconds: number;
+      /** Max Attempts */
+      max_attempts: number;
+      /** Max Result Bytes */
+      max_result_bytes: number;
+      /** Max Runtime Seconds */
+      max_runtime_seconds: number;
+      network_policy: components["schemas"]["NetworkPolicy"];
+      /** Policy Hash */
+      policy_hash: string;
+      repository_access: components["schemas"]["RepositoryAccess"];
+      /** Shell Access */
+      shell_access: boolean;
     };
     /**
      * PermissionLevel
@@ -507,6 +1181,105 @@ export interface components {
      */
     PlanStatus:
       "draft" | "awaiting_approval" | "approved" | "rejected" | "superseded";
+    /** ProgressEventRequest */
+    ProgressEventRequest: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /**
+       * Event Type
+       * @default progress
+       * @constant
+       */
+      event_type: "progress";
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /**
+       * Message Code
+       * @default waiting
+       * @constant
+       */
+      message_code: "waiting";
+      /** Progress Percent */
+      progress_percent: number;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Sequence */
+      sequence: number;
+    };
+    /** RegisterRequest */
+    RegisterRequest: {
+      /** Capabilities */
+      capabilities: components["schemas"]["Capability"][];
+      /** Display Name */
+      display_name: string;
+      /**
+       * Protocol Version
+       * @default 1
+       * @constant
+       */
+      protocol_version: 1;
+      /** Software Version */
+      software_version: string;
+    };
+    /** RegisterResponse */
+    RegisterResponse: {
+      /**
+       * Protocol Version
+       * @default 1
+       * @constant
+       */
+      protocol_version: 1;
+      /**
+       * Registered At
+       * Format: date-time
+       */
+      registered_at: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Runner Token */
+      runner_token: string;
+      /**
+       * Token Type
+       * @default Bearer
+       * @constant
+       */
+      token_type: "Bearer";
+    };
+    /** RenewRequest */
+    RenewRequest: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+    };
+    /**
+     * RepositoryAccess
+     * @enum {string}
+     */
+    RepositoryAccess: "none";
     /**
      * RepositoryKind
      * @enum {string}
@@ -605,6 +1378,195 @@ export interface components {
       | "rejected"
       | "failed"
       | "cancelled";
+    /** RunnerJobAttemptResponse */
+    RunnerJobAttemptResponse: {
+      /** Attempt Number */
+      attempt_number: number;
+      /** Completed At */
+      completed_at: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Error Code */
+      error_code: string | null;
+      /** Error Message */
+      error_message: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Job Id
+       * Format: uuid
+       */
+      job_id: string;
+      /** Last Heartbeat At */
+      last_heartbeat_at: string | null;
+      /** Lease Id Hint */
+      lease_id_hint: string;
+      /**
+       * Leased Until
+       * Format: date-time
+       */
+      leased_until: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Started At */
+      started_at: string | null;
+      /** State */
+      state: string;
+    };
+    /** RunnerJobEventListResponse */
+    RunnerJobEventListResponse: {
+      /** Items */
+      items: components["schemas"]["RunnerJobEventResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** RunnerJobEventResponse */
+    RunnerJobEventResponse: {
+      /** Attempt Id */
+      attempt_id: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Event Type */
+      event_type: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Job Id */
+      job_id: string | null;
+      /** Metadata */
+      metadata: {
+        [key: string]: unknown;
+      };
+      /** Request Id */
+      request_id: string;
+      /** Runner Id */
+      runner_id: string | null;
+      /** Sequence */
+      sequence: number;
+    };
+    /** RunnerJobListResponse */
+    RunnerJobListResponse: {
+      /** Items */
+      items: components["schemas"]["RunnerJobResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** RunnerJobResponse */
+    RunnerJobResponse: {
+      active_attempt: components["schemas"]["RunnerJobAttemptResponse"] | null;
+      /** Active Attempt Id */
+      active_attempt_id: string | null;
+      /** Attempt Count */
+      attempt_count: number;
+      /** Attempts */
+      attempts?: components["schemas"]["RunnerJobAttemptResponse"][];
+      /** Completed At */
+      completed_at: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Error Code */
+      error_code: string | null;
+      /** Error Message */
+      error_message: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      kind: components["schemas"]["JobKind"];
+      /** Max Attempts */
+      max_attempts: number;
+      /** Parameters */
+      parameters: {
+        [key: string]: unknown;
+      };
+      permission_envelope: components["schemas"]["PermissionEnvelopeResponse"];
+      /** Requested By */
+      requested_by: string;
+      /** Result */
+      result:
+        | (
+            | components["schemas"]["DiagnosticResult"]
+            | components["schemas"]["ControlledWaitResult"]
+          )
+        | null;
+      state: components["schemas"]["JobState"];
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Version */
+      version: number;
+    };
+    /** RunnerListResponse */
+    RunnerListResponse: {
+      /** Items */
+      items: components["schemas"]["RunnerResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** RunnerResponse */
+    RunnerResponse: {
+      active_job?: components["schemas"]["ActiveJobSummary"] | null;
+      /** Capabilities */
+      capabilities: components["schemas"]["Capability"][];
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Display Name */
+      display_name: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Last Seen At */
+      last_seen_at: string | null;
+      /** Protocol Version */
+      protocol_version: number;
+      /**
+       * Registered At
+       * Format: date-time
+       */
+      registered_at: string;
+      /** Revoked At */
+      revoked_at: string | null;
+      /** Software Version */
+      software_version: string;
+      status: components["schemas"]["RunnerStatus"];
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Version */
+      version: number;
+    };
+    /**
+     * RunnerStatus
+     * @enum {string}
+     */
+    RunnerStatus: "registered" | "online" | "offline" | "revoked";
     /**
      * SnapshotMode
      * @enum {string}
@@ -684,6 +1646,32 @@ export interface components {
       /** Tracked File Count */
       tracked_file_count: number;
     };
+    /** StartRequest */
+    StartRequest: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+    };
+    /** SystemDiagnosticJobSpec */
+    SystemDiagnosticJobSpec: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "system_diagnostic_v1";
+    };
     /** TaskCreate */
     TaskCreate: {
       /** Objective */
@@ -751,6 +1739,1130 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  list_runner_jobs_api_v1_runner_jobs_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunnerJobListResponse"];
+        };
+      };
+      /** @description Runner or Job not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner or Job state conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Invalid closed Job request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_runner_job_api_v1_runner_jobs_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json":
+          | components["schemas"]["SystemDiagnosticJobSpec"]
+          | components["schemas"]["ControlledWaitJobSpec"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunnerJobResponse"];
+        };
+      };
+      /** @description Runner or Job not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner or Job state conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Invalid closed Job request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_runner_job_api_v1_runner_jobs__job_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunnerJobResponse"];
+        };
+      };
+      /** @description Runner or Job not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner or Job state conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Invalid closed Job request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  cancel_runner_job_api_v1_runner_jobs__job_id__cancel_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunnerJobResponse"];
+        };
+      };
+      /** @description Runner or Job not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner or Job state conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Invalid closed Job request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_runner_job_events_api_v1_runner_jobs__job_id__events_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunnerJobEventListResponse"];
+        };
+      };
+      /** @description Runner or Job not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner or Job state conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Invalid closed Job request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  heartbeat_api_v1_runner_protocol_v1_heartbeat_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HeartbeatRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HeartbeatResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  claim_job_api_v1_runner_protocol_v1_jobs_claim_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ClaimRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ClaimResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  acknowledge_cancelled_api_v1_runner_protocol_v1_jobs__job_id__cancelled_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CancelledRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LeaseMutationResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  complete_job_api_v1_runner_protocol_v1_jobs__job_id__complete_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CompleteRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LeaseMutationResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  append_job_event_api_v1_runner_protocol_v1_jobs__job_id__events_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProgressEventRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LeaseMutationResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  fail_job_api_v1_runner_protocol_v1_jobs__job_id__fail_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FailRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LeaseMutationResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  renew_job_api_v1_runner_protocol_v1_jobs__job_id__renew_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RenewRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LeaseMutationResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  start_job_api_v1_runner_protocol_v1_jobs__job_id__start_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["StartRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LeaseMutationResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  register_runner_api_v1_runner_protocol_v1_register_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RegisterRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegisterResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_runners_api_v1_runners_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunnerListResponse"];
+        };
+      };
+      /** @description Runner or Job not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner or Job state conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Invalid closed Job request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_runner_api_v1_runners__runner_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runner_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunnerResponse"];
+        };
+      };
+      /** @description Runner or Job not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner or Job state conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Invalid closed Job request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  revoke_runner_api_v1_runners__runner_id__revoke_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runner_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RunnerResponse"];
+        };
+      };
+      /** @description Runner or Job not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner or Job state conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Invalid closed Job request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
   get_run_api_v1_runs__run_id__get: {
     parameters: {
       query?: never;

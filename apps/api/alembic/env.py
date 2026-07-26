@@ -8,9 +8,14 @@ from visual_engineer_api.db.base import Base
 from visual_engineer_api.models import (  # noqa: F401
     ApprovalDecision,
     AuditEvent,
+    PermissionEnvelope,
     Plan,
     RepositorySnapshot,
     Run,
+    Runner,
+    RunnerJob,
+    RunnerJobAttempt,
+    RunnerJobEvent,
     Task,
 )
 

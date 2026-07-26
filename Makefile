@@ -3,10 +3,10 @@ SHELL := /bin/sh
 
 TEST_DATABASE_URL ?= postgresql+psycopg://visualengineer:visualengineer-test-local@localhost:55433/visualengineer_test
 
-.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-web build build-web e2e eval verify up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
+.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-runner test-web build build-web e2e eval verify platform-up platform-down platform-logs runner-status runner-smoke runner-chaos-check up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
 
 help:
-	@echo "VisualEngineer Foundation commands: bootstrap db-up migrate up verify down"
+	@echo "VisualEngineer Phase 3 commands: bootstrap platform-up runner-smoke verify platform-down"
 
 bootstrap:
 	uv sync --frozen
@@ -28,11 +28,11 @@ contracts-check:
 	./scripts/check-contract-drift.sh
 
 format:
-	uv run ruff format apps/api scripts
+	uv run ruff format apps/api apps/runner packages/runner-protocol scripts
 	pnpm format
 
 format-check-api:
-	uv run ruff format --check apps/api scripts
+	uv run ruff format --check apps/api apps/runner packages/runner-protocol scripts
 
 format-check-web:
 	pnpm format:check
@@ -40,7 +40,7 @@ format-check-web:
 format-check: format-check-api format-check-web
 
 lint-api:
-	uv run ruff check apps/api scripts
+	uv run ruff check apps/api apps/runner packages/runner-protocol scripts
 
 lint-web:
 	pnpm lint
@@ -48,7 +48,7 @@ lint-web:
 lint: lint-api lint-web
 
 typecheck-api:
-	uv run mypy apps/api/src apps/api/tests
+	uv run mypy
 
 typecheck-web:
 	pnpm typecheck
@@ -60,6 +60,9 @@ test-api:
 
 test-api-direct:
 	uv run pytest
+
+test-runner:
+	uv run pytest apps/runner/tests packages/runner-protocol/tests --no-cov -q
 
 test-web:
 	pnpm test
@@ -79,7 +82,9 @@ docker-config:
 
 security-check:
 	./scripts/check-secrets.sh
+	uv run python scripts/check_runner_security.py
 	uv run pytest apps/api/tests/test_repository_scanner.py --no-cov -q
+	./scripts/run-runner-security-tests.sh
 
 eval:
 	uv run python scripts/validate_evals.py
@@ -105,14 +110,33 @@ verify:
 	$(MAKE) eval
 	git diff --check
 
-up:
-	docker compose up -d --build --wait db api web
+platform-up:
+	uv run python scripts/ensure_runner_bootstrap.py
+	docker compose --env-file .env.runner.local up -d --build --wait db api web runner
+	$(MAKE) runner-status
+	@echo "VisualEngineer Web Console: http://127.0.0.1:$${WEB_PUBLISHED_PORT:-3000}"
+	@echo "Runner Console: http://127.0.0.1:$${WEB_PUBLISHED_PORT:-3000}/runners"
 
-down:
+platform-down:
 	docker compose down
 
-logs:
-	docker compose logs --tail=200 -f api web db
+platform-logs:
+	docker compose logs --tail=200 -f api web runner db
+
+runner-status:
+	uv run python scripts/runner_status.py
+
+runner-smoke: platform-up
+	uv run python scripts/runner_smoke.py
+
+runner-chaos-check:
+	./scripts/run-runner-chaos-check.sh
+
+up: platform-up
+
+down: platform-down
+
+logs: platform-logs
 
 customer0-up:
 	@test -n "$(CUSTOMER0_REPOSITORY_PATH)" || (echo "Set CUSTOMER0_REPOSITORY_PATH explicitly." >&2; exit 1)

@@ -1,4 +1,13 @@
-import type { AuditEvent, Plan, Run, Snapshot, Task } from "@/lib/api";
+import type {
+  AuditEvent,
+  Plan,
+  Run,
+  Runner,
+  RunnerJob,
+  RunnerJobEvent,
+  Snapshot,
+  Task,
+} from "@/lib/api";
 
 export function taskFixture(overrides: Partial<Task> = {}): Task {
   return {
@@ -141,4 +150,83 @@ export function auditFixture(overrides: Partial<AuditEvent> = {}): AuditEvent {
     created_at: "2026-07-26T04:00:00Z",
     ...overrides,
   } as AuditEvent;
+}
+
+export function runnerFixture(overrides: Partial<Runner> = {}): Runner {
+  return {
+    id: "271ad4e1-4bc2-41db-a954-973b14dcf008",
+    display_name: "Local Docker Runner",
+    protocol_version: 1,
+    software_version: "0.3.0",
+    capabilities: ["controlled_wait_v1", "system_diagnostic_v1"],
+    status: "online",
+    last_seen_at: "2026-07-26T16:00:00Z",
+    registered_at: "2026-07-26T15:59:00Z",
+    revoked_at: null,
+    version: 2,
+    created_at: "2026-07-26T15:59:00Z",
+    updated_at: "2026-07-26T16:00:00Z",
+    active_job: null,
+    ...overrides,
+  } as Runner;
+}
+
+export function runnerJobFixture(
+  overrides: Partial<RunnerJob> = {},
+): RunnerJob {
+  return {
+    id: "a4993354-a21a-4c68-af85-286390e6bda2",
+    kind: "system_diagnostic_v1",
+    state: "queued",
+    requested_by: "local_user",
+    parameters: {},
+    active_attempt_id: null,
+    attempt_count: 0,
+    max_attempts: 2,
+    result: null,
+    error_code: null,
+    error_message: null,
+    version: 1,
+    created_at: "2026-07-26T16:01:00Z",
+    updated_at: "2026-07-26T16:01:00Z",
+    completed_at: null,
+    permission_envelope: {
+      id: "890cb53b-54e0-4dcc-8349-1b7e423257ba",
+      envelope_version: 1,
+      job_id: "a4993354-a21a-4c68-af85-286390e6bda2",
+      authorization_source: "local_user_job_dispatch",
+      allowed_capabilities: ["system_diagnostic_v1"],
+      repository_access: "none",
+      shell_access: false,
+      network_policy: "control_plane_only",
+      max_runtime_seconds: 10,
+      lease_seconds: 6,
+      max_attempts: 2,
+      max_result_bytes: 8192,
+      issued_at: "2026-07-26T16:01:00Z",
+      expires_at: "2026-07-26T16:06:00Z",
+      policy_hash: "d".repeat(64),
+      created_at: "2026-07-26T16:01:00Z",
+    },
+    active_attempt: null,
+    attempts: [],
+    ...overrides,
+  } as RunnerJob;
+}
+
+export function runnerJobEventFixture(
+  overrides: Partial<RunnerJobEvent> = {},
+): RunnerJobEvent {
+  return {
+    id: "671c2cd6-ac7f-4369-b8a5-2fa8c6ea71c4",
+    runner_id: null,
+    job_id: "a4993354-a21a-4c68-af85-286390e6bda2",
+    attempt_id: null,
+    event_type: "job_created",
+    sequence: 1,
+    request_id: "runner-event-fixture",
+    metadata: { kind: "system_diagnostic_v1" },
+    created_at: "2026-07-26T16:01:00Z",
+    ...overrides,
+  } as RunnerJobEvent;
 }

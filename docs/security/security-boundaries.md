@@ -11,6 +11,8 @@ flowchart LR
     REP["Mounted Git repository: untrusted content"]
     ENV["Local environment: sensitive configuration"]
     HUMAN["Local human decision"]
+    RUNNER["Local Runner: typed execution boundary"]
+    CRED["Dedicated credential volume"]
 
     B -->|"bounded HTTP"| API
     API -->|"parameterized transactions"| DB
@@ -18,6 +20,8 @@ flowchart LR
     SC -->|"fixed read-only Git operations"| REP
     ENV -->|"typed settings"| API
     HUMAN -->|"exact Plan decision"| API
+    RUNNER -->|"outbound protocol v1 only"| API
+    CRED -->|"Runner Token only"| RUNNER
 ```
 
 The operator is trusted for this local phase. Browser/API fields and all
@@ -90,7 +94,7 @@ relative path, committed blob/hash, risk label, and matched rule class. Text
 requesting secret access, disabled tests, permission elevation, push, merge,
 or deployment has no policy effect.
 
-There is no LLM in Phase 2. This provenance boundary is still enforced and
+There is no LLM in Phase 3. This provenance boundary is still enforced and
 evaluated so a future model cannot silently inherit repository authority.
 
 ## Plan and approval boundary
@@ -109,6 +113,46 @@ Only the latest submitted Plan can receive a final decision. PostgreSQL row
 locks and uniqueness ensure one concurrent winner. Approval sets a terminal
 Phase 2 state and does not execute or authorize code.
 
+## Runner identity and protocol boundary
+
+- Bootstrap registration uses an ignored high-entropy local token that is
+  compared in constant time and never stored in PostgreSQL or shown in Web.
+- Registration returns an independent at-least-256-bit Runner Token once.
+  PostgreSQL stores only its SHA-256 digest; the non-root Runner stores the
+  value mode 0600 in a dedicated volume.
+- Bearer authentication selects the Runner identity. Body Runner ID must match;
+  revoked, invalid, or mismatched credentials fail with stable 401/403.
+- Protocol v1 payloads are strict, closed, limited to 64 KiB, and carry request
+  IDs. Full request bodies and authorization headers are never logged.
+- Result and event schemas reject unknown fields, secret/path-like values,
+  hostname/username/IP/environment/files/package inventory, and excessive
+  bytes.
+
+## Permission and lease boundary
+
+The browser submits only a Job kind and typed parameters. The Control Plane
+derives an immutable Envelope with repository none, shell false, and
+Control-Plane-only network. PostgreSQL rejects mutation; Runner recomputes the
+canonical hash and validates expiry/capability/authority before start.
+
+Claim uses `FOR UPDATE SKIP LOCKED`; a partial unique index permits one active
+Attempt. Every mutation verifies authenticated Runner, active Attempt, Lease
+UUID, deadline, and legal state under lock. Stale identity returns
+`409 stale_lease`. Cancellation blocks later success. The advisory-locked
+reaper expires/requeues or fails attempts within a finite retry budget.
+
+## Runner container boundary
+
+Runner is non-root with read-only root filesystem, all capabilities dropped,
+no-new-privileges, tmpfs `/tmp`, no published port, and only its credential
+volume. It joins only the internal `runner-control` network shared with API.
+It has no default/database/Web network, target/customer/developer mount,
+CreativeDeploy, Docker socket, SSH material, or public-network path.
+
+System Diagnostic and Controlled Wait are in-process typed executors. There is
+no arbitrary command, shell, subprocess executor, filesystem content access,
+dynamic plugin, Git, build, test, browser, or repository operation.
+
 ## Customer 0 mount boundary
 
 The optional Compose override:
@@ -126,6 +170,9 @@ The real repository is verified through mount inspection and before/after
 read-only Git observations. A write probe is not performed against
 CreativeDeploy.
 
+This override is historical Phase 2 evidence. Phase 3 base Compose and Runner
+do not use it.
+
 ## Network and public-exposure boundary
 
 The scanner has no authorized repository network access. The application needs
@@ -137,6 +184,10 @@ network.
 ## Evidence boundary
 
 Adversarial fixtures contain synthetic markers only. Passing local tests and
-Compose checks proves the declared local Phase 2 behavior, not production
+Compose checks prove the declared local Phase 3 behavior, not production
 security certification. CreativeDeploy is internal Customer 0, not external
 enterprise adoption or outcome evidence.
+
+Local bearer credentials, Docker internal networking, and containers are not
+production identity, egress policy, or hostile-code sandboxing. See the
+[Runner threat model](runner-threat-model.md) for residual risks and upgrades.

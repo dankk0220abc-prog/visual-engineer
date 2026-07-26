@@ -1,4 +1,5 @@
 import os
+import secrets
 from collections.abc import Generator
 
 import pytest
@@ -16,6 +17,8 @@ TEST_DATABASE_URL = os.environ.get(
     ),
 )
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["RUNNER_BOOTSTRAP_TOKEN"] = secrets.token_urlsafe(48)
+os.environ["RUNNER_REAPER_ENABLED"] = "false"
 
 from visual_engineer_api.core.config import get_settings  # noqa: E402
 from visual_engineer_api.db.session import get_db, get_engine  # noqa: E402
@@ -43,7 +46,8 @@ def db_session(database_url: str) -> Generator[Session, None, None]:
         connection.execute(
             text(
                 "TRUNCATE TABLE audit_events, approval_decisions, plans, "
-                "repository_snapshots, runs, tasks"
+                "repository_snapshots, runs, tasks, runner_job_events, "
+                "runner_job_attempts, runner_jobs, permission_envelopes, runners"
             )
         )
     with Session(engine) as session:
@@ -71,3 +75,8 @@ def valid_payload() -> dict[str, str]:
         "repository_display_name": "Example repository",
         "repository_locator": "~/Developer/example",
     }
+
+
+@pytest.fixture
+def runner_bootstrap_token() -> str:
+    return os.environ["RUNNER_BOOTSTRAP_TOKEN"]

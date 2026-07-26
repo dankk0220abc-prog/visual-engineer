@@ -4,6 +4,58 @@ from typing import Any
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DATASETS = sorted((REPOSITORY_ROOT / "evals/datasets").glob("*.jsonl"))
+RUNNER_DATASET = "runner-protocol-v0.1.jsonl"
+RUNNER_FAILURE_CATEGORIES = {
+    "authentication",
+    "concurrency",
+    "control_plane_unavailable",
+    "lease_fencing",
+    "none",
+    "permission_boundary",
+    "retry_exhausted",
+    "secret_boundary",
+    "state_transition",
+}
+
+
+def validate_runner_case(
+    dataset: Path,
+    line_number: int,
+    value: dict[str, Any],
+) -> None:
+    required = {
+        "case_id",
+        "schema_version",
+        "dataset_version",
+        "category",
+        "input",
+        "expected",
+        "failure_category",
+        "test_mapping",
+    }
+    if not required.issubset(value):
+        raise SystemExit(f"{dataset.name}:{line_number}: invalid Runner eval case shape")
+    if value["schema_version"] != 1 or value["dataset_version"] != "runner-protocol-v0.1":
+        raise SystemExit(f"{dataset.name}:{line_number}: unsupported Runner eval version")
+    expected = value["expected"]
+    if not isinstance(expected, dict) or not isinstance(expected.get("outcome"), str):
+        raise SystemExit(f"{dataset.name}:{line_number}: Runner expected outcome is required")
+    if value["failure_category"] not in RUNNER_FAILURE_CATEGORIES:
+        raise SystemExit(f"{dataset.name}:{line_number}: unknown Runner failure category")
+    mappings = value["test_mapping"]
+    if not isinstance(mappings, list) or not mappings:
+        raise SystemExit(f"{dataset.name}:{line_number}: Runner test mapping is required")
+    for mapping in mappings:
+        if not isinstance(mapping, str) or "::" not in mapping:
+            raise SystemExit(f"{dataset.name}:{line_number}: invalid Runner test mapping")
+        relative_path, function_name = mapping.split("::", 1)
+        test_path = REPOSITORY_ROOT / relative_path
+        if (
+            not test_path.is_file()
+            or not function_name.startswith("test_")
+            or f"def {function_name}(" not in test_path.read_text(encoding="utf-8")
+        ):
+            raise SystemExit(f"{dataset.name}:{line_number}: unmapped Runner test {mapping}")
 
 
 def main() -> None:
@@ -16,6 +68,8 @@ def main() -> None:
             value: Any = json.loads(line)
             if not isinstance(value, dict):
                 raise SystemExit(f"{dataset.name}:{line_number}: invalid eval case shape")
+            if dataset.name == RUNNER_DATASET:
+                validate_runner_case(dataset, line_number, value)
             if "case_id" in value:
                 required = {"case_id", "category", "input", "expected"}
                 case_id = value["case_id"]

@@ -55,6 +55,26 @@ type AuditListOperation = OperationAt<
   "/api/v1/runs/{run_id}/audit-events",
   "get"
 >;
+type RunnerListOperation = OperationAt<"/api/v1/runners", "get">;
+type RunnerDetailOperation = OperationAt<"/api/v1/runners/{runner_id}", "get">;
+type RunnerRevokeOperation = OperationAt<
+  "/api/v1/runners/{runner_id}/revoke",
+  "post"
+>;
+type RunnerJobListOperation = OperationAt<"/api/v1/runner-jobs", "get">;
+type RunnerJobCreateOperation = OperationAt<"/api/v1/runner-jobs", "post">;
+type RunnerJobDetailOperation = OperationAt<
+  "/api/v1/runner-jobs/{job_id}",
+  "get"
+>;
+type RunnerJobCancelOperation = OperationAt<
+  "/api/v1/runner-jobs/{job_id}/cancel",
+  "post"
+>;
+type RunnerJobEventsOperation = OperationAt<
+  "/api/v1/runner-jobs/{job_id}/events",
+  "get"
+>;
 
 export type Task = JsonResponse<TaskDetailOperation, 200>;
 export type CreateTaskInput = JsonRequest<TaskCreateOperation>;
@@ -76,6 +96,18 @@ type PlanListPayload = JsonResponse<PlanListOperation, 200>;
 export type ApprovalDecision = JsonResponse<PlanDecisionOperation, 201>;
 type AuditListPayload = JsonResponse<AuditListOperation, 200>;
 export type AuditEvent = AuditListPayload extends {
+  items: Array<infer Item>;
+}
+  ? Item
+  : never;
+type RunnerListPayload = JsonResponse<RunnerListOperation, 200>;
+export type Runner = JsonResponse<RunnerDetailOperation, 200>;
+type RunnerJobListPayload = JsonResponse<RunnerJobListOperation, 200>;
+export type RunnerJob = JsonResponse<RunnerJobDetailOperation, 200>;
+export type CreateRunnerJobInput = JsonRequest<RunnerJobCreateOperation>;
+type CreatedRunnerJob = JsonResponse<RunnerJobCreateOperation, 201>;
+type RunnerJobEventListPayload = JsonResponse<RunnerJobEventsOperation, 200>;
+export type RunnerJobEvent = RunnerJobEventListPayload extends {
   items: Array<infer Item>;
 }
   ? Item
@@ -386,4 +418,80 @@ export async function cancelRun(runId: string, reason?: string): Promise<Run> {
     },
   );
   return data;
+}
+
+export async function listRunners(): Promise<Runner[]> {
+  const { data } = await request<RunnerListPayload>("/api/v1/runners", {
+    cache: "no-store",
+  });
+  return data.items;
+}
+
+export async function getRunner(runnerId: string): Promise<Runner> {
+  const { data } = await request<Runner>(
+    `/api/v1/runners/${encodeURIComponent(runnerId)}`,
+    { cache: "no-store" },
+  );
+  return data;
+}
+
+export async function revokeRunner(runnerId: string): Promise<Runner> {
+  const { data } = await request<JsonResponse<RunnerRevokeOperation, 200>>(
+    `/api/v1/runners/${encodeURIComponent(runnerId)}/revoke`,
+    {
+      method: "POST",
+      headers: { "X-Request-ID": crypto.randomUUID() },
+    },
+  );
+  return data;
+}
+
+export async function listRunnerJobs(): Promise<RunnerJob[]> {
+  const { data } = await request<RunnerJobListPayload>("/api/v1/runner-jobs", {
+    cache: "no-store",
+  });
+  return data.items;
+}
+
+export async function createRunnerJob(
+  input: CreateRunnerJobInput,
+): Promise<RunnerJob> {
+  const { data } = await request<CreatedRunnerJob>("/api/v1/runner-jobs", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify(input),
+  });
+  return data as RunnerJob;
+}
+
+export async function getRunnerJob(jobId: string): Promise<RunnerJob> {
+  const { data } = await request<RunnerJob>(
+    `/api/v1/runner-jobs/${encodeURIComponent(jobId)}`,
+    { cache: "no-store" },
+  );
+  return data;
+}
+
+export async function cancelRunnerJob(jobId: string): Promise<RunnerJob> {
+  const { data } = await request<JsonResponse<RunnerJobCancelOperation, 200>>(
+    `/api/v1/runner-jobs/${encodeURIComponent(jobId)}/cancel`,
+    {
+      method: "POST",
+      headers: { "X-Request-ID": crypto.randomUUID() },
+    },
+  );
+  return data;
+}
+
+export async function listRunnerJobEvents(
+  jobId: string,
+): Promise<RunnerJobEvent[]> {
+  const { data } = await request<RunnerJobEventListPayload>(
+    `/api/v1/runner-jobs/${encodeURIComponent(jobId)}/events`,
+    { cache: "no-store" },
+  );
+  return data.items;
 }

@@ -1,21 +1,32 @@
+import asyncio
 import json
 import logging
 import re
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 from starlette.responses import Response
 
 from visual_engineer_api.api.health import router as health_router
+from visual_engineer_api.api.runner_protocol import router as runner_protocol_router
+from visual_engineer_api.api.runners import router as runners_router
 from visual_engineer_api.api.runs import router as runs_router
 from visual_engineer_api.api.tasks import router as tasks_router
 from visual_engineer_api.core.config import get_settings
+from visual_engineer_api.db.session import get_engine
+from visual_engineer_api.services.runner import RunnerService
+from visual_engineer_runner_protocol import (
+    MAX_PROTOCOL_PAYLOAD_BYTES,
+    RUNNER_PROTOCOL_PREFIX,
+)
 
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
@@ -45,20 +56,60 @@ def create_app() -> FastAPI:
     logging.basicConfig(level=settings.log_level)
     logger = logging.getLogger("visual_engineer_api.requests")
 
+    async def lease_reaper_loop() -> None:
+        while True:
+            await asyncio.sleep(settings.runner_reaper_interval_seconds)
+
+            def reap_once() -> None:
+                with Session(get_engine()) as session:
+                    RunnerService(session, settings).reap_expired()
+
+            try:
+                await asyncio.to_thread(reap_once)
+            except Exception as exc:
+                logger.error(
+                    json.dumps(
+                        {
+                            "event": "lease_reaper_error",
+                            "exception_type": type(exc).__name__,
+                        },
+                        separators=(",", ":"),
+                    )
+                )
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        reaper_task: asyncio.Task[None] | None = None
+        if settings.runner_reaper_enabled:
+            reaper_task = asyncio.create_task(lease_reaper_loop())
+        try:
+            yield
+        finally:
+            if reaper_task is not None:
+                reaper_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await reaper_task
+
     app = FastAPI(
         title="VisualEngineer API",
-        version="0.2.0",
+        version="0.3.0",
         description=(
-            "Phase 2 API for governed Level 0 committed-HEAD repository intelligence and "
-            "deterministic plan approval. Approval never executes code."
+            "Phase 3 Control Plane API for governed planning and a browser-orchestrated "
+            "repository-free Local Runner. Plan approval never dispatches execution."
         ),
+        lifespan=lifespan,
     )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "Idempotency-Key", "X-Request-ID"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "Idempotency-Key",
+            "X-Request-ID",
+        ],
         expose_headers=["Idempotent-Replay", "X-Request-ID"],
     )
 
@@ -70,6 +121,27 @@ def create_app() -> FastAPI:
         request_id = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else str(uuid.uuid4())
         request.state.request_id = request_id
         started = time.perf_counter()
+        if request.method == "POST" and request.url.path.startswith(RUNNER_PROTOCOL_PREFIX):
+            content_length = request.headers.get("Content-Length")
+            if content_length is not None:
+                try:
+                    declared_length = int(content_length)
+                except ValueError:
+                    declared_length = MAX_PROTOCOL_PAYLOAD_BYTES + 1
+                if declared_length > MAX_PROTOCOL_PAYLOAD_BYTES:
+                    return _error_response(
+                        request,
+                        status_code=413,
+                        code="protocol_payload_too_large",
+                        message="Runner protocol payload exceeds the size limit",
+                    )
+            if len(await request.body()) > MAX_PROTOCOL_PAYLOAD_BYTES:
+                return _error_response(
+                    request,
+                    status_code=413,
+                    code="protocol_payload_too_large",
+                    message="Runner protocol payload exceeds the size limit",
+                )
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         logger.info(
@@ -138,6 +210,8 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(tasks_router)
     app.include_router(runs_router)
+    app.include_router(runners_router)
+    app.include_router(runner_protocol_router)
     return app
 
 

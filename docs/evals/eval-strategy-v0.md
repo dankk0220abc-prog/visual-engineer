@@ -3,7 +3,7 @@
 ## Purpose
 
 Evaluation asks whether VisualEngineer is correct, safe, governed, and
-reproducible, not whether it emits plausible text. Phase 2 has no LLM,
+reproducible, not whether it emits plausible text. Phase 3 has no LLM,
 production dataset, Agent score, or leaderboard. Plan generation and all
 current eval expectations are deterministic.
 
@@ -21,7 +21,12 @@ current eval expectations are deterministic.
 6. **Real stack:** Web/API/PostgreSQL plus read-only adversarial mount on
    desktop and 390px, with axe WCAG 2 A/AA and overflow checks.
 7. **Customer 0:** separately recorded read-only CreativeDeploy case, stopped
-   before the human decision.
+   before its later separately verified human rejection.
+8. **Runner protocol and state:** registration, credentials, Envelope,
+   concurrency, leases, fencing, cancellation, retry, liveness, redaction, and
+   stable failure classification.
+9. **Execution plane:** real outbound Runner success/cancellation and abrupt
+   loss/recovery without repository or public-network authority.
 
 ## Versioned datasets
 
@@ -48,22 +53,36 @@ The JSONL contains expected behavior only. The validator rejects duplicate IDs,
 invalid shapes, and fields such as `agent_score`, `result`, or `passed` that
 would fabricate outcomes.
 
+`evals/datasets/runner-protocol-v0.1.jsonl` defines deterministic registration,
+heartbeat, claim/concurrency, Envelope, stale lease, cancellation, retry,
+offline, secret redaction, unsupported capability, terminal state, and failure
+classification cases. Every record declares schema/dataset version, expected
+outcome, failure category, and one or more existing test-function mappings.
+The validator rejects a missing or stale mapping.
+
 ## Failure taxonomy
 
-| Class                | Examples                                                                    |
-| -------------------- | --------------------------------------------------------------------------- |
-| `contract`           | schema, generated type, request ID, or stable-error mismatch                |
-| `database`           | migration, transaction, uniqueness, immutability, or lock failure           |
-| `path_boundary`      | traversal, allowlist, root, symlink, or locator acceptance error            |
-| `secret_boundary`    | sensitive path/value reaches result, DB, API, audit, or log                 |
-| `snapshot_integrity` | worktree content affects facts/fingerprint or Snapshot mutates              |
-| `execution_boundary` | script, dependency, hook, import, or target command runs                    |
-| `network_boundary`   | submodule, LFS, remote Git, credential, or other egress occurs              |
-| `resource_boundary`  | count, byte, binary, symlink metadata, or deadline is unbounded             |
-| `policy`             | repository text raises permission or invalid Plan reaches approval          |
-| `approval_integrity` | stale/duplicate/racing decision produces invalid state                      |
-| `frontend`           | missing state, accessibility, keyboard, responsive, or persistence behavior |
-| `environment`        | required PostgreSQL, Docker, browser, or tool is unavailable                |
+| Class                       | Examples                                                                    |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `contract`                  | schema, generated type, request ID, or stable-error mismatch                |
+| `database`                  | migration, transaction, uniqueness, immutability, or lock failure           |
+| `path_boundary`             | traversal, allowlist, root, symlink, or locator acceptance error            |
+| `secret_boundary`           | sensitive path/value reaches result, DB, API, audit, or log                 |
+| `snapshot_integrity`        | worktree content affects facts/fingerprint or Snapshot mutates              |
+| `execution_boundary`        | script, dependency, hook, import, or target command runs                    |
+| `network_boundary`          | submodule, LFS, remote Git, credential, or other egress occurs              |
+| `resource_boundary`         | count, byte, binary, symlink metadata, or deadline is unbounded             |
+| `policy`                    | repository text raises permission or invalid Plan reaches approval          |
+| `approval_integrity`        | stale/duplicate/racing decision produces invalid state                      |
+| `frontend`                  | missing state, accessibility, keyboard, responsive, or persistence behavior |
+| `environment`               | required PostgreSQL, Docker, browser, or tool is unavailable                |
+| `authentication`            | Bootstrap or Runner identity accepted incorrectly                           |
+| `concurrency`               | multiple claim winners or active Attempts                                   |
+| `lease_fencing`             | stale, mismatched, expired, or superseded Lease mutates state               |
+| `state_transition`          | illegal or terminal Runner Job transition                                   |
+| `permission_boundary`       | Envelope/capability authority is expanded                                   |
+| `retry_exhausted`           | retry budget is ignored or misclassified                                    |
+| `control_plane_unavailable` | transient API failure is retried incorrectly                                |
 
 Failures stay visible in the active ExecPlan with root cause, fix, and
 regression. Checks must not be deleted, skipped, weakened, or reclassified as
@@ -80,7 +99,7 @@ maliciously different.
 
 ## Release gate
 
-Phase 2 passes only when:
+Phase 3 passes only when:
 
 - all deterministic dataset records validate;
 - backend and frontend behavior tests pass at their configured coverage gates;
@@ -89,7 +108,14 @@ Phase 2 passes only when:
 - Playwright approve/reject flows pass with real services, both viewports,
   axe, persistence, and no overflow;
 - target `HEAD`/status and lifecycle markers are unchanged;
-- the Customer 0 read-only flow stops at awaiting approval; and
+- the historical Customer 0 rejection remains separate and Phase 3 never
+  accesses CreativeDeploy;
+- concurrent claim and stale fencing pass on real PostgreSQL;
+- real Runner Playwright diagnostic/cancellation passes at both viewports;
+- chaos proves offline, expiry, requeue, new Attempt, stale denial, recovery,
+  success, and source integrity;
+- Compose inspection proves the Runner network, mounts, user, capabilities,
+  root filesystem, and no published port; and
 - current verification evidence records exact commands and limitations.
 
 Remote GitHub Actions are not considered passed unless actually run.

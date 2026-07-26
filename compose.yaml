@@ -44,11 +44,21 @@ services:
       API_PORT: 8000
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000,http://127.0.0.1:3000}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RUNNER_BOOTSTRAP_TOKEN: ${RUNNER_BOOTSTRAP_TOKEN:-}
+      RUNNER_ONLINE_THRESHOLD_SECONDS: ${RUNNER_ONLINE_THRESHOLD_SECONDS:-8}
+      RUNNER_LEASE_SECONDS: ${RUNNER_LEASE_SECONDS:-6}
+      RUNNER_JOB_MAX_ATTEMPTS: ${RUNNER_JOB_MAX_ATTEMPTS:-2}
+      RUNNER_MAX_RESULT_BYTES: ${RUNNER_MAX_RESULT_BYTES:-8192}
+      RUNNER_ENVELOPE_TTL_SECONDS: ${RUNNER_ENVELOPE_TTL_SECONDS:-300}
+      RUNNER_REAPER_INTERVAL_SECONDS: ${RUNNER_REAPER_INTERVAL_SECONDS:-1}
     ports:
       - "127.0.0.1:${API_PUBLISHED_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - runner-control
     command:
       - /bin/sh
       - -c
@@ -92,5 +102,40 @@ services:
       start_period: 10s
       retries: 12
 
+  runner:
+    build:
+      context: .
+      dockerfile: apps/runner/Dockerfile
+    environment:
+      RUNNER_CONTROL_PLANE_URL: http://api:8000
+      RUNNER_BOOTSTRAP_TOKEN: ${RUNNER_BOOTSTRAP_TOKEN:-}
+      RUNNER_DISPLAY_NAME: ${RUNNER_DISPLAY_NAME:-Local Docker Runner}
+      RUNNER_SOFTWARE_VERSION: ${RUNNER_SOFTWARE_VERSION:-0.3.0}
+      RUNNER_CREDENTIAL_PATH: /var/lib/visual-engineer-runner/credentials.json
+      RUNNER_HEARTBEAT_INTERVAL_SECONDS: ${RUNNER_HEARTBEAT_INTERVAL_SECONDS:-3}
+      RUNNER_POLL_INTERVAL_SECONDS: ${RUNNER_POLL_INTERVAL_SECONDS:-0.5}
+      RUNNER_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - runner-control
+    volumes:
+      - runner-credentials:/var/lib/visual-engineer-runner
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+
 volumes:
   postgres-data:
+  runner-credentials:
+
+networks:
+  runner-control:
+    internal: true

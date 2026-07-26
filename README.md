@@ -27,13 +27,12 @@ integrations remain future capabilities.
 
 ## Current state
 
-The repository implements the Phase 0 + Phase 1 Foundation and Phase 2
-governed read-only repository intelligence. A local user can create a Level 0
-Run, snapshot an allowlisted local Git repository's committed `HEAD`, review
-bounded structural facts, generate and revise a deterministic plan, submit it
-for approval, and record one durable human approval or rejection. Plan
-approval never executes code. See the current Phase 2 evidence before treating
-a local gate as verified; remote GitHub Actions have not run.
+The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
+read-only repository intelligence, and the Phase 3 browser-orchestrated Local
+Runner foundation. A local user can complete the Phase 2 planning flow or open
+`/runners`, review a registered Runner, dispatch one of two repository-free
+typed Jobs, observe fenced attempts and durable events, and cancel a controlled
+wait. Plan approval never dispatches a Runner Job.
 
 The implemented target is:
 
@@ -45,6 +44,15 @@ The implemented target is:
   symlink, submodule, LFS, byte-budget, and timeout controls;
 - deterministic plan generation and Foundation policy validation;
 - revision, stale-version, idempotency, and concurrent final-decision guards;
+- a pure versioned Runner Protocol with immutable canonical-hash Permission
+  Envelopes;
+- PostgreSQL Runner registry, durable Job queue, `SKIP LOCKED` claim, Attempts,
+  leases, cancellation, retries, reaper, fencing, and typed events;
+- an independent outbound non-root Runner that executes only System Diagnostic
+  and Controlled Wait with no repository, shell, worktree, Git, or public
+  network;
+- browser Runner registry, dispatch, Job detail, progress, result, cancellation,
+  offline/retry evidence, and Timeline;
 - generated OpenAPI-to-TypeScript contract artifacts;
 - adversarial security evaluation and deterministic quality checks;
 - Docker Compose for local development;
@@ -54,11 +62,11 @@ The implemented target is:
 - concrete product, architecture, permission, security, and evaluation
   documents.
 
-Explicitly not implemented: an Agent runtime, OpenAI Agents SDK, LLM calls,
-code-writing or general shell tools, target-repository command execution,
-isolated target worktrees, approval-triggered execution, GitHub PR creation,
-remote CI evidence, automated visual comparison or repair, authentication,
-public hosting, or production deployment.
+Explicitly not implemented: OpenAI Agents SDK, LLM calls, Agent Trace,
+code-writing or general shell tools, target-repository access or command
+execution, isolated target worktrees, approval-triggered execution, GitHub PR
+creation, remote CI evidence, automated visual comparison or repair,
+authentication, public hosting, or production deployment.
 
 CreativeDeploy is internal Customer 0 and Design Partner 0: the first real
 usage target for shaping the Deployment Pack. Its Phase 2 path is an API-only
@@ -74,21 +82,23 @@ flowchart LR
     U["Local user"] --> W["Next.js web console"]
     W --> A["FastAPI /api/v1"]
     A --> D[("PostgreSQL")]
-    A --> S["Bounded read-only Git scanner"]
-    S --> R["Allowlisted repository mount (read-only)"]
-    A --> P["Deterministic plan policy"]
+    A --> Q["Runner registry, policy, queue, leases"]
+    Q --> D
+    R["Local Runner: outbound polling only"] --> Q
+    R --> X["Typed diagnostic / wait executor"]
+    A --> S["Historical Phase 2 bounded read-only scanner"]
+    S -. "optional exact read-only override" .-> T["Allowlisted repository"]
     A -. "OpenAPI export" .-> C["Generated TypeScript contract"]
     C -. "typed client input" .-> W
-    F["Future Agent runtime"] -. "not implemented" .-> A
-    F -. "future approved, isolated write access" .-> I["Future worktree"]
-    F -. "future least-privilege integration" .-> G["GitHub"]
+    X -. "Phase 4 only" .-> I["Future isolated worktree"]
+    X -. "not implemented" .-> G["Future GitHub integration"]
 ```
 
 FastAPI OpenAPI is the HTTP contract source. The browser never accesses the
-database or target repository directly. A Task locator becomes readable only
-when its canonical Git root is inside `READ_ONLY_REPOSITORY_ROOTS`; the
-scanner reads selected blobs from committed Git objects and records only
-bounded dirty-path status metadata.
+database or target repository directly. Runner Protocol v1 is shared as a pure
+Pydantic package. The Phase 3 base platform has no repository mount; the
+Runner has only the API-facing internal network and its credential volume.
+Phase 2's optional read-only scanner override remains historical and separate.
 
 ## Local development
 
@@ -96,18 +106,17 @@ Prerequisites and exact command behavior are defined by the project manifests
 and Makefile. The verified local sequence is:
 
 ```sh
-cp .env.example .env
 make bootstrap
-make db-up
-make migrate
-make up
+make platform-up
 ```
 
 Local endpoints are the web console at `http://localhost:3000`, API
 documentation at `http://localhost:8000/docs`, liveness at
 `http://localhost:8000/health/live`, and readiness at
-`http://localhost:8000/health/ready`. Services are intentionally stopped after
-verification; run `make up` to make these addresses available.
+`http://localhost:8000/health/ready`. The Runner console is
+`http://localhost:3000/runners`. Startup generates an ignored high-entropy
+local Bootstrap Token without printing it and waits for the Runner to become
+online.
 
 Stop project services with:
 
@@ -115,7 +124,7 @@ Stop project services with:
 make down
 ```
 
-Do not commit the local `.env`.
+Do not commit `.env.runner.local` or any `.env`.
 
 ## Testing and contracts
 
@@ -133,6 +142,8 @@ make migration-check
 make security-check
 make eval
 make e2e
+make runner-smoke
+make runner-chaos-check
 make verify
 ```
 
@@ -140,7 +151,7 @@ Backend integration and migration tests must use PostgreSQL. Playwright must
 exercise the real web/API/database stack rather than a mocked API. Contract
 generation must be repeatable and leave no diff. See the current evidence
 before treating any check as passed:
-[`docs/evidence/phase-2-verification.md`](docs/evidence/phase-2-verification.md).
+[`docs/evidence/phase-3-verification.md`](docs/evidence/phase-3-verification.md).
 
 To run the internal Customer 0 case after all synthetic gates pass:
 
@@ -156,9 +167,10 @@ approves, rejects, installs, builds, tests, or modifies CreativeDeploy.
 
 ## Docker
 
-The local target uses `docker compose` services for `db`, `api`, and
-`web`, with explicit health checks and a dedicated migration step. Intended
-commands are:
+The local target uses `docker compose` services for `db`, `api`, `web`, and
+`runner`, with explicit health checks and a migration step. Runner is
+non-root, read-only, capability-free, has no published port, and joins only
+the internal `runner-control` network. Intended commands are:
 
 ```sh
 docker compose config
@@ -177,8 +189,10 @@ This project remains local-only and single-user. It must not be exposed
 publicly. A locator alone grants no access: Level 0 reads require a canonical
 allowlisted local Git root, and target repositories remain read-only.
 Repository text is untrusted data, not an instruction source. Human plan
-approval is a durable governance decision, not permission to execute. Never
-add real secrets. Read
+approval is a durable governance decision, not Runner dispatch permission.
+Phase 3 Envelopes are server-derived and fixed to no repository, no shell, and
+Control-Plane-only network. Local bearer tokens are not a production identity
+scheme. Never add real secrets. Read
 [`SECURITY.md`](SECURITY.md) before integration work.
 
 ## Documentation
@@ -186,16 +200,22 @@ add real secrets. Read
 - [Product contract](docs/product/product-contract.md)
 - [V1 boundaries](docs/product/v1-boundaries.md)
 - [System overview](docs/architecture/system-overview.md)
+- [Runner Protocol v1](docs/architecture/runner-protocol.md)
 - [Run state machine](docs/architecture/state-machine.md)
 - [Data model](docs/architecture/data-model.md)
 - [Tool permissions](docs/architecture/tool-permissions.md)
 - [Threat model](docs/security/threat-model-v0.md)
+- [Runner threat model](docs/security/runner-threat-model.md)
+- [Phase 3 ExecPlan](docs/exec-plans/phase-3-browser-orchestrated-local-runner.md)
 - [Phase 2 ExecPlan](docs/exec-plans/phase-2-readonly-repository-intelligence.md)
 - [Foundation ExecPlan](docs/exec-plans/phase-0-1-foundation.md)
 - [Project status](docs/status/project-status.md)
 - [Environment audit](docs/evidence/phase-0-1-environment-audit.md)
 - [Phase 2 verification evidence](docs/evidence/phase-2-verification.md)
+- [Phase 3 verification evidence](docs/evidence/phase-3-verification.md)
 - [Local development runbook](docs/runbooks/local-development.md)
+- [Local Runner runbook](docs/runbooks/local-runner.md)
+- [Runner recovery runbook](docs/runbooks/runner-recovery.md)
 - [Customer 0 read-only runbook](docs/runbooks/customer0-readonly-investigation.md)
 - [CreativeDeploy Customer 0 evidence](docs/deployment-cases/creative-deploy/phase-2-readonly-evidence.md)
 - [Evaluation strategy](docs/evals/eval-strategy-v0.md)

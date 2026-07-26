@@ -19,5 +19,10 @@ def test_initial_migration_round_trip(database_url: str) -> None:
         "plans",
         "approval_decisions",
         "audit_events",
+        "runners",
+        "permission_envelopes",
+        "runner_jobs",
+        "runner_job_attempts",
+        "runner_job_events",
     }.issubset(inspect(engine).get_table_names())
     engine.dispose()

@@ -1,7 +1,8 @@
 # System Overview
 
-VisualEngineer Phase 2 is a local, single-user governed planning system. Solid
-nodes below are implemented. Dashed nodes are future V1 boundaries.
+VisualEngineer Phase 3 is a local, single-user governed planning and
+repository-free execution foundation. Solid nodes below are implemented.
+Dashed nodes are future V1 boundaries.
 
 ```mermaid
 flowchart TB
@@ -12,6 +13,9 @@ flowchart TB
     S["Repository Scanner"]
     R["Exact allowlisted Git repository (read-only)"]
     P["Deterministic Plan Generator"]
+    Q["Runner Registry / Queue / Lease Policy"]
+    LR["Independent Local Runner"]
+    E["Typed Diagnostic / Wait Executor"]
     O["OpenAPI and generated TypeScript"]
 
     H -->|"create Task and Run; revise or decide Plan"| W
@@ -20,22 +24,24 @@ flowchart TB
     A -->|"Level 0 scan request"| S
     S -->|"fixed Git reads of HEAD objects"| R
     A -->|"Task + Snapshot + package"| P
+    A -->|"durable jobs, envelopes, attempts"| Q
+    Q --> D
+    LR -->|"outbound protocol v1"| Q
+    LR --> E
     A -->|"source contract"| O
     O -->|"typed client input"| W
 
     subgraph Future["Future - not implemented"]
-        AR["Agent Runtime"]
         IW["Isolated worktree"]
-        T["Typed execution tools"]
+        T["Typed repository tools"]
         B["Controlled browser validation"]
         G["GitHub pull request"]
     end
 
-    A -. "separate future authorization" .-> AR
-    AR -. "scoped work" .-> IW
-    AR -. "runtime policy" .-> T
+    E -. "separate future authorization" .-> IW
+    IW -. "scoped work" .-> T
     T -. "future evidence" .-> B
-    AR -. "future final approval" .-> G
+    T -. "future final approval" .-> G
 ```
 
 ## Implemented responsibilities
@@ -45,8 +51,10 @@ flowchart TB
 The web application renders Task/Run history, state, permission and snapshot
 mode, committed repository intelligence, safety findings, deterministic Plan
 versions, typed validation steps, decision controls, and the Audit Timeline.
-It owns no database, filesystem, Git, Docker, shell, or target-repository
-access.
+It also renders Runner Registry, immutable Envelope previews, typed Dispatch,
+Job/Attempt state, progress, cancellation, results, and RunnerJobEvent
+Timeline. It owns no database, filesystem, Git, Docker, shell, Runner
+credential, or target-repository access.
 
 ### API
 
@@ -55,6 +63,21 @@ owns Run and Plan state policy, coordinates repository scanning, generates
 deterministic plans, serializes final decisions, writes sanitized audit
 events, and exports OpenAPI. Routes delegate to typed services and
 repositories.
+
+The API also owns Runner bootstrap authentication, digest-only credential
+verification, derived liveness, revocation, server-side Envelope derivation,
+transactional claim, explicit Job/Attempt transitions, lease renewal,
+cancellation, typed results/events, and lease recovery. It never executes a
+Runner Job.
+
+### Local Runner
+
+The independent long-running Runner makes outbound calls only. It persists its
+credential in a dedicated Docker volume, validates every Envelope, and invokes
+one in-process typed executor. System Diagnostic returns a redacted closed
+schema; Controlled Wait exercises renewal/progress/cancellation. Runner has no
+repository, shell, subprocess executor, worktree, Git, database/Web network,
+Docker socket, inbound port, or public network.
 
 ### Repository Scanner
 
@@ -83,9 +106,11 @@ still requires typed tool schemas and an independent runtime policy layer.
 
 ### PostgreSQL
 
-PostgreSQL stores Task, Run, RepositorySnapshot, Plan, ApprovalDecision, and
-AuditEvent. Alembic owns schema history. Row locks and uniqueness serialize
-final plan decisions. A database trigger rejects Snapshot update and delete.
+PostgreSQL stores Task, Run, RepositorySnapshot, Plan, ApprovalDecision,
+AuditEvent, Runner, PermissionEnvelope, RunnerJob, RunnerJobAttempt, and
+RunnerJobEvent. Alembic owns schema history. Row locks and uniqueness serialize
+final plan decisions and Runner claims. Database triggers reject Snapshot and
+PermissionEnvelope mutation.
 
 ### Contract
 
@@ -121,10 +146,38 @@ sequenceDiagram
 
 ## Customer 0 deployment boundary
 
-The Customer 0 override mounts only the exact CreativeDeploy repository into
+The historical Phase 2 Customer 0 override mounts only the exact CreativeDeploy repository into
 the API at `/repositories/customer0/creative-deploy` with `read_only: true`.
 The Web and database receive no repository mount. The API runs as a non-root
 user. The host path is supplied only at invocation and is not committed.
+The Phase 3 base platform and Runner do not use this override and do not mount,
+scan, read, or modify CreativeDeploy.
+
+## Runner dispatch sequence
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web
+    participant API
+    participant DB as PostgreSQL
+    participant Runner
+
+    Runner->>API: Register with bootstrap credential
+    API->>DB: Runner identity + token digest
+    API-->>Runner: Runner Token returned once
+    Runner->>API: Heartbeat and bounded claim poll
+    User->>Web: Review fixed Envelope and dispatch typed Job
+    Web->>API: Job kind + closed parameters only
+    API->>DB: Immutable Envelope + queued Job + event
+    Runner->>API: Claim
+    API->>DB: SKIP LOCKED claim + fenced Attempt
+    Runner->>API: Validate Envelope; start; renew/progress
+    User->>Web: Optionally request cancellation
+    API->>DB: cancel_requested
+    Runner->>API: Typed complete or cancelled acknowledgement
+    API->>DB: Terminal state + sanitized evidence
+```
 
 ## Deployment posture
 

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 
+import { MainNavigation } from "@/components/main-navigation";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VisualEngineer · Phase 2",
-  description:
-    "面向企业前端团队的 VisualEngineer 受治理只读仓库调查与计划审批控制台",
+  title: "VisualEngineer · Phase 3",
+  description: "VisualEngineer 受治理控制面与浏览器编排的仓库无关 Local Runner",
 };
 
 export default function RootLayout({
@@ -15,7 +16,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <MainNavigation />
+        {children}
+      </body>
     </html>
   );
 }

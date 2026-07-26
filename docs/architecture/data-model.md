@@ -2,7 +2,7 @@
 
 PostgreSQL and Alembic are authoritative for all implemented durable state.
 Timestamps are timezone-aware UTC. API enums and database checks enforce the
-Phase 2 boundary independently.
+Phase 2 planning and Phase 3 Runner boundaries independently.
 
 ## Task
 
@@ -75,6 +75,42 @@ repository paths.
 
 AuditEvent is governance history, not a full Agent or tool trace.
 
+## Runner
+
+Runner stores UUID identity, display name, protocol/software versions,
+normalized capabilities, a digest of its high-entropy token, closed
+registered/online/offline/revoked state, last-seen/registration/revocation
+time, optimistic version, and timestamps. No Bootstrap or Runner Token
+plaintext column exists. Online/offline is derived from last seen and the
+configured threshold.
+
+## PermissionEnvelope
+
+PermissionEnvelope is one-to-one with RunnerJob and stores version,
+authorization source, allowed capabilities, literal repository-none,
+shell-false and Control-Plane-only network policy, runtime/lease/retry/result
+budgets, issue/expiry timestamps, canonical policy hash, and creation time.
+A database trigger rejects update and delete.
+
+## RunnerJob and RunnerJobAttempt
+
+RunnerJob stores the closed Job kind/state, immutable Envelope link,
+`requested_by=local_user`, typed normalized parameters, active Attempt pointer,
+attempt budget/count, typed sanitized result or stable error, optimistic
+version, and timestamps.
+
+RunnerJobAttempt stores Job/Runner identity, positive attempt number, random
+Lease UUID, closed Attempt state, lease deadline, heartbeat/start/completion,
+bounded error, and creation time. A partial unique index allows at most one
+active leased/running Attempt for a Job.
+
+## RunnerJobEvent
+
+RunnerJobEvent stores nullable Runner/Job/Attempt links, a closed event type,
+monotonic per-Job sequence, request ID, allowlisted bounded metadata, and
+timestamp. It records current typed execution audit, not a future Agent Trace.
+Heartbeats do not append an event on every poll.
+
 ## Relationships
 
 ```mermaid
@@ -85,6 +121,10 @@ erDiagram
     RUN ||--o{ APPROVAL_DECISION : "decisions"
     PLAN ||--o| APPROVAL_DECISION : "one final outcome"
     RUN ||--o{ AUDIT_EVENT : "governance history"
+    RUNNER ||--o{ RUNNER_JOB_ATTEMPT : "claims"
+    RUNNER_JOB ||--|| PERMISSION_ENVELOPE : "immutable authority"
+    RUNNER_JOB ||--o{ RUNNER_JOB_ATTEMPT : "retries"
+    RUNNER_JOB ||--o{ RUNNER_JOB_EVENT : "execution timeline"
 ```
 
 ## Database guarantees and service guarantees
@@ -92,6 +132,13 @@ erDiagram
 Database constraints enforce valid enums, fixed permission/source/execution
 values, non-negative counts, Run-scoped Plan versions, one Snapshot per Run,
 one decision per Plan, and immutable Snapshot rows.
+
+For Runner state, database checks enforce closed enums/bounds; foreign keys
+preserve identity; a partial unique index enforces one active Attempt; and an
+immutability trigger protects Envelopes. The service adds capability matching,
+canonical hash validation, `SKIP LOCKED` claim, transition order, three-part
+fencing, deadlines, idempotency, cancellation, retry, result redaction, and
+event ordering.
 
 The service additionally enforces transition order, Task/Run/Plan association,
 latest-version semantics, snapshot-fingerprint binding, editable revision
@@ -101,6 +148,6 @@ evidence.
 
 ## Future entities
 
-Typed ToolCall, isolated-worktree Checkpoint, Artifact, detailed Trace, and
-EvalResult tables remain future work. They should be added only with a real
-workflow, retention policy, constraints, and evidence.
+Typed repository ToolCall, isolated-worktree Checkpoint, Artifact, Agent Trace,
+and EvalResult tables remain future work. They should be added only with a
+real workflow, retention policy, constraints, and evidence.

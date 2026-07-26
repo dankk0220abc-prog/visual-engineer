@@ -1,6 +1,24 @@
 {
   "components": {
     "schemas": {
+      "ActiveJobSummary": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          }
+        },
+        "required": ["id", "kind", "state"],
+        "title": "ActiveJobSummary",
+        "type": "object"
+      },
       "ApprovalDecisionResponse": {
         "properties": {
           "actor_type": {
@@ -149,6 +167,179 @@
         "title": "BrowserValidationStep",
         "type": "object"
       },
+      "CancelledRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          }
+        },
+        "required": ["runner_id", "attempt_id", "lease_id"],
+        "title": "CancelledRequest",
+        "type": "object"
+      },
+      "Capability": {
+        "enum": ["system_diagnostic_v1", "controlled_wait_v1"],
+        "title": "Capability",
+        "type": "string"
+      },
+      "ClaimRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "wait_seconds": {
+            "default": 0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Wait Seconds",
+            "type": "integer"
+          }
+        },
+        "required": ["runner_id"],
+        "title": "ClaimRequest",
+        "type": "object"
+      },
+      "ClaimResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobAssignment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "server_time": {
+            "format": "date-time",
+            "title": "Server Time",
+            "type": "string"
+          }
+        },
+        "required": ["assignment", "server_time"],
+        "title": "ClaimResponse",
+        "type": "object"
+      },
+      "CompleteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "result": {
+            "discriminator": {
+              "mapping": {
+                "controlled_wait_v1": "#/components/schemas/ControlledWaitResult",
+                "system_diagnostic_v1": "#/components/schemas/DiagnosticResult"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticResult"
+              },
+              {
+                "$ref": "#/components/schemas/ControlledWaitResult"
+              }
+            ],
+            "title": "Result"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          }
+        },
+        "required": ["runner_id", "attempt_id", "lease_id", "result"],
+        "title": "CompleteRequest",
+        "type": "object"
+      },
+      "ControlledWaitJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "duration_ms": {
+            "maximum": 10000.0,
+            "minimum": 100.0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "controlled_wait_v1",
+            "default": "controlled_wait_v1",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": ["duration_ms"],
+        "title": "ControlledWaitJobSpec",
+        "type": "object"
+      },
+      "ControlledWaitResult": {
+        "additionalProperties": false,
+        "properties": {
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "elapsed_duration_ms": {
+            "maximum": 60000.0,
+            "minimum": 0.0,
+            "title": "Elapsed Duration Ms",
+            "type": "number"
+          },
+          "kind": {
+            "const": "controlled_wait_v1",
+            "default": "controlled_wait_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "requested_duration_ms": {
+            "maximum": 10000.0,
+            "minimum": 100.0,
+            "title": "Requested Duration Ms",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requested_duration_ms",
+          "elapsed_duration_ms",
+          "started_at",
+          "completed_at"
+        ],
+        "title": "ControlledWaitResult",
+        "type": "object"
+      },
       "DecisionKind": {
         "enum": ["approve", "reject"],
         "title": "DecisionKind",
@@ -162,6 +353,84 @@
         ],
         "title": "DeliveryPackage",
         "type": "string"
+      },
+      "DiagnosticResult": {
+        "additionalProperties": false,
+        "properties": {
+          "architecture": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._-]+$",
+            "title": "Architecture",
+            "type": "string"
+          },
+          "capability_list": {
+            "items": {
+              "$ref": "#/components/schemas/Capability"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Capability List",
+            "type": "array"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "maximum": 60000.0,
+            "minimum": 0.0,
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "kind": {
+            "const": "system_diagnostic_v1",
+            "default": "system_diagnostic_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "os_family": {
+            "enum": ["linux", "darwin", "windows", "other"],
+            "title": "Os Family",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Protocol Version",
+            "type": "integer"
+          },
+          "python_version": {
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "title": "Python Version",
+            "type": "string"
+          },
+          "runner_software_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Runner Software Version",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runner_software_version",
+          "python_version",
+          "os_family",
+          "architecture",
+          "capability_list",
+          "started_at",
+          "completed_at",
+          "duration_ms"
+        ],
+        "title": "DiagnosticResult",
+        "type": "object"
       },
       "ErrorBody": {
         "properties": {
@@ -208,6 +477,59 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "FailRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "error_code": {
+            "$ref": "#/components/schemas/FailureCode"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          }
+        },
+        "required": ["runner_id", "attempt_id", "lease_id", "error_code"],
+        "title": "FailRequest",
+        "type": "object"
+      },
+      "FailureCode": {
+        "enum": [
+          "policy_denied",
+          "unsupported_capability",
+          "envelope_expired",
+          "envelope_hash_mismatch",
+          "result_rejected",
+          "runner_internal_error",
+          "control_plane_unavailable",
+          "lease_lost",
+          "retry_exhausted"
+        ],
+        "title": "FailureCode",
+        "type": "string"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -217,6 +539,182 @@
         },
         "required": ["status"],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HeartbeatRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "protocol_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Protocol Version",
+            "type": "integer"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "software_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Software Version",
+            "type": "string"
+          }
+        },
+        "required": ["runner_id", "software_version"],
+        "title": "HeartbeatRequest",
+        "type": "object"
+      },
+      "HeartbeatResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "server_time": {
+            "format": "date-time",
+            "title": "Server Time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunnerStatus"
+          }
+        },
+        "required": ["runner_id", "status", "server_time"],
+        "title": "HeartbeatResponse",
+        "type": "object"
+      },
+      "JobAssignment": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "attempt_number": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "job": {
+            "discriminator": {
+              "mapping": {
+                "controlled_wait_v1": "#/components/schemas/ControlledWaitJobSpec",
+                "system_diagnostic_v1": "#/components/schemas/SystemDiagnosticJobSpec"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SystemDiagnosticJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/ControlledWaitJobSpec"
+              }
+            ],
+            "title": "Job"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "leased_until": {
+            "format": "date-time",
+            "title": "Leased Until",
+            "type": "string"
+          },
+          "permission_envelope": {
+            "$ref": "#/components/schemas/PermissionEnvelope"
+          }
+        },
+        "required": [
+          "job_id",
+          "attempt_id",
+          "lease_id",
+          "attempt_number",
+          "job",
+          "permission_envelope",
+          "leased_until"
+        ],
+        "title": "JobAssignment",
+        "type": "object"
+      },
+      "JobKind": {
+        "enum": ["system_diagnostic_v1", "controlled_wait_v1"],
+        "title": "JobKind",
+        "type": "string"
+      },
+      "JobState": {
+        "enum": [
+          "queued",
+          "leased",
+          "running",
+          "cancel_requested",
+          "succeeded",
+          "cancelled",
+          "failed"
+        ],
+        "title": "JobState",
+        "type": "string"
+      },
+      "LeaseMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "cancel_requested": {
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
+          "idempotent_replay": {
+            "default": false,
+            "title": "Idempotent Replay",
+            "type": "boolean"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "leased_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leased Until"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          }
+        },
+        "required": [
+          "job_id",
+          "attempt_id",
+          "state",
+          "leased_until",
+          "cancel_requested"
+        ],
+        "title": "LeaseMutationResponse",
         "type": "object"
       },
       "MakeTargetValidationStep": {
@@ -237,6 +735,11 @@
         "required": ["kind", "target"],
         "title": "MakeTargetValidationStep",
         "type": "object"
+      },
+      "NetworkPolicy": {
+        "enum": ["control_plane_only"],
+        "title": "NetworkPolicy",
+        "type": "string"
       },
       "PackageScriptValidationStep": {
         "additionalProperties": false,
@@ -261,6 +764,207 @@
         },
         "required": ["kind", "workspace", "script"],
         "title": "PackageScriptValidationStep",
+        "type": "object"
+      },
+      "PermissionEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/Capability"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Allowed Capabilities",
+            "type": "array"
+          },
+          "authorization_source": {
+            "const": "local_user_job_dispatch",
+            "default": "local_user_job_dispatch",
+            "title": "Authorization Source",
+            "type": "string"
+          },
+          "envelope_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Envelope Version",
+            "type": "integer"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "lease_seconds": {
+            "maximum": 60.0,
+            "minimum": 2.0,
+            "title": "Lease Seconds",
+            "type": "integer"
+          },
+          "max_attempts": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "max_result_bytes": {
+            "maximum": 65536.0,
+            "minimum": 256.0,
+            "title": "Max Result Bytes",
+            "type": "integer"
+          },
+          "max_runtime_seconds": {
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Max Runtime Seconds",
+            "type": "integer"
+          },
+          "network_policy": {
+            "const": "control_plane_only",
+            "default": "control_plane_only",
+            "title": "Network Policy",
+            "type": "string"
+          },
+          "policy_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Hash",
+            "type": "string"
+          },
+          "repository_access": {
+            "const": "none",
+            "default": "none",
+            "title": "Repository Access",
+            "type": "string"
+          },
+          "shell_access": {
+            "const": false,
+            "default": false,
+            "title": "Shell Access",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "allowed_capabilities",
+          "max_runtime_seconds",
+          "lease_seconds",
+          "max_attempts",
+          "max_result_bytes",
+          "issued_at",
+          "expires_at",
+          "policy_hash"
+        ],
+        "title": "PermissionEnvelope",
+        "type": "object"
+      },
+      "PermissionEnvelopeResponse": {
+        "properties": {
+          "allowed_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/Capability"
+            },
+            "title": "Allowed Capabilities",
+            "type": "array"
+          },
+          "authorization_source": {
+            "title": "Authorization Source",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "envelope_version": {
+            "title": "Envelope Version",
+            "type": "integer"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "lease_seconds": {
+            "title": "Lease Seconds",
+            "type": "integer"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "max_result_bytes": {
+            "title": "Max Result Bytes",
+            "type": "integer"
+          },
+          "max_runtime_seconds": {
+            "title": "Max Runtime Seconds",
+            "type": "integer"
+          },
+          "network_policy": {
+            "$ref": "#/components/schemas/NetworkPolicy"
+          },
+          "policy_hash": {
+            "title": "Policy Hash",
+            "type": "string"
+          },
+          "repository_access": {
+            "$ref": "#/components/schemas/RepositoryAccess"
+          },
+          "shell_access": {
+            "title": "Shell Access",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "envelope_version",
+          "job_id",
+          "authorization_source",
+          "allowed_capabilities",
+          "repository_access",
+          "shell_access",
+          "network_policy",
+          "max_runtime_seconds",
+          "lease_seconds",
+          "max_attempts",
+          "max_result_bytes",
+          "issued_at",
+          "expires_at",
+          "policy_hash",
+          "created_at"
+        ],
+        "title": "PermissionEnvelopeResponse",
         "type": "object"
       },
       "PermissionLevel": {
@@ -620,6 +1324,159 @@
         "title": "PlanStatus",
         "type": "string"
       },
+      "ProgressEventRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "event_type": {
+            "const": "progress",
+            "default": "progress",
+            "title": "Event Type",
+            "type": "string"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "message_code": {
+            "const": "waiting",
+            "default": "waiting",
+            "title": "Message Code",
+            "type": "string"
+          },
+          "progress_percent": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Progress Percent",
+            "type": "integer"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "runner_id",
+          "attempt_id",
+          "lease_id",
+          "sequence",
+          "progress_percent"
+        ],
+        "title": "ProgressEventRequest",
+        "type": "object"
+      },
+      "RegisterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/Capability"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Protocol Version",
+            "type": "integer"
+          },
+          "software_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Software Version",
+            "type": "string"
+          }
+        },
+        "required": ["display_name", "software_version", "capabilities"],
+        "title": "RegisterRequest",
+        "type": "object"
+      },
+      "RegisterResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "protocol_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Protocol Version",
+            "type": "integer"
+          },
+          "registered_at": {
+            "format": "date-time",
+            "title": "Registered At",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "runner_token": {
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Runner Token",
+            "type": "string"
+          },
+          "token_type": {
+            "const": "Bearer",
+            "default": "Bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": ["runner_id", "runner_token", "registered_at"],
+        "title": "RegisterResponse",
+        "type": "object"
+      },
+      "RenewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          }
+        },
+        "required": ["runner_id", "attempt_id", "lease_id"],
+        "title": "RenewRequest",
+        "type": "object"
+      },
+      "RepositoryAccess": {
+        "enum": ["none"],
+        "title": "RepositoryAccess",
+        "type": "string"
+      },
       "RepositoryKind": {
         "enum": ["local_path", "github"],
         "title": "RepositoryKind",
@@ -805,6 +1662,519 @@
         "title": "RunStatus",
         "type": "string"
       },
+      "RunnerJobAttemptResponse": {
+        "properties": {
+          "attempt_number": {
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "last_heartbeat_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Heartbeat At"
+          },
+          "lease_id_hint": {
+            "title": "Lease Id Hint",
+            "type": "string"
+          },
+          "leased_until": {
+            "format": "date-time",
+            "title": "Leased Until",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "runner_id",
+          "attempt_number",
+          "lease_id_hint",
+          "state",
+          "leased_until",
+          "last_heartbeat_at",
+          "started_at",
+          "completed_at",
+          "error_code",
+          "error_message",
+          "created_at"
+        ],
+        "title": "RunnerJobAttemptResponse",
+        "type": "object"
+      },
+      "RunnerJobEventListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunnerJobEventResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "RunnerJobEventListResponse",
+        "type": "object"
+      },
+      "RunnerJobEventResponse": {
+        "properties": {
+          "attempt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "runner_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Id"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "runner_id",
+          "job_id",
+          "attempt_id",
+          "event_type",
+          "sequence",
+          "request_id",
+          "metadata",
+          "created_at"
+        ],
+        "title": "RunnerJobEventResponse",
+        "type": "object"
+      },
+      "RunnerJobListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunnerJobResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "RunnerJobListResponse",
+        "type": "object"
+      },
+      "RunnerJobResponse": {
+        "properties": {
+          "active_attempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunnerJobAttemptResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_attempt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Attempt Id"
+          },
+          "attempt_count": {
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/RunnerJobAttemptResponse"
+            },
+            "title": "Attempts",
+            "type": "array"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "permission_envelope": {
+            "$ref": "#/components/schemas/PermissionEnvelopeResponse"
+          },
+          "requested_by": {
+            "title": "Requested By",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "controlled_wait_v1": "#/components/schemas/ControlledWaitResult",
+                    "system_diagnostic_v1": "#/components/schemas/DiagnosticResult"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DiagnosticResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ControlledWaitResult"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "requested_by",
+          "parameters",
+          "active_attempt_id",
+          "attempt_count",
+          "max_attempts",
+          "result",
+          "error_code",
+          "error_message",
+          "version",
+          "created_at",
+          "updated_at",
+          "completed_at",
+          "permission_envelope",
+          "active_attempt"
+        ],
+        "title": "RunnerJobResponse",
+        "type": "object"
+      },
+      "RunnerListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunnerResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "RunnerListResponse",
+        "type": "object"
+      },
+      "RunnerResponse": {
+        "properties": {
+          "active_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveJobSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/Capability"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "protocol_version": {
+            "title": "Protocol Version",
+            "type": "integer"
+          },
+          "registered_at": {
+            "format": "date-time",
+            "title": "Registered At",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "software_version": {
+            "title": "Software Version",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunnerStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "protocol_version",
+          "software_version",
+          "capabilities",
+          "status",
+          "last_seen_at",
+          "registered_at",
+          "revoked_at",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RunnerResponse",
+        "type": "object"
+      },
+      "RunnerStatus": {
+        "enum": ["registered", "online", "offline", "revoked"],
+        "title": "RunnerStatus",
+        "type": "string"
+      },
       "SnapshotMode": {
         "enum": ["git_head"],
         "title": "SnapshotMode",
@@ -972,6 +2342,42 @@
         "title": "SnapshotResponse",
         "type": "object"
       },
+      "StartRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          }
+        },
+        "required": ["runner_id", "attempt_id", "lease_id"],
+        "title": "StartRequest",
+        "type": "object"
+      },
+      "SystemDiagnosticJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "system_diagnostic_v1",
+            "default": "system_diagnostic_v1",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "SystemDiagnosticJobSpec",
+        "type": "object"
+      },
       "TaskCreate": {
         "additionalProperties": false,
         "properties": {
@@ -1106,12 +2512,1510 @@
     }
   },
   "info": {
-    "description": "Phase 2 API for governed Level 0 committed-HEAD repository intelligence and deterministic plan approval. Approval never executes code.",
+    "description": "Phase 3 Control Plane API for governed planning and a browser-orchestrated repository-free Local Runner. Plan approval never dispatches execution.",
     "title": "VisualEngineer API",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/runner-jobs": {
+      "get": {
+        "operationId": "list_runner_jobs_api_v1_runner_jobs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerJobListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid closed Job request"
+          }
+        },
+        "summary": "List browser-dispatched Runner Jobs newest first",
+        "tags": ["runner control plane"]
+      },
+      "post": {
+        "operationId": "create_runner_job_api_v1_runner_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "discriminator": {
+                  "mapping": {
+                    "controlled_wait_v1": "#/components/schemas/ControlledWaitJobSpec",
+                    "system_diagnostic_v1": "#/components/schemas/SystemDiagnosticJobSpec"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SystemDiagnosticJobSpec"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ControlledWaitJobSpec"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid closed Job request"
+          }
+        },
+        "summary": "Create a typed Job and server-derived immutable Permission Envelope",
+        "tags": ["runner control plane"]
+      }
+    },
+    "/api/v1/runner-jobs/{job_id}": {
+      "get": {
+        "operationId": "get_runner_job_api_v1_runner_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid closed Job request"
+          }
+        },
+        "summary": "Get a Runner Job, safe lease summary, Envelope, and Attempts",
+        "tags": ["runner control plane"]
+      }
+    },
+    "/api/v1/runner-jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_runner_job_api_v1_runner_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid closed Job request"
+          }
+        },
+        "summary": "Request or complete cancellation without allowing later success",
+        "tags": ["runner control plane"]
+      }
+    },
+    "/api/v1/runner-jobs/{job_id}/events": {
+      "get": {
+        "operationId": "list_runner_job_events_api_v1_runner_jobs__job_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerJobEventListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid closed Job request"
+          }
+        },
+        "summary": "List the bounded Runner Job execution timeline",
+        "tags": ["runner control plane"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/heartbeat": {
+      "post": {
+        "operationId": "heartbeat_api_v1_runner_protocol_v1_heartbeat_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartbeatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Refresh Runner liveness without creating heartbeat event spam",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/jobs/claim": {
+      "post": {
+        "operationId": "claim_job_api_v1_runner_protocol_v1_jobs_claim_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Atomically claim one compatible queued Job",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/jobs/{job_id}/cancelled": {
+      "post": {
+        "operationId": "acknowledge_cancelled_api_v1_runner_protocol_v1_jobs__job_id__cancelled_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Acknowledge cancellation for the active fenced Attempt",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/jobs/{job_id}/complete": {
+      "post": {
+        "operationId": "complete_job_api_v1_runner_protocol_v1_jobs__job_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Store one typed result for the active fenced Attempt",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/jobs/{job_id}/events": {
+      "post": {
+        "operationId": "append_job_event_api_v1_runner_protocol_v1_jobs__job_id__events_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProgressEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Append one closed, bounded Runner progress event",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/jobs/{job_id}/fail": {
+      "post": {
+        "operationId": "fail_job_api_v1_runner_protocol_v1_jobs__job_id__fail_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Store one typed sanitized failure for the active Attempt",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/jobs/{job_id}/renew": {
+      "post": {
+        "operationId": "renew_job_api_v1_runner_protocol_v1_jobs__job_id__renew_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Renew the active lease and receive cancellation state",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/jobs/{job_id}/start": {
+      "post": {
+        "operationId": "start_job_api_v1_runner_protocol_v1_jobs__job_id__start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Start the active fenced Job Attempt",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/register": {
+      "post": {
+        "operationId": "register_runner_api_v1_runner_protocol_v1_register_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Register a Local Runner with the one-time bootstrap credential",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runners": {
+      "get": {
+        "operationId": "list_runners_api_v1_runners_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid closed Job request"
+          }
+        },
+        "summary": "List the local Runner registry with derived liveness",
+        "tags": ["runner control plane"]
+      }
+    },
+    "/api/v1/runners/{runner_id}": {
+      "get": {
+        "operationId": "get_runner_api_v1_runners__runner_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Runner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid closed Job request"
+          }
+        },
+        "summary": "Get one Runner without exposing its credential",
+        "tags": ["runner control plane"]
+      }
+    },
+    "/api/v1/runners/{runner_id}/revoke": {
+      "post": {
+        "operationId": "revoke_runner_api_v1_runners__runner_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Runner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner or Job state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid closed Job request"
+          }
+        },
+        "summary": "Revoke one Runner credential and request cancellation",
+        "tags": ["runner control plane"]
+      }
+    },
     "/api/v1/runs/{run_id}": {
       "get": {
         "operationId": "get_run_api_v1_runs__run_id__get",

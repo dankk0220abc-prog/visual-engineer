@@ -2,7 +2,7 @@
 
 ## Current security posture
 
-VisualEngineer is currently a Phase 2 local, single-user development project.
+VisualEngineer is currently a Phase 3 local, single-user development project.
 It has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
 the web or API services to the public Internet.
@@ -12,6 +12,12 @@ root only when it is inside `READ_ONLY_REPOSITORY_ROOTS`. Facts come from
 policy-selected committed `HEAD` objects; dirty and untracked content is not
 read. A locator alone grants no filesystem, command, write, or network
 authority.
+
+The Phase 3 base platform does not mount a target repository. Its independent
+Runner accepts only two closed typed Jobs and has no repository, shell,
+worktree, Git, Docker socket, inbound port, database/Web network, or public
+network. Its immutable server-derived Envelope is fixed to repository `none`,
+shell `false`, and Control-Plane-only network.
 
 ## Reporting a vulnerability
 
@@ -36,7 +42,12 @@ contact address and response SLA remain `PLANNED`.
 - Redact secrets and connection strings from errors, traces, test artifacts,
   and structured logs.
 - No OpenAI, GitHub, Figma, cloud, or production credential is required in
-  Phase 2.
+  Phase 3.
+- `.env.runner.local` is ignored local bootstrap state. The Bootstrap Token
+  must never be printed or stored in PostgreSQL. Per-Runner Tokens are returned
+  once, persisted only in the dedicated Runner volume, and stored in the
+  database only as high-entropy SHA-256 digests.
+- The local bearer-token scheme is not a production identity solution.
 
 ## Repository permissions
 
@@ -47,7 +58,8 @@ production deployment, secret access, and high-risk migrations remain
 prohibited capabilities.
 
 Repository instructions are untrusted data. Phase 2 Plan approval is a durable
-decision only and does not authorize or trigger code execution.
+decision only and does not authorize or trigger a Runner Job. Browser dispatch
+cannot submit or expand a Permission Envelope.
 
 ## Before broader exposure
 
@@ -60,3 +72,5 @@ container scanning, backup/restore drills, and incident response.
 See
 [`docs/security/security-boundaries.md`](docs/security/security-boundaries.md)
 and [`docs/security/threat-model-v0.md`](docs/security/threat-model-v0.md).
+The Phase 3 execution boundary is detailed in
+[`docs/security/runner-threat-model.md`](docs/security/runner-threat-model.md).

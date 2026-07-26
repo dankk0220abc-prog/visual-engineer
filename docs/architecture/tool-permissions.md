@@ -6,9 +6,10 @@ Permissions are deny-by-default, Run-scoped, non-transitive, and elevated only
 by an explicit future human grant. Repository content, a Task objective, a
 Deployment Pack, or a prior approval cannot grant a capability.
 
-Phase 2 implements only Level 0 repository intelligence. It has no generic
-tool executor. The fixed Git reader is a narrow product capability, not a
-shell tool.
+Phase 2 implements only Level 0 repository intelligence. Phase 3 additionally
+implements repository-free execution-plane capabilities, not a higher
+repository level. It has no generic tool executor. The fixed Git reader is a
+narrow historical Control Plane capability, not a shell tool.
 
 ## Levels
 
@@ -19,6 +20,23 @@ shell tool.
 | 2: Controlled validation | Run allowlisted install/format/lint/test/build/browser schemas in isolation.                                          | Not implemented |
 | 3: Branch and commit     | Create a scoped branch and local commit after gates.                                                                  | Not implemented |
 | 4: Pull request          | Push the approved branch and create/update a PR.                                                                      | Not implemented |
+
+## Phase 3 repository-free capabilities
+
+System Diagnostic and Controlled Wait are closed Job kinds outside the
+repository permission ladder. Their immutable Envelope fixes:
+
+```text
+repository_access = none
+shell_access = false
+network_policy = control_plane_only
+```
+
+The browser cannot edit the Envelope. A Plan, Task, repository locator,
+Deployment Pack, or repository instruction cannot dispatch a Job or broaden
+authority. System Diagnostic returns only redacted runtime facts; Controlled
+Wait uses async time and cancellation. Neither accesses project code,
+filesystem content, a shell, subprocess executor, Git, or public network.
 
 ## Implemented Level 0 controls
 
@@ -69,10 +87,11 @@ must be designed and authorized separately.
 
 ## Customer 0 boundary
 
-CreativeDeploy is internal Customer 0. The only allowed Phase 2 access is the
+CreativeDeploy is internal Customer 0. The only allowed historical Phase 2 access is the
 API container's exact read-only bind mount and the fixed scanner operations
-above. Web and database services receive no mount. The case must stop with Plan
-status `awaiting_approval`; the user personally approves or rejects.
+above. Web and database services receive no mount. The user personally
+rejected the stale Plan. Phase 3 Runner and base Compose receive no
+CreativeDeploy mount or locator.
 
 Disallowed actions include reading real environment/credential contents,
 installing dependencies, running target builds/tests/formatters/generators,

@@ -7,7 +7,7 @@ and Frontend Quality Remediation work for governed frontend teams. V1 is not a
 promise of arbitrary language, repository, backend, infrastructure, or general
 software-engineering support.
 
-## Implemented Foundation and Phase 2
+## Implemented Foundation through Phase 3
 
 - Task create/list/detail with bounded validation and idempotency.
 - Level 0 `read_only` Run creation and durable state.
@@ -25,12 +25,24 @@ software-engineering support.
 - Structured redacted audit events and a responsive review console.
 - PostgreSQL migration history, generated contracts, synthetic security
   fixture, deterministic eval cases, and real-stack Playwright flows.
+- Runner Protocol v1, registry, high-entropy digest-only credentials,
+  heartbeat-derived online/offline state, and revocation.
+- Server-derived immutable Permission Envelopes fixed to no repository, no
+  shell, and Control-Plane-only network.
+- PostgreSQL Jobs, Attempts, event timeline, `SKIP LOCKED` claim, leases,
+  fencing, cancellation, retry budget, and lease reaper.
+- Independent outbound Local Runner with only typed System Diagnostic and
+  Controlled Wait executors.
+- Browser Runner Registry, Dispatch, Job detail, progress, cancellation,
+  results, offline/expired/requeue evidence, and Timeline.
+- Non-root/read-only Runner container on a dedicated internal API-only network,
+  plus real Runner E2E and chaos recovery.
 
 ## Reserved V1 seams
 
 These remain deliberate future seams, not placeholder capabilities:
 
-- an Agent Runtime or OpenAI Agents SDK integration;
+- an LLM/Agents SDK planning runtime;
 - model invocation and model-specific evaluation;
 - isolated worktree lifecycle and scoped file writes;
 - typed execution tools and independent runtime policy enforcement;
@@ -53,7 +65,7 @@ for future typed tool schemas and runtime authorization.
   recovery.
 - Broader source-control providers and governed release workflows.
 
-## Explicitly out of scope in Phase 2
+## Explicitly out of scope in Phase 3
 
 - Any LLM API or OpenAI Agents SDK.
 - Generic shell or target-repository command execution.
@@ -61,9 +73,11 @@ for future typed tool schemas and runtime authorization.
   working tree.
 - Target-repository writes, worktrees, dependency installation, code changes,
   Git state changes, or cleanup.
+- Any target-repository mount, scan, read, locator, or file content in Runner;
+  any CreativeDeploy access from Phase 3.
 - GitHub credentials, clone, push, PR, merge, tag, or deployment.
 - Automatic approval or treating plan approval as execution authority.
-- Authentication, multi-tenancy, queues, public exposure, or production use.
+- Authentication, multi-tenancy, public exposure, or production use.
 - Redis, Celery, Temporal, brokers, Kubernetes, or a gateway.
 - Fake Agent scores, tool traces, execution states, or outcome metrics.
 - Treating CreativeDeploy as external-customer or production-adoption proof.
@@ -72,5 +86,6 @@ for future typed tool schemas and runtime authorization.
 
 If a proposed change requires repository write access, executing a target
 command, a credential, an LLM, an isolated worktree, a remote integration, or
-an effect caused by plan approval, it is outside Phase 2. It requires a new
-reviewed milestone and explicit authority.
+an effect caused by plan approval, it is outside Phase 3. Repository read
+access by Runner is also outside Phase 3. Each requires a new reviewed
+milestone and explicit authority.

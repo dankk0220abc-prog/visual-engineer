@@ -4,6 +4,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "apps/api/src"))
+sys.path.insert(0, str(REPOSITORY_ROOT / "packages/runner-protocol/src"))
 
 from visual_engineer_api.main import app  # noqa: E402
 

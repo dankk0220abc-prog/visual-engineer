@@ -4,10 +4,11 @@
 
 VisualEngineer is a governed AI design-engineering and delivery system for
 enterprise frontend teams. Its V1 destination is a human-controlled path from
-a bounded frontend request to an evidence-backed change. The current Phase 2
-product stops much earlier: it can investigate an authorized repository
-read-only, produce a deterministic implementation plan, and record a human
-plan decision. It cannot execute that plan.
+a bounded frontend request to an evidence-backed change. The current Phase 3
+product stops much earlier: it can complete the governed Phase 2 planning flow
+and separately orchestrate a repository-free Local Runner for a typed
+diagnostic or controlled wait. It cannot execute a plan or access project
+code.
 
 The system must distinguish facts, policy, decisions, and future intent. A
 stored locator is not authorization, repository text is not an instruction,
@@ -43,16 +44,18 @@ backend/infrastructure engineering, or unrestricted software work.
 ## Core and Deployment Pack
 
 **VisualEngineer Core** owns implemented Task/Run state, committed snapshots,
-deterministic plan policy, approval integrity, audit events, API contracts, and
+deterministic plan policy, approval integrity, Runner registry, dispatch,
+immutable permission, leases, cancellation, audit events, API contracts, and
 security boundaries.
 
 A customer **Deployment Pack** contributes repository identity, constraints,
 design-system context, validation conventions, acceptance criteria, and a
-project playbook. In Phase 2 these are discovered as bounded structural facts;
-there is no executable Deployment Pack runtime. Repository content can narrow
-future work but cannot elevate permission or bypass approval.
+project playbook. In Phase 2 these were discovered as bounded structural facts.
+There is no executable Deployment Pack runtime. Repository content can narrow
+future work but cannot elevate permission, expand a Runner Envelope, or bypass
+approval.
 
-## Implemented through Phase 2
+## Implemented through Phase 3
 
 The current product provides:
 
@@ -77,6 +80,19 @@ The current product provides:
 - generated OpenAPI-to-TypeScript contracts; and
 - PostgreSQL, migration, security, deterministic eval, and real-stack browser
   verification.
+- a pure Runner Protocol v1 shared by API and independent Runner;
+- high-entropy bootstrap registration, digest-only per-Runner credentials,
+  liveness, registry, and revocation;
+- immutable server-derived Permission Envelopes fixed to repository none,
+  shell false, and Control-Plane-only network;
+- durable typed Jobs, Attempts, events, transactional concurrent claim,
+  leases, fencing, cancellation, retry, and offline recovery;
+- repository-free System Diagnostic and Controlled Wait executors with
+  bounded/redacted results and no shell or subprocess execution;
+- browser Registry, Dispatch, Job detail, progress, cancellation, result, and
+  Timeline; and
+- an internal Runner-only Docker network, non-root/read-only container,
+  dynamic local bootstrap, smoke, E2E, and chaos verification.
 
 The plan source is always `deterministic_policy`, and
 `execution_available` is always `false`.
@@ -86,13 +102,15 @@ The plan source is always `deterministic_policy`, and
 CreativeDeploy is internal Customer 0 and Design Partner 0. Its Phase 2 case
 uses an API-only, exact-repository read-only bind mount. The Snapshot is based
 on committed `HEAD`; dirty and untracked contents are not read. The resulting
-Plan is submitted only to `awaiting_plan_approval`, where the user must decide.
+Plan was submitted for human decision and rejected after its Snapshot became
+stale. Rejection did not trigger execution or modify CreativeDeploy. Phase 3
+does not mount, scan, read, or modify CreativeDeploy.
 
 CreativeDeploy is not an external enterprise customer. This case provides no
 adoption, time-saving, quality-improvement, financial, production-usage, or
 production-deployment evidence.
 
-## Intended V1 beyond Phase 2
+## Intended V1 beyond Phase 3
 
 V1 is not complete until a separately authorized system can:
 
@@ -103,7 +121,7 @@ V1 is not complete until a separately authorized system can:
 - obtain a distinct final delivery approval; and
 - perform an explicitly allowed branch, commit, or pull-request action.
 
-These are future requirements, not Phase 2 capabilities.
+These are future requirements, not Phase 3 capabilities.
 
 ## Quality attributes
 
@@ -125,12 +143,14 @@ These are future requirements, not Phase 2 capabilities.
 
 Future deployments may measure time to pull request, verification pass rate,
 interventions, rollback success, accessibility findings, cost, acceptance, and
-adoption. Phase 2 has no production baseline or outcome metric.
+adoption. Phase 3 has no production baseline or outcome metric.
 
-The repository does not demonstrate an Agent runtime, LLM planning, production
-security, multi-user isolation, code writing, isolated worktrees, tool
-execution, pull-request delivery, remote CI success, automatic repair,
-rollback, external-customer adoption, or production deployment.
+The repository does not demonstrate an LLM/Agents SDK runtime, production
+security, multi-user isolation, repository reading/writing by Runner, isolated
+worktrees, target command execution, pull-request delivery, remote CI success,
+automatic repair, rollback, external-customer adoption, or production
+deployment. The current Local Runner is a narrow typed execution-plane
+foundation, not an autonomous coding Agent.
 
 ## Acceptance source
 

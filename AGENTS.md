@@ -10,8 +10,12 @@ later. Explicit user instructions override this file.
   and backend tests.
 - `apps/web/`: Next.js App Router console, frontend tests, and Playwright
   configuration.
+- `apps/runner/`: independent outbound Local Runner and repository-free typed
+  executors.
 - `packages/api-contract/`: generated OpenAPI specification and generated
   TypeScript types. Treat generated outputs as derived artifacts.
+- `packages/runner-protocol/`: pure versioned Pydantic protocol, canonical
+  policy hashing, typed results, and errors; no API/database/executor code.
 - `docs/`: product, architecture, security, decisions, execution plans,
   runbooks, status, and verification evidence.
 - `evals/datasets/`: deterministic evaluation cases; never record invented
@@ -19,7 +23,7 @@ later. Explicit user instructions override this file.
 - `infra/`: container definitions and infrastructure configuration.
 - `scripts/`: small, reviewed project automation.
 - `.github/workflows/`: CI definitions only; no deployment workflow belongs in
-  Phase 2.
+  Phase 3.
 
 ## Stack and authority
 
@@ -44,10 +48,11 @@ later. Explicit user instructions override this file.
   and project playbook.
 - CreativeDeploy is Customer 0 and Design Partner 0, not an external enterprise
   customer or evidence of production adoption.
-- Phase 2 approval is implemented as a durable decision only. Never describe
-  approval as execution authority, or planned Agent, worktree, repair,
-  rollback, GitHub, or deployment capability as implemented without
-  executable evidence.
+- Phase 2 approval is a durable decision only. Phase 3 Runner dispatch is a
+  separate browser action and grants only its immutable Envelope. Never
+  describe approval as execution authority, or planned repository tools,
+  worktree, repair, rollback, GitHub, or deployment capability as implemented
+  without executable evidence.
 
 ## Standard workflow
 
@@ -75,9 +80,12 @@ make security-check
 make eval
 make e2e
 make verify
-make up
-make down
-make logs
+make platform-up
+make platform-down
+make platform-logs
+make runner-status
+make runner-smoke
+make runner-chaos-check
 ```
 
 Do not report a command as passing unless it ran in the current worktree and
@@ -108,13 +116,30 @@ the evidence file for the active phase.
   reads.
 - Package scripts and Make targets may be parsed into typed metadata but must
   never be executed against a target repository in Phase 2.
+- Phase 3 Runner jobs are a closed discriminated union. Do not add an arbitrary
+  command, shell string, dynamic import, plugin hook, filesystem/repository
+  tool, Docker socket, or subprocess-backed executor.
+- A Phase 3 Permission Envelope is server-derived, immutable, canonical-hashed,
+  and fixed to `repository_access=none`, `shell_access=false`, and
+  `network_policy=control_plane_only`. Browser input and Deployment Packs may
+  not submit or broaden it.
+- Every Attempt mutation must validate authenticated Runner ID, active Attempt
+  ID, high-entropy Lease ID, lease deadline, revocation, and state under a
+  database lock. A stale identity returns `409` without mutation.
+- Claim uses PostgreSQL row locking with `SKIP LOCKED`; retain both the partial
+  active-attempt unique index and the independent-transaction concurrency test.
+- Runner credentials are random, returned once, digest-only in PostgreSQL, and
+  stored only in the ignored local bootstrap file or dedicated Runner volume.
+  Never log request bodies or authorization headers.
+- Keep RunnerJobEvent distinct from a future Agent Trace. Heartbeats update
+  liveness without appending unbounded events.
 - Never log full request bodies, credentials, tokens, connection strings, or
   other sensitive data. Preserve request IDs and stable public error codes.
 - Frontend code must handle loading, empty, failure, and retry states and must
   preserve keyboard focus visibility and accessible names.
 - Avoid nondeterministic LLM behavior for logic that code can determine.
-- Do not add an Agent runtime, fake tools, fake traces, or unused SDKs to imply
-  capabilities that do not exist.
+- Do not add fake tools, fake traces, or unused SDKs to imply capabilities that
+  do not exist.
 
 ## Contract and generated-file rules
 
@@ -152,7 +177,12 @@ Only commit generated output after its source and verification are included.
   that synthetic secret, dirty, untracked, symlink-target, and lifecycle
   markers do not leak or execute.
 - Playwright smoke tests use the real web, API, and PostgreSQL stack; do not
-  replace that flow with API mocks.
+  replace that flow with API mocks. Phase 3 flows also require the real Runner
+  container.
+- Chaos tests must use their exact isolated Compose project and compare source
+  status before/after. A graceful SIGTERM may finish active work and is not a
+  valid simulation of abrupt Runner loss; use a bounded immediate stop for
+  lease-expiry recovery evidence.
 - Do not delete valid tests, disable checks, lower meaningful thresholds, or
   broaden exclusions to make a change pass.
 - After a change, run the narrow test first, then the relevant quality,
@@ -175,6 +205,9 @@ Only commit generated output after its source and verification are included.
 ## External repository permissions
 
 - External repositories are read-only by default.
+- The Phase 3 base platform and Runner have no external-repository access at
+  all. Never mount CreativeDeploy, a customer repository, `~/Developer`, SSH,
+  or Docker socket into Runner.
 - Do not read real `.env` files, credentials, certificates, tokens, or secret
   stores in an external repository.
 - Customer 0 mounts must be API-only, bind-mounted read-only, limited to the
