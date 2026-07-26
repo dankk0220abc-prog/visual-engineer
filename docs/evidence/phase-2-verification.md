@@ -4,6 +4,7 @@
 - Branch: `feat/phase-2-readonly-repository-intelligence`
 - Foundation commit: `d136418158d9f5ffc4f2f8ba993ca48e837ed59b`
 - Checkpoint status: COMPLETE
+- Human decision closure: VERIFIED — REJECTED
 - Remote CI: not run
 
 ## Baseline
@@ -72,14 +73,43 @@ Durable IDs:
 
 - Task `d71b708b-597e-448d-a41c-90df41c602f0`;
 - Run `447510d7-695c-46ec-baad-9a0f750ce965`;
+- Snapshot `eddf95d2-fe12-4699-a7c2-36b4331ebe26`;
 - Snapshot fingerprint
   `41c0ff6896e97d22b876e7bfe9d31f6f260998a74a2b0ddbcdb3620be1a53797`;
-- Plan v1, source `deterministic_policy`, status `awaiting_approval`;
-- Run status `awaiting_plan_approval`; and
+- Plan v1, source `deterministic_policy`, status `rejected`;
+- Run status `rejected`; and
 - local page
   `http://127.0.0.1:13001/runs/447510d7-695c-46ec-baad-9a0f750ce965`.
 
-Audit ends with `plan_submitted`. No decision API was called.
+## Human rejection closure
+
+The user made the decision in the browser. A subsequent read-only verification
+queried the persisted Run, Plan v1, ApprovalDecision, Snapshot, and ordered
+Audit Timeline. The API and PostgreSQL state agree:
+
+- the Run and Plan are both `rejected`;
+- exactly one `local_user` ApprovalDecision exists and its decision is
+  `reject`;
+- the rejection reason is the following browser-submitted text:
+
+  > CreativeDeploy HEAD has advanced since this Snapshot was created. Regenerate
+  > the Snapshot and Plan against the current committed HEAD before any execution
+  > approval.
+
+- the persisted Snapshot ID and fingerprint match the expected evidence;
+- the last governance event is `plan_rejected`, with
+  `execution_available = false`; and
+- no execution, tool, write, Git, or pull-request event exists for the Run.
+
+A read-only Git observation confirmed that CreativeDeploy's committed `HEAD`
+has advanced beyond the revision bound to the Snapshot, so the old Snapshot
+and Plan are stale. Rejecting the Plan prevented that stale planning baseline
+from being mistaken for current authorization. The decision did not start
+execution and this closure performed no CreativeDeploy write, scan, Task, Run,
+Snapshot, or Plan creation.
+
+The focused decision record and verification method are retained in
+[`phase-2-human-rejection.md`](phase-2-human-rejection.md).
 
 ## Verification matrix
 

@@ -47,21 +47,37 @@ selected 16 of 86 entries and produced the fingerprint above.
 
 Plan v1:
 
-- status `awaiting_approval`;
+- status `rejected`;
 - source `deterministic_policy`;
 - delivery package `frontend_quality_remediation`;
 - required future level `level_2_controlled_validation`;
 - `execution_available = false`; and
 - Snapshot fingerprint equal to the persisted Snapshot.
 
-Run status is `awaiting_plan_approval`. Its five AuditEvents, in order, are
+Run status is `rejected`. Its six AuditEvents, in order, are
 `run_created`, `snapshot_started`, `snapshot_completed`, `plan_created`, and
-`plan_submitted`. There is no decision or execution event. The user must
-personally approve or reject.
+`plan_submitted`, followed by `plan_rejected`. The final event and the sole
+ApprovalDecision both identify `local_user` as the actor. The user supplied
+this reason in the browser:
+
+> CreativeDeploy HEAD has advanced since this Snapshot was created. Regenerate
+> the Snapshot and Plan against the current committed HEAD before any execution
+> approval.
+
+A closure check confirmed the live committed `HEAD` no longer matches the
+Snapshot revision, so the Snapshot and Plan are stale. The rejection prevents
+the outdated Plan from being reused as if it were current. It created no
+execution authority: there is no execution, tool, write, Git, or pull-request
+event for the Run. The closure used only existing persisted records, did not
+rescan or modify CreativeDeploy, and created no replacement Task, Run,
+Snapshot, or Plan.
+
+Focused rejection evidence is in
+[`../../evidence/phase-2-human-rejection.md`](../../evidence/phase-2-human-rejection.md).
 
 ## Evidence boundary
 
-This case proves local governed read-only investigation and durable plan
-submission only. It provides no LLM, Agent Runtime, code-write, worktree,
-validation execution, PR, remote CI, production, external-customer, adoption,
-time-saving, or outcome evidence.
+This case proves local governed read-only investigation, durable plan
+submission, and a durable browser-originated human rejection only. It provides
+no LLM, Agent Runtime, code-write, worktree, validation execution, PR, remote
+CI, production, external-customer, adoption, time-saving, or outcome evidence.

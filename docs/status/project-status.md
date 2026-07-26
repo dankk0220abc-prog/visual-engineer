@@ -1,7 +1,7 @@
 # Project Status
 
 - Phase: Phase 2 — Governed Read-Only Repository Intelligence
-- Overall status: VERIFIED FOR PHASE 2 LOCAL CHECKPOINT
+- Overall status: VERIFIED AND HUMAN-REJECTED FOR PHASE 2 LOCAL CHECKPOINT
 - Last updated: 2026-07-26
 - Branch: `feat/phase-2-readonly-repository-intelligence`
 - Foundation base: `d136418158d9f5ffc4f2f8ba993ca48e837ed59b`
@@ -70,14 +70,23 @@ Exact final command results belong in
 - Run: `447510d7-695c-46ec-baad-9a0f750ce965`.
 - Snapshot fingerprint:
   `41c0ff6896e97d22b876e7bfe9d31f6f260998a74a2b0ddbcdb3620be1a53797`.
-- Plan: v1, `deterministic_policy`, `awaiting_approval`.
-- Run: `awaiting_plan_approval`.
+- Plan: v1, `deterministic_policy`, `rejected`.
+- Run: `rejected`.
 - Local page:
   `http://127.0.0.1:13001/runs/447510d7-695c-46ec-baad-9a0f750ce965`.
 
 CreativeDeploy branch, `HEAD`, full status hash, and diff-stat hash were
 identical before/after. The API ran non-root with the exact target mount
-read-only; Web and database had no target mount. The user decision is pending.
+read-only; Web and database had no target mount.
+
+The user subsequently rejected Plan v1 in the browser because CreativeDeploy
+`HEAD` had advanced beyond the persisted Snapshot revision. Read-only API and
+database checks verified one `local_user` rejection, the required non-empty
+reason, matching rejected Run/Plan states, and a final `plan_rejected` Audit
+Event. No execution, tool, write, Git, or pull-request event exists. The
+rejection did not execute the Plan, and the closure neither rescanned nor
+modified CreativeDeploy. See
+[`../evidence/phase-2-human-rejection.md`](../evidence/phase-2-human-rejection.md).
 
 ## Known limitations
 
@@ -108,7 +117,8 @@ read-only; Web and database had no target mount. The user decision is pending.
 
 ## Recommended next milestone
 
-Design one separately approved Level 1 isolated-worktree prototype with a
-closed typed file-write schema, exact path confinement, checkpoint, independent
-runtime policy, and explicit permission grant. Do not add target command
-execution, Git publication, PR, or deployment in that batch.
+Establish the separately approved Phase 3 browser-orchestrated Local Runner
+foundation with no repository, shell, worktree, Git, or public-network access.
+Its first jobs must remain typed diagnostics and controlled waits governed by
+immutable permission envelopes, leases, fencing, cancellation, and browser
+visibility.
