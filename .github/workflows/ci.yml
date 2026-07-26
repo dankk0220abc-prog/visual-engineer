@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend quality and PostgreSQL tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.10-alpine3.24
+        env:
+          POSTGRES_USER: visualengineer
+          POSTGRES_PASSWORD: visualengineer-test-local
+          POSTGRES_DB: visualengineer_test
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -U visualengineer -d visualengineer_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://visualengineer:visualengineer-test-local@localhost:55433/visualengineer_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+        with:
+          version: 0.11.30
+          enable-cache: true
+      - run: uv python install 3.12.13
+      - run: uv sync --frozen
+      - run: make format-check-api
+      - run: make lint-api
+      - run: make typecheck-api
+      - run: make test-api-direct
+
+  frontend:
+    name: Frontend quality, tests, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.14.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: make format-check-web
+      - run: make lint-web
+      - run: make typecheck-web
+      - run: make test-web
+      - run: make build-web
+
+  contract:
+    name: OpenAPI contract drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+        with:
+          version: 0.11.30
+          enable-cache: true
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.14.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: uv python install 3.12.13
+      - run: uv sync --frozen
+      - run: pnpm install --frozen-lockfile
+      - run: make contracts-check
+
+  e2e:
+    name: Docker and Playwright smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.14.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @visual-engineer/web exec playwright install --with-deps chromium
+      - run: make docker-config
+      - run: make e2e
+      - name: Upload Playwright evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-evidence
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

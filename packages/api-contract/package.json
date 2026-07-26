@@ -1,0 +1,22 @@
+{
+  "name": "@visual-engineer/api-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "types": "./src/schema.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/schema.d.ts"
+    }
+  },
+  "scripts": {
+    "export": "uv run --project ../.. python ../../scripts/export_openapi.py",
+    "generate:types": "openapi-typescript openapi.json -o src/schema.d.ts",
+    "format": "pnpm --workspace-root exec prettier --write packages/api-contract/openapi.json packages/api-contract/src/schema.d.ts",
+    "generate": "pnpm export && pnpm generate:types && pnpm format",
+    "check": "../../scripts/check-contract-drift.sh"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0"
+  }
+}

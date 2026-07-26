@@ -1,0 +1,96 @@
+name: visualengineer
+
+services:
+  db:
+    image: postgres:17.10-alpine3.24
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-visualengineer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visualengineer-local}
+      POSTGRES_DB: ${POSTGRES_DB:-visualengineer}
+    ports:
+      - "127.0.0.1:${POSTGRES_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  test-db:
+    image: postgres:17.10-alpine3.24
+    profiles: ["test"]
+    environment:
+      POSTGRES_USER: visualengineer
+      POSTGRES_PASSWORD: visualengineer-test-local
+      POSTGRES_DB: visualengineer_test
+    ports:
+      - "127.0.0.1:${TEST_POSTGRES_PUBLISHED_PORT:-55433}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visualengineer -d visualengineer_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-visualengineer}:${POSTGRES_PASSWORD:-visualengineer-local}@db:5432/${POSTGRES_DB:-visualengineer}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000,http://127.0.0.1:3000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:${API_PUBLISHED_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -c
+      - alembic -c apps/api/alembic.ini upgrade head && exec uvicorn visual_engineer_api.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 12
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "127.0.0.1:${WEB_PUBLISHED_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 12
+
+volumes:
+  postgres-data:

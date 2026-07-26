@@ -1,0 +1,25 @@
+{
+  "name": "visual-engineer",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "pnpm": "11.14.0"
+  },
+  "packageManager": "pnpm@11.14.0",
+  "scripts": {
+    "build": "pnpm --filter @visual-engineer/web build",
+    "contracts": "pnpm --filter @visual-engineer/api-contract generate",
+    "contracts:check": "pnpm --filter @visual-engineer/api-contract check",
+    "format": "prettier --write . && pnpm --filter @visual-engineer/web format",
+    "format:check": "prettier --check . && pnpm --filter @visual-engineer/web format:check",
+    "lint": "pnpm --filter @visual-engineer/web lint",
+    "test": "pnpm --filter @visual-engineer/web test:coverage",
+    "typecheck": "pnpm --filter @visual-engineer/web typecheck",
+    "e2e": "pnpm --filter @visual-engineer/web e2e"
+  },
+  "devDependencies": {
+    "prettier": "3.9.6",
+    "prettier-plugin-tailwindcss": "0.8.1"
+  }
+}
