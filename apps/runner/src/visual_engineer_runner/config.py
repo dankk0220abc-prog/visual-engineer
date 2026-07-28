@@ -34,14 +34,23 @@ class RunnerSettings(BaseSettings):
     display_name: str = Field(default="Local Runner", min_length=1, max_length=120)
     software_version: str = Field(default="0.4.0", pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
     credential_path: Path = Path("/var/lib/visual-engineer-runner/credentials.json")
+    ownership_key_path: Path = Path("/var/lib/visual-engineer-runner/ownership.key")
     repository_handles: dict[str, LocalRepositoryConfig] = Field(default_factory=dict)
     mirror_root: Path = Path("/var/lib/visual-engineer-runner/mirrors")
     workspace_root: Path = Path("/var/lib/visual-engineer-runner/workspaces")
     registry_root: Path = Path("/var/lib/visual-engineer-runner/registry")
     require_source_read_only: bool = True
     git_timeout_seconds: float = Field(default=15.0, ge=1, le=60)
+    git_max_output_bytes: int = Field(default=1024 * 1024, ge=4096, le=8 * 1024 * 1024)
+    mirror_max_object_files: int = Field(default=200_000, ge=1, le=1_000_000)
+    mirror_max_object_bytes: int = Field(
+        default=1024 * 1024 * 1024,
+        ge=1024,
+        le=10 * 1024 * 1024 * 1024,
+    )
     workspace_prepare_delay_ms: int = Field(default=0, ge=0, le=10_000)
     workspace_write_commit_delay_ms: int = Field(default=0, ge=0, le=10_000)
+    workspace_write_post_commit_delay_ms: int = Field(default=0, ge=0, le=10_000)
     heartbeat_interval_seconds: float = Field(default=3.0, ge=0.5, le=60)
     poll_interval_seconds: float = Field(default=0.5, ge=0.1, le=10)
     request_timeout_seconds: float = Field(default=10.0, ge=1, le=60)
@@ -65,7 +74,13 @@ class RunnerSettings(BaseSettings):
             raise ValueError("RUNNER_CONTROL_PLANE_URL must be an HTTP(S) origin")
         return normalized
 
-    @field_validator("credential_path", "mirror_root", "workspace_root", "registry_root")
+    @field_validator(
+        "credential_path",
+        "ownership_key_path",
+        "mirror_root",
+        "workspace_root",
+        "registry_root",
+    )
     @classmethod
     def require_absolute_credential_path(cls, value: Path) -> Path:
         if not value.is_absolute():
@@ -89,6 +104,12 @@ class RunnerSettings(BaseSettings):
 
     @model_validator(mode="after")
     def require_distinct_state_roots(self) -> "RunnerSettings":
+        if "ownership_key_path" not in self.model_fields_set:
+            object.__setattr__(
+                self,
+                "ownership_key_path",
+                self.credential_path.parent / "ownership.key",
+            )
         roots = {
             str(self.mirror_root),
             str(self.workspace_root),
@@ -96,6 +117,10 @@ class RunnerSettings(BaseSettings):
         }
         if len(roots) != 3:
             raise ValueError("Runner mirror, workspace, and registry roots must be distinct")
+        if self.credential_path == self.ownership_key_path:
+            raise ValueError("Runner credential and ownership key paths must be distinct")
+        if self.credential_path.parent != self.ownership_key_path.parent:
+            raise ValueError("Runner ownership key must share the credential volume")
         return self
 
     @field_validator("log_level")

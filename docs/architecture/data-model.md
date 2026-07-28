@@ -118,8 +118,9 @@ Heartbeats do not append an event on every poll.
 RepositoryHandle stores Runner identity, an opaque locally configured handle,
 display name, `git` kind, available/unavailable/revoked status, closed
 `committed_head_read`/`isolated_workspace` capabilities, optional current
-revision/branch, dirty boolean and bounded count, last verification,
-metadata version, and timestamps. It never stores a host path.
+revision/branch, literal `source_status=unknown`, last verification, metadata
+version, and timestamps. It neither stores a host path nor claims source dirty
+metadata that would require working-tree Git execution.
 
 ## ExecutionGrant and ExecutionGrantDecision
 
@@ -135,6 +136,30 @@ ExecutionGrantDecision records one approve/reject outcome, reason where
 required, `local_user` actor, request ID, and timestamp. A unique Grant
 constraint prevents competing decisions.
 
+An approved Grant may transition through `revoke_requested` to effectively
+`revoked`. `revocation_requested_at` records the transaction that first blocks
+new Permits; `revoked_at` is present only after consumed Permits are terminal
+or expired.
+
+## SideEffectPermit
+
+SideEffectPermit persists one consumed mutation authority. It binds Permit,
+Grant, RunnerJob, Attempt, Lease, Workspace, Runner, Repository Handle,
+revision, policy hash, operation, optional normalized relative path,
+precondition/content/operation digests, monotonic Workspace sequence, issued/
+expiry/consumed/terminal timestamps, and one of `consumed`, `completed`,
+`failed`, `cancelled`, or `expired`.
+
+The canonical operation digest includes the consumed state and
+issued/consumed/expiry window so local authority-window changes fail
+validation before mutation.
+
+Database checks constrain digests, UUID bindings, deadlines, operation/path
+shape, and terminal timestamps. Unique constraints prevent duplicate sequence
+or idempotency identity. A PostgreSQL trigger rejects deletion, every authority
+field update, and any transition out of a terminal state. Only state and
+terminal time may change through the service.
+
 ## Workspace, WorkspaceEvent, and WorkspaceCheckpoint
 
 Workspace binds Grant, Runner, Repository Handle, and exact revision. It stores
@@ -143,9 +168,12 @@ write counts, an allowlisted created-path ledger, active Attempt, expiry,
 timestamps, and sanitized error. No Runner filesystem path is stored.
 
 WorkspaceEvent uses a monotonic per-Workspace sequence, closed event type,
-request ID, strict bounded metadata, and timestamp. WorkspaceCheckpoint is
-immutable and stores source revision, tree/diff fingerprints, bounded allowed
-relative paths, count/size, and bounded textual diff evidence.
+request ID, optional Permit foreign key, strict bounded metadata, and
+timestamp. WorkspaceCheckpoint is immutable and stores its optional Permit
+foreign key, source revision, tree/diff fingerprints, bounded allowed relative
+paths, count/size, and bounded textual diff evidence. Workspace states also
+include visible `recovery_required` and `quarantined` terminal-like operator
+conditions.
 
 ## Relationships
 
@@ -165,7 +193,11 @@ erDiagram
     PLAN ||--o{ EXECUTION_GRANT : "separate authority"
     REPOSITORY_HANDLE ||--o{ EXECUTION_GRANT : "exact source"
     EXECUTION_GRANT ||--o| EXECUTION_GRANT_DECISION : "one human decision"
+    EXECUTION_GRANT ||--o{ SIDE_EFFECT_PERMIT : "bounded mutations"
     EXECUTION_GRANT ||--o{ WORKSPACE : "isolated copies"
+    RUNNER_JOB ||--o{ SIDE_EFFECT_PERMIT : "exact operation"
+    RUNNER_JOB_ATTEMPT ||--o{ SIDE_EFFECT_PERMIT : "lease-bound"
+    WORKSPACE ||--o{ SIDE_EFFECT_PERMIT : "monotonic authority"
     WORKSPACE ||--o{ WORKSPACE_EVENT : "typed timeline"
     WORKSPACE ||--o{ WORKSPACE_CHECKPOINT : "immutable evidence"
     RUNNER_JOB }o--o| WORKSPACE : "bound operation"
@@ -180,17 +212,24 @@ one decision per Plan, and immutable Snapshot rows.
 For Runner/workspace state, database checks enforce closed enums/bounds;
 foreign keys preserve identity; a partial unique index enforces one active
 Attempt; and immutability triggers protect Envelopes, Grant policy,
-WorkspaceEvents, and Checkpoints. The service locks the Grant and enforces one
-non-terminal Workspace per Grant. It also adds capability
+Side-effect Permit authority/terminal state, WorkspaceEvents, and Checkpoints.
+The service locks the active identities and Grant to acquire a Permit and
+enforces one non-terminal Workspace per Grant. It also adds capability
 matching, canonical hash validation, current Plan/Snapshot/Handle binding,
-`SKIP LOCKED` claim, transition order, three-part fencing, deadlines,
-idempotency, cancellation, retry, result redaction, and event ordering.
+`SKIP LOCKED` claim, transition order, Runner/Attempt/Lease/Permit fencing,
+deadlines, revocation coordination, idempotency, cancellation, retry, result
+redaction, and event ordering.
 
 The service additionally enforces transition order, Task/Run/Plan association,
 latest-version semantics, snapshot-fingerprint binding, editable revision
 fields, policy validation, idempotent replay, and redacted failure handling.
 Both layers are tested against real PostgreSQL; SQLite is not acceptance
 evidence.
+
+The repair adds only Alembic revision
+`20260728_0005_close_phase4_security_findings`; prior migrations are not
+rewritten. It must pass real-PostgreSQL upgrade/downgrade/upgrade before the
+repair candidate is ready for independent re-audit.
 
 ## Future entities
 

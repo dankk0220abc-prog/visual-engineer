@@ -40,7 +40,13 @@ function tone(
   state: Workspace["state"],
 ): "neutral" | "positive" | "negative" | "pending" {
   if (state === "ready" || state === "rolled_back") return "positive";
-  if (state === "failed" || state === "expired") return "negative";
+  if (
+    state === "failed" ||
+    state === "expired" ||
+    state === "recovery_required" ||
+    state === "quarantined"
+  )
+    return "negative";
   if (
     state === "requested" ||
     state === "preparing" ||
@@ -316,6 +322,24 @@ export function WorkspaceDetailConsole({
               <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 Workspace 已过期，只允许受控 Discard。
               </p>
+            ) : null}
+            {workspace.state === "recovery_required" ||
+            workspace.state === "quarantined" ? (
+              <div
+                className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-950"
+                role="alert"
+              >
+                <p className="font-semibold">
+                  {workspace.state === "recovery_required"
+                    ? "Workspace ownership proof is missing."
+                    : "Workspace ownership evidence is inconsistent."}
+                </p>
+                <p className="mt-1">
+                  All filesystem mutation and automatic discard are blocked.
+                  Preserve the Workspace and use the controlled recovery
+                  runbook; do not reconstruct ownership from Git status.
+                </p>
+              </div>
             ) : null}
             <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
               <div>
@@ -641,6 +665,11 @@ export function WorkspaceDetailConsole({
                         {checkpoint.changed_paths.join(", ") || "clean"} ·{" "}
                         {checkpoint.total_diff_bytes} bytes
                       </p>
+                      {checkpoint.side_effect_permit_id ? (
+                        <p className="mt-2 font-mono text-xs break-all text-slate-500">
+                          permit {checkpoint.side_effect_permit_id}
+                        </p>
+                      ) : null}
                       <pre className="mt-3 max-h-80 overflow-auto rounded-lg bg-slate-950 p-4 text-xs break-words whitespace-pre-wrap text-slate-100">
                         {checkpoint.diff_artifact || "(empty diff)"}
                       </pre>

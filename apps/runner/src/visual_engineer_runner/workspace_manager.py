@@ -9,7 +9,7 @@ import threading
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
@@ -20,11 +20,17 @@ from visual_engineer_runner.git_ops import (
     GitStatusEntry,
     RepositoryMetadata,
 )
+from visual_engineer_runner.ownership import (
+    OwnershipError,
+    WorkspaceOwnershipManifest,
+    WorkspaceOwnershipStore,
+)
 from visual_engineer_runner.safe_fs import SafeFilesystemError, SafeWorkspaceFilesystem
 from visual_engineer_runner_protocol import (
     FailureCode,
     RepositoryRegistrationRequest,
     ResultPayload,
+    SideEffectPermit,
     WorkspaceCheckpointPayload,
     WorkspaceDiffJobSpec,
     WorkspaceDiffResult,
@@ -40,12 +46,16 @@ from visual_engineer_runner_protocol import (
     WorkspaceReadTextResult,
     WorkspaceRollbackJobSpec,
     WorkspaceRollbackResult,
+    WorkspaceStatusCode,
     WorkspaceStatusEntry,
     WorkspaceStatusJobSpec,
     WorkspaceStatusResult,
     WorkspaceWriteTextJobSpec,
     WorkspaceWriteTextResult,
+    compute_side_effect_job_digest,
     execution_grant_policy_hash_matches,
+    side_effect_job_binding,
+    side_effect_permit_digest_matches,
 )
 
 _RESULT_ADAPTER: TypeAdapter[ResultPayload] = TypeAdapter(ResultPayload)
@@ -67,8 +77,9 @@ class WorkspaceExecutionError(Exception):
 class WorkspaceRegistry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    version: int = 1
+    version: Literal[2] = 2
     workspace_id: uuid.UUID
+    runner_id: uuid.UUID
     grant_id: uuid.UUID
     repository_handle_id: uuid.UUID
     repository_opaque_handle: str
@@ -80,17 +91,21 @@ class WorkspaceRegistry(BaseModel):
     current_tree_hash: str
     workspace_device: int
     workspace_inode: int
+    creation_nonce: str = Field(pattern=r"^[0-9a-f]{32}$")
     created_paths: list[str] = Field(default_factory=list)
     total_written_bytes: int = 0
-    local_state: str = "ready"
+    local_state: Literal["ready", "rolled_back", "discarded"] = "ready"
     completed_operations: dict[str, dict[str, Any]] = Field(default_factory=dict)
     pending_operation: dict[str, Any] | None = None
+    pending_permit_id: uuid.UUID | None = None
+    signature: str = Field(default="0" * 64, pattern=r"^[0-9a-f]{64}$")
 
 
 class WorkspaceManager:
     def __init__(self, settings: RunnerSettings) -> None:
         self._settings = settings
         self._git = GitOperations(settings)
+        self._ownership = WorkspaceOwnershipStore(settings)
         self._lock = threading.RLock()
 
     def registration_requests(self, runner_id: uuid.UUID) -> list[RepositoryRegistrationRequest]:
@@ -108,6 +123,7 @@ class WorkspaceManager:
                     capabilities=["committed_head_read", "isolated_workspace"],
                     current_revision=metadata.current_revision,
                     current_branch=metadata.current_branch,
+                    source_status=metadata.source_status,
                     source_is_dirty=metadata.source_is_dirty,
                     dirty_path_count=metadata.dirty_path_count,
                 )
@@ -120,11 +136,17 @@ class WorkspaceManager:
         *,
         operation_id: uuid.UUID,
         cancel_event: threading.Event,
+        side_effect_permit: SideEffectPermit | None = None,
     ) -> ResultPayload:
         with self._lock:
             try:
-                return self._execute(spec, operation_id=operation_id, cancel_event=cancel_event)
-            except (GitOperationError, SafeFilesystemError) as exc:
+                return self._execute(
+                    spec,
+                    operation_id=operation_id,
+                    cancel_event=cancel_event,
+                    side_effect_permit=side_effect_permit,
+                )
+            except (GitOperationError, OwnershipError, SafeFilesystemError) as exc:
                 raise WorkspaceExecutionError(exc.code) from exc
 
     def _execute(
@@ -133,37 +155,112 @@ class WorkspaceManager:
         *,
         operation_id: uuid.UUID,
         cancel_event: threading.Event,
+        side_effect_permit: SideEffectPermit | None,
     ) -> ResultPayload:
         operation = _operation_for_spec(spec)
         self._validate_grant(spec, operation)
         if isinstance(spec, WorkspacePrepareJobSpec):
+            prepare_permit = self._require_side_effect_permit(
+                spec,
+                operation_id=operation_id,
+                permit=side_effect_permit,
+                registry=None,
+            )
             return self._prepare(
                 spec,
                 operation_id=operation_id,
                 cancel_event=cancel_event,
+                permit=prepare_permit,
             )
         registry = self._load_registry(spec.workspace_id)
         if registry is None:
+            workspace = self._git.workspace_path(spec.workspace_id)
+            if workspace.exists() or workspace.is_symlink():
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
             if isinstance(spec, WorkspaceDiscardJobSpec):
-                return self._discard_without_registry(spec, operation_id=operation_id)
+                missing_registry_permit = self._require_side_effect_permit(
+                    spec,
+                    operation_id=operation_id,
+                    permit=side_effect_permit,
+                    registry=None,
+                )
+                return self._discard_without_registry(
+                    spec,
+                    operation_id=operation_id,
+                    permit=missing_registry_permit,
+                )
             raise WorkspaceExecutionError(FailureCode.WORKSPACE_NOT_FOUND)
         self._validate_registry(spec, registry)
-        cached = registry.completed_operations.get(str(operation_id))
-        if cached is not None:
-            try:
-                return _RESULT_ADAPTER.validate_python(cached)
-            except ValidationError as exc:
-                raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID) from exc
         if registry.local_state == "discarded":
             if isinstance(spec, WorkspaceDiscardJobSpec):
-                result = WorkspaceDiscardResult(
+                replay_permit = self._require_side_effect_permit(
+                    spec,
+                    operation_id=operation_id,
+                    permit=side_effect_permit,
+                    registry=registry,
+                )
+                discard_result = WorkspaceDiscardResult(
                     workspace_id=spec.workspace_id,
                     discarded=True,
                     idempotent=True,
+                    side_effect_permit_id=replay_permit.id,
                 )
-                self._cache_result(registry, operation_id, result)
-                return result
+                self._cache_result(registry, operation_id, discard_result)
+                return discard_result
             raise WorkspaceExecutionError(FailureCode.WORKSPACE_NOT_FOUND)
+        permit: SideEffectPermit | None = None
+        if isinstance(
+            spec,
+            (
+                WorkspaceWriteTextJobSpec,
+                WorkspaceRollbackJobSpec,
+                WorkspaceDiscardJobSpec,
+            ),
+        ):
+            permit = self._require_side_effect_permit(
+                spec,
+                operation_id=operation_id,
+                permit=side_effect_permit,
+                registry=registry,
+            )
+        elif side_effect_permit is not None:
+            raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_INVALID)
+        cached = registry.completed_operations.get(str(operation_id))
+        if cached is not None:
+            try:
+                cached_result = _RESULT_ADAPTER.validate_python(cached)
+            except ValidationError as exc:
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+            return _rebind_cached_permit(cached_result, permit)
+
+        workspace = self._git.workspace_path(spec.workspace_id)
+        if (
+            isinstance(spec, WorkspaceDiscardJobSpec)
+            and permit is not None
+            and registry.pending_operation
+            == {
+                "operation_id": str(operation_id),
+                "kind": "discard",
+            }
+            and not workspace.exists()
+            and not workspace.is_symlink()
+        ):
+            self._validate_ownership_record(spec, registry)
+            registry.local_state = "discarded"
+            registry.pending_operation = None
+            registry.pending_permit_id = None
+            result = WorkspaceDiscardResult(
+                workspace_id=spec.workspace_id,
+                discarded=True,
+                idempotent=True,
+                side_effect_permit_id=permit.id,
+            )
+            self._cache_result(registry, operation_id, result)
+            return result
+        if workspace.is_symlink():
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+        if not workspace.exists():
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
 
         repository = self._repository_for(spec)
         source_metadata = self._git.inspect_source(repository)
@@ -172,7 +269,6 @@ class WorkspaceManager:
             or _source_fingerprint(source_metadata) != registry.source_fingerprint
         ):
             raise WorkspaceExecutionError(FailureCode.SOURCE_REVISION_MISMATCH)
-        workspace = self._git.workspace_path(spec.workspace_id)
         filesystem = SafeWorkspaceFilesystem(
             workspace,
             spec.execution_grant,
@@ -183,33 +279,46 @@ class WorkspaceManager:
             registry.workspace_device,
             registry.workspace_inode,
         )
+        self._validate_ownership_manifest(spec, registry, filesystem)
         if isinstance(spec, WorkspaceListJobSpec):
             return self._list(spec, filesystem)
         if isinstance(spec, WorkspaceReadTextJobSpec):
             return self._read(spec, filesystem)
         if isinstance(spec, WorkspaceWriteTextJobSpec):
+            if permit is None:
+                raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_REQUIRED)
             return self._write(
                 spec,
                 registry,
                 filesystem,
                 operation_id=operation_id,
+                permit=permit,
+                cancel_event=cancel_event,
             )
         if isinstance(spec, WorkspaceStatusJobSpec):
             return self._status(spec, registry, filesystem)
         if isinstance(spec, WorkspaceDiffJobSpec):
-            diff_result = self._diff(spec, registry, filesystem)
-            registry.local_state = "sealed"
-            self._cache_result(registry, operation_id, diff_result)
-            return diff_result
+            return self._diff(spec, registry, filesystem)
         if isinstance(spec, WorkspaceRollbackJobSpec):
+            if permit is None:
+                raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_REQUIRED)
             return self._rollback(
                 spec,
                 registry,
                 filesystem,
                 operation_id=operation_id,
+                permit=permit,
             )
         if isinstance(spec, WorkspaceDiscardJobSpec):
-            return self._discard(spec, registry, filesystem, operation_id=operation_id)
+            if permit is None:
+                raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_REQUIRED)
+            return self._discard(
+                spec,
+                registry,
+                filesystem,
+                operation_id=operation_id,
+                permit=permit,
+            )
         raise WorkspaceExecutionError(FailureCode.UNSUPPORTED_CAPABILITY)
 
     def _prepare(
@@ -218,6 +327,7 @@ class WorkspaceManager:
         *,
         operation_id: uuid.UUID,
         cancel_event: threading.Event,
+        permit: SideEffectPermit,
     ) -> WorkspacePrepareResult:
         existing = self._load_registry(spec.workspace_id)
         if existing is not None:
@@ -228,15 +338,23 @@ class WorkspaceManager:
             if cached is not None:
                 result = _RESULT_ADAPTER.validate_python(cached)
                 if isinstance(result, WorkspacePrepareResult):
-                    return result
+                    rebound = _rebind_cached_permit(result, permit)
+                    if isinstance(rebound, WorkspacePrepareResult):
+                        return rebound
+            workspace = self._git.workspace_path(spec.workspace_id)
+            if workspace.is_symlink():
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+            if not workspace.exists():
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
             filesystem = SafeWorkspaceFilesystem(
-                self._git.workspace_path(spec.workspace_id),
+                workspace,
                 spec.execution_grant,
             )
             filesystem.verify_root_identity(
                 existing.workspace_device,
                 existing.workspace_inode,
             )
+            self._validate_ownership_manifest(spec, existing, filesystem)
             return WorkspacePrepareResult(
                 workspace_id=spec.workspace_id,
                 repository_handle_id=spec.execution_grant.repository_handle_id,
@@ -244,6 +362,7 @@ class WorkspaceManager:
                 workspace_fingerprint=existing.workspace_fingerprint,
                 initial_tree_hash=existing.initial_tree_hash,
                 current_tree_hash=existing.current_tree_hash,
+                side_effect_permit_id=permit.id,
             )
 
         if self._settings.workspace_prepare_delay_ms and cancel_event.wait(
@@ -258,18 +377,18 @@ class WorkspaceManager:
             spec.execution_grant.repository_opaque_handle,
             repository,
             spec.execution_grant.source_revision,
+            permit_expires_at=permit.expires_at,
         )
         workspace = self._git.workspace_path(spec.workspace_id)
         if workspace.exists():
-            status = self._git.status(workspace, spec.execution_grant.source_revision)
-            if status:
-                raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID)
-        else:
-            workspace = self._git.create_detached_worktree(
-                mirror,
-                spec.workspace_id,
-                spec.execution_grant.source_revision,
-            )
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
+        self._ensure_permit_fresh(permit)
+        workspace = self._git.create_detached_worktree(
+            mirror,
+            spec.workspace_id,
+            spec.execution_grant.source_revision,
+            permit_expires_at=permit.expires_at,
+        )
         filesystem = SafeWorkspaceFilesystem(workspace, spec.execution_grant)
         status = self._authorized_status(spec, filesystem)
         if status:
@@ -282,8 +401,23 @@ class WorkspaceManager:
                 f"{filesystem.root_inode}"
             ).encode()
         ).hexdigest()
+        creation_nonce = uuid.uuid4().hex
+        self._ensure_permit_fresh(permit)
+        self._ownership.create(
+            workspace_id=spec.workspace_id,
+            runner_id=permit.runner_id,
+            grant_id=spec.execution_grant.id,
+            repository_handle_id=spec.execution_grant.repository_handle_id,
+            repository_opaque_handle=spec.execution_grant.repository_opaque_handle,
+            source_revision=spec.execution_grant.source_revision,
+            policy_hash=spec.execution_grant.policy_hash,
+            creation_nonce=creation_nonce,
+            workspace_device=filesystem.root_device,
+            workspace_inode=filesystem.root_inode,
+        )
         registry = WorkspaceRegistry(
             workspace_id=spec.workspace_id,
+            runner_id=permit.runner_id,
             grant_id=spec.execution_grant.id,
             repository_handle_id=spec.execution_grant.repository_handle_id,
             repository_opaque_handle=spec.execution_grant.repository_opaque_handle,
@@ -295,6 +429,7 @@ class WorkspaceManager:
             current_tree_hash=initial_tree_hash,
             workspace_device=filesystem.root_device,
             workspace_inode=filesystem.root_inode,
+            creation_nonce=creation_nonce,
         )
         result = WorkspacePrepareResult(
             workspace_id=spec.workspace_id,
@@ -303,6 +438,7 @@ class WorkspaceManager:
             workspace_fingerprint=workspace_fingerprint,
             initial_tree_hash=initial_tree_hash,
             current_tree_hash=initial_tree_hash,
+            side_effect_permit_id=permit.id,
         )
         self._cache_result(registry, operation_id, result)
         return result
@@ -347,6 +483,8 @@ class WorkspaceManager:
         filesystem: SafeWorkspaceFilesystem,
         *,
         operation_id: uuid.UUID,
+        permit: SideEffectPermit,
+        cancel_event: threading.Event,
     ) -> WorkspaceWriteTextResult:
         if _SENSITIVE_CONTENT.search(spec.content):
             raise WorkspaceExecutionError(FailureCode.POLICY_DENIED)
@@ -373,8 +511,13 @@ class WorkspaceManager:
         if recover_interrupted:
             if registry.pending_operation != pending_operation:
                 raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID)
+            registry.pending_permit_id = permit.id
+            self._ensure_permit_fresh(permit)
+            self._save_registry(registry)
         else:
             registry.pending_operation = pending_operation
+            registry.pending_permit_id = permit.id
+            self._ensure_permit_fresh(permit)
             self._save_registry(registry)
         outcome = None
         try:
@@ -385,16 +528,28 @@ class WorkspaceManager:
                 expected_sha256=spec.expected_sha256,
                 operation_id=operation_id,
                 recover_interrupted=recover_interrupted,
+                before_commit=lambda: self._ensure_permit_fresh(permit),
             )
+            if self._settings.workspace_write_post_commit_delay_ms and cancel_event.wait(
+                self._settings.workspace_write_post_commit_delay_ms / 1000
+            ):
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_CANCELLED)
+            self._ensure_permit_fresh(permit)
             status = self._authorized_status(spec, filesystem)
             if len(status) > spec.execution_grant.max_files_changed:
                 raise WorkspaceExecutionError(FailureCode.FILE_COUNT_BUDGET_EXCEEDED)
             if outcome.created and outcome.relative_path not in registry.created_paths:
                 registry.created_paths = sorted([*registry.created_paths, outcome.relative_path])
             registry.total_written_bytes += outcome.size
-            checkpoint = self._checkpoint(spec, filesystem, status)
+            checkpoint = self._checkpoint(
+                spec,
+                filesystem,
+                status,
+                side_effect_permit_id=permit.id,
+            )
             registry.current_tree_hash = checkpoint.tree_fingerprint
             registry.pending_operation = None
+            registry.pending_permit_id = None
             result = WorkspaceWriteTextResult(
                 workspace_id=spec.workspace_id,
                 relative_path=outcome.relative_path,
@@ -405,12 +560,14 @@ class WorkspaceManager:
                 changed_file_count=len(status),
                 total_written_bytes=registry.total_written_bytes,
                 checkpoint=checkpoint,
+                side_effect_permit_id=permit.id,
             )
             self._cache_result(registry, operation_id, result)
             return result
         except Exception:
             if outcome is None:
                 registry.pending_operation = None
+                registry.pending_permit_id = None
             self._save_registry(registry)
             raise
 
@@ -426,8 +583,6 @@ class WorkspaceManager:
             status,
             filesystem,
         )
-        registry.current_tree_hash = current_tree_hash
-        self._save_registry(registry)
         return WorkspaceStatusResult(
             workspace_id=spec.workspace_id,
             entries=[
@@ -451,8 +606,6 @@ class WorkspaceManager:
         checkpoint = self._checkpoint(spec, filesystem, status)
         if _SENSITIVE_CONTENT.search(checkpoint.diff):
             raise WorkspaceExecutionError(FailureCode.POLICY_DENIED)
-        registry.current_tree_hash = checkpoint.tree_fingerprint
-        self._save_registry(registry)
         return WorkspaceDiffResult(
             workspace_id=spec.workspace_id,
             diff=checkpoint.diff,
@@ -468,6 +621,8 @@ class WorkspaceManager:
         spec: WorkspaceJobSpec,
         filesystem: SafeWorkspaceFilesystem,
         status: list[GitStatusEntry],
+        *,
+        side_effect_permit_id: uuid.UUID | None = None,
     ) -> WorkspaceCheckpointPayload:
         workspace = self._git.workspace_path(spec.workspace_id)
         diff = self._git.diff(
@@ -496,6 +651,7 @@ class WorkspaceManager:
             changed_file_count=len(changed_paths),
             total_diff_bytes=len(diff.encode("utf-8")),
             diff=diff,
+            side_effect_permit_id=side_effect_permit_id,
         )
 
     def _rollback(
@@ -505,6 +661,7 @@ class WorkspaceManager:
         filesystem: SafeWorkspaceFilesystem,
         *,
         operation_id: uuid.UUID,
+        permit: SideEffectPermit,
     ) -> WorkspaceRollbackResult:
         status = self._authorized_status(spec, filesystem)
         tracked = [
@@ -512,14 +669,32 @@ class WorkspaceManager:
             for entry in status
             if entry.relative_path not in registry.created_paths
         ]
+        pending_operation = {
+            "operation_id": str(operation_id),
+            "kind": "rollback",
+            "target": "initial",
+        }
+        if (
+            registry.pending_operation is not None
+            and registry.pending_operation != pending_operation
+        ):
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID)
+        registry.pending_operation = pending_operation
+        registry.pending_permit_id = permit.id
+        self._ensure_permit_fresh(permit)
+        self._save_registry(registry)
         self._git.restore_tracked(
             self._git.workspace_path(spec.workspace_id),
             spec.execution_grant.source_revision,
             tracked,
+            permit_expires_at=permit.expires_at,
         )
         removed: list[str] = []
         for relative_path in registry.created_paths:
-            if filesystem.remove_created_file(relative_path):
+            if filesystem.remove_created_file(
+                relative_path,
+                before_remove=lambda: self._ensure_permit_fresh(permit),
+            ):
                 removed.append(relative_path)
         remaining = self._authorized_status(spec, filesystem)
         if remaining:
@@ -535,11 +710,14 @@ class WorkspaceManager:
         registry.created_paths = []
         registry.total_written_bytes = 0
         registry.local_state = "rolled_back"
+        registry.pending_operation = None
+        registry.pending_permit_id = None
         result = WorkspaceRollbackResult(
             workspace_id=spec.workspace_id,
             clean=True,
             current_tree_hash=current_tree_hash,
             removed_created_paths=removed,
+            side_effect_permit_id=permit.id,
         )
         self._cache_result(registry, operation_id, result)
         return result
@@ -551,6 +729,7 @@ class WorkspaceManager:
         filesystem: SafeWorkspaceFilesystem,
         *,
         operation_id: uuid.UUID,
+        permit: SideEffectPermit,
     ) -> WorkspaceDiscardResult:
         filesystem.verify_root_identity(
             registry.workspace_device,
@@ -558,13 +737,45 @@ class WorkspaceManager:
         )
         mirror = self._git.mirror_path(registry.repository_opaque_handle)
         workspace = self._git.workspace_path(spec.workspace_id)
-        self._git.discard_worktree(mirror, workspace)
+        inventory = self._git.discard_inventory(
+            workspace,
+            spec.execution_grant.source_revision,
+        )
+        for entry in inventory:
+            if entry.status == WorkspaceStatusCode.IGNORED:
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+            filesystem.authorize(entry.relative_path)
+            if (
+                entry.status == WorkspaceStatusCode.UNTRACKED
+                and entry.relative_path not in registry.created_paths
+            ):
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+        pending_operation = {
+            "operation_id": str(operation_id),
+            "kind": "discard",
+        }
+        if (
+            registry.pending_operation is not None
+            and registry.pending_operation != pending_operation
+        ):
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID)
+        registry.pending_operation = pending_operation
+        registry.pending_permit_id = permit.id
+        self._ensure_permit_fresh(permit)
+        self._save_registry(registry)
+        self._git.discard_worktree(
+            mirror,
+            workspace,
+            permit_expires_at=permit.expires_at,
+        )
         registry.local_state = "discarded"
         registry.pending_operation = None
+        registry.pending_permit_id = None
         result = WorkspaceDiscardResult(
             workspace_id=spec.workspace_id,
             discarded=True,
             idempotent=False,
+            side_effect_permit_id=permit.id,
         )
         self._cache_result(registry, operation_id, result)
         return result
@@ -574,24 +785,17 @@ class WorkspaceManager:
         spec: WorkspaceDiscardJobSpec,
         *,
         operation_id: uuid.UUID,
+        permit: SideEffectPermit,
     ) -> WorkspaceDiscardResult:
         del operation_id
         workspace = self._git.workspace_path(spec.workspace_id)
         if workspace.exists():
-            repository = self._repository_for(spec)
-            mirror = self._git.prepare_mirror(
-                spec.execution_grant.repository_opaque_handle,
-                repository,
-                spec.execution_grant.source_revision,
-            )
-            status = self._git.status(workspace, spec.execution_grant.source_revision)
-            if status:
-                raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID)
-            self._git.discard_worktree(mirror, workspace)
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
         return WorkspaceDiscardResult(
             workspace_id=spec.workspace_id,
             discarded=True,
             idempotent=True,
+            side_effect_permit_id=permit.id,
         )
 
     def _authorized_status(
@@ -643,7 +847,81 @@ class WorkspaceManager:
             or registry.policy_hash != grant.policy_hash
             or registry.source_revision != grant.source_revision
         ):
-            raise WorkspaceExecutionError(FailureCode.WORKSPACE_IDENTITY_MISMATCH)
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+
+    def _require_side_effect_permit(
+        self,
+        spec: WorkspaceJobSpec,
+        *,
+        operation_id: uuid.UUID,
+        permit: SideEffectPermit | None,
+        registry: WorkspaceRegistry | None,
+    ) -> SideEffectPermit:
+        if permit is None:
+            raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_REQUIRED)
+        binding = side_effect_job_binding(spec)
+        job_digest = compute_side_effect_job_digest(spec)
+        expected_current = binding["expected_current"]
+        if expected_current is None and registry is not None:
+            expected_current = registry.current_tree_hash
+        if (
+            permit.job_id != operation_id
+            or permit.grant_id != spec.execution_grant.id
+            or permit.workspace_id != spec.workspace_id
+            or permit.repository_handle_id != spec.execution_grant.repository_handle_id
+            or permit.policy_hash != spec.execution_grant.policy_hash
+            or permit.source_revision != spec.execution_grant.source_revision
+            or permit.operation.value != binding["operation"]
+            or permit.relative_path != binding["relative_path"]
+            or permit.proposed_digest != binding["proposed_digest"]
+            or permit.job_digest != job_digest
+            or (expected_current is not None and permit.expected_current != expected_current)
+            or (registry is not None and permit.runner_id != registry.runner_id)
+            or not side_effect_permit_digest_matches(permit, permit.operation_digest)
+        ):
+            raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_INVALID)
+        self._ensure_permit_fresh(permit)
+        return permit
+
+    @staticmethod
+    def _ensure_permit_fresh(permit: SideEffectPermit) -> None:
+        if permit.expires_at <= datetime.now(UTC):
+            raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_EXPIRED)
+
+    def _validate_ownership_manifest(
+        self,
+        spec: WorkspaceJobSpec,
+        registry: WorkspaceRegistry,
+        filesystem: SafeWorkspaceFilesystem,
+    ) -> WorkspaceOwnershipManifest:
+        manifest = self._validate_ownership_record(spec, registry)
+        if (
+            manifest.workspace_device != filesystem.root_device
+            or manifest.workspace_inode != filesystem.root_inode
+        ):
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+        return manifest
+
+    def _validate_ownership_record(
+        self,
+        spec: WorkspaceJobSpec,
+        registry: WorkspaceRegistry,
+    ) -> WorkspaceOwnershipManifest:
+        manifest = self._ownership.load(spec.workspace_id)
+        if (
+            manifest.workspace_id != registry.workspace_id
+            or manifest.runner_id != registry.runner_id
+            or manifest.grant_id != registry.grant_id
+            or manifest.repository_handle_id != registry.repository_handle_id
+            or manifest.repository_opaque_handle != registry.repository_opaque_handle
+            or manifest.source_revision != registry.source_revision
+            or manifest.policy_hash != registry.policy_hash
+            or manifest.creation_nonce != registry.creation_nonce
+            or manifest.workspace_device != registry.workspace_device
+            or manifest.workspace_inode != registry.workspace_inode
+        ):
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+        return manifest
 
     def _repository_for(self, spec: WorkspaceJobSpec) -> Any:
         repository = self._settings.repository_handles.get(
@@ -666,24 +944,31 @@ class WorkspaceManager:
         except FileNotFoundError:
             return None
         except OSError as exc:
-            raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED) from exc
         try:
             metadata = os.fstat(descriptor)
             if (
                 not stat.S_ISREG(metadata.st_mode)
                 or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o600
                 or metadata.st_size > _MAX_REGISTRY_BYTES
             ):
-                raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID)
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
             payload = os.read(descriptor, metadata.st_size + 1)
         finally:
             os.close(descriptor)
         try:
-            return WorkspaceRegistry.model_validate_json(payload)
+            registry = WorkspaceRegistry.model_validate_json(payload)
         except ValidationError as exc:
-            raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED) from exc
+        unsigned = registry.model_dump(mode="json", exclude={"signature"})
+        if not self._ownership.registry_signature_matches(unsigned, registry.signature):
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+        return registry
 
     def _save_registry(self, registry: WorkspaceRegistry) -> None:
+        unsigned = registry.model_dump(mode="json", exclude={"signature"})
+        registry.signature = self._ownership.sign_registry(unsigned)
         root = self._settings.registry_root
         root_descriptor = os.open(
             root,
@@ -783,12 +1068,38 @@ def _source_fingerprint(metadata: RepositoryMetadata) -> str:
             "branch": metadata.current_branch,
             "dirty_path_count": metadata.dirty_path_count,
             "revision": metadata.current_revision,
+            "source_status": metadata.source_status.value,
             "source_is_dirty": metadata.source_is_dirty,
         },
         sort_keys=True,
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _rebind_cached_permit(
+    result: ResultPayload,
+    permit: SideEffectPermit | None,
+) -> ResultPayload:
+    if permit is None or not isinstance(
+        result,
+        (
+            WorkspacePrepareResult,
+            WorkspaceWriteTextResult,
+            WorkspaceRollbackResult,
+            WorkspaceDiscardResult,
+        ),
+    ):
+        return result
+    payload = result.model_dump(mode="json")
+    payload["side_effect_permit_id"] = str(permit.id)
+    checkpoint = payload.get("checkpoint")
+    if isinstance(checkpoint, dict):
+        checkpoint["side_effect_permit_id"] = str(permit.id)
+    try:
+        return _RESULT_ADAPTER.validate_python(payload)
+    except ValidationError as exc:
+        raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID) from exc
 
 
 def _tree_fingerprint(

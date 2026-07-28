@@ -1,10 +1,12 @@
 import hashlib
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -14,7 +16,16 @@ from visual_engineer_api.models.run import (
     RepositorySnapshot,
     Run,
 )
+from visual_engineer_api.models.runner import RunnerJob
 from visual_engineer_api.models.task import Task
+from visual_engineer_api.models.workspace import ExecutionGrant, SideEffectPermit
+from visual_engineer_api.services.runner import RunnerService, RunnerServiceError
+from visual_engineer_api.services.workspace import WorkspaceService
+from visual_engineer_runner_protocol import (
+    JobAssignment,
+    SideEffectPermitAcquireRequest,
+    compute_side_effect_job_digest,
+)
 
 WORKSPACE_CAPABILITIES = [
     "controlled_wait_v1",
@@ -249,8 +260,32 @@ def complete(
     assert response.json()["state"] == "succeeded"
 
 
-def checkpoint(diff: str, tree_hash: str) -> dict[str, Any]:
-    return {
+def acquire_side_effect_permit(
+    client: TestClient,
+    token: str,
+    assignment: dict[str, Any],
+    identity: dict[str, str],
+) -> dict[str, Any]:
+    typed_assignment = JobAssignment.model_validate(assignment)
+    response = client.post(
+        (f"/api/v1/runner-protocol/v1/jobs/{typed_assignment.job_id}/side-effect-permit"),
+        headers=runner_headers(token),
+        json={
+            **identity,
+            "job_digest": compute_side_effect_job_digest(typed_assignment.job),
+        },
+    )
+    assert response.status_code == 200, response.text
+    return cast(dict[str, Any], response.json())
+
+
+def checkpoint(
+    diff: str,
+    tree_hash: str,
+    *,
+    side_effect_permit_id: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "source_revision": REVISION,
         "tree_fingerprint": tree_hash,
         "diff_hash": hashlib.sha256(diff.encode()).hexdigest(),
@@ -259,6 +294,9 @@ def checkpoint(diff: str, tree_hash: str) -> dict[str, Any]:
         "total_diff_bytes": len(diff.encode()),
         "diff": diff,
     }
+    if side_effect_permit_id is not None:
+        payload["side_effect_permit_id"] = side_effect_permit_id
+    return payload
 
 
 def test_execution_grant_is_independent_narrow_and_database_immutable(
@@ -344,7 +382,8 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
     assert prepare_job["permission_envelope"]["repository_access"] == "isolated_workspace"
     assert prepare_job["permission_envelope"]["authorization_source"] == "execution_grant"
     assert "path" not in prepare_job["parameters"]
-    _, identity = claim_start(client, runner, token, prepare_job["id"])
+    assignment, identity = claim_start(client, runner, token, prepare_job["id"])
+    permit = acquire_side_effect_permit(client, token, assignment, identity)
     complete(
         client,
         token,
@@ -358,6 +397,7 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
             "workspace_fingerprint": hashlib.sha256(b"workspace").hexdigest(),
             "initial_tree_hash": INITIAL_TREE_HASH,
             "current_tree_hash": INITIAL_TREE_HASH,
+            "side_effect_permit_id": permit["id"],
         },
     )
     assert client.get(f"/api/v1/workspaces/{workspace_id}").json()["state"] == "ready"
@@ -428,7 +468,8 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
     assert replay.status_code == 200
     assert replay.json()["job"]["id"] == write_action.json()["job"]["id"]
     write_job = write_action.json()["job"]
-    _, identity = claim_start(client, runner, token, write_job["id"])
+    assignment, identity = claim_start(client, runner, token, write_job["id"])
+    permit = acquire_side_effect_permit(client, token, assignment, identity)
     diff_text = (
         "--- a/sandbox/original.txt\n"
         "+++ b/sandbox/original.txt\n"
@@ -453,7 +494,12 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
             "current_tree_hash": changed_tree,
             "changed_file_count": 1,
             "total_written_bytes": len(b"Updated fixture text.\n"),
-            "checkpoint": checkpoint(diff_text, changed_tree),
+            "checkpoint": checkpoint(
+                diff_text,
+                changed_tree,
+                side_effect_permit_id=str(permit["id"]),
+            ),
+            "side_effect_permit_id": permit["id"],
         },
     )
     checkpoints = client.get(f"/api/v1/workspaces/{workspace_id}/checkpoints")
@@ -463,6 +509,7 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
         checkpoints.json()["items"][0]["diff_hash"]
         == hashlib.sha256(diff_text.encode()).hexdigest()
     )
+    assert checkpoints.json()["items"][0]["side_effect_permit_id"] == permit["id"]
 
     conflict_action = client.post(
         f"/api/v1/workspaces/{workspace_id}/actions/write-text",
@@ -475,11 +522,17 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
     )
     assert conflict_action.status_code == 200
     conflict_job = conflict_action.json()["job"]
-    _, identity = claim_start(client, runner, token, conflict_job["id"])
+    assignment, identity = claim_start(client, runner, token, conflict_job["id"])
+    permit = acquire_side_effect_permit(client, token, assignment, identity)
     failed = client.post(
         f"/api/v1/runner-protocol/v1/jobs/{conflict_job['id']}/fail",
         headers=runner_headers(token),
-        json={**identity, "error_code": "content_conflict", "error_message": None},
+        json={
+            **identity,
+            "error_code": "content_conflict",
+            "error_message": None,
+            "side_effect_permit_id": permit["id"],
+        },
     )
     assert failed.status_code == 200
     assert client.get(f"/api/v1/workspaces/{workspace_id}").json()["state"] == "active"
@@ -509,7 +562,8 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
     rollback_action = client.post(f"/api/v1/workspaces/{workspace_id}/actions/rollback")
     assert rollback_action.status_code == 200
     rollback_job = rollback_action.json()["job"]
-    _, identity = claim_start(client, runner, token, rollback_job["id"])
+    assignment, identity = claim_start(client, runner, token, rollback_job["id"])
+    permit = acquire_side_effect_permit(client, token, assignment, identity)
     complete(
         client,
         token,
@@ -521,6 +575,7 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
             "clean": True,
             "current_tree_hash": INITIAL_TREE_HASH,
             "removed_created_paths": [],
+            "side_effect_permit_id": permit["id"],
         },
     )
     rolled_back = client.get(f"/api/v1/workspaces/{workspace_id}").json()
@@ -530,7 +585,8 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
     discard_action = client.post(f"/api/v1/workspaces/{workspace_id}/actions/discard")
     assert discard_action.status_code == 200
     discard_job = discard_action.json()["job"]
-    _, identity = claim_start(client, runner, token, discard_job["id"])
+    assignment, identity = claim_start(client, runner, token, discard_job["id"])
+    permit = acquire_side_effect_permit(client, token, assignment, identity)
     complete(
         client,
         token,
@@ -541,6 +597,7 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
             "workspace_id": workspace_id,
             "discarded": True,
             "idempotent": False,
+            "side_effect_permit_id": permit["id"],
         },
     )
     repeated_discard = client.post(f"/api/v1/workspaces/{workspace_id}/actions/discard")
@@ -631,7 +688,7 @@ def test_stale_repository_and_revoked_grant_block_execution(
     assert claim.status_code == 200
     assert claim.json()["assignment"] is None
     job = client.get(f"/api/v1/runner-jobs/{workspace.json()['job']['id']}").json()
-    assert job["state"] == "failed"
+    assert job["state"] == "cancelled"
     assert job["error_code"] == "execution_grant_inactive"
 
 
@@ -659,3 +716,306 @@ def test_phase_four_openapi_has_closed_workspace_surface(client: TestClient) -> 
     write_schema = document["components"]["schemas"]["WorkspaceWriteTextAction"]
     assert "relative_path" in write_schema["properties"]
     assert "path" not in write_schema["properties"]
+
+
+def test_side_effect_permit_endpoint_rejects_stale_or_wrong_binding_and_replays(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+) -> None:
+    runner, token, repository = register_workspace_runner(client, runner_bootstrap_token)
+    plan = seed_approved_plan(db_session)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    created = client.post(
+        "/api/v1/workspaces",
+        json={"grant_id": grant["id"]},
+    )
+    assert created.status_code == 201, created.text
+    workspace_id = created.json()["workspace"]["id"]
+    job = created.json()["job"]
+    assignment, identity = claim_start(client, runner, token, job["id"])
+    typed_assignment = JobAssignment.model_validate(assignment)
+    endpoint = f"/api/v1/runner-protocol/v1/jobs/{job['id']}/side-effect-permit"
+    digest = compute_side_effect_job_digest(typed_assignment.job)
+
+    stale = client.post(
+        endpoint,
+        headers=runner_headers(token),
+        json={**identity, "lease_id": str(uuid.uuid4()), "job_digest": digest},
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["error"]["code"] == "stale_lease"
+
+    wrong_digest = client.post(
+        endpoint,
+        headers=runner_headers(token),
+        json={**identity, "job_digest": "f" * 64},
+    )
+    assert wrong_digest.status_code == 422, wrong_digest.text
+    assert wrong_digest.json()["error"]["code"] == "operation_digest_mismatch"
+
+    acquired = client.post(
+        endpoint,
+        headers=runner_headers(token),
+        json={**identity, "job_digest": digest},
+    )
+    assert acquired.status_code == 200, acquired.text
+    permit = acquired.json()
+    assert permit["state"] == "consumed"
+    assert permit["idempotent_replay"] is False
+    replay = client.post(
+        endpoint,
+        headers=runner_headers(token),
+        json={**identity, "job_digest": digest},
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["id"] == permit["id"]
+    assert replay.json()["idempotent_replay"] is True
+
+    wrong_result_binding = client.post(
+        f"/api/v1/runner-protocol/v1/jobs/{job['id']}/complete",
+        headers=runner_headers(token),
+        json={
+            **identity,
+            "result": {
+                "kind": "workspace_prepare_v1",
+                "workspace_id": workspace_id,
+                "repository_handle_id": repository["repository_handle_id"],
+                "source_revision": REVISION,
+                "workspace_fingerprint": hashlib.sha256(b"workspace").hexdigest(),
+                "initial_tree_hash": INITIAL_TREE_HASH,
+                "current_tree_hash": INITIAL_TREE_HASH,
+                "side_effect_permit_id": str(uuid.uuid4()),
+            },
+        },
+    )
+    assert wrong_result_binding.status_code == 409, wrong_result_binding.text
+    assert wrong_result_binding.json()["error"]["code"] == "side_effect_permit_invalid"
+
+    complete(
+        client,
+        token,
+        job["id"],
+        identity,
+        {
+            "kind": "workspace_prepare_v1",
+            "workspace_id": workspace_id,
+            "repository_handle_id": repository["repository_handle_id"],
+            "source_revision": REVISION,
+            "workspace_fingerprint": hashlib.sha256(b"workspace").hexdigest(),
+            "initial_tree_hash": INITIAL_TREE_HASH,
+            "current_tree_hash": INITIAL_TREE_HASH,
+            "side_effect_permit_id": permit["id"],
+        },
+    )
+    db_session.expire_all()
+    persisted = db_session.get(SideEffectPermit, uuid.UUID(permit["id"]))
+    assert persisted is not None
+    assert persisted.state == "completed"
+    assert persisted.terminal_at is not None
+    workspace_events = client.get(f"/api/v1/workspaces/{workspace_id}/events").json()["items"]
+    permit_events = [
+        item
+        for item in workspace_events
+        if item["event_type"] in {"permit_acquired", "permit_completed"}
+    ]
+    assert len(permit_events) == 2
+    assert all(item["side_effect_permit_id"] == permit["id"] for item in permit_events)
+    with pytest.raises(DBAPIError):
+        db_session.execute(
+            text("UPDATE side_effect_permits SET operation_digest = :digest WHERE id = :permit_id"),
+            {"digest": "f" * 64, "permit_id": permit["id"]},
+        )
+        db_session.commit()
+    db_session.rollback()
+
+
+def test_permit_acquire_and_grant_revoke_serialize_without_deadlock(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    database_url: str,
+) -> None:
+    runner, token, repository = register_workspace_runner(client, runner_bootstrap_token)
+    plan = seed_approved_plan(db_session)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    created = client.post(
+        "/api/v1/workspaces",
+        json={"grant_id": grant["id"]},
+    )
+    assert created.status_code == 201, created.text
+    job = created.json()["job"]
+    assignment, identity = claim_start(client, runner, token, job["id"])
+    typed_assignment = JobAssignment.model_validate(assignment)
+    request = SideEffectPermitAcquireRequest.model_validate(
+        {
+            **identity,
+            "job_digest": compute_side_effect_job_digest(typed_assignment.job),
+        }
+    )
+    grant_id = uuid.UUID(grant["id"])
+    job_id = uuid.UUID(job["id"])
+    barrier = threading.Barrier(2)
+    engine = create_engine(database_url, pool_pre_ping=True)
+
+    def acquire() -> tuple[str, str]:
+        with Session(engine) as session:
+            service = RunnerService(session)
+            authenticated = service.authenticate(token)
+            barrier.wait(timeout=10)
+            try:
+                permit = service.acquire_side_effect_permit(
+                    authenticated,
+                    job_id,
+                    request,
+                    request_id=f"concurrent-permit-{uuid.uuid4()}",
+                )
+            except RunnerServiceError as exc:
+                session.rollback()
+                return "denied", exc.code
+            return "acquired", str(permit.id)
+
+    def revoke() -> tuple[str, str]:
+        with Session(engine) as session:
+            barrier.wait(timeout=10)
+            result = WorkspaceService(session).revoke_grant(
+                grant_id,
+                request_id=f"concurrent-revoke-{uuid.uuid4()}",
+            )
+            return "revoked", result.status
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            acquire_future = executor.submit(acquire)
+            revoke_future = executor.submit(revoke)
+            acquire_result = acquire_future.result(timeout=20)
+            revoke_result = revoke_future.result(timeout=20)
+
+        assert revoke_result[0] == "revoked"
+        with Session(engine) as session:
+            durable_grant = session.get(ExecutionGrant, grant_id)
+            durable_job = session.get(RunnerJob, job_id)
+            permits = list(
+                session.scalars(
+                    select(SideEffectPermit).where(SideEffectPermit.grant_id == grant_id)
+                )
+            )
+            assert durable_grant is not None
+            assert durable_job is not None
+            assert len(permits) <= 1
+            assert durable_job.state == "cancel_requested"
+            if acquire_result[0] == "acquired":
+                assert durable_grant.status == "revoke_requested"
+                assert revoke_result[1] == "revoke_requested"
+                assert len(permits) == 1
+                assert permits[0].state == "consumed"
+                assert str(permits[0].id) == acquire_result[1]
+            else:
+                assert acquire_result[1] in {"execution_grant_inactive", "stale_lease"}
+                assert durable_grant.status == "revoked"
+                assert revoke_result[1] == "revoked"
+                assert permits == []
+    finally:
+        engine.dispose()
+
+
+def test_revocation_waits_for_consumed_permit_then_cancel_ack_finalizes(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+) -> None:
+    runner, token, repository = register_workspace_runner(client, runner_bootstrap_token)
+    plan = seed_approved_plan(db_session)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    created = client.post(
+        "/api/v1/workspaces",
+        json={"grant_id": grant["id"]},
+    )
+    assert created.status_code == 201, created.text
+    job = created.json()["job"]
+    assignment, identity = claim_start(client, runner, token, job["id"])
+    permit = acquire_side_effect_permit(client, token, assignment, identity)
+
+    revoked = client.post(f"/api/v1/execution-grants/{grant['id']}/revoke")
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["status"] == "revoke_requested"
+    assert revoked.json()["in_flight_permit_count"] == 1
+    assert revoked.json()["revocation_requested_at"] is not None
+    assert revoked.json()["revoked_at"] is None
+
+    cancelled = client.post(
+        f"/api/v1/runner-protocol/v1/jobs/{job['id']}/cancelled",
+        headers=runner_headers(token),
+        json=identity,
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["state"] == "cancelled"
+    db_session.expire_all()
+    durable_grant = db_session.get(ExecutionGrant, uuid.UUID(grant["id"]))
+    durable_permit = db_session.get(SideEffectPermit, uuid.UUID(permit["id"]))
+    assert durable_grant is not None
+    assert durable_permit is not None
+    assert durable_grant.status == "revoked"
+    assert durable_grant.revoked_at is not None
+    assert durable_permit.state == "cancelled"
+    assert durable_permit.terminal_at is not None
+
+
+def test_expired_lease_cannot_acquire_side_effect_permit(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+) -> None:
+    runner, token, repository = register_workspace_runner(client, runner_bootstrap_token)
+    plan = seed_approved_plan(db_session)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    created = client.post(
+        "/api/v1/workspaces",
+        json={"grant_id": grant["id"]},
+    )
+    assert created.status_code == 201, created.text
+    job = created.json()["job"]
+    assignment, identity = claim_start(client, runner, token, job["id"])
+    typed_assignment = JobAssignment.model_validate(assignment)
+    db_session.execute(
+        text(
+            "UPDATE runner_job_attempts "
+            "SET leased_until = now() - interval '1 second' "
+            "WHERE id = :attempt_id"
+        ),
+        {"attempt_id": identity["attempt_id"]},
+    )
+    db_session.commit()
+
+    response = client.post(
+        f"/api/v1/runner-protocol/v1/jobs/{job['id']}/side-effect-permit",
+        headers=runner_headers(token),
+        json={
+            **identity,
+            "job_digest": compute_side_effect_job_digest(typed_assignment.job),
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "stale_lease"
+    assert (
+        db_session.scalar(
+            select(SideEffectPermit).where(SideEffectPermit.job_id == uuid.UUID(job["id"]))
+        )
+        is None
+    )

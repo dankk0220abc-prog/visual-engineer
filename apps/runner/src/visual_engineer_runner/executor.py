@@ -16,6 +16,7 @@ from visual_engineer_runner_protocol import (
     DiagnosticResult,
     JobSpec,
     ResultPayload,
+    SideEffectPermit,
     SystemDiagnosticJobSpec,
     WorkspaceBoundJobSpec,
 )
@@ -45,6 +46,7 @@ async def execute_job(
     workspace_manager: WorkspaceManager | None = None,
     operation_id: uuid.UUID | None = None,
     cancel_event: threading.Event | None = None,
+    side_effect_permit: SideEffectPermit | None = None,
 ) -> ResultPayload:
     if isinstance(spec, SystemDiagnosticJobSpec):
         started_at = datetime.now(UTC)
@@ -85,5 +87,6 @@ async def execute_job(
             spec,
             operation_id=operation_id,
             cancel_event=cancel_event,
+            side_effect_permit=side_effect_permit,
         )
     raise ValueError("unsupported typed Job")

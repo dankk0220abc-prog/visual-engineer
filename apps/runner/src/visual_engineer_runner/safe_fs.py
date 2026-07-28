@@ -351,6 +351,7 @@ class SafeWorkspaceFilesystem:
         relative_path: str,
         *,
         expected_sha256: str | None = None,
+        before_remove: Callable[[], None] | None = None,
     ) -> bool:
         components = self.authorize(relative_path)
         with self._parent_descriptor(components) as (parent, leaf):
@@ -375,6 +376,8 @@ class SafeWorkspaceFilesystem:
                     os.close(descriptor)
                 if current.sha256 != expected_sha256:
                     raise SafeFilesystemError(FailureCode.CONTENT_CONFLICT)
+            if before_remove is not None:
+                before_remove()
             try:
                 os.unlink(leaf, dir_fd=parent)
                 os.fsync(parent)

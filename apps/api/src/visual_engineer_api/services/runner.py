@@ -19,6 +19,7 @@ from visual_engineer_api.models.runner import (
     RunnerJobAttempt,
     RunnerJobEvent,
 )
+from visual_engineer_api.models.workspace import SideEffectPermit as PersistedSideEffectPermit
 from visual_engineer_api.models.workspace import (
     Workspace,
     WorkspaceCheckpoint,
@@ -63,21 +64,32 @@ from visual_engineer_runner_protocol import (
     RenewRequest,
     ResultPayload,
     RunnerStatus,
+    SideEffectPermit,
+    SideEffectPermitAcquireRequest,
+    SideEffectPermitState,
     StartRequest,
     SystemDiagnosticJobSpec,
     WorkspaceBoundJobSpec,
     WorkspaceCheckpointPayload,
     WorkspaceDiffResult,
+    WorkspaceDiscardJobSpec,
     WorkspaceDiscardResult,
     WorkspaceJobSpec,
     WorkspaceListResult,
+    WorkspacePrepareJobSpec,
     WorkspacePrepareResult,
     WorkspaceReadTextResult,
+    WorkspaceRollbackJobSpec,
     WorkspaceRollbackResult,
     WorkspaceStatusResult,
+    WorkspaceWriteTextJobSpec,
     WorkspaceWriteTextResult,
     compute_permission_policy_hash,
+    compute_side_effect_job_digest,
+    compute_side_effect_permit_digest,
     execution_grant_policy_hash_matches,
+    side_effect_job_binding,
+    side_effect_permit_digest_matches,
     validate_result_payload,
     validate_safe_error_message,
 )
@@ -609,6 +621,207 @@ class RunnerService:
         )
         return self._lease_response(job, attempt)
 
+    def acquire_side_effect_permit(
+        self,
+        authenticated: Runner,
+        job_id: uuid.UUID,
+        payload: SideEffectPermitAcquireRequest,
+        *,
+        request_id: str,
+    ) -> SideEffectPermit:
+        job, attempt, envelope = self._active_lease(authenticated, job_id, payload)
+        if job.state != "running" or attempt.state != "running":
+            self._conflict(
+                "side_effect_permit_denied",
+                "Side-effect Permit requires the active running Attempt",
+            )
+        if job.workspace_id is None or job.execution_grant_id is None:
+            raise RunnerServiceError(
+                "side_effect_permit_not_applicable",
+                "This Job has no Workspace side effect",
+                category="policy",
+            )
+        now = utc_now()
+        policy = self._require_workspace_authority(job, authenticated, now)
+        grant = self._workspaces.get_grant(job.execution_grant_id, lock=True)
+        workspace = self._workspaces.get_workspace(job.workspace_id, lock=True)
+        if (
+            grant is None
+            or workspace is None
+            or grant.status != "approved"
+            or grant.revocation_requested_at is not None
+            or grant.expires_at <= now
+            or workspace.active_attempt_id != attempt.id
+        ):
+            self._permit_denied_event(
+                job,
+                attempt,
+                authenticated,
+                request_id=request_id,
+                reason_code="execution_grant_inactive",
+            )
+            self._session.commit()
+            self._conflict(
+                "execution_grant_inactive",
+                "Execution Grant is revoked, expired, or unavailable",
+            )
+        try:
+            spec = JOB_SPEC_ADAPTER.validate_python({"kind": job.kind, **job.parameters})
+        except ValidationError as exc:
+            raise RunnerServiceError(
+                "stored_job_spec_invalid",
+                "Stored Runner Job specification is invalid",
+                category="internal",
+            ) from exc
+        if not isinstance(
+            spec,
+            (
+                WorkspacePrepareJobSpec,
+                WorkspaceWriteTextJobSpec,
+                WorkspaceRollbackJobSpec,
+                WorkspaceDiscardJobSpec,
+            ),
+        ):
+            raise RunnerServiceError(
+                "side_effect_permit_not_applicable",
+                "This Workspace Job does not require a Side-effect Permit",
+                category="policy",
+            )
+        job_digest = compute_side_effect_job_digest(spec)
+        if not hmac.compare_digest(job_digest, payload.job_digest):
+            self._permit_denied_event(
+                job,
+                attempt,
+                authenticated,
+                request_id=request_id,
+                reason_code="operation_digest_mismatch",
+            )
+            self._session.commit()
+            raise RunnerServiceError(
+                "operation_digest_mismatch",
+                "Side-effect operation digest does not match the stored Job",
+                category="policy",
+            )
+        existing = self._workspaces.side_effect_permit_for_attempt(
+            job.id,
+            attempt.id,
+            job_digest,
+            lock=True,
+        )
+        if existing is not None:
+            if (
+                existing.state == "consumed"
+                and existing.expires_at > now
+                and existing.runner_id == authenticated.id
+                and hmac.compare_digest(str(existing.lease_id), str(attempt.lease_id))
+            ):
+                return self._protocol_side_effect_permit(
+                    existing,
+                    idempotent_replay=True,
+                )
+            self._conflict(
+                "side_effect_permit_replay_denied",
+                "The Side-effect Permit is no longer active",
+            )
+        if self._workspaces.in_flight_permits_for_workspace(workspace.id, lock=True):
+            self._permit_denied_event(
+                job,
+                attempt,
+                authenticated,
+                request_id=request_id,
+                reason_code="workspace_side_effect_in_flight",
+            )
+            self._session.commit()
+            self._conflict(
+                "workspace_side_effect_in_flight",
+                "Another bounded Workspace side effect is still in flight",
+            )
+
+        binding = side_effect_job_binding(spec)
+        expected_current = binding["expected_current"]
+        if expected_current is None:
+            expected_current = workspace.current_tree_hash
+        if expected_current is None:
+            self._conflict(
+                "workspace_state_invalid",
+                "Workspace current state is unavailable for side-effect fencing",
+            )
+        if isinstance(spec, WorkspaceWriteTextJobSpec):
+            proposed_bytes = len(spec.content.encode("utf-8"))
+            if workspace.total_written_bytes + proposed_bytes > policy.max_total_write_bytes:
+                raise RunnerServiceError(
+                    "total_write_budget_exceeded",
+                    "Workspace write budget is exhausted",
+                    category="policy",
+                )
+
+        permit_id = uuid.uuid4()
+        sequence = self._workspaces.next_side_effect_permit_sequence(workspace.id)
+        expires_at = min(
+            attempt.leased_until,
+            envelope.expires_at,
+            grant.expires_at,
+            now + timedelta(seconds=self._settings.side_effect_permit_ttl_seconds),
+        )
+        values: dict[str, Any] = {
+            "id": permit_id,
+            "sequence": sequence,
+            "runner_id": authenticated.id,
+            "job_id": job.id,
+            "attempt_id": attempt.id,
+            "lease_id": attempt.lease_id,
+            "grant_id": grant.id,
+            "workspace_id": workspace.id,
+            "repository_handle_id": workspace.repository_handle_id,
+            "operation": binding["operation"],
+            "relative_path": binding["relative_path"],
+            "expected_current": expected_current,
+            "proposed_digest": binding["proposed_digest"],
+            "job_digest": job_digest,
+            "operation_digest": "0" * 64,
+            "policy_hash": policy.policy_hash,
+            "source_revision": policy.source_revision,
+            "issued_at": now,
+            "consumed_at": now,
+            "expires_at": expires_at,
+            "state": SideEffectPermitState.CONSUMED,
+        }
+        values["operation_digest"] = compute_side_effect_permit_digest(values)
+        protocol_permit = SideEffectPermit.model_validate(values)
+        permit = PersistedSideEffectPermit(
+            **protocol_permit.model_dump(
+                mode="python",
+                exclude={"idempotent_replay"},
+            ),
+            request_id=request_id[:128],
+        )
+        self._workspaces.add(permit)
+        self._session.flush()
+        self._event(
+            EventType.SIDE_EFFECT_PERMIT_ACQUIRED,
+            request_id=request_id,
+            runner_id=authenticated.id,
+            job_id=job.id,
+            attempt_id=attempt.id,
+            metadata={
+                "operation": permit.operation,
+                "permit_id_hint": _identifier_hint(permit.id),
+            },
+        )
+        self._workspace_event(
+            workspace,
+            "permit_acquired",
+            request_id=request_id,
+            metadata={
+                "job_id": str(job.id),
+                "operation": permit.operation,
+                "permit_id_hint": _identifier_hint(permit.id),
+            },
+            side_effect_permit_id=permit.id,
+        )
+        self._session.commit()
+        return protocol_permit
+
     def renew(
         self,
         authenticated: Runner,
@@ -744,6 +957,14 @@ class RunnerService:
             ) from exc
 
         now = utc_now()
+        self._complete_side_effect_permit(
+            job,
+            attempt,
+            authenticated,
+            payload.result,
+            request_id=request_id,
+            now=now,
+        )
         transition_attempt(attempt, "succeeded")
         transition_job(job, "succeeded")
         attempt.completed_at = now
@@ -812,6 +1033,13 @@ class RunnerService:
                 category="policy",
             ) from exc
         now = utc_now()
+        self._terminalize_side_effect_permit(
+            payload.side_effect_permit_id,
+            job,
+            attempt,
+            state="failed",
+            request_id=request_id,
+        )
         transition_attempt(attempt, "failed")
         transition_job(job, "failed")
         attempt.error_code = payload.error_code.value
@@ -827,6 +1055,7 @@ class RunnerService:
                 error_code=payload.error_code.value,
                 error_message=job.error_message,
                 request_id=request_id,
+                side_effect_permit_id=payload.side_effect_permit_id,
             )
         if payload.error_code.value in {
             "policy_denied",
@@ -849,6 +1078,13 @@ class RunnerService:
             "content_conflict",
             "expected_absent_conflict",
             "workspace_state_invalid",
+            "side_effect_permit_required",
+            "side_effect_permit_invalid",
+            "side_effect_permit_expired",
+            "workspace_recovery_required",
+            "workspace_quarantined",
+            "git_output_limit_exceeded",
+            "mirror_budget_exceeded",
         }:
             self._event(
                 EventType.POLICY_DENIED,
@@ -900,6 +1136,36 @@ class RunnerService:
                 "Runner cannot acknowledge cancellation before it is requested",
             )
         now = utc_now()
+        try:
+            stored_spec = JOB_SPEC_ADAPTER.validate_python({"kind": job.kind, **job.parameters})
+        except ValidationError as exc:
+            raise RunnerServiceError(
+                "stored_job_spec_invalid",
+                "Stored Runner Job specification is invalid",
+                category="internal",
+            ) from exc
+        if isinstance(
+            stored_spec,
+            (
+                WorkspacePrepareJobSpec,
+                WorkspaceWriteTextJobSpec,
+                WorkspaceRollbackJobSpec,
+                WorkspaceDiscardJobSpec,
+            ),
+        ):
+            existing_permit = self._workspaces.side_effect_permit_for_attempt(
+                job.id,
+                attempt.id,
+                compute_side_effect_job_digest(stored_spec),
+                lock=True,
+            )
+            self._terminalize_side_effect_permit(
+                existing_permit.id if existing_permit is not None else None,
+                job,
+                attempt,
+                state="cancelled",
+                request_id=request_id,
+            )
         transition_attempt(attempt, "cancelled")
         transition_job(job, "cancelled")
         attempt.completed_at = now
@@ -975,6 +1241,28 @@ class RunnerService:
             return {"expired": 0, "requeued": 0, "failed": 0, "offline": 0}
 
         now = utc_now()
+        expired_grant_ids: set[uuid.UUID] = set()
+        permit_cutoff = now - timedelta(seconds=self._settings.side_effect_permit_safety_seconds)
+        for permit in self._workspaces.expired_in_flight_permits(
+            permit_cutoff,
+            lock=True,
+        ):
+            permit.state = "expired"
+            permit.terminal_at = now
+            expired_grant_ids.add(permit.grant_id)
+            self._event(
+                EventType.SIDE_EFFECT_PERMIT_DENIED,
+                request_id=request_id,
+                runner_id=permit.runner_id,
+                job_id=permit.job_id,
+                attempt_id=permit.attempt_id,
+                metadata={
+                    "reason_code": "side_effect_permit_expired",
+                    "permit_id_hint": _identifier_hint(permit.id),
+                },
+            )
+        for grant_id in expired_grant_ids:
+            self._maybe_finalize_grant_revocation(grant_id, request_id=request_id)
         cutoff = now - timedelta(seconds=self._settings.runner_online_threshold_seconds)
         offline_count = 0
         for runner in self._runners.runners_past_heartbeat(cutoff):
@@ -1088,7 +1376,8 @@ class RunnerService:
         | ProgressEventRequest
         | CompleteRequest
         | FailRequest
-        | CancelledRequest,
+        | CancelledRequest
+        | SideEffectPermitAcquireRequest,
         *,
         allow_cancel_requested: bool = False,
     ) -> tuple[RunnerJob, RunnerJobAttempt, PermissionEnvelope]:
@@ -1238,6 +1527,247 @@ class RunnerService:
             )
         return policy
 
+    def _protocol_side_effect_permit(
+        self,
+        permit: PersistedSideEffectPermit,
+        *,
+        idempotent_replay: bool = False,
+    ) -> SideEffectPermit:
+        if permit.state != "consumed":
+            self._conflict(
+                "side_effect_permit_inactive",
+                "Side-effect Permit is no longer active",
+            )
+        protocol = SideEffectPermit(
+            id=permit.id,
+            sequence=permit.sequence,
+            runner_id=permit.runner_id,
+            job_id=permit.job_id,
+            attempt_id=permit.attempt_id,
+            lease_id=permit.lease_id,
+            grant_id=permit.grant_id,
+            workspace_id=permit.workspace_id,
+            repository_handle_id=permit.repository_handle_id,
+            operation=permit.operation,
+            relative_path=permit.relative_path,
+            expected_current=permit.expected_current,
+            proposed_digest=permit.proposed_digest,
+            job_digest=permit.job_digest,
+            operation_digest=permit.operation_digest,
+            policy_hash=permit.policy_hash,
+            source_revision=permit.source_revision,
+            issued_at=permit.issued_at,
+            consumed_at=permit.consumed_at,
+            expires_at=permit.expires_at,
+            state=SideEffectPermitState.CONSUMED,
+            idempotent_replay=idempotent_replay,
+        )
+        if not side_effect_permit_digest_matches(protocol, protocol.operation_digest):
+            raise RunnerServiceError(
+                "side_effect_permit_digest_invalid",
+                "Stored Side-effect Permit digest is invalid",
+                category="policy",
+            )
+        return protocol
+
+    def _complete_side_effect_permit(
+        self,
+        job: RunnerJob,
+        attempt: RunnerJobAttempt,
+        authenticated: Runner,
+        result: ResultPayload,
+        *,
+        request_id: str,
+        now: datetime,
+    ) -> PersistedSideEffectPermit | None:
+        if not isinstance(
+            result,
+            (
+                WorkspacePrepareResult,
+                WorkspaceWriteTextResult,
+                WorkspaceRollbackResult,
+                WorkspaceDiscardResult,
+            ),
+        ):
+            return None
+        permit = self._workspaces.get_side_effect_permit(
+            result.side_effect_permit_id,
+            lock=True,
+        )
+        if (
+            permit is None
+            or permit.job_id != job.id
+            or permit.attempt_id != attempt.id
+            or permit.runner_id != authenticated.id
+            or not hmac.compare_digest(str(permit.lease_id), str(attempt.lease_id))
+            or permit.workspace_id != job.workspace_id
+            or permit.grant_id != job.execution_grant_id
+            or permit.state != "consumed"
+        ):
+            self._conflict(
+                "side_effect_permit_invalid",
+                "Side-effect result is not bound to the active Permit",
+            )
+        safety_deadline = permit.expires_at + timedelta(
+            seconds=self._settings.side_effect_permit_safety_seconds
+        )
+        if now > safety_deadline:
+            permit.state = "expired"
+            permit.terminal_at = now
+            workspace = self._workspaces.get_workspace(permit.workspace_id, lock=True)
+            if workspace is not None:
+                workspace.state = "quarantined"
+                workspace.error_code = "side_effect_permit_expired"
+                workspace.error_message = "Side-effect result arrived outside the fencing window"
+                workspace.active_attempt_id = None
+                self._workspace_event(
+                    workspace,
+                    "workspace_quarantined",
+                    request_id=request_id,
+                    metadata={
+                        "job_id": str(job.id),
+                        "reason_code": "side_effect_permit_expired",
+                        "state": workspace.state,
+                    },
+                    side_effect_permit_id=permit.id,
+                )
+            self._event(
+                EventType.SIDE_EFFECT_PERMIT_DENIED,
+                request_id=request_id,
+                runner_id=authenticated.id,
+                job_id=job.id,
+                attempt_id=attempt.id,
+                metadata={"reason_code": "side_effect_permit_expired"},
+            )
+            self._session.commit()
+            self._conflict(
+                "side_effect_permit_expired",
+                "Side-effect Permit expired before result coordination",
+            )
+        permit.state = "completed"
+        permit.terminal_at = now
+        self._event(
+            EventType.SIDE_EFFECT_PERMIT_COMPLETED,
+            request_id=request_id,
+            runner_id=authenticated.id,
+            job_id=job.id,
+            attempt_id=attempt.id,
+            metadata={
+                "operation": permit.operation,
+                "permit_id_hint": _identifier_hint(permit.id),
+            },
+        )
+        workspace = self._workspaces.get_workspace(permit.workspace_id, lock=True)
+        if workspace is not None:
+            self._workspace_event(
+                workspace,
+                "permit_completed",
+                request_id=request_id,
+                metadata={
+                    "job_id": str(job.id),
+                    "operation": permit.operation,
+                    "permit_id_hint": _identifier_hint(permit.id),
+                },
+                side_effect_permit_id=permit.id,
+            )
+        self._maybe_finalize_grant_revocation(permit.grant_id, request_id=request_id)
+        return permit
+
+    def _terminalize_side_effect_permit(
+        self,
+        permit_id: uuid.UUID | None,
+        job: RunnerJob,
+        attempt: RunnerJobAttempt,
+        *,
+        state: str,
+        request_id: str,
+    ) -> None:
+        if permit_id is None:
+            return
+        permit = self._workspaces.get_side_effect_permit(permit_id, lock=True)
+        if (
+            permit is None
+            or permit.job_id != job.id
+            or permit.attempt_id != attempt.id
+            or not hmac.compare_digest(str(permit.lease_id), str(attempt.lease_id))
+        ):
+            self._conflict(
+                "side_effect_permit_invalid",
+                "Side-effect Permit does not match the active Attempt",
+            )
+        if permit.state == "consumed":
+            permit.state = state
+            permit.terminal_at = utc_now()
+        elif permit.state not in {state, "expired"}:
+            self._conflict(
+                "side_effect_permit_terminal",
+                "Side-effect Permit already has a different terminal state",
+            )
+        self._maybe_finalize_grant_revocation(permit.grant_id, request_id=request_id)
+
+    def _maybe_finalize_grant_revocation(
+        self,
+        grant_id: uuid.UUID,
+        *,
+        request_id: str,
+    ) -> None:
+        grant = self._workspaces.get_grant(grant_id, lock=True)
+        if grant is None or grant.status != "revoke_requested":
+            return
+        now = utc_now()
+        cutoff = now - timedelta(seconds=self._settings.side_effect_permit_safety_seconds)
+        for permit in self._workspaces.expired_in_flight_permits(cutoff, lock=True):
+            if permit.grant_id == grant.id:
+                permit.state = "expired"
+                permit.terminal_at = now
+        if self._workspaces.in_flight_permits_for_grant(grant.id, lock=True):
+            return
+        grant.status = "revoked"
+        grant.revoked_at = now
+        workspace_jobs = self._workspaces.active_jobs_for_grant(grant.id, lock=True)
+        for active_job in workspace_jobs:
+            if active_job.workspace_id is None:
+                continue
+            workspace = self._workspaces.get_workspace(active_job.workspace_id, lock=True)
+            if workspace is not None:
+                self._workspace_event(
+                    workspace,
+                    "grant_revoke_effective",
+                    request_id=request_id,
+                    metadata={"state": "revoked"},
+                )
+
+    def _permit_denied_event(
+        self,
+        job: RunnerJob,
+        attempt: RunnerJobAttempt,
+        authenticated: Runner,
+        *,
+        request_id: str,
+        reason_code: str,
+    ) -> None:
+        self._event(
+            EventType.SIDE_EFFECT_PERMIT_DENIED,
+            request_id=request_id,
+            runner_id=authenticated.id,
+            job_id=job.id,
+            attempt_id=attempt.id,
+            metadata={"reason_code": reason_code},
+        )
+        if job.workspace_id is not None:
+            workspace = self._workspaces.get_workspace(job.workspace_id, lock=True)
+            if workspace is not None:
+                self._workspace_event(
+                    workspace,
+                    "permit_denied",
+                    request_id=request_id,
+                    metadata={
+                        "job_id": str(job.id),
+                        "reason_code": reason_code,
+                        "state": workspace.state,
+                    },
+                )
+
     def _workspace_job_started(
         self,
         job: RunnerJob,
@@ -1326,6 +1856,7 @@ class RunnerService:
         workspace.active_attempt_id = None
         workspace.error_code = None
         workspace.error_message = None
+        side_effect_permit_id = getattr(result, "side_effect_permit_id", None)
         if isinstance(result, WorkspacePrepareResult):
             if (
                 result.workspace_id != workspace.id
@@ -1347,12 +1878,14 @@ class RunnerService:
                 "mirror_prepared",
                 request_id=request_id,
                 metadata={"source_revision": result.source_revision},
+                side_effect_permit_id=side_effect_permit_id,
             )
             self._workspace_event(
                 workspace,
                 "workspace_prepared",
                 request_id=request_id,
                 metadata={"state": workspace.state},
+                side_effect_permit_id=side_effect_permit_id,
             )
         elif isinstance(result, (WorkspaceListResult, WorkspaceReadTextResult)):
             if workspace.state == "ready":
@@ -1400,6 +1933,7 @@ class RunnerService:
                 "workspace_sealed",
                 request_id=request_id,
                 metadata={"state": workspace.state},
+                side_effect_permit_id=side_effect_permit_id,
             )
         elif isinstance(result, WorkspaceRollbackResult):
             if (
@@ -1422,6 +1956,7 @@ class RunnerService:
                 "rollback_completed",
                 request_id=request_id,
                 metadata={"state": workspace.state},
+                side_effect_permit_id=side_effect_permit_id,
             )
         elif isinstance(result, WorkspaceDiscardResult):
             workspace.state = "discarded"
@@ -1431,6 +1966,7 @@ class RunnerService:
                 "workspace_discarded",
                 request_id=request_id,
                 metadata={"state": workspace.state},
+                side_effect_permit_id=side_effect_permit_id,
             )
         else:
             raise RunnerServiceError(
@@ -1443,6 +1979,7 @@ class RunnerService:
             "tool_succeeded",
             request_id=request_id,
             metadata={"job_id": str(job.id), "kind": job.kind, "state": workspace.state},
+            side_effect_permit_id=side_effect_permit_id,
         )
 
     def _workspace_job_failed(
@@ -1452,6 +1989,7 @@ class RunnerService:
         error_code: str,
         error_message: str,
         request_id: str,
+        side_effect_permit_id: uuid.UUID | None = None,
     ) -> None:
         if job.workspace_id is None:
             return
@@ -1475,8 +2013,21 @@ class RunnerService:
             "content_conflict",
             "expected_absent_conflict",
             "workspace_state_invalid",
+            "side_effect_permit_required",
+            "side_effect_permit_invalid",
+            "side_effect_permit_expired",
         }
-        if job.kind == JobKind.WORKSPACE_PREPARE_V1.value or error_code not in denial_codes:
+        if error_code == "workspace_recovery_required":
+            workspace.state = "recovery_required"
+            workspace.error_code = error_code
+            workspace.error_message = error_message[:500]
+            event_type = "recovery_required"
+        elif error_code == "workspace_quarantined":
+            workspace.state = "quarantined"
+            workspace.error_code = error_code
+            workspace.error_message = error_message[:500]
+            event_type = "workspace_quarantined"
+        elif job.kind == JobKind.WORKSPACE_PREPARE_V1.value or error_code not in denial_codes:
             workspace.state = "failed"
             workspace.error_code = error_code[:64]
             workspace.error_message = error_message[:500]
@@ -1495,6 +2046,7 @@ class RunnerService:
                 "error_code": error_code,
                 "state": workspace.state,
             },
+            side_effect_permit_id=side_effect_permit_id,
         )
 
     def _workspace_job_cancelled(
@@ -1544,6 +2096,7 @@ class RunnerService:
         sequence = self._workspaces.next_checkpoint_sequence(workspace.id)
         checkpoint = WorkspaceCheckpoint(
             workspace_id=workspace.id,
+            side_effect_permit_id=payload.side_effect_permit_id,
             sequence=sequence,
             source_revision=payload.source_revision,
             tree_fingerprint=payload.tree_fingerprint,
@@ -1563,7 +2116,9 @@ class RunnerService:
                 "checkpoint_sequence": sequence,
                 "diff_hash": payload.diff_hash,
                 "changed_file_count": payload.changed_file_count,
+                "permit_id_hint": _identifier_hint(payload.side_effect_permit_id),
             },
+            side_effect_permit_id=payload.side_effect_permit_id,
         )
 
     def _workspace_event(
@@ -1573,6 +2128,7 @@ class RunnerService:
         *,
         request_id: str,
         metadata: dict[str, Any],
+        side_effect_permit_id: uuid.UUID | None = None,
     ) -> None:
         allowed = {
             "changed_file_count",
@@ -1582,6 +2138,7 @@ class RunnerService:
             "job_id",
             "kind",
             "operation",
+            "permit_id_hint",
             "policy_hash",
             "reason_code",
             "relative_path",
@@ -1603,6 +2160,7 @@ class RunnerService:
             WorkspaceEvent(
                 workspace_id=workspace.id,
                 runner_id=workspace.runner_id,
+                side_effect_permit_id=side_effect_permit_id,
                 event_type=event_type,
                 sequence=self._workspaces.next_workspace_event_sequence(workspace.id),
                 request_id=request_id[:128],
@@ -1904,6 +2462,8 @@ def _sanitize_event_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         "kind",
         "lease_id_hint",
         "message_code",
+        "operation",
+        "permit_id_hint",
         "policy_hash",
         "progress_percent",
         "protocol_version",

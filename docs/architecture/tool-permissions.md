@@ -40,8 +40,9 @@ filesystem content, a shell, subprocess executor, Git, or public network.
 ## Implemented fixture-only Level 1
 
 The authority chain is approved exact Plan/Snapshot, pending Execution Grant,
-separate local-user approve, Workspace binding, typed Job/Envelope, and fenced
-Attempt. The server-derived Grant fixes:
+separate local-user approve, Workspace binding, typed Job/Envelope, fenced
+Attempt, and a current Side-effect Permit immediately before each mutation.
+The server-derived Grant fixes:
 
 ```text
 repository = fixture-repository-v1 at exact revision
@@ -56,11 +57,12 @@ network = none
 shell/source write/Git delivery = false
 ```
 
-Only Runner knows the source path. The source is read-only and every write
-occurs in a detached Runner-owned worktree. List/read/create/compare-and-swap
-replace are descriptor-rooted and bounded. Fixed Git status/diff, immutable
-checkpoints, initial-baseline rollback, and UUID-only discard complete the
-scope. There is no delete/rename/binary tool or target command.
+Only Runner knows the source path. The source is read-only, no Git process is
+run against it, and every write occurs in a detached Runner-owned worktree.
+List/read/create/compare-and-swap replace are descriptor-rooted and bounded.
+Fixed Runner-owned Git status/diff, immutable checkpoints, initial-baseline
+rollback, and Permit plus signed-ownership-bound UUID-only discard complete
+the scope. There is no delete/rename/binary tool or target command.
 
 ## Implemented Level 0 controls
 
@@ -92,14 +94,17 @@ flowchart LR
     A -->|"reject + reason"| J["Rejected terminal state"]
     R -->|"explicit new request"| G["Pending Execution Grant"]
     G --> D{"Separate human decision"}
-    D -->|"approve"| X["Exact fixture Workspace authority"]
+    D -->|"approve"| X["Exact fixture Workspace scope"]
+    X --> P2["Current Permit per mutation"]
     D -->|"reject + reason"| J
 ```
 
 Plan approval binds an exact Plan version and fingerprint as a governance
 record. It does not elevate the Run or create a worktree. Only a separately
-approved immutable Grant can authorize the implemented fixture tools. It
-cannot authorize target validation, source Git changes, GitHub, or deployment.
+approved immutable Grant can scope the implemented fixture tools, and only a
+current exact Permit can authorize a mutation. A revoked, expired, stale,
+cancelled, mismatched, or replayed identity cannot do so. The Grant cannot
+authorize target validation, source Git changes, GitHub, or deployment.
 
 ## Always prohibited
 
@@ -114,11 +119,11 @@ cannot authorize target validation, source Git changes, GitHub, or deployment.
 
 ## Customer 0 boundary
 
-CreativeDeploy is internal Customer 0. The only allowed historical Phase 2 access is the
-API container's exact read-only bind mount and the fixed scanner operations
-above. Web and database services receive no mount. The user personally
-rejected the stale Plan. Phase 3 Runner, Phase 4 fixture Runner, and base
-Compose receive no CreativeDeploy mount or locator.
+CreativeDeploy is internal Customer 0. Historical Phase 2 documentation
+describes a separately authorized API-only read path, but no such authority
+exists for this repair. Phase 3 Runner, Phase 4 fixture Runner, and base
+Compose receive no CreativeDeploy mount or locator. The repair, E2E,
+source-invariance, smoke, and chaos fixtures must never access it.
 
 Disallowed actions include reading real environment/credential contents,
 installing dependencies, running target builds/tests/formatters/generators,
@@ -132,4 +137,6 @@ Foundation plan string validation blocks obvious policy violations but is not
 a complete security system. Any later non-fixture access or target command
 requires a new independent runtime authorization, path/argument confinement,
 resource/network limits, attributable results, and recovery design. A maximum-
-depth security audit is mandatory before Phase 5.
+depth security audit is mandatory before Phase 5. The prior independent Phase
+4 audit remains Security Gate FAIL; the only next milestone is Phase 4
+Independent Security Re-Audit.

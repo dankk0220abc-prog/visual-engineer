@@ -7,6 +7,7 @@ from typing import NoReturn
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from visual_engineer_api.core.config import get_settings
 from visual_engineer_api.models.runner import Runner
 from visual_engineer_api.models.workspace import (
     ExecutionGrant,
@@ -113,6 +114,7 @@ class WorkspaceService:
     def __init__(self, session: Session) -> None:
         self._session = session
         self._repositories = WorkspaceRepository(session)
+        self._settings = get_settings()
 
     def register_repository(
         self,
@@ -144,6 +146,7 @@ class WorkspaceService:
                 capabilities=list(payload.capabilities),
                 current_revision=payload.current_revision,
                 current_branch=payload.current_branch,
+                source_status=payload.source_status.value,
                 source_is_dirty=payload.source_is_dirty,
                 dirty_path_count=payload.dirty_path_count,
                 last_verified_at=now,
@@ -163,6 +166,7 @@ class WorkspaceService:
             handle.capabilities = list(payload.capabilities)
             handle.current_revision = payload.current_revision
             handle.current_branch = payload.current_branch
+            handle.source_status = payload.source_status.value
             handle.source_is_dirty = payload.source_is_dirty
             handle.dirty_path_count = payload.dirty_path_count
             handle.last_verified_at = now
@@ -328,6 +332,7 @@ class WorkspaceService:
         grants = self._repositories.list_grants()
         for grant in grants:
             changed = self._expire_grant(grant) or changed
+            changed = self._advance_grant_revocation(grant) or changed
         if changed:
             self._session.commit()
         return [self._grant_response(item) for item in grants]
@@ -337,6 +342,8 @@ class WorkspaceService:
         if grant is None:
             self._not_found("execution_grant_not_found", "Execution Grant was not found")
         if self._expire_grant(grant):
+            self._session.commit()
+        elif self._advance_grant_revocation(grant):
             self._session.commit()
         return self._grant_response(grant)
 
@@ -390,19 +397,53 @@ class WorkspaceService:
         *,
         request_id: str,
     ) -> ExecutionGrantResponse:
-        del request_id
+        # Side-effect Permit acquisition locks Job/Attempt before Grant/Workspace.
+        # Keep the same ordering here so a concurrent revoke cannot deadlock
+        # against an acquire transaction.
+        if self._repositories.get_grant(grant_id) is None:
+            self._not_found("execution_grant_not_found", "Execution Grant was not found")
+        active_jobs = self._repositories.active_jobs_for_grant(grant_id, lock=True)
         grant = self._repositories.get_grant(grant_id, lock=True)
         if grant is None:
             self._not_found("execution_grant_not_found", "Execution Grant was not found")
         if grant.status == "revoked":
+            return self._grant_response(grant)
+        if grant.status == "revoke_requested":
+            if self._advance_grant_revocation(grant):
+                self._session.commit()
             return self._grant_response(grant)
         if grant.status in {"rejected", "expired"}:
             self._conflict(
                 "execution_grant_terminal",
                 "Rejected or expired Execution Grant cannot be revoked",
             )
-        grant.status = "revoked"
-        grant.decided_at = grant.decided_at or utc_now()
+        now = utc_now()
+        grant.status = "revoke_requested"
+        grant.decided_at = grant.decided_at or now
+        grant.revocation_requested_at = now
+        seen_workspaces: set[uuid.UUID] = set()
+        for job in active_jobs:
+            if job.workspace_id is not None and job.workspace_id not in seen_workspaces:
+                workspace = self._repositories.get_workspace(job.workspace_id, lock=True)
+                if workspace is not None:
+                    self._workspace_event(
+                        workspace,
+                        "grant_revoke_requested",
+                        request_id=request_id,
+                        metadata={"state": "revoke_requested"},
+                    )
+                    seen_workspaces.add(workspace.id)
+        self._session.flush()
+        runner_service = RunnerService(self._session)
+        for job in active_jobs:
+            if job.state not in {"cancelled", "succeeded", "failed"}:
+                job.error_code = "execution_grant_inactive"
+                job.error_message = "Execution Grant revocation cancelled the Workspace Job"
+                runner_service.cancel_job(
+                    job.id,
+                    request_id=f"{request_id[:96]}-grant-revoke",
+                )
+        self._advance_grant_revocation(grant)
         self._session.commit()
         return self._grant_response(grant)
 
@@ -884,6 +925,31 @@ class WorkspaceService:
                 category="policy",
             )
 
+    def _advance_grant_revocation(self, grant: ExecutionGrant) -> bool:
+        if grant.status != "revoke_requested":
+            return False
+        now = utc_now()
+        cutoff = now - timedelta(seconds=self._settings.side_effect_permit_safety_seconds)
+        for permit in self._repositories.expired_in_flight_permits_for_grant(
+            grant.id,
+            cutoff,
+            lock=True,
+        ):
+            permit.state = "expired"
+            permit.terminal_at = now
+        if self._repositories.in_flight_permits_for_grant(grant.id, lock=True):
+            return False
+        grant.status = "revoked"
+        grant.revoked_at = now
+        for workspace in self._repositories.workspaces_for_grant(grant.id):
+            self._workspace_event(
+                workspace,
+                "grant_revoke_effective",
+                request_id="grant-revoke-effective",
+                metadata={"state": "revoked"},
+            )
+        return True
+
     def _expire_grant(self, grant: ExecutionGrant) -> bool:
         if grant.status in {"pending", "approved"} and grant.expires_at <= utc_now():
             grant.status = "expired"
@@ -893,7 +959,15 @@ class WorkspaceService:
 
     def _expire_workspace(self, workspace: Workspace) -> bool:
         if (
-            workspace.state not in {"discarded", "failed", "expired", "rolled_back"}
+            workspace.state
+            not in {
+                "discarded",
+                "failed",
+                "expired",
+                "rolled_back",
+                "recovery_required",
+                "quarantined",
+            }
             and workspace.expires_at <= utc_now()
             and workspace.active_attempt_id is None
         ):
@@ -926,6 +1000,7 @@ class WorkspaceService:
             capabilities=handle.capabilities,
             current_revision=handle.current_revision,
             current_branch=handle.current_branch,
+            source_status=handle.source_status,
             source_is_dirty=handle.source_is_dirty,
             dirty_path_count=handle.dirty_path_count,
             last_verified_at=handle.last_verified_at,
@@ -964,6 +1039,9 @@ class WorkspaceService:
             policy_hash=grant.policy_hash,
             requested_at=grant.requested_at,
             decided_at=grant.decided_at,
+            revocation_requested_at=grant.revocation_requested_at,
+            revoked_at=grant.revoked_at,
+            in_flight_permit_count=len(self._repositories.in_flight_permits_for_grant(grant.id)),
             expires_at=grant.expires_at,
             created_at=grant.created_at,
             decision=(

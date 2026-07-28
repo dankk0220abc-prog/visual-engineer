@@ -76,7 +76,10 @@ make test
 make build
 make contracts-check
 make migration-check
+make phase4-findings-check
+make source-invariance-check
 make workspace-security-check
+make workspace-security-repair-check
 make security-check
 make eval
 make e2e
@@ -139,12 +142,20 @@ the evidence file for the active phase.
   `O_NOFOLLOW`, type/link-count checks, same-directory atomic writes, expected
   hashes, post-write verification, and fail-closed behavior. Do not replace
   this with string `resolve()` plus ordinary write.
-- The sole Runner subprocess boundary is fixed Git in `git_ops.py` with
-  argument arrays, no shell, bounded timeouts, sanitized configuration, and no
-  hooks/helpers/network. Do not execute target repository commands.
+- The sole Runner subprocess boundary is the hardened adapter in `git_ops.py`.
+  It must never invoke Git against a source repository. Preserve fixed
+  argument arrays, no shell, managed configuration, bounded streaming output,
+  process-group timeouts, and disabled hooks/filters/fsmonitor/helpers/LFS/
+  submodules/URL rewrites/network. Do not execute target repository commands.
+- Prepare, text create/replace, baseline rollback, and discard require a
+  current PostgreSQL-backed Side-effect Permit bound to the exact Runner, Job,
+  Attempt, Lease, Grant, Workspace, operation, digest, and deadline. A Job
+  start or old lease is never sufficient filesystem authority.
 - Rollback is initial-baseline-only and may remove only same-Workspace
   ledger-recorded created files. Discard accepts only a Workspace UUID and may
-  remove only its registry-bound worktree.
+  remove only a registry- and signed-ownership-bound worktree. Missing proof
+  requires recovery; inconsistent proof or unknown content requires
+  quarantine. Neither condition permits deletion.
 - Every Attempt mutation must validate authenticated Runner ID, active Attempt
   ID, high-entropy Lease ID, lease deadline, revocation, and state under a
   database lock. A stale identity returns `409` without mutation.
@@ -201,12 +212,18 @@ Only commit generated output after its source and verification are included.
 - Playwright smoke tests use the real Web, API, PostgreSQL, and Runner; do not
   replace that flow with API or Runner mocks. Phase 4 also requires the exact
   read-only adversarial fixture and full source/`.git` fingerprint comparison.
+- Source invariance is a mandatory gate before any non-synthetic repository
+  expansion. Compare a no-follow full source and `.git` manifest; never
+  normalize or clean a fixture to conceal a difference.
 - Chaos tests must use their exact isolated Compose project and compare source
   status before/after. A graceful SIGTERM may finish active work and is not a
   valid simulation of abrupt Runner loss; use a bounded immediate stop for
   lease-expiry recovery evidence.
 - Do not delete valid tests, disable checks, lower meaningful thresholds, or
   broaden exclusions to make a change pass.
+- Independent security-audit Finding tests and the original FAIL report are
+  permanent evidence. A repair may make the reproductions prove denial, but
+  must not delete IDs, severities, history, or acceptance assertions.
 - After a change, run the narrow test first, then the relevant quality,
   contract, build, migration, and end-to-end regression checks.
 - Keep generated reports, traces, screenshots, videos, caches, `.venv`, and
@@ -259,3 +276,24 @@ Only commit generated output after its source and verification are included.
   `git status --short` before committing.
 - Never claim GitHub Actions passed remotely from local workflow validation.
 - No Agent may automatically merge the main branch.
+
+## Durable Phase 4 security rules
+
+1. All source-repository Git behavior goes through the hardened adapter, and
+   no Git process receives the source as worktree, Git directory, object
+   database, or local fetch endpoint.
+2. Untrusted repository configuration and attributes never influence Runner
+   execution.
+3. Every filesystem side effect requires a latest-authority Side-effect
+   Permit; stale Lease, Attempt, Grant, cancellation, expiry, mismatch, or
+   replay fails before mutation.
+4. `revoke_requested` blocks new permits. After revocation is effective,
+   accepted filesystem side effects must remain zero.
+5. Unprovable Workspace ownership forbids deletion.
+6. Registry, signed-manifest, root identity, inventory, or database
+   inconsistency fails closed into visible recovery or quarantine.
+7. Security Finding regressions must remain additive and runnable.
+8. A repair implementer cannot declare the independent Security Gate PASS.
+   Only a separate re-audit may decide it.
+9. Exact source invariance is mandatory before any real-repository
+   Workspace capability.

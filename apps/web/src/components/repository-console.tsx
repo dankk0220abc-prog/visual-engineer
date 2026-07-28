@@ -128,10 +128,11 @@ export function RepositoryConsole() {
                   {repository.status}
                 </StatusPill>
               </div>
-              {repository.source_is_dirty ? (
+              {repository.source_status === "unknown" ? (
                 <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                  Source working tree is dirty（{repository.dirty_path_count}{" "}
-                  paths）。Mirror 只读取 committed HEAD，不导入这些内容。
+                  Source working-tree status is intentionally unknown. Runner
+                  不执行源仓库 Git 配置；{repository.dirty_path_count}{" "}
+                  是保守上界， Mirror 只导入 committed HEAD objects。
                 </p>
               ) : null}
               <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">

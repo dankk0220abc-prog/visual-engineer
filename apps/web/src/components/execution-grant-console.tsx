@@ -30,7 +30,7 @@ function grantTone(
   status: ExecutionGrant["status"],
 ): "neutral" | "positive" | "negative" | "pending" {
   if (status === "approved") return "positive";
-  if (status === "pending") return "pending";
+  if (status === "pending" || status === "revoke_requested") return "pending";
   if (status === "rejected" || status === "revoked") return "negative";
   return "neutral";
 }
@@ -331,6 +331,22 @@ export function ExecutionGrantConsole() {
                     Requested {formatTimestamp(grant.requested_at)} · expires{" "}
                     {formatTimestamp(grant.expires_at)}
                   </p>
+                  {grant.status === "revoke_requested" ? (
+                    <p
+                      className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                      role="status"
+                    >
+                      Revocation requested. New Side-effect Permits are blocked;
+                      effective revocation waits for{" "}
+                      {grant.in_flight_permit_count} bounded in-flight permit
+                      {grant.in_flight_permit_count === 1 ? "" : "s"}.
+                    </p>
+                  ) : null}
+                  {grant.revoked_at ? (
+                    <p className="mt-3 text-xs text-slate-500">
+                      Revocation effective {formatTimestamp(grant.revoked_at)}
+                    </p>
+                  ) : null}
                   {grant.status === "pending" ? (
                     <div className="mt-5 grid gap-3 border-t border-slate-200 pt-5 sm:grid-cols-[auto_minmax(12rem,1fr)_auto]">
                       <button

@@ -15,6 +15,7 @@ from pydantic import (
 from visual_engineer_api.schemas.runner import RunnerJobResponse
 from visual_engineer_runner_protocol import (
     MAX_WORKSPACE_TEXT_BYTES,
+    SourceStatus,
     WorkspaceOperation,
     WorkspaceWriteMode,
 )
@@ -58,6 +59,7 @@ class RepositoryHandleResponse(BaseModel):
     capabilities: list[Literal["committed_head_read", "isolated_workspace"]]
     current_revision: str | None
     current_branch: str | None
+    source_status: SourceStatus
     source_is_dirty: bool
     dirty_path_count: int
     last_verified_at: datetime | None
@@ -75,6 +77,7 @@ class ExecutionGrantStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    REVOKE_REQUESTED = "revoke_requested"
     REVOKED = "revoked"
     EXPIRED = "expired"
 
@@ -140,6 +143,9 @@ class ExecutionGrantResponse(BaseModel):
     policy_hash: str
     requested_at: datetime
     decided_at: datetime | None
+    revocation_requested_at: datetime | None
+    revoked_at: datetime | None
+    in_flight_permit_count: int
     expires_at: datetime
     created_at: datetime
     decision: ExecutionGrantDecisionResponse | None = None
@@ -180,6 +186,8 @@ class WorkspaceState(StrEnum):
     DISCARDED = "discarded"
     FAILED = "failed"
     EXPIRED = "expired"
+    RECOVERY_REQUIRED = "recovery_required"
+    QUARANTINED = "quarantined"
 
 
 class WorkspaceCreate(BaseModel):
@@ -287,6 +295,7 @@ class WorkspaceEventResponse(BaseModel):
     id: uuid.UUID
     workspace_id: uuid.UUID
     runner_id: uuid.UUID
+    side_effect_permit_id: uuid.UUID | None
     event_type: str
     sequence: int
     request_id: str
@@ -304,6 +313,7 @@ class WorkspaceCheckpointResponse(BaseModel):
 
     id: uuid.UUID
     workspace_id: uuid.UUID
+    side_effect_permit_id: uuid.UUID | None
     sequence: int
     source_revision: str
     tree_fingerprint: str

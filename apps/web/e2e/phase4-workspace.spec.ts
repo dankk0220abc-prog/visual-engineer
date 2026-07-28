@@ -28,7 +28,9 @@ test("Phase 4 grant, typed tools, rollback, and discard stay browser-visible", a
     page.getByRole("heading", { name: "Phase 4 Adversarial Fixture" }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("available", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Source working tree is dirty/)).toBeVisible();
+  await expect(
+    page.getByText(/Source working-tree status is intentionally unknown/),
+  ).toBeVisible();
   await expect(page.locator("main")).not.toContainText("/repositories/fixture");
   await expectAccessibleAndContained(page);
 
@@ -49,7 +51,9 @@ test("Phase 4 grant, typed tools, rollback, and discard stay browser-visible", a
     await expect(pending.or(approved).first()).toBeVisible({ timeout: 30_000 });
     if ((await approved.count()) === 0) {
       await expect(pending).toBeVisible();
-      await expect(page.getByText(/network none · Shell false/)).toBeVisible();
+      await expect(
+        page.getByText(/network none · Shell false/).first(),
+      ).toBeVisible();
       await Promise.all([
         page.waitForResponse(
           (response) =>
@@ -62,7 +66,9 @@ test("Phase 4 grant, typed tools, rollback, and discard stay browser-visible", a
     }
   }
   await expect(approved).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("sandbox/**", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("sandbox/**", { exact: true }).first(),
+  ).toBeVisible();
   await expectAccessibleAndContained(page);
 
   await page.goto("/workspaces");
@@ -156,6 +162,10 @@ test("Phase 4 grant, typed tools, rollback, and discard stay browser-visible", a
   await expect(sealedCheckpoint.locator("pre")).toContainText(
     "Browser-created text.",
   );
+  const writeCheckpoint = page
+    .getByText("Checkpoint #1", { exact: true })
+    .locator("..");
+  await expect(writeCheckpoint.getByText(/permit [0-9a-f-]{36}/)).toBeVisible();
   await expect(page.getByText(/No source repository write/)).toBeVisible();
 
   const persistedUrl = page.url();

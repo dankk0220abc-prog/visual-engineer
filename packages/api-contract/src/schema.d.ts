@@ -312,6 +312,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/runner-protocol/v1/jobs/{job_id}/side-effect-permit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Acquire one current, attempt-bound Permit before a Workspace side effect */
+    post: operations["acquire_side_effect_permit_api_v1_runner_protocol_v1_jobs__job_id__side_effect_permit_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/runner-protocol/v1/jobs/{job_id}/start": {
     parameters: {
       query?: never;
@@ -1355,6 +1372,8 @@ export interface components {
        * Format: uuid
        */
       id: string;
+      /** In Flight Permit Count */
+      in_flight_permit_count: number;
       /** Max Diff Bytes */
       max_diff_bytes: number;
       /** Max Files Changed */
@@ -1387,6 +1406,10 @@ export interface components {
        * Format: date-time
        */
       requested_at: string;
+      /** Revocation Requested At */
+      revocation_requested_at: string | null;
+      /** Revoked At */
+      revoked_at: string | null;
       /** Run Id */
       run_id: string | null;
       /**
@@ -1419,7 +1442,12 @@ export interface components {
      * @enum {string}
      */
     ExecutionGrantStatus:
-      "pending" | "approved" | "rejected" | "revoked" | "expired";
+      | "pending"
+      | "approved"
+      | "rejected"
+      | "revoke_requested"
+      | "revoked"
+      | "expired";
     /** FailRequest */
     FailRequest: {
       /**
@@ -1440,6 +1468,8 @@ export interface components {
        * Format: uuid
        */
       runner_id: string;
+      /** Side Effect Permit Id */
+      side_effect_permit_id?: string | null;
     };
     /**
      * FailureCode
@@ -1476,7 +1506,14 @@ export interface components {
       | "content_conflict"
       | "expected_absent_conflict"
       | "atomic_write_failed"
-      | "workspace_cancelled";
+      | "workspace_cancelled"
+      | "side_effect_permit_required"
+      | "side_effect_permit_invalid"
+      | "side_effect_permit_expired"
+      | "workspace_recovery_required"
+      | "workspace_quarantined"
+      | "git_output_limit_exceeded"
+      | "mirror_budget_exceeded";
     /** HealthResponse */
     HealthResponse: {
       /** Status */
@@ -1992,6 +2029,7 @@ export interface components {
       runner_id: string;
       /** Source Is Dirty */
       source_is_dirty: boolean;
+      source_status: components["schemas"]["SourceStatus"];
       status: components["schemas"]["RepositoryHandleStatus"];
       /**
        * Updated At
@@ -2041,6 +2079,12 @@ export interface components {
       runner_id: string;
       /** Source Is Dirty */
       source_is_dirty: boolean;
+      /**
+       * Source Status
+       * @default unknown
+       * @constant
+       */
+      source_status: "unknown";
       /**
        * Vcs Kind
        * @default git
@@ -2370,6 +2414,112 @@ export interface components {
      * @enum {string}
      */
     RunnerStatus: "registered" | "online" | "offline" | "revoked";
+    /** SideEffectPermit */
+    SideEffectPermit: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /**
+       * Consumed At
+       * Format: date-time
+       */
+      consumed_at: string;
+      /** Expected Current */
+      expected_current: string;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /**
+       * Grant Id
+       * Format: uuid
+       */
+      grant_id: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Idempotent Replay
+       * @default false
+       */
+      idempotent_replay: boolean;
+      /**
+       * Issued At
+       * Format: date-time
+       */
+      issued_at: string;
+      /** Job Digest */
+      job_digest: string;
+      /**
+       * Job Id
+       * Format: uuid
+       */
+      job_id: string;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      operation: components["schemas"]["WorkspaceOperation"];
+      /** Operation Digest */
+      operation_digest: string;
+      /** Policy Hash */
+      policy_hash: string;
+      /** Proposed Digest */
+      proposed_digest: string;
+      /** Relative Path */
+      relative_path?: string | null;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Sequence */
+      sequence: number;
+      /** Source Revision */
+      source_revision: string;
+      /**
+       * State
+       * @default consumed
+       * @constant
+       */
+      state: "consumed";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** SideEffectPermitAcquireRequest */
+    SideEffectPermitAcquireRequest: {
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /** Job Digest */
+      job_digest: string;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+    };
     /**
      * SnapshotMode
      * @enum {string}
@@ -2449,6 +2599,11 @@ export interface components {
       /** Tracked File Count */
       tracked_file_count: number;
     };
+    /**
+     * SourceStatus
+     * @enum {string}
+     */
+    SourceStatus: "unknown";
     /** StartRequest */
     StartRequest: {
       /**
@@ -2555,6 +2710,8 @@ export interface components {
       diff: string;
       /** Diff Hash */
       diff_hash: string;
+      /** Side Effect Permit Id */
+      side_effect_permit_id?: string | null;
       /** Source Revision */
       source_revision: string;
       /** Total Diff Bytes */
@@ -2584,6 +2741,8 @@ export interface components {
       id: string;
       /** Sequence */
       sequence: number;
+      /** Side Effect Permit Id */
+      side_effect_permit_id: string | null;
       /** Source Revision */
       source_revision: string;
       /** Total Diff Bytes */
@@ -2672,6 +2831,11 @@ export interface components {
        */
       kind: "workspace_discard_v1";
       /**
+       * Side Effect Permit Id
+       * Format: uuid
+       */
+      side_effect_permit_id: string;
+      /**
        * Workspace Id
        * Format: uuid
        */
@@ -2727,6 +2891,8 @@ export interface components {
       runner_id: string;
       /** Sequence */
       sequence: number;
+      /** Side Effect Permit Id */
+      side_effect_permit_id: string | null;
       /**
        * Workspace Id
        * Format: uuid
@@ -2837,6 +3003,11 @@ export interface components {
        * Format: uuid
        */
       repository_handle_id: string;
+      /**
+       * Side Effect Permit Id
+       * Format: uuid
+       */
+      side_effect_permit_id: string;
       /** Source Revision */
       source_revision: string;
       /** Workspace Fingerprint */
@@ -3015,6 +3186,11 @@ export interface components {
       /** Removed Created Paths */
       removed_created_paths: string[];
       /**
+       * Side Effect Permit Id
+       * Format: uuid
+       */
+      side_effect_permit_id: string;
+      /**
        * Workspace Id
        * Format: uuid
        */
@@ -3036,7 +3212,9 @@ export interface components {
       | "discard_requested"
       | "discarded"
       | "failed"
-      | "expired";
+      | "expired"
+      | "recovery_required"
+      | "quarantined";
     /**
      * WorkspaceStatusCode
      * @enum {string}
@@ -3048,7 +3226,8 @@ export interface components {
       | "renamed"
       | "copied"
       | "untracked"
-      | "type_changed";
+      | "type_changed"
+      | "ignored";
     /** WorkspaceStatusEntry */
     WorkspaceStatusEntry: {
       /** Relative Path */
@@ -3145,6 +3324,11 @@ export interface components {
       relative_path: string;
       /** Sha256 */
       sha256: string;
+      /**
+       * Side Effect Permit Id
+       * Format: uuid
+       */
+      side_effect_permit_id: string;
       /** Size */
       size: number;
       /** Total Written Bytes */
@@ -4387,6 +4571,88 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["LeaseMutationResponse"];
+        };
+      };
+      /** @description Invalid Runner credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Revoked or mismatched Runner */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Stale or conflicting lease */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Runner protocol payload too large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Protocol or policy validation failure */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Registration unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  acquire_side_effect_permit_api_v1_runner_protocol_v1_jobs__job_id__side_effect_permit_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        Authorization?: string | null;
+      };
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SideEffectPermitAcquireRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SideEffectPermit"];
         };
       };
       /** @description Invalid Runner credential */

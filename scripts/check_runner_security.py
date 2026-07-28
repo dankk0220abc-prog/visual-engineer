@@ -61,22 +61,29 @@ def main() -> None:
             raise SystemExit(
                 f"{path.relative_to(REPOSITORY_ROOT)} imports subprocess outside git_ops.py"
             )
-        for marker in ("shell=True", "os.system(", "Popen("):
+        for marker in ("shell=True", "os.system("):
             if marker in source:
                 raise SystemExit(
                     f"{path.relative_to(REPOSITORY_ROOT)} contains prohibited marker: {marker}"
                 )
+        if "Popen(" in source and path != git_boundary:
+            raise SystemExit(
+                f"{path.relative_to(REPOSITORY_ROOT)} starts a process outside git_ops.py"
+            )
     git_source = git_boundary.read_text(encoding="utf-8")
     required_git_controls = (
-        "subprocess.run(",
+        "subprocess.Popen(",
         "shell=False",
+        "start_new_session=True",
+        "_collect_bounded_output",
+        "GIT_OUTPUT_LIMIT_EXCEEDED",
         "GIT_TERMINAL_PROMPT",
         "GIT_OPTIONAL_LOCKS",
         "core.hooksPath=/dev/null",
         "credential.helper=",
         "diff.external=",
         "protocol.allow=never",
-        "protocol.file.allow=always",
+        "filter.lfs.smudge=",
     )
     missing_git_controls = [value for value in required_git_controls if value not in git_source]
     if missing_git_controls:

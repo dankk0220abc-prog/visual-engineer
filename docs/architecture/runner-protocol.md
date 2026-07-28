@@ -34,17 +34,18 @@ tokens return a stable `401`; an identity mismatch or revoked Runner returns
 
 ## Closed endpoints
 
-| Method and path                 | Purpose                                             |
-| ------------------------------- | --------------------------------------------------- |
-| `POST /register`                | One-time local registration and credential issuance |
-| `POST /heartbeat`               | Refresh derived liveness without event flooding     |
-| `POST /jobs/claim`              | Atomically claim one compatible queued Job          |
-| `POST /jobs/{job_id}/start`     | Move the active fenced Attempt to running           |
-| `POST /jobs/{job_id}/renew`     | Extend a lease and observe cancellation             |
-| `POST /jobs/{job_id}/events`    | Append one typed, bounded progress event            |
-| `POST /jobs/{job_id}/complete`  | Validate and persist one typed result               |
-| `POST /jobs/{job_id}/fail`      | Persist one closed failure classification           |
-| `POST /jobs/{job_id}/cancelled` | Acknowledge cancellation                            |
+| Method and path                          | Purpose                                             |
+| ---------------------------------------- | --------------------------------------------------- |
+| `POST /register`                         | One-time local registration and credential issuance |
+| `POST /heartbeat`                        | Refresh derived liveness without event flooding     |
+| `POST /jobs/claim`                       | Atomically claim one compatible queued Job          |
+| `POST /jobs/{job_id}/start`              | Move the active fenced Attempt to running           |
+| `POST /jobs/{job_id}/renew`              | Extend a lease and observe cancellation             |
+| `POST /jobs/{job_id}/side-effect-permit` | Acquire current exact mutation authority            |
+| `POST /jobs/{job_id}/events`             | Append one typed, bounded progress event            |
+| `POST /jobs/{job_id}/complete`           | Validate and persist one typed result               |
+| `POST /jobs/{job_id}/fail`               | Persist one closed failure classification           |
+| `POST /jobs/{job_id}/cancelled`          | Acknowledge cancellation                            |
 
 Mutations carry `X-Request-ID`. Runner payloads are strict, reject extra fields,
 and are limited to 64 KiB before protocol validation. Results are independently
@@ -95,8 +96,39 @@ Control-Plane-only transport, and bind one immutable Execution Grant,
 Repository Handle, Workspace, source revision, and Grant policy hash. The
 Grant itself fixes network `none`, source write false, Git delivery false,
 paths, operations, budgets, and expiry. Control Plane revalidates approved
-status and all bindings at claim/start/renew/progress/terminal mutation; Runner
-recomputes both hashes before filesystem work.
+status and all bindings at claim/start/renew/progress/terminal mutation. That
+lease-level revalidation is necessary but not sufficient for filesystem
+mutation.
+
+## Side-effect Permit
+
+Prepare, text create/replace, rollback, and discard specs produce a canonical
+operation description. Immediately before mutation, Runner posts the current
+Runner/Attempt/Lease identity plus that description to
+`/jobs/{job_id}/side-effect-permit`.
+
+The Control Plane locks and validates all current authority and returns a
+strict `SideEffectPermit` bound to:
+
+- Permit, Runner, Job, Attempt, Lease, Grant, Workspace, and Repository Handle
+  IDs;
+- source revision and policy hash;
+- exact operation and normalized relative path where applicable;
+- expected-current and proposed-content/operation digests;
+- the canonical complete operation digest, covering the consumed state and
+  issued/consumed/expiry window; and
+- lease, Grant, and short permit deadlines.
+
+The Runner recomputes the canonical digest and rejects any extra field,
+mismatch, authorization-window tampering, expiry, cancellation, stale
+identity, or unsupported operation before entering a mutating manager method.
+The Permit ID is carried through the result and corresponding Workspace
+Event/Checkpoint. A Permit is single-use and cannot move to another Attempt.
+
+Grant revocation is explicit: `revoke_requested` blocks new Permit acquisition
+while consumed permits are visible as in flight; effective `revoked` waits for
+all such permits to be terminal or expired. Effective revocation accepts no
+later mutation.
 
 ## Typed jobs and results
 
@@ -153,20 +185,28 @@ Public errors use stable codes and a request ID:
 Workspace failures additionally use a closed `FailureCode` taxonomy, including
 path/sensitive/symlink/hardlink/non-regular/binary/size/budget denials,
 expected-absent and `content_conflict`, source/revision/workspace identity,
-atomic write, diff, cancellation, and envelope/policy errors. Arbitrary
-exception text never becomes a public error.
+atomic write, diff, cancellation, ownership/recovery/quarantine, and
+Permit-required/invalid/expired errors. Arbitrary exception text never becomes
+a public error.
 
 Messages do not include tokens, authorization headers, host paths, database
 details, arbitrary exception text, or customer content.
 
 ## Compatibility
 
-Protocol v1 requires exact version compatibility. Backward-compatible v1
-schema changes must remain additive only where strict clients can safely
-ignore nothing; otherwise a new URL and protocol version are required.
-OpenAPI is exported from FastAPI and generated TypeScript is checked for drift.
+Protocol v1 requires exact version compatibility. The security repair is a
+coordinated upgrade of the never-merged Phase 4 Workspace portion of v1:
+Phase 3 repository-free jobs remain compatible, while a pre-repair Phase 4
+Runner is intentionally incompatible with mutating Workspace jobs because it
+cannot present a Permit. API and Runner must be deployed from the same repair
+revision; strict validation fails closed on either mixed direction. Any
+post-merge breaking change requires a new URL and protocol version. OpenAPI is
+exported from FastAPI and generated TypeScript is checked for drift.
 
 Agent Trace is a future, separate concept. `RunnerJobEvent` and
 `WorkspaceEvent` record current typed execution facts only. Adding a shell,
 target command, Git delivery, or new authority field requires a separately
 reviewed protocol version/ADR; it is not an additive Phase 4 change.
+
+The independent audit remains Security Gate FAIL. This coordinated protocol
+repair is not approved until Phase 4 Independent Security Re-Audit.

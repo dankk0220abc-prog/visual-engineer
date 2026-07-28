@@ -124,3 +124,26 @@ The independent audit accepts only these bounded facts:
 Run a Phase 4 security-repair milestone for the four blocking findings plus
 the resource-limit gap, then repeat this audit from a newly frozen production
 baseline. Do not proceed to Customer 0, Phase 5, or merge before a fresh PASS.
+
+## Post-audit repair-candidate addendum
+
+This addendum does not alter the independent result above. The audit commit
+and **Security Gate: FAIL** remain authoritative historical evidence.
+
+The isolated branch `fix/phase-4-security-remediation` implements a local
+candidate disposition for all six findings:
+
+| Finding         | Repair-candidate control                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| `VE-P4-AUD-001` | no Git execution against source; bounded no-follow committed-object snapshot into Runner-owned mirror |
+| `VE-P4-AUD-002` | current PostgreSQL Side-effect Permit plus explicit requested/effective revocation                    |
+| `VE-P4-AUD-003` | authenticated registry and signed ownership manifest with fail-closed recovery/quarantine             |
+| `VE-P4-AUD-004` | exact no-follow source-invariance harness covering complete lifecycle                                 |
+| `VE-P4-AUD-005` | CPU, memory, PID, FD, subprocess-output, and mirror object/byte bounds                                |
+| `VE-P4-AUD-006` | immutable Compose image digests and GitHub Action commit SHAs                                         |
+
+Local repair evidence is kept separately in
+`docs/evidence/phase-4-security-repair-verification.md`. It is evidence for a
+future independent review, not a re-audit and not a Gate decision. Phase 4
+remains outside `main`; CreativeDeploy remains prohibited. The only next
+milestone is **Phase 4 Independent Security Re-Audit**.

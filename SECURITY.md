@@ -3,7 +3,12 @@
 ## Current security posture
 
 VisualEngineer is currently a Phase 4 local, single-user development project.
-It has not been hardened for hostile multi-user input, Internet
+The independent Phase 4 audit is complete with **Security Gate: FAIL**. This
+branch is a repair candidate only; local green checks cannot turn that
+independent verdict into PASS. Phase 4 is not in `main` and must undergo a
+separate Phase 4 Independent Security Re-Audit.
+
+The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
 the web or API services to the public Internet.
 
@@ -15,17 +20,29 @@ authority.
 
 The Phase 3 base platform remains repository-free. The Phase 4 fixture profile
 gives only the independent Runner one exact synthetic Git source bind,
-read-only, plus dedicated managed mirror/workspace/registry volumes. API, Web,
-and PostgreSQL get none. Runner has no shell, arbitrary command, Docker socket,
-inbound port, database/Web network, or public network.
+read-only, plus dedicated managed credential/mirror/workspace/registry
+volumes. API, Web, and PostgreSQL get none. The hardened snapshot adapter does
+not execute Git against the source; it imports only bounded validated
+committed objects into new Runner-owned inodes. Runner has no shell, arbitrary
+command, Docker socket, inbound port, database/Web network, or public network,
+and has explicit CPU, memory, PID, FD, subprocess-output, and mirror-copy
+bounds.
 
 Execution requires an immutable server-derived Grant, a separate local-user
-decision, and a fenced typed Job. The Grant is bound to the approved
-Plan/Snapshot/revision, `sandbox/**`, sensitive-path denials, strict budgets,
-network `none`, and false shell/source-write/Git-delivery fields. File access
-is descriptor-rooted and no-follow; status/diff/rollback/discard use fixed
-operations. This is fixture-only and is not a hostile multi-tenant or
-production sandbox.
+decision, a fenced typed Job, and—for every mutating operation—a short-lived,
+single-use Side-effect Permit acquired from current PostgreSQL authority. The
+Grant is bound to the approved Plan/Snapshot/revision, `sandbox/**`,
+sensitive-path denials, strict budgets, network `none`, and false
+shell/source-write/Git-delivery fields. `revoke_requested` blocks new permits;
+`revoked` becomes effective only when every consumed permit is terminal or
+expired.
+
+File access is descriptor-rooted and no-follow; status/diff/rollback/discard
+use fixed operations. Workspace registry and ownership evidence are
+domain-separated HMAC authenticated with a mode-`0600` Runner-local key.
+Missing proof enters `recovery_required`; inconsistent proof or unknown
+content enters `quarantined`; neither path deletes. This is fixture-only and
+is not a hostile multi-tenant or production sandbox.
 
 ## Reporting a vulnerability
 
@@ -55,6 +72,9 @@ contact address and response SLA remain `PLANNED`.
   must never be printed or stored in PostgreSQL. Per-Runner Tokens are returned
   once, persisted only in the dedicated Runner volume, and stored in the
   database only as high-entropy SHA-256 digests.
+- The Workspace ownership HMAC key is generated inside the Runner credential
+  volume with mode `0600`. Its value and signed local paths must never enter
+  PostgreSQL, API/Web responses, logs, test evidence, or Git.
 - The local bearer-token scheme is not a production identity solution.
 
 ## Repository permissions

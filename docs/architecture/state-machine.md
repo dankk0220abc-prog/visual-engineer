@@ -150,14 +150,34 @@ stateDiagram-v2
     pending --> approved: separate local-user approve
     pending --> rejected: separate reasoned reject
     pending --> expired: TTL
-    approved --> revoked: explicit revoke
+    approved --> revoke_requested: explicit revoke commits
+    revoke_requested --> revoked: all consumed Permits terminal or expired
     approved --> expired: TTL
 ```
 
 Policy fields never transition: a PostgreSQL trigger rejects updates and
 deletes. Decision, revocation, and expiry services may change status only.
-Plan approval creates neither a Grant nor an approval decision. A rejected,
-revoked, or expired Grant cannot dispatch or complete a Runner Job.
+Plan approval creates neither a Grant nor an approval decision.
+`revoke_requested` blocks new Side-effect Permits immediately but exposes the
+bounded count of already consumed Permits. A rejected, revoke-requested,
+revoked, or expired Grant cannot acquire new mutation authority.
+
+## Phase 4 Side-effect Permit lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> consumed: locked current-authority acquisition
+    consumed --> completed: exact result committed
+    consumed --> failed: exact typed failure
+    consumed --> cancelled: cancellation acknowledged
+    consumed --> expired: deadline or reaper
+```
+
+All terminal states are immutable. Permit authority fields are immutable in
+PostgreSQL. Only the active Runner/Attempt/Lease can acquire a Permit, and its
+expiry cannot outlive the Lease, Grant, Envelope, or configured short window.
+A later Attempt cannot reuse it. `completed` coordinates the exact
+Event/Checkpoint/result; it never authorizes a second disk operation.
 
 ## Phase 4 Workspace lifecycle
 
@@ -184,6 +204,8 @@ stateDiagram-v2
     expired --> discard_requested
     discard_requested --> discarded: exact worktree removed
     discard_requested --> failed
+    discard_requested --> recovery_required: ownership proof missing
+    discard_requested --> quarantined: proof conflict or unknown content
     requested --> expired: TTL
     preparing --> expired: TTL
     ready --> expired: TTL
@@ -192,10 +214,17 @@ stateDiagram-v2
 
 One non-terminal Workspace may exist per Grant. Every action verifies the
 Workspace/Runner/Handle/revision/Grant/policy binding and its allowed source
-state under a row lock. Workspace expiry precedes Grant expiry, leaving a
-bounded discard window. Grant revocation/expiry fences all Jobs and is never
-bypassed for cleanup.
+state under a row lock. Every mutating action additionally acquires and
+validates a current exact Permit immediately before mutation. Workspace expiry
+precedes Grant expiry, leaving a bounded discard window. Grant
+revocation/expiry is never bypassed for cleanup.
 
 Successful create/replace and diff append immutable Checkpoints. Rollback is
 initial-baseline-only and must return clean status plus the original tree hash.
-Discard is idempotent only after the exact disposal Job has durable evidence.
+Discard is idempotent only after the exact disposal Job has durable signed and
+database evidence. `recovery_required` and `quarantined` disable destructive
+controls and preserve all local data for controlled diagnosis; they do not
+auto-transition back or authorize garbage collection.
+
+This is repair-candidate state. The independent audit remains Security Gate
+FAIL until Phase 4 Independent Security Re-Audit.

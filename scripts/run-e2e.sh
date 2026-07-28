@@ -39,6 +39,11 @@ WORKSPACE_API_BASE_URL="http://127.0.0.1:$E2E_API_PORT" \
 WORKSPACE_DATABASE_URL="postgresql+psycopg://visualengineer:visualengineer-local@127.0.0.1:$E2E_DB_PORT/visualengineer" \
   uv run python scripts/seed_workspace_e2e.py
 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$E2E_WEB_PORT" \
+PLAYWRIGHT_API_BASE_URL="http://127.0.0.1:$E2E_API_PORT" \
+PLAYWRIGHT_REPOSITORY_ROOT="$PWD" \
+PLAYWRIGHT_COMPOSE_PROJECT_NAME="$PROJECT_NAME" \
+PLAYWRIGHT_E2E_REPOSITORY_PATH="$FIXTURE_REPOSITORY" \
+PLAYWRIGHT_WORKSPACE_FIXTURE_REPOSITORY_PATH="$WORKSPACE_FIXTURE_REPOSITORY" \
   pnpm --filter @visual-engineer/web exec playwright test
 FIXTURE_HEAD_AFTER=$(git -C "$FIXTURE_REPOSITORY" rev-parse HEAD)
 FIXTURE_STATUS_AFTER=$(git -C "$FIXTURE_REPOSITORY" status --porcelain=v1 -uall | git hash-object --stdin)

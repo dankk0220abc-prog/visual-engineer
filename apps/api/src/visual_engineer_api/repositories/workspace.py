@@ -11,6 +11,7 @@ from visual_engineer_api.models.workspace import (
     ExecutionGrant,
     ExecutionGrantDecision,
     RepositoryHandle,
+    SideEffectPermit,
     Workspace,
     WorkspaceCheckpoint,
     WorkspaceEvent,
@@ -36,7 +37,8 @@ class WorkspaceRepository:
         | ExecutionGrantDecision
         | Workspace
         | WorkspaceEvent
-        | WorkspaceCheckpoint,
+        | WorkspaceCheckpoint
+        | SideEffectPermit,
     ) -> None:
         self._session.add(value)
 
@@ -161,6 +163,15 @@ class WorkspaceRepository:
             )
         )
 
+    def workspaces_for_grant(self, grant_id: uuid.UUID) -> list[Workspace]:
+        return list(
+            self._session.scalars(
+                select(Workspace)
+                .where(Workspace.grant_id == grant_id)
+                .order_by(Workspace.created_at.asc(), Workspace.id.asc())
+            )
+        )
+
     def nonterminal_workspace_for_grant(
         self, grant_id: uuid.UUID, *, lock: bool = False
     ) -> Workspace | None:
@@ -257,6 +268,139 @@ class WorkspaceRepository:
             + 1
         )
 
+    def get_side_effect_permit(
+        self,
+        permit_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> SideEffectPermit | None:
+        statement = select(SideEffectPermit).where(SideEffectPermit.id == permit_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def side_effect_permit_for_attempt(
+        self,
+        job_id: uuid.UUID,
+        attempt_id: uuid.UUID,
+        job_digest: str,
+        *,
+        lock: bool = False,
+    ) -> SideEffectPermit | None:
+        statement = select(SideEffectPermit).where(
+            SideEffectPermit.job_id == job_id,
+            SideEffectPermit.attempt_id == attempt_id,
+            SideEffectPermit.job_digest == job_digest,
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def next_side_effect_permit_sequence(self, workspace_id: uuid.UUID) -> int:
+        return (
+            int(
+                self._session.scalar(
+                    select(func.coalesce(func.max(SideEffectPermit.sequence), 0)).where(
+                        SideEffectPermit.workspace_id == workspace_id
+                    )
+                )
+                or 0
+            )
+            + 1
+        )
+
+    def in_flight_permits_for_grant(
+        self,
+        grant_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> list[SideEffectPermit]:
+        statement = (
+            select(SideEffectPermit)
+            .where(
+                SideEffectPermit.grant_id == grant_id,
+                SideEffectPermit.state == "consumed",
+            )
+            .order_by(SideEffectPermit.expires_at.asc(), SideEffectPermit.id.asc())
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return list(self._session.scalars(statement))
+
+    def in_flight_permits_for_workspace(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> list[SideEffectPermit]:
+        statement = (
+            select(SideEffectPermit)
+            .where(
+                SideEffectPermit.workspace_id == workspace_id,
+                SideEffectPermit.state == "consumed",
+            )
+            .order_by(SideEffectPermit.expires_at.asc(), SideEffectPermit.id.asc())
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return list(self._session.scalars(statement))
+
+    def expired_in_flight_permits(
+        self,
+        cutoff: datetime,
+        *,
+        lock: bool = False,
+    ) -> list[SideEffectPermit]:
+        statement = (
+            select(SideEffectPermit)
+            .where(
+                SideEffectPermit.state == "consumed",
+                SideEffectPermit.expires_at <= cutoff,
+            )
+            .order_by(SideEffectPermit.expires_at.asc(), SideEffectPermit.id.asc())
+        )
+        if lock:
+            statement = statement.with_for_update(skip_locked=True)
+        return list(self._session.scalars(statement))
+
+    def expired_in_flight_permits_for_grant(
+        self,
+        grant_id: uuid.UUID,
+        cutoff: datetime,
+        *,
+        lock: bool = False,
+    ) -> list[SideEffectPermit]:
+        statement = (
+            select(SideEffectPermit)
+            .where(
+                SideEffectPermit.grant_id == grant_id,
+                SideEffectPermit.state == "consumed",
+                SideEffectPermit.expires_at <= cutoff,
+            )
+            .order_by(SideEffectPermit.expires_at.asc(), SideEffectPermit.id.asc())
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return list(self._session.scalars(statement))
+
+    def active_jobs_for_grant(
+        self,
+        grant_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> list[RunnerJob]:
+        statement = (
+            select(RunnerJob)
+            .where(
+                RunnerJob.execution_grant_id == grant_id,
+                RunnerJob.state.in_(("queued", "leased", "running", "cancel_requested")),
+            )
+            .order_by(RunnerJob.created_at.asc(), RunnerJob.id.asc())
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return list(self._session.scalars(statement))
+
     def approved_grant_for_job(
         self, grant_id: uuid.UUID, workspace_id: uuid.UUID, now: datetime
     ) -> tuple[ExecutionGrant, Workspace] | None:
@@ -265,7 +409,7 @@ class WorkspaceRepository:
             .join(Workspace, Workspace.grant_id == ExecutionGrant.id)
             .where(
                 ExecutionGrant.id == grant_id,
-                ExecutionGrant.status == "approved",
+                ExecutionGrant.status.in_(("approved", "revoke_requested")),
                 ExecutionGrant.expires_at > now,
                 Workspace.id == workspace_id,
             )

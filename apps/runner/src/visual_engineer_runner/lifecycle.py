@@ -25,8 +25,15 @@ from visual_engineer_runner_protocol import (
     ProgressEventRequest,
     RegisterRequest,
     RenewRequest,
+    SideEffectPermit,
+    SideEffectPermitAcquireRequest,
     StartRequest,
     WorkspaceBoundJobSpec,
+    WorkspaceDiscardJobSpec,
+    WorkspacePrepareJobSpec,
+    WorkspaceRollbackJobSpec,
+    WorkspaceWriteTextJobSpec,
+    compute_side_effect_job_digest,
 )
 
 LOGGER = logging.getLogger("visual_engineer_runner")
@@ -197,6 +204,35 @@ class RunnerLifecycle:
             )
             return
 
+        side_effect_permit: SideEffectPermit | None = None
+        if isinstance(
+            assignment.job,
+            (
+                WorkspacePrepareJobSpec,
+                WorkspaceWriteTextJobSpec,
+                WorkspaceRollbackJobSpec,
+                WorkspaceDiscardJobSpec,
+            ),
+        ):
+            side_effect_permit = await self._client.acquire_side_effect_permit(
+                assignment.job_id,
+                SideEffectPermitAcquireRequest(
+                    **identity,
+                    job_digest=compute_side_effect_job_digest(assignment.job),
+                ),
+                credential.token,
+            )
+            if (
+                side_effect_permit.runner_id != credential.runner_id
+                or side_effect_permit.job_id != assignment.job_id
+                or side_effect_permit.attempt_id != assignment.attempt_id
+                or side_effect_permit.lease_id != assignment.lease_id
+                or side_effect_permit.workspace_id != assignment.job.workspace_id
+                or side_effect_permit.grant_id != assignment.job.execution_grant.id
+                or side_effect_permit.policy_hash != assignment.job.execution_grant.policy_hash
+            ):
+                raise ValueError("Side-effect Permit binding is inconsistent")
+
         cancel_event = threading.Event()
         execution = asyncio.create_task(
             execute_job(
@@ -206,6 +242,7 @@ class RunnerLifecycle:
                 workspace_manager=self._workspace_manager,
                 operation_id=assignment.job_id,
                 cancel_event=cancel_event,
+                side_effect_permit=side_effect_permit,
             )
         )
         renewal_interval = max(
@@ -280,6 +317,9 @@ class RunnerLifecycle:
                     **identity,
                     error_code=exc.code,
                     error_message=None,
+                    side_effect_permit_id=(
+                        side_effect_permit.id if side_effect_permit is not None else None
+                    ),
                 ),
                 credential.token,
             )
@@ -297,6 +337,9 @@ class RunnerLifecycle:
                     **identity,
                     error_code=FailureCode.RUNNER_INTERNAL_ERROR,
                     error_message=None,
+                    side_effect_permit_id=(
+                        side_effect_permit.id if side_effect_permit is not None else None
+                    ),
                 ),
                 credential.token,
             )

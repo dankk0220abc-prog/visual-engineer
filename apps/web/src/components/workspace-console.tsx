@@ -33,7 +33,13 @@ function workspaceTone(
     state === "discard_requested"
   )
     return "pending";
-  if (state === "failed" || state === "expired") return "negative";
+  if (
+    state === "failed" ||
+    state === "expired" ||
+    state === "recovery_required" ||
+    state === "quarantined"
+  )
+    return "negative";
   return "neutral";
 }
 
@@ -240,6 +246,17 @@ export function WorkspaceConsole() {
                       </dd>
                     </div>
                   </dl>
+                  {workspace.state === "recovery_required" ||
+                  workspace.state === "quarantined" ? (
+                    <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                      Ownership proof is{" "}
+                      {workspace.state === "recovery_required"
+                        ? "missing"
+                        : "inconsistent"}
+                      . Automatic discard is blocked; inspect the recovery
+                      evidence without deleting this Workspace.
+                    </p>
+                  ) : null}
                   <p className="mt-4 text-xs text-slate-500">
                     Expires {formatTimestamp(workspace.expires_at)}
                   </p>

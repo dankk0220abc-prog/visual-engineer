@@ -29,6 +29,8 @@ from visual_engineer_runner_protocol import (
     PermissionEnvelope,
     RepositoryAccess,
     ResultPayload,
+    SideEffectPermit,
+    SourceStatus,
     WorkspaceDiffJobSpec,
     WorkspaceDiffResult,
     WorkspaceDiscardJobSpec,
@@ -50,9 +52,13 @@ from visual_engineer_runner_protocol import (
     WorkspaceWriteTextResult,
     compute_execution_grant_policy_hash,
     compute_permission_policy_hash,
+    compute_side_effect_job_digest,
+    compute_side_effect_permit_digest,
+    side_effect_job_binding,
 )
 
 HANDLE = "fixture-repository-v1"
+RUNNER_ID = uuid.UUID("5a2aa04b-6801-52ad-995d-cf4e829b96cb")
 
 
 def git(repository: Path, *arguments: str) -> str:
@@ -147,11 +153,66 @@ def execute(
     operation_id: uuid.UUID | None = None,
     cancel_event: threading.Event | None = None,
 ) -> ResultPayload:
+    resolved_operation_id = operation_id or uuid.uuid4()
+    permit: SideEffectPermit | None = None
+    if isinstance(
+        spec,
+        (
+            WorkspacePrepareJobSpec,
+            WorkspaceWriteTextJobSpec,
+            WorkspaceRollbackJobSpec,
+            WorkspaceDiscardJobSpec,
+        ),
+    ):
+        permit = side_effect_permit(manager, spec, resolved_operation_id)
     return manager.execute(
         spec,
-        operation_id=operation_id or uuid.uuid4(),
+        operation_id=resolved_operation_id,
         cancel_event=cancel_event or threading.Event(),
+        side_effect_permit=permit,
     )
+
+
+def side_effect_permit(
+    manager: WorkspaceManager,
+    spec: WorkspaceJobSpec,
+    operation_id: uuid.UUID,
+    *,
+    expires_at: datetime | None = None,
+    expected_current: str | None = None,
+) -> SideEffectPermit:
+    binding = side_effect_job_binding(spec)
+    resolved_current = expected_current or binding["expected_current"]
+    if resolved_current is None:
+        registry = manager._load_registry(spec.workspace_id)
+        assert registry is not None
+        resolved_current = registry.current_tree_hash
+    now = datetime.now(UTC)
+    values: dict[str, object] = {
+        "id": uuid.uuid5(operation_id, "side-effect-permit"),
+        "sequence": 1,
+        "runner_id": RUNNER_ID,
+        "job_id": operation_id,
+        "attempt_id": uuid.uuid5(operation_id, "attempt"),
+        "lease_id": uuid.uuid5(operation_id, "lease"),
+        "grant_id": spec.execution_grant.id,
+        "workspace_id": spec.workspace_id,
+        "repository_handle_id": spec.execution_grant.repository_handle_id,
+        "operation": binding["operation"],
+        "relative_path": binding["relative_path"],
+        "expected_current": resolved_current,
+        "proposed_digest": binding["proposed_digest"],
+        "job_digest": compute_side_effect_job_digest(spec),
+        "operation_digest": "0" * 64,
+        "policy_hash": spec.execution_grant.policy_hash,
+        "source_revision": spec.execution_grant.source_revision,
+        "issued_at": now,
+        "consumed_at": now,
+        "expires_at": expires_at or now + timedelta(minutes=1),
+        "state": "consumed",
+    }
+    values["operation_digest"] = compute_side_effect_permit_digest(values)
+    return SideEffectPermit.model_validate(values)
 
 
 def test_workspace_assignment_requires_exact_isolated_repository_access() -> None:
@@ -204,7 +265,8 @@ def test_runner_owned_workspace_end_to_end_and_restart_recovery(tmp_path: Path) 
     registrations = manager.registration_requests(uuid.uuid4())
     assert len(registrations) == 1
     assert registrations[0].source_is_dirty is True
-    assert registrations[0].dirty_path_count == 2
+    assert registrations[0].source_status == SourceStatus.UNKNOWN
+    assert registrations[0].dirty_path_count == 10_000
     assert str(source) not in registrations[0].model_dump_json()
 
     prepared = cast(
@@ -618,6 +680,40 @@ def test_source_read_only_verification_fails_closed(tmp_path: Path) -> None:
     assert error.value.code == FailureCode.SOURCE_NOT_READ_ONLY
 
 
+def test_source_loose_ref_symlink_cannot_fall_back_to_packed_ref(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    git(source, "pack-refs", "--all")
+    loose_ref = source / ".git" / "refs" / "heads" / "main"
+    loose_ref.parent.mkdir(parents=True, exist_ok=True)
+    outside = tmp_path / "outside-ref"
+    outside.write_text(f"{revision}\n", encoding="ascii")
+    os.symlink(outside, loose_ref)
+    settings = runner_settings(tmp_path, source)
+
+    with pytest.raises(GitOperationError) as error:
+        GitOperations(settings).inspect_source(settings.repository_handles[HANDLE])
+    assert error.value.code == FailureCode.REPOSITORY_UNAVAILABLE
+    assert outside.read_text(encoding="ascii") == f"{revision}\n"
+
+
+def test_source_loose_ref_parent_symlink_is_rejected(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    git(source, "pack-refs", "--all")
+    refs = source / ".git" / "refs"
+    shutil.rmtree(refs)
+    outside = tmp_path / "outside-refs"
+    outside_head = outside / "heads" / "main"
+    outside_head.parent.mkdir(parents=True)
+    outside_head.write_text(f"{revision}\n", encoding="ascii")
+    os.symlink(outside, refs)
+    settings = runner_settings(tmp_path, source)
+
+    with pytest.raises(GitOperationError) as error:
+        GitOperations(settings).inspect_source(settings.repository_handles[HANDLE])
+    assert error.value.code == FailureCode.REPOSITORY_UNAVAILABLE
+    assert outside_head.read_text(encoding="ascii") == f"{revision}\n"
+
+
 def test_grant_hash_expiry_and_write_budgets_are_enforced(tmp_path: Path) -> None:
     source, revision = repository_fixture(tmp_path)
     manager = WorkspaceManager(runner_settings(tmp_path, source))
@@ -728,3 +824,405 @@ def test_grant_hash_expiry_and_write_budgets_are_enforced(tmp_path: Path) -> Non
             ),
         )
     assert diff_budget.value.code == FailureCode.DIFF_BUDGET_EXCEEDED
+
+
+def test_side_effect_permit_is_required_fresh_and_exactly_bound(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    prepare = WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    prepare_operation_id = uuid.uuid4()
+
+    with pytest.raises(WorkspaceExecutionError) as missing:
+        manager.execute(
+            prepare,
+            operation_id=prepare_operation_id,
+            cancel_event=threading.Event(),
+        )
+    assert missing.value.code == FailureCode.SIDE_EFFECT_PERMIT_REQUIRED
+    assert not manager._git.workspace_path(workspace_id).exists()
+
+    valid_prepare_permit = side_effect_permit(manager, prepare, prepare_operation_id)
+    tampered_expiry_permit = valid_prepare_permit.model_copy(
+        update={"expires_at": datetime.now(UTC) - timedelta(milliseconds=1)}
+    )
+    with pytest.raises(WorkspaceExecutionError) as tampered_expiry:
+        manager.execute(
+            prepare,
+            operation_id=prepare_operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=tampered_expiry_permit,
+        )
+    assert tampered_expiry.value.code == FailureCode.SIDE_EFFECT_PERMIT_INVALID
+    assert not manager._git.workspace_path(workspace_id).exists()
+
+    expired_values = valid_prepare_permit.model_dump(mode="python")
+    expired_values.update(
+        issued_at=datetime.now(UTC) - timedelta(seconds=2),
+        consumed_at=datetime.now(UTC) - timedelta(seconds=2),
+        expires_at=datetime.now(UTC) - timedelta(seconds=1),
+        operation_digest="0" * 64,
+    )
+    expired_values["operation_digest"] = compute_side_effect_permit_digest(expired_values)
+    expired_prepare_permit = SideEffectPermit.model_validate(expired_values)
+    with pytest.raises(WorkspaceExecutionError) as expired:
+        manager.execute(
+            prepare,
+            operation_id=prepare_operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=expired_prepare_permit,
+        )
+    assert expired.value.code == FailureCode.SIDE_EFFECT_PERMIT_EXPIRED
+    assert not manager._git.workspace_path(workspace_id).exists()
+
+    wrong_job_permit = valid_prepare_permit.model_copy(update={"job_id": uuid.uuid4()})
+    with pytest.raises(WorkspaceExecutionError) as wrong_job:
+        manager.execute(
+            prepare,
+            operation_id=prepare_operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=wrong_job_permit,
+        )
+    assert wrong_job.value.code == FailureCode.SIDE_EFFECT_PERMIT_INVALID
+    assert not manager._git.workspace_path(workspace_id).exists()
+
+    manager.execute(
+        prepare,
+        operation_id=prepare_operation_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=valid_prepare_permit,
+    )
+    target = manager._git.workspace_path(workspace_id) / "sandbox" / "tracked.txt"
+    write = WorkspaceWriteTextJobSpec(
+        workspace_id=workspace_id,
+        execution_grant=grant,
+        mode=WorkspaceWriteMode.REPLACE,
+        relative_path="sandbox/tracked.txt",
+        content="permitted\n",
+        expected_sha256=hashlib.sha256(b"original\n").hexdigest(),
+    )
+    write_operation_id = uuid.uuid4()
+    valid_write_permit = side_effect_permit(manager, write, write_operation_id)
+    wrong_content_permit = valid_write_permit.model_copy(
+        update={"proposed_digest": hashlib.sha256(b"different content").hexdigest()}
+    )
+    with pytest.raises(WorkspaceExecutionError) as wrong_content:
+        manager.execute(
+            write,
+            operation_id=write_operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=wrong_content_permit,
+        )
+    assert wrong_content.value.code == FailureCode.SIDE_EFFECT_PERMIT_INVALID
+    assert target.read_text() == "original\n"
+
+    first = manager.execute(
+        write,
+        operation_id=write_operation_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=valid_write_permit,
+    )
+    replay = manager.execute(
+        write,
+        operation_id=write_operation_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=valid_write_permit,
+    )
+    assert replay == first
+    assert target.read_text() == "permitted\n"
+
+
+def test_side_effect_permit_expiry_before_atomic_commit_preserves_content(
+    tmp_path: Path,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source).model_copy(
+        update={"workspace_write_commit_delay_ms": 60}
+    )
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+    )
+    target = manager._git.workspace_path(workspace_id) / "sandbox" / "tracked.txt"
+    write = WorkspaceWriteTextJobSpec(
+        workspace_id=workspace_id,
+        execution_grant=grant,
+        mode=WorkspaceWriteMode.REPLACE,
+        relative_path="sandbox/tracked.txt",
+        content="must not commit\n",
+        expected_sha256=hashlib.sha256(b"original\n").hexdigest(),
+    )
+    operation_id = uuid.uuid4()
+    permit = side_effect_permit(
+        manager,
+        write,
+        operation_id,
+        expires_at=datetime.now(UTC) + timedelta(milliseconds=10),
+    )
+    with pytest.raises(WorkspaceExecutionError) as expired:
+        manager.execute(
+            write,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        )
+    assert expired.value.code == FailureCode.SIDE_EFFECT_PERMIT_EXPIRED
+    assert target.read_text() == "original\n"
+    assert not list(target.parent.glob(".visual-engineer-write-*.tmp"))
+
+
+def test_registry_and_signed_ownership_fail_closed_on_loss_or_tamper(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+
+    def prepare_workspace() -> tuple[uuid.UUID, WorkspaceStatusJobSpec]:
+        workspace_id = uuid.uuid4()
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+        )
+        return (
+            workspace_id,
+            WorkspaceStatusJobSpec(workspace_id=workspace_id, execution_grant=grant),
+        )
+
+    missing_manifest_id, missing_manifest_status = prepare_workspace()
+    manager._ownership.path(missing_manifest_id).unlink()
+    with pytest.raises(WorkspaceExecutionError) as missing_manifest:
+        execute(manager, missing_manifest_status)
+    assert missing_manifest.value.code == FailureCode.WORKSPACE_RECOVERY_REQUIRED
+
+    tampered_manifest_id, tampered_manifest_status = prepare_workspace()
+    manifest_path = manager._ownership.path(tampered_manifest_id)
+    manifest_path.write_text("{}", encoding="utf-8")
+    os.chmod(manifest_path, 0o600)
+    with pytest.raises(WorkspaceExecutionError) as tampered_manifest:
+        execute(manager, tampered_manifest_status)
+    assert tampered_manifest.value.code == FailureCode.WORKSPACE_QUARANTINED
+
+    unsafe_mode_id, unsafe_mode_status = prepare_workspace()
+    os.chmod(manager._ownership.path(unsafe_mode_id), 0o644)
+    with pytest.raises(WorkspaceExecutionError) as unsafe_mode:
+        execute(manager, unsafe_mode_status)
+    assert unsafe_mode.value.code == FailureCode.WORKSPACE_QUARANTINED
+
+    corrupt_registry_id, corrupt_registry_status = prepare_workspace()
+    registry_path = manager._registry_path(corrupt_registry_id)
+    registry_path.write_text("{", encoding="utf-8")
+    os.chmod(registry_path, 0o600)
+    with pytest.raises(WorkspaceExecutionError) as corrupt_registry:
+        execute(manager, corrupt_registry_status)
+    assert corrupt_registry.value.code == FailureCode.WORKSPACE_QUARANTINED
+
+    valid_tamper_id, valid_tamper_status = prepare_workspace()
+    valid_tamper_registry = manager._load_registry(valid_tamper_id)
+    assert valid_tamper_registry is not None
+    valid_tamper_registry.created_paths = ["sandbox/forged-owned-path.txt"]
+    manager._registry_path(valid_tamper_id).write_text(
+        valid_tamper_registry.model_dump_json(),
+        encoding="utf-8",
+    )
+    with pytest.raises(WorkspaceExecutionError) as valid_tamper:
+        execute(manager, valid_tamper_status)
+    assert valid_tamper.value.code == FailureCode.WORKSPACE_QUARANTINED
+
+    wrong_inode_id, wrong_inode_status = prepare_workspace()
+    wrong_inode_workspace = manager._git.workspace_path(wrong_inode_id)
+    moved_workspace = wrong_inode_workspace.with_name(f"{wrong_inode_workspace.name}-moved")
+    wrong_inode_workspace.rename(moved_workspace)
+    wrong_inode_workspace.mkdir(mode=0o700)
+    with pytest.raises(WorkspaceExecutionError) as wrong_inode:
+        execute(manager, wrong_inode_status)
+    assert wrong_inode.value.code == FailureCode.WORKSPACE_IDENTITY_MISMATCH
+    assert moved_workspace.is_dir()
+
+    missing_root_id, _ = prepare_workspace()
+    missing_root_workspace = manager._git.workspace_path(missing_root_id)
+    preserved_workspace = missing_root_workspace.with_name(
+        f"{missing_root_workspace.name}-preserved"
+    )
+    missing_root_workspace.rename(preserved_workspace)
+    with pytest.raises(WorkspaceExecutionError) as missing_root:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=missing_root_id,
+                execution_grant=grant,
+            ),
+        )
+    assert missing_root.value.code == FailureCode.WORKSPACE_RECOVERY_REQUIRED
+    assert preserved_workspace.is_dir()
+
+
+@pytest.mark.parametrize("inventory_kind", ["ignored", "unknown"])
+def test_discard_quarantines_unowned_inventory_and_preserves_sibling(
+    tmp_path: Path,
+    inventory_kind: str,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    sibling_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+    )
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=sibling_id, execution_grant=grant),
+    )
+    workspace = manager._git.workspace_path(workspace_id)
+    sibling = manager._git.workspace_path(sibling_id)
+    unknown = workspace / "sandbox" / "runner-unknown.txt"
+    unknown.write_text("must be preserved\n", encoding="utf-8")
+    if inventory_kind == "ignored":
+        mirror = manager._git.mirror_path(HANDLE)
+        (mirror / "info" / "exclude").write_text(
+            "sandbox/runner-unknown.txt\n",
+            encoding="utf-8",
+        )
+
+    with pytest.raises(WorkspaceExecutionError) as discard:
+        execute(
+            manager,
+            WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant),
+        )
+    assert discard.value.code == FailureCode.WORKSPACE_QUARANTINED
+    assert unknown.read_text() == "must be preserved\n"
+    assert workspace.is_dir()
+    assert sibling.is_dir()
+
+
+def test_interrupted_discard_reconciles_only_signed_owned_workspace(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    sibling_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+    )
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=sibling_id, execution_grant=grant),
+    )
+    spec = WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    operation_id = uuid.uuid4()
+    permit = side_effect_permit(manager, spec, operation_id)
+    registry = manager._load_registry(workspace_id)
+    assert registry is not None
+    registry.pending_operation = {
+        "operation_id": str(operation_id),
+        "kind": "discard",
+    }
+    registry.pending_permit_id = permit.id
+    manager._save_registry(registry)
+    workspace = manager._git.workspace_path(workspace_id)
+    manager._git.discard_worktree(
+        manager._git.mirror_path(HANDLE),
+        workspace,
+        permit_expires_at=permit.expires_at,
+    )
+
+    recovered = cast(
+        WorkspaceDiscardResult,
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        ),
+    )
+    assert recovered.discarded is True
+    assert recovered.idempotent is True
+    assert not workspace.exists()
+    assert manager._git.workspace_path(sibling_id).is_dir()
+    recovered_registry = manager._load_registry(workspace_id)
+    assert recovered_registry is not None
+    assert recovered_registry.local_state == "discarded"
+    assert recovered_registry.pending_operation is None
+
+
+def test_git_output_and_mirror_object_budgets_fail_closed(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    output_settings = runner_settings(tmp_path, source).model_copy(
+        update={"git_max_output_bytes": 4096}
+    )
+    output_manager = WorkspaceManager(output_settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    execute(
+        output_manager,
+        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+    )
+    sandbox = output_manager._git.workspace_path(workspace_id) / "sandbox"
+    for index in range(80):
+        (sandbox / f"{index:03d}-{'x' * 80}.txt").write_text("bounded\n", encoding="utf-8")
+    with pytest.raises(GitOperationError) as output_limit:
+        output_manager._git.status(
+            output_manager._git.workspace_path(workspace_id),
+            revision,
+        )
+    assert output_limit.value.code == FailureCode.GIT_OUTPUT_LIMIT_EXCEEDED
+
+    random_object = source / "large-object.bin"
+    random_object.write_bytes(os.urandom(32 * 1024))
+    git(source, "add", "large-object.bin")
+    git(source, "commit", "-m", "large synthetic object")
+    large_revision = git(source, "rev-parse", "HEAD")
+    mirror_settings = runner_settings(tmp_path / "mirror-budget", source).model_copy(
+        update={"mirror_max_object_bytes": 1024}
+    )
+    mirror_manager = WorkspaceManager(mirror_settings)
+    opened_object = tmp_path / "opened-object"
+    opened_object.write_bytes(os.urandom(2048))
+    opened_destination = tmp_path / "opened-object-copy"
+    with pytest.raises(GitOperationError) as opened_limit:
+        mirror_manager._git._copy_object_file(
+            opened_object,
+            opened_destination,
+            max_bytes=1024,
+            permit_expires_at=datetime.now(UTC) + timedelta(seconds=5),
+        )
+    assert opened_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert not opened_destination.exists()
+
+    accumulated_source = tmp_path / "accumulated-source"
+    accumulated_destination = tmp_path / "accumulated-destination"
+    (accumulated_source / "objects" / "aa").mkdir(parents=True)
+    (accumulated_destination / "aa").mkdir(parents=True)
+    (accumulated_destination / "bb").mkdir()
+    (accumulated_source / "objects" / "aa" / ("1" * 38)).write_bytes(os.urandom(400))
+    (accumulated_destination / "bb" / ("2" * 38)).write_bytes(os.urandom(800))
+    with pytest.raises(GitOperationError) as accumulated_limit:
+        mirror_manager._git._copy_source_objects(
+            accumulated_source,
+            accumulated_destination,
+            permit_expires_at=datetime.now(UTC) + timedelta(seconds=5),
+        )
+    assert accumulated_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert not (accumulated_destination / "aa" / ("1" * 38)).exists()
+
+    mirror_workspace_id = uuid.uuid4()
+    with pytest.raises(WorkspaceExecutionError) as mirror_limit:
+        execute(
+            mirror_manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=mirror_workspace_id,
+                execution_grant=execution_grant(large_revision),
+            ),
+        )
+    assert mirror_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert not mirror_manager._git.workspace_path(mirror_workspace_id).exists()
+    assert mirror_manager._load_registry(mirror_workspace_id) is None

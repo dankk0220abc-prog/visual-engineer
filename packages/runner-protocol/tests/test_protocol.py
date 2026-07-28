@@ -9,8 +9,13 @@ from visual_engineer_runner_protocol import (
     ControlledWaitJobSpec,
     DiagnosticResult,
     PermissionEnvelope,
+    SideEffectPermit,
+    WorkspaceOperation,
+    canonical_json_bytes,
     compute_permission_policy_hash,
+    compute_side_effect_permit_digest,
     permission_policy_hash_matches,
+    side_effect_permit_digest_matches,
     validate_result_payload,
     validate_safe_error_message,
 )
@@ -113,3 +118,56 @@ def test_error_message_rejects_secrets_and_absolute_paths() -> None:
         validate_safe_error_message("failed at /Users/example/private/file.py")
     with pytest.raises(ValueError):
         validate_safe_error_message("token=dynamic-secret-value")
+
+
+def test_side_effect_permit_canonical_digest_is_stable_and_tamper_evident() -> None:
+    issued_at = datetime(2026, 7, 28, 9, 0, tzinfo=UTC)
+    values = {
+        "id": uuid.UUID("0e590b10-b8de-5e57-bc87-c08c82bba2d3"),
+        "sequence": 7,
+        "runner_id": uuid.UUID("ebec720a-c9e6-578a-b339-0987df9d7f6c"),
+        "job_id": uuid.UUID("2600a238-a6ce-5fa0-bb4e-ebd19c46ecaf"),
+        "attempt_id": uuid.UUID("f16ee025-ad4f-5f23-81fb-0d084a542202"),
+        "lease_id": uuid.UUID("23878c23-581f-5d90-9d7e-76b777cb0614"),
+        "grant_id": uuid.UUID("1f270918-857f-5e25-b15a-0d8e870f284c"),
+        "workspace_id": uuid.UUID("bb2b41d5-0f33-5a68-af87-13b3f36c9ad7"),
+        "repository_handle_id": uuid.UUID("28c7257f-4e98-57e9-9065-296eda010ccd"),
+        "operation": WorkspaceOperation.WRITE_TEXT,
+        "relative_path": "sandbox/tracked.txt",
+        "expected_current": "a" * 64,
+        "proposed_digest": "b" * 64,
+        "job_digest": "c" * 64,
+        "operation_digest": "0" * 64,
+        "policy_hash": "d" * 64,
+        "source_revision": "e" * 40,
+        "issued_at": issued_at,
+        "consumed_at": issued_at,
+        "expires_at": issued_at + timedelta(seconds=5),
+        "state": "consumed",
+    }
+    digest = compute_side_effect_permit_digest(values)
+    values["operation_digest"] = digest
+    permit = SideEffectPermit.model_validate(values)
+
+    assert side_effect_permit_digest_matches(permit, digest)
+    reversed_values = dict(reversed(list(values.items())))
+    assert compute_side_effect_permit_digest(reversed_values) == digest
+    assert canonical_json_bytes(values) == canonical_json_bytes(reversed_values)
+    assert not side_effect_permit_digest_matches(
+        permit.model_copy(update={"relative_path": "sandbox/other.txt"}),
+        digest,
+    )
+    assert not side_effect_permit_digest_matches(
+        permit.model_copy(update={"expires_at": permit.expires_at + timedelta(seconds=30)}),
+        digest,
+    )
+
+    with pytest.raises(ValidationError):
+        SideEffectPermit.model_validate({**values, "unexpected": True})
+    with pytest.raises(ValidationError):
+        SideEffectPermit.model_validate(
+            {
+                **values,
+                "consumed_at": values["expires_at"],
+            }
+        )

@@ -19,6 +19,7 @@ approved immutable Snapshot
   -> Workspace bound to Runner + Handle + revision
   -> typed Job + immutable Permission Envelope
   -> fenced Runner Attempt
+  -> short-lived single-use Side-effect Permit before mutation
 ```
 
 Each link can narrow the preceding authority and none can widen it. Browser
@@ -29,10 +30,11 @@ and Deployment Pack content are data only.
 ## Repository Handle
 
 The Control Plane stores an opaque handle, display metadata, Runner identity,
-closed capabilities, exact committed revision, dirty boolean/count, and
-verification time. The opaque handle is registered only from the Runner's
-local configuration. The host path is neither accepted by user APIs nor
-returned by API/Web responses.
+closed capabilities, exact committed revision, a conservative
+`source_status=unknown`, and verification time. It does not run source
+working-tree status or import dirty/untracked content. The opaque handle is
+registered only from the Runner's local configuration. The host path is
+neither accepted by user APIs nor returned by API/Web responses.
 
 The fixture profile maps `fixture-repository-v1` to the exact read-only
 `/repositories/fixture` mount inside Runner. Web, API, and PostgreSQL receive no
@@ -40,18 +42,32 @@ source, mirror, workspace, SSH, or Docker-socket mount.
 
 ## Mirror and detached worktree
 
-`GitOperations` is the Runner's only subprocess boundary. It invokes one fixed
-Git executable with argument arrays and `shell=False`, a sanitized
-environment, timeouts, disabled prompts, hooks, external diff/textconv,
-credential helpers, system/global configuration, and network protocols.
+`GitOperations` is the Runner's only subprocess boundary, but no Git process
+is invoked against the source repository. A no-follow reader validates a
+narrow ordinary `.git` layout, direct HEAD/ref data, and ordinary committed
+objects. Loose-ref parent components are type-checked and symbolic links fail
+closed. The adapter rejects links, alternates, graft/replacement metadata,
+malformed refs/objects, and unsupported indirection.
+
+Committed objects are copied byte-for-byte under object/byte budgets into a
+new Runner-owned bare mirror with new inodes and no source alternate. The
+opened source descriptor is rechecked against its byte ceiling, and existing
+destination objects count toward aggregate ceilings across repeated
+snapshots. All Git subprocesses then operate only on Runner-owned state. The
+adapter invokes one fixed Git executable with argument arrays and
+`shell=False`, a managed environment/configuration, process-group timeouts,
+bounded streaming output, and disabled prompts, hooks, filters, fsmonitor,
+external diff/textconv, credential helpers, LFS, submodule recursion, URL
+rewrites, system/global configuration, and network protocols.
 
 The Runner:
 
-1. verifies the configured path is the exact Git root and its filesystem is
-   read-only;
-2. records `HEAD`, branch, and only a bounded dirty path count;
-3. fetches local committed objects into a Runner-owned bare mirror without
-   alternates back to the source;
+1. validates the configured path as an exact ordinary Git root and relies on
+   the read-only container mount as an independent runtime boundary;
+2. reads `HEAD`, branch, direct refs, and bounded committed object metadata
+   without source Git execution;
+3. copies the exact committed object closure into a Runner-owned bare mirror
+   without alternates or shared inodes;
 4. verifies the exact approved commit exists;
 5. creates one unpredictable detached worktree below the workspace volume; and
 6. records root device/inode, source fingerprint, initial tree fingerprint,
@@ -98,6 +114,21 @@ The Phase 4 server-derived Grant fixes:
 precedence. Status and diff return bounded relative paths only. Each successful
 write and diff yields immutable fingerprint/checkpoint evidence.
 
+## Current mutation authority and revocation
+
+Prepare, create/replace, rollback, and discard require a
+`SideEffectPermit`. The Control Plane acquires it only after locking and
+checking the current Runner, Job, Attempt, Lease/deadline, Grant, Workspace,
+Repository Handle, revision, policy, operation, path/precondition/content
+digest, and budget. The Runner recomputes the digest and checks the exact
+binding, state, issued/consumed/expiry window, and expiry immediately before
+the first durable mutation.
+
+`revoke_requested` blocks every new permit. A consumed exact permit is exposed
+as in flight and must become completed, failed, cancelled, or expired before
+the Grant becomes effectively `revoked`. Effective revocation accepts no new
+mutation and no old permit.
+
 ## Rollback and disposal
 
 Phase 4 rollback supports only the initial commit baseline. Fixed Git restore
@@ -105,15 +136,19 @@ handles tracked changes; the Runner removes only same-Workspace created files
 recorded with their expected hashes. It then requires clean status and the
 original tree fingerprint.
 
-Discard accepts only a Workspace ID. Registry identity and the workspace root
-device/inode are checked before the exact managed worktree is removed. The
-shared mirror, source, and sibling workspaces are preserved. Discard is
-idempotent.
+Discard accepts only a Workspace ID plus a current exact permit. Before
+removing anything it requires an authenticated registry, a separate valid
+signed ownership manifest, matching Runner/Grant/Handle/revision/policy/nonce,
+the exact Workspace root device/inode, an allowed local state, the managed
+root boundary, and a complete no-follow inventory including ignored and
+unknown entries. Missing proof produces `recovery_required`; contradictory
+proof or unknown content produces `quarantined`. Both preserve the Workspace,
+mirror, source, and siblings. Exact normal discard is idempotent.
 
 An expired Workspace has a ten-minute cleanup window before its Grant expires.
-If the Grant itself is revoked or expired, every Runner Job is rejected,
-including discard; operators must not bypass that fence. Automated privileged
-garbage collection is not implemented in Phase 4.
+If the Grant itself is revoked or expired, every new Runner operation is
+rejected, including discard; operators must not bypass that fence. Automated
+privileged garbage collection is not implemented in Phase 4.
 
 ## Platform limitations
 
@@ -125,8 +160,13 @@ with the workspace volume, which removes the intended same-UID hostile writer
 from the deployed local threat model, but this is not a hostile multi-tenant
 sandbox guarantee.
 
-Git diff output is bounded before persistence/return, but the Git child can
-briefly allocate output before the parent rejects an over-budget result. The
-fixture and write budgets bound the current case; production resource
-isolation remains future work. Case-collision coverage is conditional on the
-source filesystem. A maximum-depth security audit is mandatory before Phase 5.
+Git combined output is streamed into a fixed ceiling and the process group is
+terminated on overflow or timeout. Mirror import has explicit object-count and
+byte ceilings at the opened source descriptor and aggregate destination
+levels. Compose also bounds Runner CPU, memory, PIDs, and open files. These
+are local fixture controls, not production quotas or hostile multi-tenant
+isolation. Case-collision coverage is conditional on the source filesystem.
+
+The independent Phase 4 audit remains **Security Gate: FAIL**. This repair
+design requires a Phase 4 Independent Security Re-Audit before merge,
+CreativeDeploy, Customer 0, or Phase 5.

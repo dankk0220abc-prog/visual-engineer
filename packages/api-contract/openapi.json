@@ -959,6 +959,10 @@
             "title": "Id",
             "type": "string"
           },
+          "in_flight_permit_count": {
+            "title": "In Flight Permit Count",
+            "type": "integer"
+          },
           "max_diff_bytes": {
             "title": "Max Diff Bytes",
             "type": "integer"
@@ -1002,6 +1006,30 @@
             "format": "date-time",
             "title": "Requested At",
             "type": "string"
+          },
+          "revocation_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revocation Requested At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
           },
           "run_id": {
             "anyOf": [
@@ -1085,6 +1113,9 @@
           "policy_hash",
           "requested_at",
           "decided_at",
+          "revocation_requested_at",
+          "revoked_at",
+          "in_flight_permit_count",
           "expires_at",
           "created_at"
         ],
@@ -1092,7 +1123,14 @@
         "type": "object"
       },
       "ExecutionGrantStatus": {
-        "enum": ["pending", "approved", "rejected", "revoked", "expired"],
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "revoke_requested",
+          "revoked",
+          "expired"
+        ],
         "title": "ExecutionGrantStatus",
         "type": "string"
       },
@@ -1128,6 +1166,18 @@
             "format": "uuid",
             "title": "Runner Id",
             "type": "string"
+          },
+          "side_effect_permit_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side Effect Permit Id"
           }
         },
         "required": ["runner_id", "attempt_id", "lease_id", "error_code"],
@@ -1166,7 +1216,14 @@
           "content_conflict",
           "expected_absent_conflict",
           "atomic_write_failed",
-          "workspace_cancelled"
+          "workspace_cancelled",
+          "side_effect_permit_required",
+          "side_effect_permit_invalid",
+          "side_effect_permit_expired",
+          "workspace_recovery_required",
+          "workspace_quarantined",
+          "git_output_limit_exceeded",
+          "mirror_budget_exceeded"
         ],
         "title": "FailureCode",
         "type": "string"
@@ -2275,6 +2332,9 @@
             "title": "Source Is Dirty",
             "type": "boolean"
           },
+          "source_status": {
+            "$ref": "#/components/schemas/SourceStatus"
+          },
           "status": {
             "$ref": "#/components/schemas/RepositoryHandleStatus"
           },
@@ -2300,6 +2360,7 @@
           "capabilities",
           "current_revision",
           "current_branch",
+          "source_status",
           "source_is_dirty",
           "dirty_path_count",
           "last_verified_at",
@@ -2384,6 +2445,12 @@
           "source_is_dirty": {
             "title": "Source Is Dirty",
             "type": "boolean"
+          },
+          "source_status": {
+            "const": "unknown",
+            "default": "unknown",
+            "title": "Source Status",
+            "type": "string"
           },
           "vcs_kind": {
             "const": "git",
@@ -3229,6 +3296,179 @@
         "title": "RunnerStatus",
         "type": "string"
       },
+      "SideEffectPermit": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "consumed_at": {
+            "format": "date-time",
+            "title": "Consumed At",
+            "type": "string"
+          },
+          "expected_current": {
+            "maxLength": 64,
+            "minLength": 6,
+            "pattern": "^(?:absent|workspace_absent|[0-9a-f]{64})$",
+            "title": "Expected Current",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "grant_id": {
+            "format": "uuid",
+            "title": "Grant Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "idempotent_replay": {
+            "default": false,
+            "title": "Idempotent Replay",
+            "type": "boolean"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "job_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Job Digest",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/WorkspaceOperation"
+          },
+          "operation_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Operation Digest",
+            "type": "string"
+          },
+          "policy_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Hash",
+            "type": "string"
+          },
+          "proposed_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Proposed Digest",
+            "type": "string"
+          },
+          "relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Path"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "state": {
+            "const": "consumed",
+            "default": "consumed",
+            "title": "State",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sequence",
+          "runner_id",
+          "job_id",
+          "attempt_id",
+          "lease_id",
+          "grant_id",
+          "workspace_id",
+          "repository_handle_id",
+          "operation",
+          "expected_current",
+          "proposed_digest",
+          "job_digest",
+          "operation_digest",
+          "policy_hash",
+          "source_revision",
+          "issued_at",
+          "consumed_at",
+          "expires_at"
+        ],
+        "title": "SideEffectPermit",
+        "type": "object"
+      },
+      "SideEffectPermitAcquireRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "format": "uuid",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "job_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Job Digest",
+            "type": "string"
+          },
+          "lease_id": {
+            "format": "uuid",
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "runner_id": {
+            "format": "uuid",
+            "title": "Runner Id",
+            "type": "string"
+          }
+        },
+        "required": ["runner_id", "attempt_id", "lease_id", "job_digest"],
+        "title": "SideEffectPermitAcquireRequest",
+        "type": "object"
+      },
       "SnapshotMode": {
         "enum": ["git_head"],
         "title": "SnapshotMode",
@@ -3395,6 +3635,11 @@
         ],
         "title": "SnapshotResponse",
         "type": "object"
+      },
+      "SourceStatus": {
+        "enum": ["unknown"],
+        "title": "SourceStatus",
+        "type": "string"
       },
       "StartRequest": {
         "additionalProperties": false,
@@ -3620,6 +3865,18 @@
             "title": "Diff Hash",
             "type": "string"
           },
+          "side_effect_permit_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side Effect Permit Id"
+          },
           "source_revision": {
             "pattern": "^[0-9a-f]{40,64}$",
             "title": "Source Revision",
@@ -3684,6 +3941,18 @@
             "title": "Sequence",
             "type": "integer"
           },
+          "side_effect_permit_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side Effect Permit Id"
+          },
           "source_revision": {
             "title": "Source Revision",
             "type": "string"
@@ -3705,6 +3974,7 @@
         "required": [
           "id",
           "workspace_id",
+          "side_effect_permit_id",
           "sequence",
           "source_revision",
           "tree_fingerprint",
@@ -3852,13 +4122,18 @@
             "title": "Kind",
             "type": "string"
           },
+          "side_effect_permit_id": {
+            "format": "uuid",
+            "title": "Side Effect Permit Id",
+            "type": "string"
+          },
           "workspace_id": {
             "format": "uuid",
             "title": "Workspace Id",
             "type": "string"
           }
         },
-        "required": ["workspace_id", "idempotent"],
+        "required": ["workspace_id", "idempotent", "side_effect_permit_id"],
         "title": "WorkspaceDiscardResult",
         "type": "object"
       },
@@ -3959,6 +4234,18 @@
             "title": "Sequence",
             "type": "integer"
           },
+          "side_effect_permit_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side Effect Permit Id"
+          },
           "workspace_id": {
             "format": "uuid",
             "title": "Workspace Id",
@@ -3969,6 +4256,7 @@
           "id",
           "workspace_id",
           "runner_id",
+          "side_effect_permit_id",
           "event_type",
           "sequence",
           "request_id",
@@ -4166,6 +4454,11 @@
             "title": "Repository Handle Id",
             "type": "string"
           },
+          "side_effect_permit_id": {
+            "format": "uuid",
+            "title": "Side Effect Permit Id",
+            "type": "string"
+          },
           "source_revision": {
             "pattern": "^[0-9a-f]{40,64}$",
             "title": "Source Revision",
@@ -4188,7 +4481,8 @@
           "source_revision",
           "workspace_fingerprint",
           "initial_tree_hash",
-          "current_tree_hash"
+          "current_tree_hash",
+          "side_effect_permit_id"
         ],
         "title": "WorkspacePrepareResult",
         "type": "object"
@@ -4589,6 +4883,11 @@
             "title": "Removed Created Paths",
             "type": "array"
           },
+          "side_effect_permit_id": {
+            "format": "uuid",
+            "title": "Side Effect Permit Id",
+            "type": "string"
+          },
           "workspace_id": {
             "format": "uuid",
             "title": "Workspace Id",
@@ -4598,7 +4897,8 @@
         "required": [
           "workspace_id",
           "current_tree_hash",
-          "removed_created_paths"
+          "removed_created_paths",
+          "side_effect_permit_id"
         ],
         "title": "WorkspaceRollbackResult",
         "type": "object"
@@ -4616,7 +4916,9 @@
           "discard_requested",
           "discarded",
           "failed",
-          "expired"
+          "expired",
+          "recovery_required",
+          "quarantined"
         ],
         "title": "WorkspaceState",
         "type": "string"
@@ -4629,7 +4931,8 @@
           "renamed",
           "copied",
           "untracked",
-          "type_changed"
+          "type_changed",
+          "ignored"
         ],
         "title": "WorkspaceStatusCode",
         "type": "string"
@@ -4860,6 +5163,11 @@
             "title": "Sha256",
             "type": "string"
           },
+          "side_effect_permit_id": {
+            "format": "uuid",
+            "title": "Side Effect Permit Id",
+            "type": "string"
+          },
           "size": {
             "maximum": 32768.0,
             "minimum": 0.0,
@@ -4887,7 +5195,8 @@
           "current_tree_hash",
           "changed_file_count",
           "total_written_bytes",
-          "checkpoint"
+          "checkpoint",
+          "side_effect_permit_id"
         ],
         "title": "WorkspaceWriteTextResult",
         "type": "object"
@@ -6539,6 +6848,123 @@
           }
         },
         "summary": "Renew the active lease and receive cancellation state",
+        "tags": ["runner protocol"]
+      }
+    },
+    "/api/v1/runner-protocol/v1/jobs/{job_id}/side-effect-permit": {
+      "post": {
+        "operationId": "acquire_side_effect_permit_api_v1_runner_protocol_v1_jobs__job_id__side_effect_permit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SideEffectPermitAcquireRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SideEffectPermit"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid Runner credential"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Revoked or mismatched Runner"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stale or conflicting lease"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Runner protocol payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Protocol or policy validation failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration unavailable"
+          }
+        },
+        "summary": "Acquire one current, attempt-bound Permit before a Workspace side effect",
         "tags": ["runner protocol"]
       }
     },

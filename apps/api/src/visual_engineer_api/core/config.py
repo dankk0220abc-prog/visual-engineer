@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     runner_job_max_attempts: int = Field(default=2, ge=1, le=5)
     runner_max_result_bytes: int = Field(default=8192, ge=256, le=65_536)
     runner_envelope_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    side_effect_permit_ttl_seconds: int = Field(default=5, ge=1, le=10)
+    side_effect_permit_safety_seconds: int = Field(default=1, ge=1, le=5)
     runner_reaper_interval_seconds: float = Field(default=1.0, ge=0.25, le=30)
     runner_reaper_enabled: bool = True
 

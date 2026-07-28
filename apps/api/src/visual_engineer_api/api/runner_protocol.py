@@ -28,6 +28,8 @@ from visual_engineer_runner_protocol import (
     RenewRequest,
     RepositoryRegistrationRequest,
     RepositoryRegistrationResponse,
+    SideEffectPermit,
+    SideEffectPermitAcquireRequest,
     StartRequest,
 )
 
@@ -207,6 +209,30 @@ def start_job(
 ) -> LeaseMutationResponse:
     try:
         return RunnerService(db).start(
+            authenticated,
+            job_id,
+            payload,
+            request_id=_request_id(request),
+        )
+    except RunnerServiceError as exc:
+        _raise_service_error(exc)
+
+
+@router.post(
+    "/jobs/{job_id}/side-effect-permit",
+    response_model=SideEffectPermit,
+    responses=PROTOCOL_ERRORS,
+    summary="Acquire one current, attempt-bound Permit before a Workspace side effect",
+)
+def acquire_side_effect_permit(
+    job_id: uuid.UUID,
+    payload: SideEffectPermitAcquireRequest,
+    request: Request,
+    db: DatabaseSession,
+    authenticated: AuthenticatedRunner,
+) -> SideEffectPermit:
+    try:
+        return RunnerService(db).acquire_side_effect_permit(
             authenticated,
             job_id,
             payload,

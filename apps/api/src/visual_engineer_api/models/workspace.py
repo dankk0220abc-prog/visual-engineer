@@ -29,6 +29,7 @@ class RepositoryHandle(Base):
             name="ck_repository_handles_status",
         ),
         CheckConstraint("dirty_path_count >= 0", name="ck_repository_handles_dirty_count"),
+        CheckConstraint("source_status = 'unknown'", name="ck_repository_handles_source_status"),
         CheckConstraint("metadata_version = 1", name="ck_repository_handles_metadata_version"),
         Index("ix_repository_handles_runner_status", "runner_id", "status"),
     )
@@ -44,6 +45,7 @@ class RepositoryHandle(Base):
     capabilities: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     current_revision: Mapped[str | None] = mapped_column(String(64))
     current_branch: Mapped[str | None] = mapped_column(String(255))
+    source_status: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
     source_is_dirty: Mapped[bool] = mapped_column(nullable=False, default=False)
     dirty_path_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -61,7 +63,8 @@ class ExecutionGrant(Base):
     __table_args__ = (
         CheckConstraint("grant_version = 1", name="ck_execution_grants_version"),
         CheckConstraint(
-            "status IN ('pending', 'approved', 'rejected', 'revoked', 'expired')",
+            "status IN ('pending', 'approved', 'rejected', 'revoke_requested', "
+            "'revoked', 'expired')",
             name="ck_execution_grants_status",
         ),
         CheckConstraint("max_files_changed BETWEEN 1 AND 100", name="ck_grants_file_budget"),
@@ -103,6 +106,15 @@ class ExecutionGrant(Base):
             "(status <> 'pending' AND decided_at IS NOT NULL)",
             name="ck_grants_decided_at",
         ),
+        CheckConstraint(
+            "(status = 'revoke_requested' AND revocation_requested_at IS NOT NULL "
+            "AND revoked_at IS NULL) OR "
+            "(status = 'revoked' AND revocation_requested_at IS NOT NULL "
+            "AND revoked_at IS NOT NULL) OR "
+            "(status NOT IN ('revoke_requested', 'revoked') "
+            "AND revocation_requested_at IS NULL AND revoked_at IS NULL)",
+            name="ck_grants_revocation_lifecycle",
+        ),
         Index("ix_execution_grants_status_expires", "status", "expires_at"),
         Index("ix_execution_grants_plan_created", "plan_id", "created_at"),
     )
@@ -141,6 +153,8 @@ class ExecutionGrant(Base):
     policy_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revocation_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -188,7 +202,7 @@ class Workspace(Base):
         CheckConstraint(
             "state IN ('requested', 'preparing', 'ready', 'active', 'sealing', "
             "'sealed', 'rollback_requested', 'rolled_back', 'discard_requested', "
-            "'discarded', 'failed', 'expired')",
+            "'discarded', 'failed', 'expired', 'recovery_required', 'quarantined')",
             name="ck_workspaces_state",
         ),
         CheckConstraint("changed_file_count >= 0", name="ck_workspaces_changed_count"),
@@ -258,7 +272,10 @@ class WorkspaceEvent(Base):
             "'workspace_prepared', 'tool_started', 'tool_succeeded', 'tool_denied', "
             "'checkpoint_created', 'diff_generated', 'rollback_requested', "
             "'rollback_completed', 'workspace_sealed', 'discard_requested', "
-            "'workspace_discarded', 'workspace_expired', 'workspace_failed')",
+            "'workspace_discarded', 'workspace_expired', 'workspace_failed', "
+            "'permit_acquired', 'permit_completed', 'permit_denied', "
+            "'grant_revoke_requested', 'grant_revoke_effective', "
+            "'recovery_required', 'workspace_quarantined')",
             name="ck_workspace_events_type",
         ),
         Index("ix_workspace_events_workspace_created", "workspace_id", "created_at", "id"),
@@ -270,6 +287,10 @@ class WorkspaceEvent(Base):
     )
     runner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("runners.id", ondelete="RESTRICT"), nullable=False
+    )
+    side_effect_permit_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("side_effect_permits.id", ondelete="SET NULL"),
     )
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -313,6 +334,10 @@ class WorkspaceCheckpoint(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
+    side_effect_permit_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("side_effect_permits.id", ondelete="SET NULL"),
+    )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     source_revision: Mapped[str] = mapped_column(String(64), nullable=False)
     tree_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -324,3 +349,108 @@ class WorkspaceCheckpoint(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class SideEffectPermit(Base):
+    __tablename__ = "side_effect_permits"
+    __table_args__ = (
+        UniqueConstraint(
+            "job_id",
+            "attempt_id",
+            "job_digest",
+            name="uq_side_effect_permits_attempt_job_digest",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "sequence",
+            name="uq_side_effect_permits_workspace_sequence",
+        ),
+        UniqueConstraint("operation_digest", name="uq_side_effect_permits_operation_digest"),
+        CheckConstraint("sequence >= 1", name="ck_side_effect_permits_sequence"),
+        CheckConstraint(
+            "operation IN ('prepare', 'write_text', 'rollback', 'discard')",
+            name="ck_side_effect_permits_operation",
+        ),
+        CheckConstraint(
+            "state IN ('consumed', 'completed', 'failed', 'cancelled', 'expired')",
+            name="ck_side_effect_permits_state",
+        ),
+        CheckConstraint(
+            "(operation = 'write_text' AND relative_path IS NOT NULL) OR "
+            "(operation <> 'write_text' AND relative_path IS NULL)",
+            name="ck_side_effect_permits_path_scope",
+        ),
+        CheckConstraint(
+            "expected_current IN ('absent', 'workspace_absent') "
+            "OR expected_current ~ '^[0-9a-f]{64}$'",
+            name="ck_side_effect_permits_expected_current",
+        ),
+        CheckConstraint(
+            "proposed_digest ~ '^[0-9a-f]{64}$' "
+            "AND job_digest ~ '^[0-9a-f]{64}$' "
+            "AND operation_digest ~ '^[0-9a-f]{64}$' "
+            "AND policy_hash ~ '^[0-9a-f]{64}$' "
+            "AND char_length(source_revision) IN (40, 64) "
+            "AND source_revision ~ '^[0-9a-f]+$'",
+            name="ck_side_effect_permits_digests",
+        ),
+        CheckConstraint(
+            "relative_path IS NULL OR "
+            "(relative_path !~ '(^/|(^|/)\\.\\.(/|$)|\\\\)' "
+            "AND octet_length(relative_path) BETWEEN 1 AND 512)",
+            name="ck_side_effect_permits_relative_path",
+        ),
+        CheckConstraint(
+            "issued_at <= consumed_at AND consumed_at < expires_at",
+            name="ck_side_effect_permits_window",
+        ),
+        CheckConstraint(
+            "(state = 'consumed' AND terminal_at IS NULL) OR "
+            "(state <> 'consumed' AND terminal_at IS NOT NULL)",
+            name="ck_side_effect_permits_terminal",
+        ),
+        Index("ix_side_effect_permits_grant_state", "grant_id", "state"),
+        Index("ix_side_effect_permits_state_expires", "state", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    runner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("runners.id", ondelete="RESTRICT"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("runner_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    attempt_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("runner_job_attempts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    lease_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    grant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("execution_grants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    repository_handle_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("repository_handles.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    operation: Mapped[str] = mapped_column(String(16), nullable=False)
+    relative_path: Mapped[str | None] = mapped_column(String(512))
+    expected_current: Mapped[str] = mapped_column(String(64), nullable=False)
+    proposed_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    job_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    operation_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    policy_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_revision: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="consumed")
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)

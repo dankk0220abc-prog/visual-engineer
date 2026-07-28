@@ -263,7 +263,8 @@ class RunnerJobEvent(Base):
             "'job_claimed', 'job_started', 'lease_renewed', 'job_progress', "
             "'cancel_requested', 'cancel_acknowledged', 'job_succeeded', "
             "'job_failed', 'lease_expired', 'job_requeued', 'policy_denied', "
-            "'runner_revoked')",
+            "'runner_revoked', 'side_effect_permit_acquired', "
+            "'side_effect_permit_completed', 'side_effect_permit_denied')",
             name="ck_runner_job_events_type",
         ),
         UniqueConstraint(

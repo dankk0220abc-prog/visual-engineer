@@ -29,11 +29,16 @@ commands and delivery integrations remain future capabilities.
 
 The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
 read-only repository intelligence, Phase 3 browser-orchestrated Local Runner,
-and Phase 4 Runner-owned isolated workspaces for the synthetic adversarial
-fixture. A local user can independently approve a narrow Execution Grant,
-prepare an exact detached workspace, use closed UTF-8 file tools, inspect
-bounded status/diff/checkpoints, roll back to baseline, and discard it. Plan
-approval never creates or approves an Execution Grant.
+and a Phase 4 security-repair candidate for Runner-owned isolated workspaces
+against the synthetic adversarial fixture. The independent Phase 4 audit
+recorded **Security Gate: FAIL**; that verdict and all six findings remain
+preserved. This repair branch may become ready for a different reviewer, but
+it is not an independent approval and Phase 4 is not in `main`.
+
+A local user can independently approve a narrow Execution Grant, prepare an
+exact detached workspace, use closed UTF-8 file tools, inspect bounded
+status/diff/checkpoints, roll back to baseline, and discard it. Plan approval
+never creates or approves an Execution Grant.
 
 The implemented target is:
 
@@ -54,9 +59,13 @@ The implemented target is:
 - immutable, independently decided Execution Grants bound to an approved
   Plan/Snapshot/revision with `sandbox/**`, denied sensitive paths, budgets,
   no network, no shell, no source write, and no Git delivery;
-- Runner-owned bare mirror and detached exact-revision workspaces in dedicated
-  volumes, with dirty/untracked source exclusion and no hook/submodule/LFS
-  execution;
+- a no-source-Git snapshot adapter that copies bounded committed objects into
+  a new Runner-owned bare mirror with no alternates/shared inodes, plus
+  detached exact-revision workspaces in dedicated volumes;
+- short-lived PostgreSQL-backed Side-effect Permits for prepare, create/
+  replace, rollback, and discard, with bounded Grant revocation semantics;
+- signed Runner-local Workspace ownership evidence, authenticated registry
+  state, and fail-closed recovery/quarantine rather than unproven deletion;
 - descriptor-rooted list/read/create/compare-and-swap replace, fixed Git
   status/diff, immutable checkpoints, baseline rollback, and exact discard;
 - browser Runner registry, dispatch, Job detail, progress, result, cancellation,
@@ -77,12 +86,13 @@ tools, Git commit/push/PR delivery, remote CI evidence, automated visual
 comparison or repair, authentication, multi-tenancy, public hosting, or
 production deployment.
 
-CreativeDeploy is internal Customer 0 and Design Partner 0: the first real
-usage target for shaping the Deployment Pack. Its Phase 2 path is an API-only
-read-only bind mount. Repository intelligence is based on committed `HEAD`;
-dirty and untracked contents are not read. CreativeDeploy is not an external
-enterprise customer and provides no time-saving, adoption, production-impact,
-or production-deployment evidence.
+CreativeDeploy is internal Customer 0 and Design Partner 0. It is not in scope
+for Phase 4 or this repair: it must not be accessed, mounted, read, written,
+tested, built, or used as verification evidence. Historical Phase 2 documents
+describe a separately authorized read-only path, but that does not authorize
+this branch. CreativeDeploy is not an external enterprise customer and
+provides no time-saving, adoption, production-impact, or production-deployment
+evidence.
 
 ## Architecture
 
@@ -152,7 +162,10 @@ make test
 make build
 make contracts-check
 make migration-check
+make phase4-findings-check
+make source-invariance-check
 make workspace-security-check
+make workspace-security-repair-check
 make security-check
 make eval
 make e2e
@@ -163,9 +176,9 @@ make verify
 
 Backend integration and migration tests must use PostgreSQL. Playwright must
 exercise the real web/API/database stack rather than a mocked API. Contract
-generation must be repeatable and leave no diff. See the current evidence
-before treating any check as passed:
-[`docs/evidence/phase-4-verification.md`](docs/evidence/phase-4-verification.md).
+generation must be repeatable and leave no diff. See the current repair
+evidence before treating any check as passed:
+[`docs/evidence/phase-4-security-repair-verification.md`](docs/evidence/phase-4-security-repair-verification.md).
 
 To run the internal Customer 0 case after all synthetic gates pass:
 
@@ -183,10 +196,11 @@ approves, rejects, installs, builds, tests, or modifies CreativeDeploy.
 
 The local target uses `docker compose` services for `db`, `api`, `web`, and
 `runner`, with explicit health checks and a migration step. Runner is
-non-root, root-filesystem-read-only, capability-free, has no published port,
-and joins only the internal `runner-control` network. The fixture override
-mounts one exact synthetic source read-only only into Runner and adds separate
-managed volumes. Intended commands are:
+non-root, root-filesystem-read-only, capability-free, CPU/memory/PID/FD
+bounded, has no published port, and joins only the internal `runner-control`
+network. The fixture override mounts one exact synthetic source read-only only
+into Runner and adds separate credential, mirror, workspace, and registry
+volumes. Intended commands are:
 
 ```sh
 docker compose config
@@ -206,11 +220,13 @@ publicly. A locator alone grants no access: Level 0 reads require a canonical
 allowlisted local Git root, and target repositories remain read-only.
 Repository text is untrusted data, not an instruction source. Human plan
 approval is a durable governance decision, not execution permission. A
-separate immutable Grant authorizes only the exact fixture Workspace scope;
-every typed Job is lease-fenced and revalidates it. Descriptor confinement is
-deliberately conservative but does not claim hostile multi-tenant syscall
-isolation. Local bearer tokens are not a production identity scheme. Never add
-real secrets. Read
+separate immutable Grant authorizes only the exact fixture Workspace scope.
+Every mutating operation additionally requires a current, attempt-bound,
+single-use Side-effect Permit immediately before the filesystem mutation.
+Unprovable Workspace ownership enters recovery/quarantine and is not deleted.
+Descriptor confinement is deliberately conservative but does not claim
+hostile multi-tenant syscall isolation. Local bearer tokens are not a
+production identity scheme. Never add real secrets. Read
 [`SECURITY.md`](SECURITY.md) before integration work.
 
 ## Documentation
@@ -235,6 +251,9 @@ real secrets. Read
 - [Phase 2 verification evidence](docs/evidence/phase-2-verification.md)
 - [Phase 3 verification evidence](docs/evidence/phase-3-verification.md)
 - [Phase 4 verification evidence](docs/evidence/phase-4-verification.md)
+- [Phase 4 independent security audit](docs/security/audits/phase-4-workspace-security-audit.md)
+- [Phase 4 security repair ExecPlan](docs/exec-plans/phase-4-security-repair.md)
+- [Phase 4 security repair evidence](docs/evidence/phase-4-security-repair-verification.md)
 - [Local development runbook](docs/runbooks/local-development.md)
 - [Local Runner runbook](docs/runbooks/local-runner.md)
 - [Runner recovery runbook](docs/runbooks/runner-recovery.md)

@@ -21,6 +21,8 @@ from visual_engineer_runner_protocol import (
     RenewRequest,
     RepositoryRegistrationRequest,
     RepositoryRegistrationResponse,
+    SideEffectPermit,
+    SideEffectPermitAcquireRequest,
     StartRequest,
 )
 
@@ -110,6 +112,20 @@ class ControlPlaneClient:
         token: SecretStr,
     ) -> LeaseMutationResponse:
         return await self._lease_mutation("start", job_id, payload, token)
+
+    async def acquire_side_effect_permit(
+        self,
+        job_id: uuid.UUID,
+        payload: SideEffectPermitAcquireRequest,
+        token: SecretStr,
+    ) -> SideEffectPermit:
+        return await self._request(
+            "POST",
+            f"{RUNNER_PROTOCOL_PREFIX}/jobs/{job_id}/side-effect-permit",
+            SideEffectPermit,
+            payload=payload,
+            token=token,
+        )
 
     async def renew(
         self,

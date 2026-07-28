@@ -228,7 +228,9 @@ def stale_complete(
         },
     )
     if status != 409 or "stale_lease" not in json.dumps(body):
-        raise RuntimeError("Expired Workspace lease was not fenced with stable HTTP 409")
+        raise RuntimeError(
+            f"Expired Workspace lease was not fenced with stable HTTP 409; got HTTP {status}"
+        )
 
 
 def main() -> None:
@@ -293,6 +295,7 @@ def main() -> None:
             "workspace_fingerprint": "1" * 64,
             "initial_tree_hash": "2" * 64,
             "current_tree_hash": "2" * 64,
+            "side_effect_permit_id": str(uuid.uuid4()),
         },
     )
     compose("start", "runner")
@@ -366,6 +369,75 @@ def main() -> None:
     if not isinstance(result, dict) or result.get("sha256") != replacement_sha256:
         raise RuntimeError("Recovered write hash is invalid")
 
+    post_rename_replacement = "Chaos recovered after rename.\n"
+    post_rename_bytes = post_rename_replacement.encode()
+    post_rename_sha256 = hashlib.sha256(post_rename_bytes).hexdigest()
+    post_rename_write = require_json(
+        f"/api/v1/workspaces/{workspace_id}/actions/write-text",
+        method="POST",
+        payload={
+            "mode": "replace",
+            "relative_path": "sandbox/original.txt",
+            "content": post_rename_replacement,
+            "expected_sha256": replacement_sha256,
+        },
+    )
+    post_rename_job_id = str(post_rename_write["job"]["id"])
+    wait_for(
+        "renamed file before result coordination",
+        lambda: write_target_committed(
+            workspace_id,
+            post_rename_job_id,
+            post_rename_sha256,
+        ),
+    )
+    post_rename_attempt_id, post_rename_lease_id = active_lease(post_rename_job_id, 1)
+    compose("stop", "--timeout", "0", "runner")
+    renamed = inspect_interrupted_write(workspace_id, post_rename_job_id)
+    if (
+        renamed.get("target_sha256") != post_rename_sha256
+        or renamed.get("temp_exists") is not False
+    ):
+        raise RuntimeError("Post-rename interruption did not preserve the committed file")
+    wait_for(
+        "post-rename lease expiry and requeue",
+        lambda: requeued_job(post_rename_job_id),
+    )
+    stale_complete(
+        job_id=post_rename_job_id,
+        runner_id=runner_id,
+        runner_token=runner_token,
+        attempt_id=post_rename_attempt_id,
+        lease_id=post_rename_lease_id,
+        result=fake_write_result(
+            workspace_id,
+            str(fixture["current_revision"]),
+            post_rename_sha256,
+            len(post_rename_bytes),
+        ),
+    )
+    compose("start", "runner")
+    recovered_post_rename = wait_for(
+        "post-rename write recovery",
+        lambda: job_in_states(post_rename_job_id, {"succeeded", "failed"}),
+    )
+    if recovered_post_rename.get("state") != "succeeded":
+        raise RuntimeError(
+            f"Post-rename recovery failed with {recovered_post_rename.get('error_code')}"
+        )
+    require_two_attempts(recovered_post_rename)
+    post_rename_result = recovered_post_rename.get("result")
+    if (
+        not isinstance(post_rename_result, dict)
+        or post_rename_result.get("sha256") != post_rename_sha256
+    ):
+        raise RuntimeError("Post-rename recovered write hash is invalid")
+    durable_workspace = require_json(f"/api/v1/workspaces/{workspace_id}")
+    if durable_workspace.get("total_written_bytes") != len(replacement_bytes) + len(
+        post_rename_bytes
+    ):
+        raise RuntimeError("Crash recovery repeated the Workspace write budget")
+
     status = require_success(
         require_json(
             f"/api/v1/workspaces/{workspace_id}/actions/status",
@@ -405,16 +477,80 @@ def main() -> None:
     if workspace_path_exists(workspace_id):
         raise RuntimeError("Discard left the Runner-owned Workspace path behind")
 
+    revoke_workspace_action = require_json(
+        "/api/v1/workspaces",
+        method="POST",
+        payload={"grant_id": grant["id"]},
+    )
+    revoke_workspace_id = str(revoke_workspace_action["workspace"]["id"])
+    require_success(revoke_workspace_action, "workspace_prepare_v1")
+    revoke_read = require_success(
+        require_json(
+            f"/api/v1/workspaces/{revoke_workspace_id}/actions/read-text",
+            method="POST",
+            payload={"relative_path": "sandbox/original.txt", "max_bytes": 32768},
+        ),
+        "workspace_read_text_v1",
+    )
+    revoke_write = require_json(
+        f"/api/v1/workspaces/{revoke_workspace_id}/actions/write-text",
+        method="POST",
+        payload={
+            "mode": "replace",
+            "relative_path": "sandbox/original.txt",
+            "content": "Bounded in-flight write during revoke request.\n",
+            "expected_sha256": revoke_read["sha256"],
+        },
+    )
+    revoke_write_job_id = str(revoke_write["job"]["id"])
+    wait_for(
+        "consumed Permit before concurrent Grant revoke",
+        lambda: consumed_permit_job(revoke_write_job_id),
+    )
+    revoke_response = require_json(
+        f"/api/v1/execution-grants/{grant['id']}/revoke",
+        method="POST",
+    )
+    if (
+        revoke_response.get("status") != "revoke_requested"
+        or revoke_response.get("in_flight_permit_count") != 1
+    ):
+        raise RuntimeError("Concurrent revoke did not expose the bounded in-flight Permit")
+    wait_for(
+        "effective Grant revocation",
+        lambda: execution_grant_in_state(str(grant["id"]), "revoked"),
+    )
+    effective_hash = workspace_file_sha256(revoke_workspace_id)
+    time.sleep(1)
+    denied_status, denied_body = request_json(
+        f"/api/v1/workspaces/{revoke_workspace_id}/actions/write-text",
+        method="POST",
+        payload={
+            "mode": "replace",
+            "relative_path": "sandbox/original.txt",
+            "content": "This write is after effective revocation.\n",
+            "expected_sha256": effective_hash,
+        },
+    )
+    if denied_status != 409 or "execution_grant_inactive" not in json.dumps(denied_body):
+        raise RuntimeError("Effective Grant revocation accepted a new write")
+    if workspace_file_sha256(revoke_workspace_id) != effective_hash:
+        raise RuntimeError("Workspace changed after Grant revocation became effective")
+
     print(
         json.dumps(
             {
                 "atomic_precommit_verified": True,
+                "atomic_postrename_verified": True,
+                "budget_replay": False,
                 "discard_residual": False,
                 "prepare_attempts": 2,
+                "revoke_concurrency_verified": True,
+                "revoke_effective_side_effects": 0,
                 "source_revision": fixture["current_revision"],
-                "stale_leases_fenced": 2,
+                "stale_leases_fenced": 3,
                 "workspace_id": workspace_id,
-                "write_attempts": 2,
+                "write_attempts": 4,
                 "write_recovered": True,
             },
             sort_keys=True,
@@ -460,6 +596,39 @@ def requeued_job(job_id: str) -> dict[str, Any]:
     return {**job, "_ready": job.get("state") == "queued" and expired}
 
 
+def consumed_permit_job(job_id: str) -> dict[str, Any]:
+    job = require_json(f"/api/v1/runner-jobs/{job_id}")
+    query = (
+        "SELECT count(*) FROM side_effect_permits "
+        f"WHERE job_id = '{uuid.UUID(job_id)}' AND state = 'consumed'"
+    )
+    count = compose(
+        "exec",
+        "-T",
+        "db",
+        "psql",
+        "-U",
+        "visualengineer",
+        "-d",
+        "visualengineer",
+        "-At",
+        "-c",
+        query,
+    ).strip()
+    return {**job, "_ready": job.get("state") == "running" and count == "1"}
+
+
+def execution_grant_in_state(grant_id: str, state: str) -> dict[str, Any]:
+    grants = require_json("/api/v1/execution-grants").get("items", [])
+    grant = next(
+        (item for item in grants if isinstance(item, dict) and item.get("id") == grant_id),
+        None,
+    )
+    if grant is None:
+        return {"status": "missing", "_ready": False}
+    return {**grant, "_ready": grant.get("status") == state}
+
+
 def write_temp_present(workspace_id: str, job_id: str) -> dict[str, Any]:
     job = require_json(f"/api/v1/runner-jobs/{job_id}")
     if job.get("state") != "running":
@@ -471,6 +640,48 @@ def write_temp_present(workspace_id: str, job_id: str) -> dict[str, Any]:
     )
     exists = compose("exec", "-T", "runner", "python", "-c", script).strip() == "True"
     return {**job, "_ready": exists}
+
+
+def write_target_committed(
+    workspace_id: str,
+    job_id: str,
+    expected_sha256: str,
+) -> dict[str, Any]:
+    job = require_json(f"/api/v1/runner-jobs/{job_id}")
+    if job.get("state") != "running":
+        return {**job, "_ready": False}
+    script = (
+        "import hashlib;"
+        "from pathlib import Path;"
+        f"p=Path('/var/lib/visual-engineer-runner/workspaces/workspace-{uuid.UUID(workspace_id).hex}')/"
+        "'sandbox/original.txt';"
+        "print(hashlib.sha256(p.read_bytes()).hexdigest())"
+    )
+    actual = compose("exec", "-T", "runner", "python", "-c", script).strip()
+    return {**job, "_ready": actual == expected_sha256}
+
+
+def workspace_file_sha256(workspace_id: str) -> str:
+    script = (
+        "import hashlib;"
+        "from pathlib import Path;"
+        f"p=Path('/var/lib/visual-engineer-runner/workspaces/workspace-{uuid.UUID(workspace_id).hex}')/"
+        "'sandbox/original.txt';"
+        "print(hashlib.sha256(p.read_bytes()).hexdigest())"
+    )
+    value = compose(
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        "runner",
+        "-c",
+        script,
+    ).strip()
+    if len(value) != 64:
+        raise RuntimeError("Workspace file hash inspection failed")
+    return value
 
 
 def require_two_attempts(job: dict[str, Any]) -> None:
@@ -491,6 +702,7 @@ def fake_write_result(
     size: int,
 ) -> dict[str, Any]:
     empty_diff_hash = hashlib.sha256(b"").hexdigest()
+    permit_id = str(uuid.uuid4())
     checkpoint = {
         "source_revision": source_revision,
         "tree_fingerprint": "3" * 64,
@@ -499,6 +711,7 @@ def fake_write_result(
         "changed_file_count": 1,
         "total_diff_bytes": 0,
         "diff": "",
+        "side_effect_permit_id": permit_id,
     }
     return {
         "kind": "workspace_write_text_v1",
@@ -511,6 +724,7 @@ def fake_write_result(
         "changed_file_count": 1,
         "total_written_bytes": size,
         "checkpoint": checkpoint,
+        "side_effect_permit_id": permit_id,
     }
 
 

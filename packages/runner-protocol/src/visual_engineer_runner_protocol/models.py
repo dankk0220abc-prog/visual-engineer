@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import uuid
@@ -111,6 +112,9 @@ class EventType(StrEnum):
     JOB_REQUEUED = "job_requeued"
     POLICY_DENIED = "policy_denied"
     RUNNER_REVOKED = "runner_revoked"
+    SIDE_EFFECT_PERMIT_ACQUIRED = "side_effect_permit_acquired"
+    SIDE_EFFECT_PERMIT_COMPLETED = "side_effect_permit_completed"
+    SIDE_EFFECT_PERMIT_DENIED = "side_effect_permit_denied"
 
 
 class RepositoryAccess(StrEnum):
@@ -154,6 +158,13 @@ class FailureCode(StrEnum):
     EXPECTED_ABSENT_CONFLICT = "expected_absent_conflict"
     ATOMIC_WRITE_FAILED = "atomic_write_failed"
     WORKSPACE_CANCELLED = "workspace_cancelled"
+    SIDE_EFFECT_PERMIT_REQUIRED = "side_effect_permit_required"
+    SIDE_EFFECT_PERMIT_INVALID = "side_effect_permit_invalid"
+    SIDE_EFFECT_PERMIT_EXPIRED = "side_effect_permit_expired"
+    WORKSPACE_RECOVERY_REQUIRED = "workspace_recovery_required"
+    WORKSPACE_QUARANTINED = "workspace_quarantined"
+    GIT_OUTPUT_LIMIT_EXCEEDED = "git_output_limit_exceeded"
+    MIRROR_BUDGET_EXCEEDED = "mirror_budget_exceeded"
 
 
 class WorkspaceOperation(StrEnum):
@@ -189,6 +200,19 @@ class WorkspaceStatusCode(StrEnum):
     COPIED = "copied"
     UNTRACKED = "untracked"
     TYPE_CHANGED = "type_changed"
+    IGNORED = "ignored"
+
+
+class SourceStatus(StrEnum):
+    UNKNOWN = "unknown"
+
+
+class SideEffectPermitState(StrEnum):
+    CONSUMED = "consumed"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
 
 
 class SystemDiagnosticJobSpec(StrictModel):
@@ -379,6 +403,44 @@ WorkspaceJobSpec = (
     | WorkspaceDiscardJobSpec
 )
 
+
+def side_effect_job_binding(spec: WorkspaceJobSpec) -> dict[str, str | None]:
+    relative_path: str | None
+    expected_current: str | None
+    if isinstance(spec, WorkspacePrepareJobSpec):
+        operation = WorkspaceOperation.PREPARE
+        relative_path = None
+        expected_current = "workspace_absent"
+        proposed_digest = hashlib.sha256(
+            f"prepare:{spec.execution_grant.source_revision}".encode("ascii")
+        ).hexdigest()
+    elif isinstance(spec, WorkspaceWriteTextJobSpec):
+        operation = WorkspaceOperation.WRITE_TEXT
+        relative_path = spec.relative_path
+        expected_current = (
+            "absent" if spec.mode == WorkspaceWriteMode.CREATE else spec.expected_sha256
+        )
+        proposed_digest = hashlib.sha256(spec.content.encode("utf-8")).hexdigest()
+    elif isinstance(spec, WorkspaceRollbackJobSpec):
+        operation = WorkspaceOperation.ROLLBACK
+        relative_path = None
+        expected_current = None
+        proposed_digest = hashlib.sha256(b"rollback:initial").hexdigest()
+    elif isinstance(spec, WorkspaceDiscardJobSpec):
+        operation = WorkspaceOperation.DISCARD
+        relative_path = None
+        expected_current = None
+        proposed_digest = hashlib.sha256(b"discard:workspace").hexdigest()
+    else:
+        raise ValueError("Job does not require a side-effect permit")
+    return {
+        "operation": operation.value,
+        "relative_path": relative_path,
+        "expected_current": expected_current,
+        "proposed_digest": proposed_digest,
+    }
+
+
 JobSpec = Annotated[
     SystemDiagnosticJobSpec | ControlledWaitJobSpec | WorkspaceJobSpec,
     Field(discriminator="kind"),
@@ -491,6 +553,7 @@ class RepositoryRegistrationRequest(StrictModel):
         Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
         | None
     ) = None
+    source_status: Literal[SourceStatus.UNKNOWN] = SourceStatus.UNKNOWN
     source_is_dirty: bool
     dirty_path_count: int = Field(ge=0, le=10_000)
     metadata_version: Literal[1] = 1
@@ -518,6 +581,68 @@ class LeaseIdentity(StrictModel):
     runner_id: uuid.UUID
     attempt_id: uuid.UUID
     lease_id: uuid.UUID
+
+
+class SideEffectPermitAcquireRequest(LeaseIdentity):
+    job_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+
+class SideEffectPermit(StrictModel):
+    id: uuid.UUID
+    sequence: int = Field(ge=1)
+    runner_id: uuid.UUID
+    job_id: uuid.UUID
+    attempt_id: uuid.UUID
+    lease_id: uuid.UUID
+    grant_id: uuid.UUID
+    workspace_id: uuid.UUID
+    repository_handle_id: uuid.UUID
+    operation: WorkspaceOperation
+    relative_path: str | None = None
+    expected_current: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=False,
+            min_length=6,
+            max_length=64,
+            pattern=r"^(?:absent|workspace_absent|[0-9a-f]{64})$",
+        ),
+    ]
+    proposed_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    job_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    operation_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    policy_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    issued_at: datetime
+    consumed_at: datetime
+    expires_at: datetime
+    state: Literal[SideEffectPermitState.CONSUMED] = SideEffectPermitState.CONSUMED
+    idempotent_replay: bool = False
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_optional_relative_path(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+    @field_validator("issued_at", "consumed_at", "expires_at")
+    @classmethod
+    def require_permit_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("side-effect permit timestamps must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def validate_permit_window(self) -> "SideEffectPermit":
+        if not self.issued_at <= self.consumed_at < self.expires_at:
+            raise ValueError("side-effect permit timestamps are inconsistent")
+        if self.operation == WorkspaceOperation.WRITE_TEXT:
+            if self.relative_path is None:
+                raise ValueError("write permit requires a relative path")
+        elif self.relative_path is not None:
+            raise ValueError("Workspace-scoped permit cannot carry a relative path")
+        return self
 
 
 class ClaimRequest(StrictModel):
@@ -617,6 +742,7 @@ class WorkspaceCheckpointPayload(StrictModel):
     changed_file_count: int = Field(ge=0, le=100)
     total_diff_bytes: int = Field(ge=0, le=MAX_WORKSPACE_DIFF_BYTES)
     diff: OpaqueText
+    side_effect_permit_id: uuid.UUID | None = None
 
     @field_validator("changed_paths")
     @classmethod
@@ -643,6 +769,7 @@ class WorkspacePrepareResult(StrictModel):
     workspace_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
     initial_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
     current_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    side_effect_permit_id: uuid.UUID
 
 
 class WorkspaceEntry(StrictModel):
@@ -701,11 +828,18 @@ class WorkspaceWriteTextResult(StrictModel):
     changed_file_count: int = Field(ge=0, le=100)
     total_written_bytes: int = Field(ge=0, le=1024 * 1024)
     checkpoint: WorkspaceCheckpointPayload
+    side_effect_permit_id: uuid.UUID
 
     @field_validator("relative_path")
     @classmethod
     def validate_relative_path(cls, value: str) -> str:
         return _validate_relative_policy_value(value, allow_glob=False)
+
+    @model_validator(mode="after")
+    def validate_permit_checkpoint_binding(self) -> "WorkspaceWriteTextResult":
+        if self.checkpoint.side_effect_permit_id != self.side_effect_permit_id:
+            raise ValueError("write result and checkpoint permit IDs must match")
+        return self
 
 
 class WorkspaceStatusEntry(StrictModel):
@@ -765,6 +899,7 @@ class WorkspaceRollbackResult(StrictModel):
     clean: Literal[True] = True
     current_tree_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
     removed_created_paths: list[str] = Field(max_length=100)
+    side_effect_permit_id: uuid.UUID
 
     @field_validator("removed_created_paths")
     @classmethod
@@ -780,6 +915,7 @@ class WorkspaceDiscardResult(StrictModel):
     workspace_id: uuid.UUID
     discarded: Literal[True] = True
     idempotent: bool
+    side_effect_permit_id: uuid.UUID
 
 
 ResultPayload = Annotated[
@@ -803,6 +939,7 @@ class CompleteRequest(LeaseIdentity):
 
 class FailRequest(LeaseIdentity):
     error_code: FailureCode
+    side_effect_permit_id: uuid.UUID | None = None
     error_message: Annotated[
         str | None, StringConstraints(strip_whitespace=True, max_length=500)
     ] = None

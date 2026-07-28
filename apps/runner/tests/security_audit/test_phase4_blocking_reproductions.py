@@ -1,8 +1,8 @@
-"""Closed, synthetic reproductions for Phase 4 independent audit findings.
+"""Closed regression tests for the remediated Phase 4 audit findings.
 
 These tests use only temporary repositories and harmless marker files. They
-record current unsafe observations so the audit evidence is reproducible
-without reaching any external repository, account, service, or network.
+prove the formerly blocking observations now fail closed without reaching any
+external repository, account, service, or network.
 """
 
 from __future__ import annotations
@@ -25,17 +25,20 @@ from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
 from visual_engineer_runner.credentials import CredentialStore, RunnerCredential
 from visual_engineer_runner.git_ops import GitOperations
 from visual_engineer_runner.lifecycle import RunnerLifecycle
-from visual_engineer_runner.workspace_manager import WorkspaceManager
+from visual_engineer_runner.workspace_manager import WorkspaceExecutionError, WorkspaceManager
 from visual_engineer_runner_protocol import (
     Capability,
     CompleteRequest,
     ExecutionGrantPolicy,
+    FailureCode,
     JobAssignment,
     JobState,
     LeaseMutationResponse,
     PermissionEnvelope,
     RenewRequest,
     RepositoryAccess,
+    SideEffectPermit,
+    SideEffectPermitAcquireRequest,
     StartRequest,
     WorkspaceDiscardJobSpec,
     WorkspaceOperation,
@@ -44,9 +47,13 @@ from visual_engineer_runner_protocol import (
     WorkspaceWriteTextJobSpec,
     compute_execution_grant_policy_hash,
     compute_permission_policy_hash,
+    compute_side_effect_job_digest,
+    compute_side_effect_permit_digest,
+    side_effect_job_binding,
 )
 
 HANDLE = "audit-fixture-repository-v1"
+RUNNER_ID = uuid.UUID("470122aa-6ab7-5b22-8e2c-183367f363ee")
 
 
 def _git(repository: Path, *arguments: str) -> str:
@@ -136,11 +143,51 @@ def _execute_prepare(
     workspace_id: uuid.UUID,
     grant: ExecutionGrantPolicy,
 ) -> None:
+    operation_id = uuid.uuid4()
+    spec = WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant)
     manager.execute(
-        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
-        operation_id=uuid.uuid4(),
+        spec,
+        operation_id=operation_id,
         cancel_event=threading.Event(),
+        side_effect_permit=_permit(spec, operation_id=operation_id),
     )
+
+
+def _permit(
+    spec: WorkspacePrepareJobSpec | WorkspaceDiscardJobSpec | WorkspaceWriteTextJobSpec,
+    *,
+    operation_id: uuid.UUID,
+    expected_current: str | None = None,
+) -> SideEffectPermit:
+    binding = side_effect_job_binding(spec)
+    resolved_expected = expected_current or binding["expected_current"]
+    assert resolved_expected is not None
+    now = datetime.now(UTC)
+    values: dict[str, object] = {
+        "id": uuid.uuid5(operation_id, "side-effect-permit"),
+        "sequence": 1,
+        "runner_id": RUNNER_ID,
+        "job_id": operation_id,
+        "attempt_id": uuid.uuid5(operation_id, "attempt"),
+        "lease_id": uuid.uuid5(operation_id, "lease"),
+        "grant_id": spec.execution_grant.id,
+        "workspace_id": spec.workspace_id,
+        "repository_handle_id": spec.execution_grant.repository_handle_id,
+        "operation": binding["operation"],
+        "relative_path": binding["relative_path"],
+        "expected_current": resolved_expected,
+        "proposed_digest": binding["proposed_digest"],
+        "job_digest": compute_side_effect_job_digest(spec),
+        "operation_digest": "0" * 64,
+        "policy_hash": spec.execution_grant.policy_hash,
+        "source_revision": spec.execution_grant.source_revision,
+        "issued_at": now,
+        "consumed_at": now,
+        "expires_at": now + timedelta(minutes=1),
+        "state": "consumed",
+    }
+    values["operation_digest"] = compute_side_effect_permit_digest(values)
+    return SideEffectPermit.model_validate(values)
 
 
 def _permission_envelope(job_id: uuid.UUID) -> PermissionEnvelope:
@@ -204,6 +251,17 @@ class _RevokingControlPlane(ControlPlaneClient):
             cancel_requested=True,
         )
 
+    async def acquire_side_effect_permit(
+        self,
+        job_id: uuid.UUID,
+        payload: SideEffectPermitAcquireRequest,
+        token: SecretStr,
+    ) -> SideEffectPermit:
+        del job_id, payload, token
+        if self.revoked:
+            raise ControlPlaneError(409, "execution_grant_inactive")
+        raise AssertionError("the synthetic authority must be revoked")
+
     async def complete(
         self,
         job_id: uuid.UUID,
@@ -217,7 +275,7 @@ class _RevokingControlPlane(ControlPlaneClient):
         raise AssertionError("the synthetic authority must be revoked")
 
 
-def test_source_local_fsmonitor_is_executed_by_current_git_adapter(tmp_path: Path) -> None:
+def test_source_local_fsmonitor_is_not_executed_by_git_adapter(tmp_path: Path) -> None:
     source, _ = _source_repository(tmp_path)
     marker = tmp_path / "fsmonitor-marker"
     helper = tmp_path / "fsmonitor-helper"
@@ -231,10 +289,10 @@ def test_source_local_fsmonitor_is_executed_by_current_git_adapter(tmp_path: Pat
     settings = _settings(tmp_path, source)
     GitOperations(settings).inspect_source(settings.repository_handles[HANDLE])
 
-    assert marker.is_file(), "current adapter unexpectedly blocked the synthetic fsmonitor marker"
+    assert not marker.exists()
 
 
-def test_source_local_clean_filter_is_executed_by_current_git_adapter(tmp_path: Path) -> None:
+def test_source_local_clean_filter_is_not_executed_by_git_adapter(tmp_path: Path) -> None:
     source, _ = _source_repository(tmp_path)
     marker = tmp_path / "filter-marker"
     helper = tmp_path / "filter-helper"
@@ -254,10 +312,10 @@ def test_source_local_clean_filter_is_executed_by_current_git_adapter(tmp_path: 
     settings = _settings(tmp_path, source)
     GitOperations(settings).inspect_source(settings.repository_handles[HANDLE])
 
-    assert marker.is_file(), "current adapter unexpectedly blocked the synthetic filter marker"
+    assert not marker.exists()
 
 
-def test_revocation_between_start_and_first_renew_allows_file_side_effect(
+def test_revocation_between_start_and_permit_denies_file_side_effect(
     tmp_path: Path,
 ) -> None:
     source, revision = _source_repository(tmp_path)
@@ -295,7 +353,7 @@ def test_revocation_between_start_and_first_renew_allows_file_side_effect(
         workspace_manager=manager,
     )
     credential = RunnerCredential(
-        runner_id=uuid.uuid4(),
+        runner_id=RUNNER_ID,
         token=SecretStr("synthetic-runner-token-" + "x" * 32),
         protocol_version=1,
     )
@@ -305,11 +363,13 @@ def test_revocation_between_start_and_first_renew_allows_file_side_effect(
 
     assert control_plane.revoked is True
     assert control_plane.renew_calls == 0
-    assert control_plane.complete_calls == 1
-    assert target.read_text(encoding="utf-8") == "changed after revocation\n"
+    assert control_plane.complete_calls == 0
+    assert target.read_text(encoding="utf-8") == "original\n"
 
 
-def test_registry_missing_discard_deletes_unknown_ignored_file(tmp_path: Path) -> None:
+def test_registry_missing_discard_requires_recovery_and_preserves_unknown_file(
+    tmp_path: Path,
+) -> None:
     source, revision = _source_repository(tmp_path)
     settings = _settings(tmp_path, source)
     manager = WorkspaceManager(settings)
@@ -323,11 +383,20 @@ def test_registry_missing_discard_deletes_unknown_ignored_file(tmp_path: Path) -
 
     registry = settings.registry_root / f"workspace-{workspace_id.hex}.json"
     os.unlink(registry)
-    manager.execute(
-        WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant),
-        operation_id=uuid.uuid4(),
-        cancel_event=threading.Event(),
-    )
+    operation_id = uuid.uuid4()
+    spec = WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    with pytest.raises(WorkspaceExecutionError) as error:
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=_permit(
+                spec,
+                operation_id=operation_id,
+                expected_current="0" * 64,
+            ),
+        )
 
-    assert not workspace.exists()
-    assert not unknown.exists()
+    assert error.value.code == FailureCode.WORKSPACE_RECOVERY_REQUIRED
+    assert workspace.is_dir()
+    assert unknown.read_text(encoding="utf-8") == "unknown audit-owned content\n"

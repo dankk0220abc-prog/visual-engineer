@@ -1,136 +1,110 @@
 # Project Status
 
-- Phase: Phase 4 — Runner-Owned Isolated Workspace + Scoped Typed File Tools
-- Overall status: IMPLEMENTED; INDEPENDENT SECURITY AUDIT COMPLETE; SECURITY
-  GATE FAIL; MERGE AND CUSTOMER 0 BLOCKED; REMOTE CI NOT RUN
+- Phase: Phase 4 — Workspace Security Repair Candidate
+- Overall status: REPAIR COMPLETE — READY FOR INDEPENDENT RE-AUDIT;
+  INDEPENDENT SECURITY GATE REMAINS FAIL; NOT IN MAIN
 - Last updated: 2026-07-28
-- Branch: `audit/phase-4-workspace-security-max`
-- Phase 4 audited commit: `53dc2f5`
-- Main: `7590f9d`
+- Repair branch: `fix/phase-4-security-remediation`
+- Repair base / audit commit:
+  `a560509b2018f86693e38e3646409f9e33841829`
+- Phase 4 implementation:
+  `53dc2f5016e9b76e1f39c6306fe116ee4091b302`
+- Main: `7590f9dcecbf06371936ac0265cecb9f7a4438ca`
 - Remote: none
+- Remote CI: not run
 
-## Product position
+## Governance status
 
-VisualEngineer is a governed AI design-engineering and delivery system limited
-to Design Implementation, Design-System Migration, and Frontend Quality
-Remediation packages.
+The independent maximum-depth audit completed with **Security Gate: FAIL**:
+three Critical, one High, one Medium, and one Low finding. That report, its
+severity assignments, and its failing source-invariance evidence are
+preserved. This repair implementer cannot change the independent Gate.
 
-Phase 2 provides durable Level 0 committed-repository investigation and
-deterministic Plan approval. Phase 3 provides a browser-orchestrated outbound
-Local Runner with typed repository-free Jobs, PostgreSQL leases, fencing,
-cancellation, and recovery. Phase 4 adds Level 1 only for the versioned
-synthetic fixture: a separate Execution Grant authorizes closed UTF-8 tools in
-a Runner-owned isolated Workspace. Plan approval alone still causes no
-execution.
+The isolated repair branch addresses all six findings and prepares evidence
+for another reviewer. A local passing result means only
+`REPAIR COMPLETE — READY FOR INDEPENDENT RE-AUDIT`; it does not mean approved,
+merged, Customer 0 ready, or production ready.
 
-CreativeDeploy remains internal Customer 0 and Design Partner 0, not an
-external enterprise customer. Phase 4 does not mount, read, write, test, build,
-clean, or otherwise access it.
+## Repair-candidate implementation
 
-## Implemented
+- `VE-P4-AUD-001`: source registration and mirror preparation invoke no Git
+  process against source. A no-follow adapter validates direct HEAD/refs/
+  ordinary objects and copies a bounded committed snapshot into new
+  Runner-owned mirror inodes with no alternates. Bounds are enforced against
+  opened source descriptors and the aggregate destination mirror.
+- `VE-P4-AUD-002`: PostgreSQL-backed Side-effect Permits bind the current
+  Runner, Job, Attempt, Lease, Grant, Workspace, operation and canonical
+  digest, including the immutable authorization time window, immediately
+  before prepare, create/replace, rollback, or discard.
+  `revoke_requested` blocks new permits; effective `revoked` waits for
+  in-flight permits to become terminal or expire.
+- `VE-P4-AUD-003`: registry payloads and separate ownership manifests are
+  domain-separated HMAC authenticated with a Runner-local mode-`0600` key.
+  Missing proof enters `recovery_required`; inconsistent proof or unknown
+  content enters `quarantined`; neither deletes.
+- `VE-P4-AUD-004`: a strict no-follow harness compares source content,
+  lstat/type metadata, branch, HEAD, refs, config, hooks, index, object
+  inventory/inodes, and tracked/untracked hashes across the full lifecycle.
+- `VE-P4-AUD-005`: Runner CPU, memory, PID, FD, Git streaming-output, timeout,
+  and mirror object/byte bounds fail closed.
+- `VE-P4-AUD-006`: in-scope external Compose images use immutable digests and
+  GitHub Actions use full commit SHAs.
 
-- Runner-registered opaque Repository Handle with display/revision/dirty
-  metadata and no Control Plane host path.
-- Immutable Execution Grant and one independent local-user decision, bound to
-  an approved exact Plan/Snapshot/revision and server-derived narrow policy.
-- RepositoryHandle, Grant/Decision, Workspace/Event/Checkpoint persistence,
-  RunnerJob bindings, additive reversible Alembic migration, and generated
-  OpenAPI/TypeScript contracts.
-- Workspace state machine, typed action APIs, request-ID idempotency, stable
-  policy/conflict codes, and per-Lease authority revalidation.
-- Runner-only exact fixture read-only bind plus dedicated persistent
-  mirror/workspace/registry volumes; API, Web, and PostgreSQL get no mount.
-- Fixed-argument no-shell Git boundary for source verification, managed bare
-  mirror, detached exact-revision worktree, bounded status/diff, baseline
-  restore, and disposal.
-- Descriptor-rooted POSIX path parsing and no-follow directory walks;
-  sensitive/symlink/hard-link/non-regular/binary/invalid/oversize denial.
-- Atomic UTF-8 create/replace with expected absence/hash, inode check, fsync,
-  post-write hash, interruption cleanup, and completed-write retry
-  reconciliation.
-- Eight closed Workspace jobs: prepare, list, read, write, status, diff,
-  rollback, and discard.
-- Immutable bounded Checkpoints, initial-baseline rollback with created-file
-  ledger, and registry-bound exact idempotent discard.
-- Repository, Execution Grant, Workspace list/detail, typed tool, write
-  preflight, diff/checkpoint, and Timeline Web surfaces.
-- Versioned adversarial fixture, real-stack seed/smoke/E2E/chaos harnesses,
-  static workspace security checks, and 15-case deterministic workspace Eval
-  dataset.
+The API, database migration, pure Runner Protocol, generated OpenAPI/
+TypeScript contract, browser surfaces, E2E/chaos harnesses, Make targets, CI
+definition, threat models, architecture, ADRs, and runbooks are updated with
+the same semantics.
 
-## Current local evidence
+## Product boundary
 
-- Phase 3 was independently accepted: local verify/smoke/chaos passed, runtime
-  isolation was inspected, and main fast-forwarded without a merge commit.
-- Backend/API/Runner/Protocol suite: 105 passed with 82.29% combined coverage,
-  one upstream Starlette/httpx deprecation warning, and no skips.
-- Frontend unit suite: 39 passed with 72.11% statement, 66.56% branch, 71.89%
-  function, and 74.15% line coverage.
-- Real Playwright suite: 12 passed in the final aggregate gate. Phase 4 passed
-  its browser flow at desktop and 390 px with axe and no-overflow checks.
-- Workspace smoke completed the real prepare/read/replace/create/deny/status/
-  diff/three-Checkpoint/rollback/discard flow and proved the full source plus
-  `.git` fingerprint unchanged.
-- Workspace chaos stopped Runner during prepare and before atomic commit,
-  produced two Attempts for each interrupted Job, fenced two stale leases,
-  recovered the complete write, rolled back, discarded with no residual
-  Workspace, and preserved the full source fingerprint.
-- Workspace security passed 25 focused tests and its static checker; the
-  broader Runner security target passed 46 tests and secret scanning found no
-  high-confidence secret.
-- Contract drift, production Web build, all Compose variants, real PostgreSQL
-  upgrade/downgrade/upgrade, and Eval validation (58 cases plus 7 scanner
-  tests) passed.
+Implemented Phase 4 remains fixture-only Level 1:
 
-The aggregate `make verify` passed. The independent audit target also passed
-four closed synthetic observations, meaning the findings are reproducible.
-The production hash remained unchanged.
+- independently decided exact Execution Grant;
+- opaque synthetic Repository Handle;
+- closed prepare/list/read/create/replace/status/diff/rollback/discard jobs;
+- descriptor-rooted bounded UTF-8 operations;
+- immutable Checkpoints and initial-baseline rollback;
+- Runner-only private mirror/workspace/registry/credential volumes; and
+- outbound API-only Runner control transport.
 
-The independent Security Gate is **FAIL** with three Critical, one High, one
-Medium, and one Low finding. Strict source invariance failed on `.git`
-directory metadata even though source content and all other captured Git state
-remained exact. `main` was not merged. No remote CI result is claimed.
+Explicitly absent: LLM, OpenAI Agents SDK, Agent Trace, shell, arbitrary
+subprocess, target repository command/build/test, delete/rename/binary tool,
+source write, Git delivery, branch/commit/push/PR, remote CI evidence,
+authentication, multi-tenancy, public hosting, and production deployment.
 
-## Current boundaries
+CreativeDeploy is not authorized for this repair and was not mounted,
+accessed, read, written, built, tested, or cleaned.
 
-- Fixture Workspace writes only; source repository and CreativeDeploy writes
-  are forbidden.
-- No LLM, OpenAI Agents SDK, prompt-selected tools, or Agent Trace.
-- No shell, arbitrary subprocess, target repository install/build/test/lint/
-  typecheck/browser command, package lifecycle, or public network.
-- No file delete/rename tool, binary write, submodule initialization, or LFS
-  fetch.
-- No target branch, commit, push, PR, merge, deployment, remote CI evidence,
-  authentication, multi-tenancy, or production hardening.
+## Verification status
 
-## Known limitations
+The complete local command matrix, real-stack E2E/chaos, Docker runtime
+inspection, strict source invariance, migrations, security/Eval checks, and
+pre-checkpoint aggregate `make verify` produced passing evidence. Exact
+commands, counts, coverage, warnings, failures and corrections are recorded in
+`docs/evidence/phase-4-security-repair-verification.md`.
 
-- Python does not expose portable `openat2`/`renameat2` pathname-CAS semantics.
-  Phase 4 uses descriptor walks, no-follow/type/link/inode checks, and makes
-  Runner the sole workspace-volume writer; it is not a hostile multi-tenant
-  sandbox.
-- Git output is bounded before persistence/return, but a child process may
-  briefly allocate an over-budget diff before rejection.
-- Case-collision fixture coverage is conditional on filesystem support.
-- Workspace expiry precedes Grant expiry by ten minutes for typed discard. An
-  expired or revoked Grant fences all Jobs, and Phase 4 has no privileged
-  garbage collector.
-- Local bearer tokens, Docker internal networking, and synthetic fixtures are
-  development controls, not production identity or certification.
-- The independent audit additionally blocks source-adapter execution surfaces,
-  transactional authority fencing, registry/discard mismatch recovery, and
-  exact source metadata invariance.
+The immutable repair hash and required post-checkpoint reruns are authoritative
+only in the final handoff because committed documentation cannot record its own
+hash without changing it. Remote GitHub Actions are not run and must not be
+inferred from the local CI definition.
 
-## Technical debt
+## Remaining limitations
 
-- Track the upstream Starlette TestClient/httpx deprecation.
-- Pin GitHub Actions to immutable commit SHAs before public/high-assurance use.
-- Add filesystem quotas, streaming output bounds, authenticated identities,
-  retention, backup/restore, and incident response before broader exposure.
+- A different reviewer has not performed the Phase 4 Independent Security
+  Re-Audit.
+- Python does not expose portable `openat2`/`renameat2` pathname-CAS; the
+  implementation retains descriptor-rooted no-follow checks and a sole
+  Runner-Writer assumption.
+- Local bearer credentials, HMAC ownership, Docker networking, PostgreSQL
+  polling, and synthetic fixtures are development controls, not hostile
+  multi-tenant or production identity/isolation.
+- No privileged garbage collector or automatic quarantine adjudication exists.
+- Filesystem quotas, fleet admission, production credential lifecycle,
+  backup/restore, incident response, and public deployment remain future work.
 
 ## Recommended next milestone
 
-Run a dedicated Phase 4 security-repair milestone for all Gate-blocking
-findings and explicit Runner resource limits. Then freeze a new baseline and
-repeat the independent audit. Do not merge, access Customer 0, or begin Phase
-5 until a fresh Security Gate PASS.
+**Phase 4 Independent Security Re-Audit**
+
+Do not merge `main`, access CreativeDeploy/Customer 0, or begin Phase 5 before
+that independent decision.

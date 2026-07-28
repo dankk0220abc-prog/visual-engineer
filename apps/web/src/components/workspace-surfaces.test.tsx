@@ -75,8 +75,9 @@ const repository: RepositoryHandle = {
   capabilities: ["committed_head_read", "isolated_workspace"],
   current_revision: "a".repeat(40),
   current_branch: "main",
+  source_status: "unknown",
   source_is_dirty: true,
-  dirty_path_count: 2,
+  dirty_path_count: 10000,
   last_verified_at: "2026-07-27T01:00:00Z",
   metadata_version: 1,
   created_at: "2026-07-27T01:00:00Z",
@@ -116,9 +117,12 @@ const grant: ExecutionGrant = {
   git_delivery_access: false,
   source_repository_write_access: false,
   status: "pending",
+  in_flight_permit_count: 0,
   policy_hash: "c".repeat(64),
   requested_at: "2026-07-27T01:00:00Z",
   decided_at: null,
+  revocation_requested_at: null,
+  revoked_at: null,
   expires_at: "2026-07-27T01:30:00Z",
   created_at: "2026-07-27T01:00:00Z",
   decision: null,
@@ -217,7 +221,7 @@ describe("Phase 4 browser surfaces", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("available")).toBeInTheDocument();
     expect(
-      screen.getByText(/Source working tree is dirty/),
+      screen.getByText(/Source working-tree status is intentionally unknown/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/\/Users\/|\/repositories\/fixture/)).toBeNull();
   });
@@ -239,6 +243,25 @@ describe("Phase 4 browser surfaces", () => {
         expect.objectContaining({ decision: "approve" }),
       ),
     );
+  });
+
+  it("shows requested versus effective Grant revocation", async () => {
+    vi.mocked(listExecutionGrants).mockResolvedValue([
+      {
+        ...grant,
+        status: "revoke_requested",
+        in_flight_permit_count: 1,
+        revocation_requested_at: "2026-07-27T01:02:00Z",
+      },
+    ]);
+    render(<ExecutionGrantConsole />);
+    expect(await screen.findByText("revoke_requested")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /effective revocation waits for 1 bounded in-flight permit/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revoke" })).toBeNull();
   });
 
   it("creates a workspace only from an approved Grant", async () => {
@@ -351,6 +374,24 @@ describe("Phase 4 browser surfaces", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("execution_grant_inactive");
     expect(within(alert).getByRole("button", { name: "重试" })).toBeVisible();
+  });
+
+  it("blocks every destructive control for ownership recovery states", async () => {
+    vi.mocked(getWorkspace).mockResolvedValue({
+      ...workspace,
+      state: "recovery_required",
+      error_code: "workspace_recovery_required",
+      error_message: "Signed ownership proof is missing.",
+    });
+    render(<WorkspaceDetailConsole workspaceId={workspace.id} />);
+    expect(
+      await screen.findByText("Workspace ownership proof is missing."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Rollback to initial" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Replace text" })).toBeDisabled();
   });
 
   it("keeps a typed action denial visible after refreshing durable state", async () => {

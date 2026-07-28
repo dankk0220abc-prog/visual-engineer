@@ -151,3 +151,16 @@ were absent and are recorded as `VE-P4-AUD-005`.
 - Strict source invariance: failed
 - `main`: unchanged and not merged
 - Next milestone: Phase 4 security repair, then a fresh independent audit
+
+## Preserved result and later repair branch
+
+This file is the immutable narrative of the independent audit run. Its FAIL
+result, command ledger, findings, and source-invariance failure are not
+superseded by later local implementation.
+
+A subsequent isolated repair branch records new evidence in
+`docs/evidence/phase-4-security-repair-verification.md`. That evidence may show
+the candidate blocks the original reproductions, but it is not an independent
+Security Gate PASS. Phase 4 is still outside `main`, CreativeDeploy was not in
+scope, and the only next milestone is **Phase 4 Independent Security
+Re-Audit**.
