@@ -11,8 +11,11 @@ import asyncio
 import hashlib
 import os
 import shlex
+import signal
 import subprocess
+import sys
 import threading
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -23,7 +26,7 @@ from pydantic import SecretStr
 from visual_engineer_runner.client import ControlPlaneClient, ControlPlaneError
 from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
 from visual_engineer_runner.credentials import CredentialStore, RunnerCredential
-from visual_engineer_runner.git_ops import GitOperations
+from visual_engineer_runner.git_ops import GitOperationError, GitOperations
 from visual_engineer_runner.lifecycle import RunnerLifecycle
 from visual_engineer_runner.workspace_manager import WorkspaceExecutionError, WorkspaceManager
 from visual_engineer_runner_protocol import (
@@ -400,3 +403,95 @@ def test_registry_missing_discard_requires_recovery_and_preserves_unknown_file(
     assert error.value.code == FailureCode.WORKSPACE_RECOVERY_REQUIRED
     assert workspace.is_dir()
     assert unknown.read_text(encoding="utf-8") == "unknown audit-owned content\n"
+
+
+def test_reaudit_unreachable_uncommitted_object_is_not_imported_into_mirror(
+    tmp_path: Path,
+) -> None:
+    """VE-P4-AUD-001: import only the approved revision's reachable closure."""
+
+    source, revision = _source_repository(tmp_path)
+    uncommitted = source / "sandbox" / "uncommitted-object.txt"
+    uncommitted.write_text("unapproved object payload\n", encoding="utf-8")
+    object_id = _git(source, "hash-object", "-w", "sandbox/uncommitted-object.txt")
+    assert _git(source, "status", "--porcelain=v1") == "?? sandbox/uncommitted-object.txt"
+
+    settings = _settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    workspace_id = uuid.uuid4()
+    _execute_prepare(manager, workspace_id, _grant(revision))
+
+    mirror_object = manager._git.mirror_path(HANDLE) / "objects" / object_id[:2] / object_id[2:]
+    workspace = manager._git.workspace_path(workspace_id)
+    assert not (workspace / "sandbox" / "uncommitted-object.txt").exists()
+    assert not mirror_object.exists()
+
+
+def test_reaudit_registry_loss_and_absent_root_requires_signed_recovery_proof(
+    tmp_path: Path,
+) -> None:
+    """VE-P4-AUD-003: absence alone is not authenticated discard completion."""
+
+    source, revision = _source_repository(tmp_path)
+    settings = _settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = _grant(revision)
+    workspace_id = uuid.uuid4()
+    _execute_prepare(manager, workspace_id, grant)
+    registry = manager._load_registry(workspace_id)
+    assert registry is not None
+
+    workspace = manager._git.workspace_path(workspace_id)
+    preserved = workspace.with_name(f"{workspace.name}-preserved-by-reaudit")
+    workspace.rename(preserved)
+    manager._registry_path(workspace_id).unlink()
+
+    operation_id = uuid.uuid4()
+    spec = WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    with pytest.raises(WorkspaceExecutionError) as error:
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=_permit(
+                spec,
+                operation_id=operation_id,
+                expected_current=registry.current_tree_hash,
+            ),
+        )
+
+    assert error.value.code == FailureCode.WORKSPACE_RECOVERY_REQUIRED
+    assert preserved.is_dir()
+
+
+def test_reaudit_timeout_kills_process_group_after_leader_exits(tmp_path: Path) -> None:
+    """VE-P4-AUD-005: a timed-out subprocess group must leave no orphan."""
+
+    source, _ = _source_repository(tmp_path)
+    operations = GitOperations(_settings(tmp_path, source))
+    marker = tmp_path / "orphan-child-marker"
+    child_code = f"import pathlib,time;time.sleep(0.4);pathlib.Path({str(marker)!r}).touch()"
+    parent_code = f"import subprocess,sys;subprocess.Popen([sys.executable, '-c', {child_code!r}])"
+    process = subprocess.Popen(
+        [sys.executable, "-c", parent_code],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        with pytest.raises(GitOperationError) as error:
+            operations._collect_bounded_output(
+                process,
+                timeout_seconds=0.05,
+                timeout_failure=FailureCode.WORKSPACE_STATE_INVALID,
+            )
+        assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+        time.sleep(0.6)
+        assert not marker.exists()
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=1)
