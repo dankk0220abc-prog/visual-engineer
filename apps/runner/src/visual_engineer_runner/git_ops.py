@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 
 from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
 from visual_engineer_runner.git_object_store import (
+    CheckoutManifestEntry,
     ObjectLimits,
     SourceObjectClosure,
     SourceObjectError,
@@ -42,6 +43,43 @@ class RepositoryMetadata:
 class GitStatusEntry:
     relative_path: str
     status: WorkspaceStatusCode
+
+
+@dataclass(frozen=True)
+class PreparedMirror:
+    path: Path
+    source_revision: str
+    checkout_manifest: tuple[CheckoutManifestEntry, ...]
+    manifest_digest: str
+
+
+@dataclass(frozen=True)
+class CheckoutProof:
+    workspace: Path
+    expected_manifest_digest: str
+    actual_manifest_digest: str
+    entry_count: int
+
+
+@dataclass(frozen=True)
+class _WorkspaceEntrySnapshot:
+    device: int
+    inode: int
+    mode: int
+    links: int
+    size: int
+    modified_ns: int
+
+    @classmethod
+    def from_stat(cls, metadata: os.stat_result) -> _WorkspaceEntrySnapshot:
+        return cls(
+            device=metadata.st_dev,
+            inode=metadata.st_ino,
+            mode=metadata.st_mode,
+            links=metadata.st_nlink,
+            size=metadata.st_size,
+            modified_ns=metadata.st_mtime_ns,
+        )
 
 
 class GitOperations:
@@ -116,18 +154,20 @@ class GitOperations:
         source_revision: str,
         *,
         permit_expires_at: datetime,
-    ) -> Path:
+    ) -> PreparedMirror:
         _require_fresh_permit(permit_expires_at)
         metadata = self.inspect_source(repository)
         if metadata.current_revision != source_revision:
             raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
         mirror = self.mirror_path(opaque_handle)
+        created_mirror = False
         if mirror.exists() or mirror.is_symlink():
             if mirror.is_symlink() or not mirror.is_dir():
                 raise GitOperationError(FailureCode.WORKSPACE_IDENTITY_MISMATCH)
-            self._validate_managed_config(
+            self._validate_managed_mirror(
                 mirror,
                 object_id_hex_length=len(source_revision),
+                source_revision=source_revision,
             )
             bare = (
                 self._run(
@@ -153,12 +193,14 @@ class GitOperations:
                 raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
         else:
             mirror.mkdir(mode=0o700)
+            created_mirror = True
             self._run(
                 [
                     "-C",
                     os.fspath(mirror),
                     "init",
                     "--bare",
+                    "--template=",
                     f"--object-format={_object_format(len(source_revision))}",
                 ],
                 failure=FailureCode.REPOSITORY_UNAVAILABLE,
@@ -166,7 +208,7 @@ class GitOperations:
             )
             self._write_managed_config(mirror, object_id_hex_length=len(source_revision))
         _require_fresh_permit(permit_expires_at)
-        self._copy_source_objects(
+        checkout_manifest = self._copy_source_objects(
             self._source_git_directory(self._validate_source_path(repository.path)),
             mirror / "objects",
             source_revision=source_revision,
@@ -174,45 +216,48 @@ class GitOperations:
         )
         if self.inspect_source(repository) != metadata:
             raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
+        if created_mirror:
+            self._write_detached_head(mirror, source_revision)
+        self._validate_managed_mirror(
+            mirror,
+            object_id_hex_length=len(source_revision),
+            source_revision=source_revision,
+        )
         self._run(
             ["-C", os.fspath(mirror), "cat-file", "-e", f"{source_revision}^{{commit}}"],
             failure=FailureCode.SOURCE_REVISION_MISMATCH,
             permit_expires_at=permit_expires_at,
         )
-        self._run(
-            [
-                "-C",
-                os.fspath(mirror),
-                "update-ref",
-                "refs/visual-engineer/source-head",
-                source_revision,
-            ],
-            failure=FailureCode.WORKSPACE_STATE_INVALID,
-            permit_expires_at=permit_expires_at,
+        return PreparedMirror(
+            path=mirror,
+            source_revision=source_revision,
+            checkout_manifest=checkout_manifest,
+            manifest_digest=_manifest_digest(checkout_manifest),
         )
-        return mirror
 
     def create_detached_worktree(
         self,
-        mirror: Path,
+        mirror: PreparedMirror,
         workspace_id: uuid.UUID,
         source_revision: str,
         *,
         permit_expires_at: datetime,
-    ) -> Path:
+    ) -> CheckoutProof:
         _require_fresh_permit(permit_expires_at)
+        if mirror.source_revision != source_revision:
+            raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
         workspace = self.workspace_path(workspace_id)
         if workspace.exists():
             raise GitOperationError(FailureCode.WORKSPACE_IDENTITY_MISMATCH)
         self._run(
-            ["-C", os.fspath(mirror), "worktree", "prune", "--expire=now"],
+            ["-C", os.fspath(mirror.path), "worktree", "prune", "--expire=now"],
             failure=FailureCode.WORKSPACE_STATE_INVALID,
             permit_expires_at=permit_expires_at,
         )
         self._run(
             [
                 "-C",
-                os.fspath(mirror),
+                os.fspath(mirror.path),
                 "worktree",
                 "add",
                 "--detach",
@@ -234,9 +279,30 @@ class GitOperations:
         )
         _require_fresh_permit(permit_expires_at)
         if actual != source_revision:
+            self._quarantine_workspace(workspace, workspace_id)
             raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
+        try:
+            actual_manifest = self._workspace_checkout_manifest(
+                workspace,
+                expected_manifest=mirror.checkout_manifest,
+            )
+        except GitOperationError:
+            self._quarantine_workspace(workspace, workspace_id)
+            raise
+        actual_manifest_digest = _manifest_digest(actual_manifest)
+        if (
+            actual_manifest != mirror.checkout_manifest
+            or actual_manifest_digest != mirror.manifest_digest
+        ):
+            self._quarantine_workspace(workspace, workspace_id)
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
         os.chmod(workspace, 0o700)
-        return workspace
+        return CheckoutProof(
+            workspace=workspace,
+            expected_manifest_digest=mirror.manifest_digest,
+            actual_manifest_digest=actual_manifest_digest,
+            entry_count=len(actual_manifest),
+        )
 
     def status(self, workspace: Path, source_revision: str) -> list[GitStatusEntry]:
         self._require_workspace(workspace)
@@ -558,10 +624,36 @@ class GitOperations:
         _require_object_id(value)
         return value
 
+    def _write_detached_head(self, mirror: Path, source_revision: str) -> None:
+        _require_object_id(source_revision)
+        self._write_managed_file(
+            mirror,
+            "HEAD",
+            (source_revision + "\n").encode("ascii"),
+        )
+
     def _write_managed_config(self, mirror: Path, *, object_id_hex_length: int) -> None:
-        config = mirror / "config"
-        payload = _managed_config_payload(object_id_hex_length)
-        temporary = mirror / f".config-{uuid.uuid4().hex}.tmp"
+        self._write_managed_file(
+            mirror,
+            "config",
+            _managed_config_payload(object_id_hex_length),
+        )
+        for forbidden in (
+            mirror / "objects" / "info" / "alternates",
+            mirror / "objects" / "info" / "http-alternates",
+            mirror / "info",
+            mirror / "hooks",
+            mirror / "logs",
+            mirror / "shallow",
+            mirror / "packed-refs",
+            mirror / "refs" / "replace",
+        ):
+            if forbidden.exists() or forbidden.is_symlink():
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+
+    def _write_managed_file(self, root: Path, name: str, payload: bytes) -> None:
+        destination = root / name
+        temporary = root / f".{name.lower()}-{uuid.uuid4().hex}.tmp"
         try:
             descriptor = os.open(
                 temporary,
@@ -573,7 +665,7 @@ class GitOperations:
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
-            os.replace(temporary, config)
+            os.replace(temporary, destination)
         except OSError as exc:
             raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
         finally:
@@ -581,14 +673,85 @@ class GitOperations:
                 temporary.unlink()
             except FileNotFoundError:
                 pass
-        for forbidden in (
-            mirror / "objects" / "info" / "alternates",
-            mirror / "objects" / "info" / "http-alternates",
-            mirror / "info" / "grafts",
-            mirror / "refs" / "replace",
-        ):
-            if forbidden.exists() or forbidden.is_symlink():
+
+    def _validate_managed_mirror(
+        self,
+        mirror: Path,
+        *,
+        object_id_hex_length: int,
+        source_revision: str,
+    ) -> None:
+        self._validate_managed_config(
+            mirror,
+            object_id_hex_length=object_id_hex_length,
+        )
+        self._validate_managed_head(mirror, source_revision)
+        required = {"HEAD", "config", "objects", "refs"}
+        allowed = required | {"worktrees"}
+        try:
+            with os.scandir(mirror) as entries:
+                found = {entry.name for entry in entries}
+            if not required.issubset(found) or not found.issubset(allowed):
                 raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            for name in ("objects", "refs", "worktrees"):
+                path = mirror / name
+                if name == "worktrees" and name not in found:
+                    continue
+                metadata = os.lstat(path)
+                if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        except GitOperationError:
+            raise
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        self._validate_empty_ref_namespace(mirror / "refs")
+
+    def _validate_managed_head(self, mirror: Path, source_revision: str) -> None:
+        expected = (source_revision + "\n").encode("ascii")
+        path = mirror / "HEAD"
+        try:
+            descriptor = os.open(
+                path,
+                os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            )
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        try:
+            before = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or stat.S_IMODE(before.st_mode) != 0o600
+                or before.st_size != len(expected)
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            payload = os.read(descriptor, len(expected) + 1)
+            after = os.fstat(descriptor)
+            if payload != expected or _WorkspaceEntrySnapshot.from_stat(
+                before
+            ) != _WorkspaceEntrySnapshot.from_stat(after):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        finally:
+            os.close(descriptor)
+
+    def _validate_empty_ref_namespace(self, refs: Path) -> None:
+        try:
+            with os.scandir(refs) as entries:
+                found = {entry.name for entry in entries}
+            if found != {"heads", "tags"}:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            for name in sorted(found):
+                path = refs / name
+                metadata = os.lstat(path)
+                if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                with os.scandir(path) as entries:
+                    if next(entries, None) is not None:
+                        raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        except GitOperationError:
+            raise
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
 
     def _validate_managed_config(
         self,
@@ -634,7 +797,11 @@ class GitOperations:
         for forbidden in (
             mirror / "objects" / "info" / "alternates",
             mirror / "objects" / "info" / "http-alternates",
-            mirror / "info" / "grafts",
+            mirror / "info",
+            mirror / "hooks",
+            mirror / "logs",
+            mirror / "shallow",
+            mirror / "packed-refs",
             mirror / "refs" / "replace",
         ):
             if forbidden.exists() or forbidden.is_symlink():
@@ -647,7 +814,7 @@ class GitOperations:
         *,
         source_revision: str,
         permit_expires_at: datetime,
-    ) -> None:
+    ) -> tuple[CheckoutManifestEntry, ...]:
         try:
             reader = SourceObjectClosure(
                 source_git,
@@ -669,13 +836,294 @@ class GitOperations:
                 _require_fresh_permit(permit_expires_at)
 
             closure = reader.collect(source_revision, require_fresh=require_fresh)
+            checkout_manifest = reader.checkout_manifest(
+                source_revision,
+                require_fresh=require_fresh,
+            )
             reader.materialize(
                 destination,
                 closure,
                 require_fresh=require_fresh,
             )
+            return checkout_manifest
         except SourceObjectError as exc:
             raise GitOperationError(exc.code) from exc
+
+    def _workspace_checkout_manifest(
+        self,
+        workspace: Path,
+        *,
+        expected_manifest: tuple[CheckoutManifestEntry, ...],
+    ) -> tuple[CheckoutManifestEntry, ...]:
+        expected_gitlinks = {
+            entry.relative_path for entry in expected_manifest if entry.entry_type == "gitlink"
+        }
+        total_bytes = [0]
+        entry_count = [0]
+        try:
+            root = os.open(
+                workspace,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            )
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        try:
+            entries = self._scan_workspace_directory(
+                root,
+                prefix=b"",
+                expected_gitlinks=expected_gitlinks,
+                total_bytes=total_bytes,
+                entry_count=entry_count,
+            )
+        finally:
+            os.close(root)
+        return tuple(sorted(entries, key=lambda entry: entry.relative_path))
+
+    def _scan_workspace_directory(
+        self,
+        directory: int,
+        *,
+        prefix: bytes,
+        expected_gitlinks: set[bytes],
+        total_bytes: list[int],
+        entry_count: list[int],
+    ) -> list[CheckoutManifestEntry]:
+        before_directory = _WorkspaceEntrySnapshot.from_stat(os.fstat(directory))
+        try:
+            names = sorted(os.fsencode(name) for name in os.listdir(directory))
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        if not prefix:
+            if b".git" not in names:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            self._validate_workspace_git_file(directory)
+            names.remove(b".git")
+        entries: list[CheckoutManifestEntry] = []
+        for name in names:
+            if not name or name in {b".", b".."} or b"/" in name or name.lower() == b".git":
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            relative_path = name if not prefix else prefix + b"/" + name
+            try:
+                metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except OSError as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+            before = _WorkspaceEntrySnapshot.from_stat(metadata)
+            entry_count[0] += 1
+            if entry_count[0] > self._settings.mirror_max_tree_entries:
+                raise GitOperationError(FailureCode.MIRROR_BUDGET_EXCEEDED)
+            if stat.S_ISDIR(metadata.st_mode):
+                try:
+                    child = os.open(
+                        name,
+                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                        dir_fd=directory,
+                    )
+                except OSError as exc:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+                try:
+                    if relative_path in expected_gitlinks:
+                        if os.listdir(child):
+                            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                        if before != _WorkspaceEntrySnapshot.from_stat(os.fstat(child)):
+                            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                        entries.append(
+                            CheckoutManifestEntry(
+                                relative_path=relative_path,
+                                entry_type="gitlink",
+                                mode=0o160000,
+                                size=0,
+                                sha256=hashlib.sha256(b"").hexdigest(),
+                            )
+                        )
+                    else:
+                        children = self._scan_workspace_directory(
+                            child,
+                            prefix=relative_path,
+                            expected_gitlinks=expected_gitlinks,
+                            total_bytes=total_bytes,
+                            entry_count=entry_count,
+                        )
+                        entries.append(
+                            CheckoutManifestEntry(
+                                relative_path=relative_path,
+                                entry_type="directory",
+                                mode=0o040000,
+                                size=0,
+                                sha256=None,
+                            )
+                        )
+                        entries.extend(children)
+                finally:
+                    os.close(child)
+            elif stat.S_ISLNK(metadata.st_mode):
+                try:
+                    target = os.readlink(name, dir_fd=directory)
+                    after = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                except OSError as exc:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+                target_bytes = os.fsencode(target)
+                if (
+                    before != _WorkspaceEntrySnapshot.from_stat(after)
+                    or len(target_bytes) > self._settings.mirror_max_single_object_bytes
+                ):
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                total_bytes[0] += len(target_bytes)
+                if total_bytes[0] > self._settings.mirror_max_object_bytes:
+                    raise GitOperationError(FailureCode.MIRROR_BUDGET_EXCEEDED)
+                entries.append(
+                    CheckoutManifestEntry(
+                        relative_path=relative_path,
+                        entry_type="symlink",
+                        mode=0o120000,
+                        size=len(target_bytes),
+                        sha256=hashlib.sha256(target_bytes).hexdigest(),
+                    )
+                )
+            elif stat.S_ISREG(metadata.st_mode):
+                if metadata.st_nlink != 1:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                content_digest = self._hash_workspace_file(
+                    directory,
+                    name,
+                    before=before,
+                    total_bytes=total_bytes,
+                )
+                entries.append(
+                    CheckoutManifestEntry(
+                        relative_path=relative_path,
+                        entry_type="regular",
+                        mode=0o100755 if metadata.st_mode & 0o111 else 0o100644,
+                        size=metadata.st_size,
+                        sha256=content_digest,
+                    )
+                )
+            else:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            try:
+                after_entry = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except OSError as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+            if before != _WorkspaceEntrySnapshot.from_stat(after_entry):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        try:
+            after_names = sorted(os.fsencode(name) for name in os.listdir(directory))
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        if not prefix:
+            try:
+                after_names.remove(b".git")
+            except ValueError as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        if names != after_names or before_directory != _WorkspaceEntrySnapshot.from_stat(
+            os.fstat(directory)
+        ):
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        return entries
+
+    def _validate_workspace_git_file(self, root: int) -> None:
+        try:
+            metadata = os.stat(b".git", dir_fd=root, follow_symlinks=False)
+            descriptor = os.open(
+                b".git",
+                os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                dir_fd=root,
+            )
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        try:
+            before = _WorkspaceEntrySnapshot.from_stat(os.fstat(descriptor))
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or before != _WorkspaceEntrySnapshot.from_stat(metadata)
+                or metadata.st_size > 4096
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            payload = os.read(descriptor, 4097)
+            after = _WorkspaceEntrySnapshot.from_stat(os.fstat(descriptor))
+            if (
+                len(payload) != metadata.st_size
+                or before != after
+                or not payload.startswith(b"gitdir: ")
+                or not payload.endswith(b"\n")
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        finally:
+            os.close(descriptor)
+
+    def _hash_workspace_file(
+        self,
+        directory: int,
+        name: bytes,
+        *,
+        before: _WorkspaceEntrySnapshot,
+        total_bytes: list[int],
+    ) -> str:
+        if before.size > self._settings.mirror_max_single_object_bytes:
+            raise GitOperationError(FailureCode.MIRROR_BUDGET_EXCEEDED)
+        total_bytes[0] += before.size
+        if total_bytes[0] > self._settings.mirror_max_object_bytes:
+            raise GitOperationError(FailureCode.MIRROR_BUDGET_EXCEEDED)
+        try:
+            descriptor = os.open(
+                name,
+                os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                dir_fd=directory,
+            )
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        try:
+            opened = _WorkspaceEntrySnapshot.from_stat(os.fstat(descriptor))
+            if opened != before or not stat.S_ISREG(opened.mode) or opened.links != 1:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            digest = hashlib.sha256()
+            remaining = before.size
+            while remaining:
+                chunk = os.read(descriptor, min(64 * 1024, remaining))
+                if not chunk:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                digest.update(chunk)
+                remaining -= len(chunk)
+            if os.read(descriptor, 1):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            if opened != _WorkspaceEntrySnapshot.from_stat(os.fstat(descriptor)):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            return digest.hexdigest()
+        finally:
+            os.close(descriptor)
+
+    def _quarantine_workspace(self, workspace: Path, workspace_id: uuid.UUID) -> Path:
+        source_name = workspace.name
+        quarantine_name = f"quarantine-workspace-{workspace_id.hex}-{uuid.uuid4().hex}"
+        try:
+            root = os.open(
+                self._settings.workspace_root,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            )
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        try:
+            os.stat(source_name, dir_fd=root, follow_symlinks=False)
+            try:
+                os.stat(quarantine_name, dir_fd=root, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            os.rename(
+                source_name,
+                quarantine_name,
+                src_dir_fd=root,
+                dst_dir_fd=root,
+            )
+            os.fsync(root)
+        except GitOperationError:
+            raise
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        finally:
+            os.close(root)
+        return self._settings.workspace_root / quarantine_name
 
     def _require_workspace(self, workspace: Path) -> None:
         expected_parent = self._settings.workspace_root.resolve(strict=True)
@@ -703,6 +1151,7 @@ class GitOperations:
             raise GitOperationError(FailureCode.PATH_INVALID)
         command = [
             "git",
+            "--no-replace-objects",
             "-c",
             "core.hooksPath=/dev/null",
             "-c",
@@ -743,6 +1192,7 @@ class GitOperations:
             "GIT_ATTR_NOSYSTEM": "1",
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_NO_REPLACE_OBJECTS": "1",
             "GIT_LFS_SKIP_SMUDGE": "1",
             "GIT_PROTOCOL_FROM_USER": "0",
             "GIT_ASKPASS": "/bin/false",
@@ -986,3 +1436,21 @@ def _managed_config_payload(object_id_hex_length: int) -> bytes:
     if object_format == "sha256":
         lines.extend(("[extensions]", "\tobjectFormat = sha256"))
     return ("\n".join(lines) + "\n").encode("ascii")
+
+
+def _manifest_digest(entries: tuple[CheckoutManifestEntry, ...]) -> str:
+    digest = hashlib.sha256()
+    digest.update(b"visual-engineer-checkout-manifest-v1\0")
+    for entry in entries:
+        entry_type = entry.entry_type.encode("ascii")
+        content_digest = (entry.sha256 or "").encode("ascii")
+        for payload in (
+            entry.relative_path,
+            entry_type,
+            f"{entry.mode:o}".encode("ascii"),
+            str(entry.size).encode("ascii"),
+            content_digest,
+        ):
+            digest.update(len(payload).to_bytes(8, "big"))
+            digest.update(payload)
+    return digest.hexdigest()

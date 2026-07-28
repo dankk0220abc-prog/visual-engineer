@@ -14,7 +14,7 @@ import uuid
 import zlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -1092,6 +1092,7 @@ def test_discard_quarantines_unowned_inventory_and_preserves_sibling(
     unknown.write_text("must be preserved\n", encoding="utf-8")
     if inventory_kind == "ignored":
         mirror = manager._git.mirror_path(HANDLE)
+        (mirror / "info").mkdir()
         (mirror / "info" / "exclude").write_text(
             "sandbox/runner-unknown.txt\n",
             encoding="utf-8",
@@ -1430,6 +1431,222 @@ def test_existing_mirror_config_is_validated_before_any_rewrite(tmp_path: Path) 
     assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
     assert config.read_bytes() == malicious
     assert manager._git.workspace_path(first_workspace).is_dir()
+    assert _filesystem_snapshot(source) == source_before
+
+
+@pytest.mark.parametrize(
+    "reference_template",
+    [
+        "refs/replace/{approved_revision}",
+        "refs/heads/unapproved",
+    ],
+)
+def test_existing_mirror_rejects_every_loose_ref_and_preserves_source(
+    tmp_path: Path,
+    reference_template: str,
+) -> None:
+    source, replaced_revision = repository_fixture(tmp_path)
+    tracked = source / "sandbox" / "tracked.txt"
+    tracked.write_text("approved second revision\n", encoding="utf-8")
+    git(source, "add", "sandbox/tracked.txt")
+    git(source, "commit", "-m", "approved second revision")
+    approved_revision = git(source, "rev-parse", "HEAD")
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+    grant = execution_grant(approved_revision)
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=uuid.uuid4(), execution_grant=grant),
+    )
+    reference = reference_template.format(approved_revision=approved_revision)
+    destination = manager._git.mirror_path(HANDLE) / reference
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(replaced_revision + "\n", encoding="ascii")
+    source_before = _filesystem_snapshot(source)
+    rejected_workspace_id = uuid.uuid4()
+
+    with pytest.raises(WorkspaceExecutionError) as error:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=rejected_workspace_id,
+                execution_grant=grant,
+            ),
+        )
+
+    assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+    assert not manager._git.workspace_path(rejected_workspace_id).exists()
+    assert destination.read_text(encoding="ascii") == replaced_revision + "\n"
+    assert _filesystem_snapshot(source) == source_before
+
+
+def test_source_packed_replacement_metadata_is_not_imported_into_mirror(
+    tmp_path: Path,
+) -> None:
+    source, replaced_revision = repository_fixture(tmp_path)
+    tracked = source / "sandbox" / "tracked.txt"
+    tracked.write_text("approved second revision\n", encoding="utf-8")
+    git(source, "add", "sandbox/tracked.txt")
+    git(source, "commit", "-m", "approved second revision")
+    approved_revision = git(source, "rev-parse", "HEAD")
+    (source / ".git" / "packed-refs").write_text(
+        "# pack-refs with: peeled fully-peeled sorted \n"
+        f"{replaced_revision} refs/replace/{approved_revision}\n",
+        encoding="ascii",
+    )
+    source_before = _filesystem_snapshot(source)
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+    workspace_id = uuid.uuid4()
+
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=workspace_id,
+            execution_grant=execution_grant(approved_revision),
+        ),
+    )
+
+    mirror = manager._git.mirror_path(HANDLE)
+    assert (mirror / "HEAD").read_text(encoding="ascii") == approved_revision + "\n"
+    assert not (mirror / "packed-refs").exists()
+    assert not any(path.is_file() or path.is_symlink() for path in (mirror / "refs").rglob("*"))
+    assert (manager._git.workspace_path(workspace_id) / "sandbox" / "tracked.txt").read_text(
+        encoding="utf-8"
+    ) == "approved second revision\n"
+    assert _filesystem_snapshot(source) == source_before
+
+
+def test_runner_git_subprocess_does_not_interpret_loose_replacement_ref(
+    tmp_path: Path,
+) -> None:
+    source, replaced_revision = repository_fixture(tmp_path)
+    tracked = source / "sandbox" / "tracked.txt"
+    tracked.write_text("approved second revision\n", encoding="utf-8")
+    git(source, "add", "sandbox/tracked.txt")
+    git(source, "commit", "-m", "approved second revision")
+    approved_revision = git(source, "rev-parse", "HEAD")
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=uuid.uuid4(),
+            execution_grant=execution_grant(approved_revision),
+        ),
+    )
+    mirror = manager._git.mirror_path(HANDLE)
+    replacement = mirror / "refs" / "replace" / approved_revision
+    replacement.parent.mkdir(parents=True)
+    replacement.write_text(replaced_revision + "\n", encoding="ascii")
+
+    output = manager._git._run(
+        [
+            "-C",
+            os.fspath(mirror),
+            "show",
+            f"{approved_revision}:sandbox/tracked.txt",
+        ],
+        failure=FailureCode.WORKSPACE_STATE_INVALID,
+    )
+
+    assert output == b"approved second revision\n"
+
+
+def test_checkout_manifest_proves_modes_symlink_gitlink_and_empty_ref_namespace(
+    tmp_path: Path,
+) -> None:
+    source, _ = repository_fixture(tmp_path)
+    git(source, "restore", "sandbox/tracked.txt")
+    executable = source / "sandbox" / "script.sh"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    executable.chmod(0o755)
+    symlink = source / "sandbox" / "tracked-link"
+    symlink.symlink_to("tracked.txt")
+    git(source, "add", "sandbox/script.sh", "sandbox/tracked-link")
+    missing_gitlink_target = "1" * 40
+    git(
+        source,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        f"160000,{missing_gitlink_target},sandbox/inert-module",
+    )
+    git(source, "commit", "-m", "checkout manifest fixture")
+    revision = git(source, "rev-parse", "HEAD")
+    source_before = _filesystem_snapshot(source)
+    settings = runner_settings(tmp_path, source)
+    operations = GitOperations(settings)
+    permit_expires_at = datetime.now(UTC) + timedelta(minutes=1)
+    prepared = operations.prepare_mirror(
+        HANDLE,
+        settings.repository_handles[HANDLE],
+        revision,
+        permit_expires_at=permit_expires_at,
+    )
+    mirror_entries = {entry.name for entry in prepared.path.iterdir()}
+    assert mirror_entries == {"HEAD", "config", "objects", "refs"}
+    assert not any(
+        path.is_file() or path.is_symlink() for path in (prepared.path / "refs").rglob("*")
+    )
+    workspace_id = uuid.uuid4()
+
+    proof = operations.create_detached_worktree(
+        prepared,
+        workspace_id,
+        revision,
+        permit_expires_at=permit_expires_at,
+    )
+
+    manifest = {entry.relative_path: entry for entry in prepared.checkout_manifest}
+    assert proof.expected_manifest_digest == prepared.manifest_digest
+    assert proof.actual_manifest_digest == prepared.manifest_digest
+    assert proof.entry_count == len(prepared.checkout_manifest)
+    assert manifest[b"sandbox/script.sh"].mode == 0o100755
+    assert manifest[b"sandbox/tracked-link"].entry_type == "symlink"
+    assert manifest[b"sandbox/tracked-link"].sha256 == hashlib.sha256(b"tracked.txt").hexdigest()
+    assert manifest[b"sandbox/inert-module"].entry_type == "gitlink"
+    assert (proof.workspace / "sandbox" / "inert-module").is_dir()
+    assert not any((proof.workspace / "sandbox" / "inert-module").iterdir())
+    assert _filesystem_snapshot(source) == source_before
+
+
+def test_semantically_different_checkout_is_quarantined_before_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    source_before = _filesystem_snapshot(source)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    original_run = manager._git._run
+    workspace_id = uuid.uuid4()
+
+    def run_and_tamper(arguments: list[str], **kwargs: Any) -> bytes:
+        output = original_run(arguments, **kwargs)
+        if len(arguments) > 3 and arguments[2:4] == ["worktree", "add"]:
+            (manager._git.workspace_path(workspace_id) / "sandbox" / "tracked.txt").write_text(
+                "semantically different checkout\n",
+                encoding="utf-8",
+            )
+        return output
+
+    monkeypatch.setattr(manager._git, "_run", run_and_tamper)
+
+    with pytest.raises(WorkspaceExecutionError) as error:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=workspace_id,
+                execution_grant=execution_grant(revision),
+            ),
+        )
+
+    assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+    assert not manager._git.workspace_path(workspace_id).exists()
+    quarantines = list(settings.workspace_root.glob(f"quarantine-workspace-{workspace_id.hex}-*"))
+    assert len(quarantines) == 1
+    assert (quarantines[0] / "sandbox" / "tracked.txt").read_text(
+        encoding="utf-8"
+    ) == "semantically different checkout\n"
+    assert manager._load_registry(workspace_id) is None
     assert _filesystem_snapshot(source) == source_before
 
 

@@ -25,6 +25,7 @@ data. It does not claim hostile-user, hostile-kernel, or production isolation.
 | Host path injection                    | Opaque handles registered from Runner-local configuration; no path in user APIs                                                                                                      | Local configuration administrator remains trusted                                                |
 | Source mutation                        | Runner-only read-only exact bind, no API/Web/DB mount, no source Git execution, exact no-follow invariance manifest                                                                  | Host administrator can remount; production attestation absent                                    |
 | Dirty/untracked or extra-object import | No source working-tree status/read; exact authorized commit/tree/blob closure is parsed from bounded loose/packed objects and materialized into new Runner-owned inodes              | Narrow ordinary `.git` loose/pack layout only                                                    |
+| Replacement metadata changes checkout  | Empty-template mirror, exact detached `HEAD`, empty loose/packed ref namespace, dual Git replacement disabling, and source-less versus no-follow Workspace manifest equality         | Legacy or unprovable mirror state requires manual recovery                                       |
 | Hook/helper/network execution          | Source is never a Git execution target; managed Runner-only adapter disables extensions and protocols                                                                                | Container/runtime hardening needs production review                                              |
 | Plan approval treated as execution     | Separate pending Grant and local-user decision                                                                                                                                       | No enterprise identity/signature yet                                                             |
 | Grant expansion/tamper                 | Server-derived scope, immutable DB trigger, canonical hash, per-operation revalidation                                                                                               | Local DB administrator is trusted                                                                |
@@ -68,10 +69,13 @@ replacement, cancellation, interrupted atomic writes, missing/tampered/
 replayed discard proof, root/inode drift, ignored/unknown files, sibling
 workspaces, loose/packed unreachable objects, alternate/graft/replace
 indirection, malformed objects, delta packs, and leader-first descendants.
-Real PostgreSQL tests cover concurrent Permit acquisition, revocation,
-terminal-state injection failure, committed-disk retry, and exact Permit
-lineage. Real E2E/chaos and the dedicated source harness fingerprint the full
-source tree and `.git` before and after.
+Round 3 adds packed/loose replacement refs, source metadata non-import,
+pre-existing destination refs, direct no-replacement Git execution, semantic
+checkout mismatch isolation, and exact normal manifest cases. Real PostgreSQL
+tests cover concurrent Permit acquisition, revocation, terminal-state
+injection failure, committed-disk retry, and exact Permit lineage. Real
+E2E/chaos and the dedicated source harness fingerprint the full source tree
+and `.git` before and after.
 
 All secret canaries are synthetic. CreativeDeploy is not mounted or accessed.
 
@@ -82,6 +86,7 @@ re-audit Linux syscall semantics (`openat2`/`renameat2` or a smaller native
 helper), registry/signature design, mirror object ownership, safe garbage
 collection, filesystem quotas, container egress enforcement, credential
 lifecycle, and hostile concurrency. The original independent audit remains
-Security Gate FAIL. Round 2 is a local remediation candidate only. The only
-next milestone is Phase 4 Independent Focused Security Re-Audit; the preserved
+Security Gate FAIL, as does the focused re-audit. Round 3 is a local
+single-finding remediation candidate only. The only next milestone is a new
+Phase 4 Independent Single-Finding Focused Security Re-Audit; the preserved
 FAIL must continue to block merge, CreativeDeploy, Customer 0, and Phase 5.

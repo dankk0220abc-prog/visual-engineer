@@ -1,10 +1,13 @@
 # Project Status
 
-- Phase: Phase 4 — Independent Focused Security Re-Audit
+- Phase: Phase 4 — Security Remediation Round 3
 - Overall status:
-  `FOCUSED RE-AUDIT COMPLETE — SECURITY GATE FAIL — REMEDIATION REQUIRED`
-- Governance qualifier: SECURITY GATE FAIL; NOT IN MAIN
+  `REMEDIATION ROUND 3 COMPLETE — READY FOR INDEPENDENT SINGLE-FINDING RE-AUDIT`
+- Governance qualifier: HISTORICAL SECURITY GATE FAIL; NOT IN MAIN
 - Last updated: 2026-07-29
+- Round 3 branch: `fix/phase-4-security-remediation-3`
+- Round 3 base / focused re-audit checkpoint:
+  `8985fa0356e636602d1414a3ade9d9a7888c624a`
 - Focused re-audit branch: `audit/phase-4-security-focused-reaudit-max`
 - Focused candidate:
   `cb799bcf1407c2c797da46c5a2d0aa0a6b73d3f1`
@@ -22,6 +25,46 @@
 - Main: `7590f9dcecbf06371936ac0265cecb9f7a4438ca`
 - Remote: none
 - Remote CI: not run
+
+## Round 3 remediation candidate
+
+The current branch narrowly implements the production correction for
+`VE-P4-FREAUD-001` / `VE-P4-AUD-001`:
+
+- new mirrors use `git init --bare --template=` followed by exact managed
+  config, a detached authorized `HEAD`, and an empty loose/packed ref
+  namespace;
+- existing mirrors fail closed unless top-level metadata, config, object
+  layout, detached `HEAD`, and empty refs match the managed template;
+- every Runner-owned Git process uses both `--no-replace-objects` and
+  `GIT_NO_REPLACE_OBJECTS=1`; and
+- the source-less parser's path/type/Git-mode/size/SHA-256 authorized checkout
+  manifest must exactly match an independent descriptor-rooted no-follow
+  Workspace manifest before ownership or registry creation. A mismatch is
+  atomically isolated without recursive deletion.
+
+The unchanged independent packed-replacement test now passes. The current
+ordered local runs also pass the six-case additive replacement/manifest
+matrix, complete ten-test blocking reproduction file, 19-case Git
+object/ref/manifest focus, strict source invariance, 58-test Workspace/Protocol
+security target plus static isolation check, and complete 75-test
+Runner/Protocol suite.
+
+The first Workspace security run is preserved as `57 passed, 1 failed`: the
+existing ignored-inventory test assumed the default Git template created
+`info/`. Its synthetic setup was corrected to create that parent before
+injecting `info/exclude`; the discard quarantine assertions were unchanged and
+the targeted/full reruns pass.
+
+Repository-wide format, lint, and typecheck pass. Final `make test` passes
+backend `153` tests at 81.79% coverage and Web `41` tests. The first two full
+test attempts exposed a coverage-load race in the already passing
+process-group audit fixture; a bounded child-ready/leader-exit handshake made
+the fixture deterministic without changing production timeout logic or its
+secure assertions. The complete blocking file then passes `10/10`.
+
+This is an implementer candidate only. The focused re-audit FAIL remains the
+governing decision until a new independent single-finding review.
 
 ## Focused re-audit decision
 
@@ -192,8 +235,9 @@ Docker evidence, and final Git state are recorded separately in
 
 ## Remaining limitations
 
-- The new Critical packed-replacement finding requires a narrow production
-  remediation and another fresh independent focused re-audit.
+- The Critical packed-replacement finding has a local Round 3 remediation
+  candidate but still requires a fresh independent single-finding focused
+  re-audit.
 - The Permit, discard, and process-group scopes pass this focused review, but
   those local PASS results do not override the object-closure Critical.
 - Python does not expose portable `openat2`/`renameat2` pathname-CAS; the
@@ -208,10 +252,10 @@ Docker evidence, and final Git state are recorded separately in
 
 ## Recommended next milestone
 
-**Narrow Phase 4 security remediation for `VE-P4-FREAUD-001`, followed by a
-fresh independent focused read-only security re-audit.**
+**Perform a fresh independent single-finding focused read-only security
+re-audit of `VE-P4-FREAUD-001`.**
 
 Do not merge `main`, access CreativeDeploy/Customer 0, push, create a pull
 request, or begin Phase 5 before a fresh independent PASS.
 
-`FOCUSED RE-AUDIT COMPLETE — SECURITY GATE FAIL — REMEDIATION REQUIRED`
+`REMEDIATION ROUND 3 COMPLETE — READY FOR INDEPENDENT SINGLE-FINDING RE-AUDIT`

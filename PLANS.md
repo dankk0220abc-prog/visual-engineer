@@ -53,15 +53,15 @@ Every plan under `docs/exec-plans/` contains:
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
 The active plan is
-[`docs/exec-plans/phase-4-security-remediation-2.md`](docs/exec-plans/phase-4-security-remediation-2.md).
-It begins from the independent re-audit's preserved Security Gate FAIL and
-tracks only its three reproduced production blockers plus the still-open
-independent closure of the Side-effect Permit Finding. It must preserve
-explicit evidence for exact source/`.git` invariance, authorized reachable
-object closure, no source Git execution, current Permit authority and
-PostgreSQL ordering, signed discard recovery, complete process-group
-deadlines, resource limits, and normal lifecycle behavior without giving the
-repair implementer authority to approve the Gate.
+[`docs/exec-plans/phase-4-security-remediation-3.md`](docs/exec-plans/phase-4-security-remediation-3.md).
+It begins from the focused re-audit's preserved Security Gate FAIL and tracks
+only `VE-P4-FREAUD-001`: Runner mirror replacement metadata, fixed Git
+replacement disabling, and independent Workspace-to-authorized-tree semantic
+proof. It must preserve exact source/`.git` invariance, authorized reachable
+object closure, no source Git execution, current Permit authority, signed
+discard recovery, complete process-group deadlines, resource limits, and
+normal lifecycle behavior without giving the repair implementer authority to
+approve the Gate.
 
 The implementation plan remains at
 [`docs/exec-plans/phase-4-isolated-workspace-tools.md`](docs/exec-plans/phase-4-isolated-workspace-tools.md),
@@ -71,9 +71,13 @@ The first repair and independent re-audit plans remain at
 [`docs/exec-plans/phase-4-security-repair.md`](docs/exec-plans/phase-4-security-repair.md)
 and
 [`docs/exec-plans/phase-4-security-reaudit-max.md`](docs/exec-plans/phase-4-security-reaudit-max.md).
+The Round 2 repair and focused re-audit plans remain at
+[`docs/exec-plans/phase-4-security-remediation-2.md`](docs/exec-plans/phase-4-security-remediation-2.md)
+and
+[`docs/exec-plans/phase-4-security-focused-reaudit-max.md`](docs/exec-plans/phase-4-security-focused-reaudit-max.md).
 None is rewritten as if the findings never occurred. The only permitted next
-milestone after a locally verified Round 2 candidate is Phase 4 Independent
-Focused Security Re-Audit.
+milestone after a locally verified Round 3 candidate is a Phase 4 Independent
+Single-Finding Focused Security Re-Audit.
 The completed Phase 3 record remains at
 [`docs/exec-plans/phase-3-browser-orchestrated-local-runner.md`](docs/exec-plans/phase-3-browser-orchestrated-local-runner.md).
 The completed Phase 2 record remains at

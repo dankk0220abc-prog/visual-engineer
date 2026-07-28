@@ -409,12 +409,13 @@ class WorkspaceManager:
         if workspace.exists():
             raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
         self._ensure_permit_fresh(permit)
-        workspace = self._git.create_detached_worktree(
+        checkout = self._git.create_detached_worktree(
             mirror,
             spec.workspace_id,
             spec.execution_grant.source_revision,
             permit_expires_at=permit.expires_at,
         )
+        workspace = checkout.workspace
         filesystem = SafeWorkspaceFilesystem(workspace, spec.execution_grant)
         status = self._authorized_status(spec, filesystem)
         if status:

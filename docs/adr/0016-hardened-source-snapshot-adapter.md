@@ -1,6 +1,6 @@
 # ADR 0016: Hardened Source Snapshot Adapter Without Source Git Execution
 
-- Status: Accepted for repair candidate
+- Status: Accepted for Round 3 repair candidate
 - Date: 2026-07-28
 
 ## Context
@@ -34,12 +34,16 @@ or recursively checked out.
 Only selected objects are materialized as canonical mode-0600 Runner-owned
 loose objects with new inodes; unreachable loose/packed objects and objects
 reachable only from other refs are excluded. Existing mirror config,
-indirection locations, object format, packs, and loose objects must already
-match the exact managed identity and authorized closure. The mirror has no
-alternate back-reference. All later Git subprocesses operate only on
-Runner-owned state through one fixed plumbing adapter with:
+indirection locations, object format, packs, loose objects, top-level
+metadata, detached `HEAD`, and empty loose/packed ref namespace must already
+match the exact managed identity and authorized closure. New mirrors are
+created with an explicitly empty Git template and receive no source metadata.
+The mirror has no alternate back-reference. All later Git subprocesses operate
+only on Runner-owned state through one fixed plumbing adapter with:
 
 - fixed argument arrays and no shell;
+- command-level `--no-replace-objects` plus fixed-environment
+  `GIT_NO_REPLACE_OBJECTS=1`;
 - managed config and a fixed environment;
 - disabled hooks, filters, fsmonitor, external diff/textconv, credentials,
   prompts, optional locks, LFS, submodule recursion, URL rewrites, and network
@@ -47,6 +51,15 @@ Runner-owned state through one fixed plumbing adapter with:
 - nonblocking-pipe, monotonic complete-process-group deadlines with bounded
   TERM/KILL/reap verification even after leader exit; and
 - streaming combined-output bounds.
+
+The source-less parser also derives the authorized checkout manifest:
+relative path bytes, entry type, Git mode, size, and SHA-256 content digest.
+After detached checkout, a descriptor-rooted no-follow scanner independently
+derives the Workspace equivalent, treating inert gitlinks only as empty
+materialized directories. Exact manifest and canonical digest equality is
+required before ownership or registry creation. A mismatch is atomically
+renamed to a non-addressable Workspace quarantine name and is not recursively
+deleted.
 
 Source dirty status is reported as intentionally unknown. Dirty and untracked
 source content is not imported or inspected.
@@ -56,6 +69,8 @@ source content is not imported or inspected.
 - Source-controlled Git extension points cannot execute during registration,
   preparation, operation, rollback, or discard.
 - Exact source and `.git` lstat/content/inode manifests can remain unchanged.
+- A matching `HEAD` and object-ID set no longer substitute for semantic
+  Workspace-to-revision equality.
 - Valid source and mirror objects may have different zlib bytes but must have
   identical canonical decompressed Git bytes, object IDs, types, and sizes.
 - Unusual Git layouts fail closed instead of being normalized or repaired.

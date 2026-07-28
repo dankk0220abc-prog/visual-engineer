@@ -63,10 +63,13 @@ objects, and source dirty/untracked bytes do not join the closure.
 Only the validated closure is materialized as mode-0600 Runner-owned loose
 objects under new inodes; source zlib bytes are not blindly copied and no
 source alternate is created. Existing mirror config, object format,
-indirection paths, packs, and loose objects must already match the managed
-identity and exact closure before reuse. All Git subprocesses then operate
-only on Runner-owned state. The adapter invokes one fixed Git executable with
-argument arrays and
+indirection paths, packs, loose objects, top-level metadata, exact detached
+`HEAD`, and empty loose/packed ref namespace must already match the managed
+identity and exact closure before reuse. New mirrors use an explicitly empty
+template rather than host or source metadata. All Git subprocesses then
+operate only on Runner-owned state. The adapter invokes one fixed Git
+executable with argument arrays, `--no-replace-objects`,
+`GIT_NO_REPLACE_OBJECTS=1`, and
 `shell=False`, a managed environment/configuration, process-group timeouts,
 bounded streaming output, and disabled prompts, hooks, filters, fsmonitor,
 external diff/textconv, credential helpers, LFS, submodule recursion, URL
@@ -80,9 +83,13 @@ The Runner:
    without source Git execution;
 3. copies the exact committed object closure into a Runner-owned bare mirror
    without alternates or shared inodes;
-4. verifies the exact approved commit exists;
-5. creates one unpredictable detached worktree below the workspace volume; and
-6. records root device/inode, source fingerprint, initial tree fingerprint,
+4. verifies the exact approved commit exists and derives its source-less
+   path/type/Git-mode/size/SHA-256 checkout manifest;
+5. creates one unpredictable detached worktree below the workspace volume;
+6. independently derives a descriptor-rooted no-follow Workspace manifest and
+   requires exact equality, isolating any mismatch without recursive deletion;
+   and
+7. records root device/inode, source fingerprint, initial tree fingerprint,
    policy hash, and write ledger in a descriptor-validated registry.
 
 Dirty tracked and untracked source content is not imported. Hooks do not run,

@@ -48,6 +48,15 @@ class ObjectRecord:
 
 
 @dataclass(frozen=True)
+class CheckoutManifestEntry:
+    relative_path: bytes
+    entry_type: str
+    mode: int
+    size: int
+    sha256: str | None
+
+
+@dataclass(frozen=True)
 class _FileSnapshot:
     device: int
     inode: int
@@ -186,6 +195,30 @@ class SourceObjectClosure:
             storage_bytes += len(compressed)
         self._validate_destination(destination, closure, require_complete=True)
         self.validate_source_unchanged()
+
+    def checkout_manifest(
+        self,
+        root_object_id: str,
+        *,
+        require_fresh: Callable[[], None],
+    ) -> tuple[CheckoutManifestEntry, ...]:
+        self._require_object_id(root_object_id)
+        object_type, content = self._read_object(
+            root_object_id,
+            require_fresh=require_fresh,
+        )
+        if object_type != "commit":
+            self._source_error()
+        tree_id, _parents = self._parse_commit(content)
+        entries = self._walk_checkout_manifest(
+            tree_id,
+            prefix=b"",
+            depth=0,
+            active=set(),
+            require_fresh=require_fresh,
+        )
+        self.validate_source_unchanged()
+        return tuple(sorted(entries, key=lambda entry: entry.relative_path))
 
     def validate_source_unchanged(self) -> None:
         for path, snapshot in self._selected_loose_snapshots.items():
@@ -740,14 +773,14 @@ class SourceObjectClosure:
             self._budget_error()
         self._reference(len(entries))
         height = 0
-        for mode, _name, child_id in entries:
+        for entry_type, _mode, _name, child_id in entries:
             require_fresh()
-            if mode == "gitlink":
+            if entry_type == "gitlink":
                 # A gitlink is inert superproject metadata. Its referenced
                 # commit belongs to another object database and is neither
                 # imported nor opened; submodule recursion stays disabled.
                 continue
-            if mode == "tree":
+            if entry_type == "tree":
                 child_height = self._walk_tree(
                     child_id,
                     depth=depth + 1,
@@ -768,6 +801,79 @@ class SourceObjectClosure:
             self._budget_error()
         self._tree_heights[object_id] = height
         return height
+
+    def _walk_checkout_manifest(
+        self,
+        object_id: str,
+        *,
+        prefix: bytes,
+        depth: int,
+        active: set[str],
+        require_fresh: Callable[[], None],
+    ) -> list[CheckoutManifestEntry]:
+        if depth > self._limits.max_tree_depth:
+            self._budget_error()
+        if object_id in active:
+            self._source_error()
+        active.add(object_id)
+        object_type, content = self._read_object(
+            object_id,
+            require_fresh=require_fresh,
+        )
+        if object_type != "tree":
+            self._source_error()
+        entries: list[CheckoutManifestEntry] = []
+        for entry_type, mode, name, child_id in self._parse_tree(content):
+            require_fresh()
+            relative_path = name if not prefix else prefix + b"/" + name
+            if entry_type == "tree":
+                children = self._walk_checkout_manifest(
+                    child_id,
+                    prefix=relative_path,
+                    depth=depth + 1,
+                    active=active,
+                    require_fresh=require_fresh,
+                )
+                if children:
+                    entries.append(
+                        CheckoutManifestEntry(
+                            relative_path=relative_path,
+                            entry_type="directory",
+                            mode=mode,
+                            size=0,
+                            sha256=None,
+                        )
+                    )
+                    entries.extend(children)
+                continue
+            if entry_type == "gitlink":
+                entries.append(
+                    CheckoutManifestEntry(
+                        relative_path=relative_path,
+                        entry_type="gitlink",
+                        mode=mode,
+                        size=0,
+                        sha256=hashlib.sha256(b"").hexdigest(),
+                    )
+                )
+                continue
+            child_type, child_content = self._read_object(
+                child_id,
+                require_fresh=require_fresh,
+            )
+            if child_type != "blob":
+                self._source_error()
+            entries.append(
+                CheckoutManifestEntry(
+                    relative_path=relative_path,
+                    entry_type="symlink" if mode == 0o120000 else "regular",
+                    mode=mode,
+                    size=len(child_content),
+                    sha256=hashlib.sha256(child_content).hexdigest(),
+                )
+            )
+        active.remove(object_id)
+        return entries
 
     def _record(self, object_id: str, object_type: str, content: bytes) -> None:
         existing = self._records.get(object_id)
@@ -806,8 +912,8 @@ class SourceObjectClosure:
             self._source_error()
         return tree_id, parents
 
-    def _parse_tree(self, content: bytes) -> list[tuple[str, bytes, str]]:
-        entries: list[tuple[str, bytes, str]] = []
+    def _parse_tree(self, content: bytes) -> list[tuple[str, int, bytes, str]]:
+        entries: list[tuple[str, int, bytes, str]] = []
         names: set[bytes] = set()
         position = 0
         while position < len(content):
@@ -830,14 +936,21 @@ class SourceObjectClosure:
                 self._source_error()
             names.add(name)
             if mode_bytes == b"40000":
-                mode = "tree"
+                entry_type = "tree"
             elif mode_bytes == b"160000":
-                mode = "gitlink"
+                entry_type = "gitlink"
             else:
-                mode = _TREE_MODES.get(mode_bytes, "")
-            if not mode:
+                entry_type = _TREE_MODES.get(mode_bytes, "")
+            if not entry_type:
                 self._source_error()
-            entries.append((mode, name, content[object_start:object_end].hex()))
+            entries.append(
+                (
+                    entry_type,
+                    int(mode_bytes, 8),
+                    name,
+                    content[object_start:object_end].hex(),
+                )
+            )
             position = object_end
         return entries
 

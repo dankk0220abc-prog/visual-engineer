@@ -621,6 +621,11 @@ def test_focused_timeout_kills_child_that_closes_output_after_leader_exit(
         start_new_session=True,
     )
     try:
+        ready_deadline = time.monotonic() + 1
+        while not child_pid_path.is_file() and time.monotonic() < ready_deadline:
+            time.sleep(0.01)
+        assert child_pid_path.is_file()
+        process.wait(timeout=1)
         with pytest.raises(GitOperationError) as error:
             operations._collect_bounded_output(
                 process,
@@ -628,7 +633,6 @@ def test_focused_timeout_kills_child_that_closes_output_after_leader_exit(
                 timeout_failure=FailureCode.WORKSPACE_STATE_INVALID,
             )
         assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
-        assert child_pid_path.is_file()
         assert not operations._process_group_alive(process.pid)
         time.sleep(0.55)
         assert not marker.exists()

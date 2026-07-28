@@ -3,10 +3,11 @@
 ## Current security posture
 
 VisualEngineer is currently a Phase 4 local, single-user development project.
-The original audit and independent re-audit both remain **Security Gate:
-FAIL**. This Round 2 branch is a remediation candidate only; local green
-checks cannot replace a new independent decision. Phase 4 is not in `main`
-and must undergo a separate Phase 4 Independent Focused Security Re-Audit.
+The original audit, independent re-audit, and focused re-audit remain
+**Security Gate: FAIL**. This Round 3 branch is a single-finding remediation
+candidate only; local green checks cannot replace a new independent decision.
+Phase 4 is not in `main` and must undergo a separate Phase 4 Independent
+Single-Finding Focused Security Re-Audit.
 
 The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
@@ -25,7 +26,14 @@ volumes. API, Web, and PostgreSQL get none. The hardened snapshot adapter does
 not execute Git against the source; it validates bounded
 loose/pack/index/delta input, computes the exact authorized commit/tree/blob
 closure, and materializes only that closure into new Runner-owned
-loose-object inodes. Runner has no shell, arbitrary command, Docker socket,
+loose-object inodes. A mirror starts from an explicitly empty Git template,
+has an exact detached `HEAD` and empty loose/packed ref namespace, and rejects
+unprovable pre-existing metadata. Every Runner-owned Git process disables
+replacement objects in both its command and fixed environment. After
+checkout, a descriptor-rooted no-follow Workspace manifest must exactly match
+the source-less parser's authorized path/type/mode/size/content-digest
+manifest before ownership or registry evidence is created. Runner has no
+shell, arbitrary command, Docker socket,
 inbound port, database/Web network, or public network, and has explicit CPU,
 memory, PID, FD, subprocess-output, process-group deadline, and mirror
 object/byte/graph bounds.
