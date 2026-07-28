@@ -1,11 +1,12 @@
 # Project Status
 
 - Phase: Phase 4 — Runner-Owned Isolated Workspace + Scoped Typed File Tools
-- Overall status: IMPLEMENTED; FULL PRE-CHECKPOINT LOCAL GATE PASSES; STAGED
-  REVIEW, CHECKPOINT, AND POST-CHECKPOINT GATE PENDING; REMOTE CI NOT RUN
-- Last updated: 2026-07-27
-- Branch: `feat/phase-4-isolated-workspace-tools`
-- Phase 4 baseline / main: `7590f9d`
+- Overall status: IMPLEMENTED; INDEPENDENT SECURITY AUDIT COMPLETE; SECURITY
+  GATE FAIL; MERGE AND CUSTOMER 0 BLOCKED; REMOTE CI NOT RUN
+- Last updated: 2026-07-28
+- Branch: `audit/phase-4-workspace-security-max`
+- Phase 4 audited commit: `53dc2f5`
+- Main: `7590f9d`
 - Remote: none
 
 ## Product position
@@ -61,13 +62,12 @@ clean, or otherwise access it.
 
 - Phase 3 was independently accepted: local verify/smoke/chaos passed, runtime
   isolation was inspected, and main fast-forwarded without a merge commit.
-- Backend/API/Runner/Protocol suite: 101 passed with 82.29% combined coverage,
+- Backend/API/Runner/Protocol suite: 105 passed with 82.29% combined coverage,
   one upstream Starlette/httpx deprecation warning, and no skips.
 - Frontend unit suite: 39 passed with 72.11% statement, 66.56% branch, 71.89%
   function, and 74.15% line coverage.
-- Real Playwright suite: 12 passed in 50.9 seconds in the final aggregate gate.
-  Phase 4 passed its browser flow at desktop and 390 px with axe and
-  no-overflow checks.
+- Real Playwright suite: 12 passed in the final aggregate gate. Phase 4 passed
+  its browser flow at desktop and 390 px with axe and no-overflow checks.
 - Workspace smoke completed the real prepare/read/replace/create/deny/status/
   diff/three-Checkpoint/rollback/discard flow and proved the full source plus
   `.git` fingerprint unchanged.
@@ -76,15 +76,20 @@ clean, or otherwise access it.
   recovered the complete write, rolled back, discarded with no residual
   Workspace, and preserved the full source fingerprint.
 - Workspace security passed 25 focused tests and its static checker; the
-  broader Runner security target passed 42 tests and secret scanning found no
+  broader Runner security target passed 46 tests and secret scanning found no
   high-confidence secret.
 - Contract drift, production Web build, all Compose variants, real PostgreSQL
   upgrade/downgrade/upgrade, and Eval validation (58 cases plus 7 scanner
   tests) passed.
 
-The aggregate `make verify` passed. Staged review, the single checkpoint
-commit, and post-commit gates remain in progress. No remote CI result is
-claimed.
+The aggregate `make verify` passed. The independent audit target also passed
+four closed synthetic observations, meaning the findings are reproducible.
+The production hash remained unchanged.
+
+The independent Security Gate is **FAIL** with three Critical, one High, one
+Medium, and one Low finding. Strict source invariance failed on `.git`
+directory metadata even though source content and all other captured Git state
+remained exact. `main` was not merged. No remote CI result is claimed.
 
 ## Current boundaries
 
@@ -112,6 +117,9 @@ claimed.
   garbage collector.
 - Local bearer tokens, Docker internal networking, and synthetic fixtures are
   development controls, not production identity or certification.
+- The independent audit additionally blocks source-adapter execution surfaces,
+  transactional authority fencing, registry/discard mismatch recovery, and
+  exact source metadata invariance.
 
 ## Technical debt
 
@@ -122,9 +130,7 @@ claimed.
 
 ## Recommended next milestone
 
-Before any Phase 5 implementation, run one maximum-depth security audit of
-descriptor/syscall behavior, registry and mirror ownership, workspace cleanup,
-Grant/Lease authorization, resource isolation, container egress, and all
-source-integrity evidence. Only after acceptance should one new maximum safe
-batch consider closed, separately approved target validation commands; Git
-delivery remains later.
+Run a dedicated Phase 4 security-repair milestone for all Gate-blocking
+findings and explicit Runner resource limits. Then freeze a new baseline and
+repeat the independent audit. Do not merge, access Customer 0, or begin Phase
+5 until a fresh Security Gate PASS.
