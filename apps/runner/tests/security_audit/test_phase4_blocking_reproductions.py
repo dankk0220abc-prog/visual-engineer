@@ -26,7 +26,7 @@ from pydantic import SecretStr
 from visual_engineer_runner.client import ControlPlaneClient, ControlPlaneError
 from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
 from visual_engineer_runner.credentials import CredentialStore, RunnerCredential
-from visual_engineer_runner.git_ops import GitOperationError, GitOperations
+from visual_engineer_runner.git_ops import GitOperationError, GitOperations, PreparedMirror
 from visual_engineer_runner.lifecycle import RunnerLifecycle
 from visual_engineer_runner.workspace_manager import WorkspaceExecutionError, WorkspaceManager
 from visual_engineer_runner_protocol import (
@@ -468,6 +468,148 @@ def test_focused_existing_mirror_packed_replace_cannot_change_checkout(
         ) == "approved second revision\n"
     assert _git(source, "rev-parse", "HEAD") == approved_revision
     assert tracked.read_text(encoding="utf-8") == "approved second revision\n"
+
+
+def test_single_finding_late_packed_replace_is_ignored_then_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VE-P4-FREAUD-001: late packed replacement cannot alter checkout."""
+
+    source, replaced_revision = _source_repository(tmp_path)
+    tracked = source / "sandbox" / "tracked.txt"
+    tracked.write_text("independently approved revision\n", encoding="utf-8")
+    _git(source, "add", "sandbox/tracked.txt")
+    _git(source, "commit", "-m", "independent late replacement fixture")
+    approved_revision = _git(source, "rev-parse", "HEAD")
+    source_status = _git(source, "status", "--porcelain=v1")
+
+    settings = _settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = _grant(approved_revision)
+    original_prepare_mirror = manager._git.prepare_mirror
+    injected: list[Path] = []
+
+    def prepare_mirror_then_inject(
+        opaque_handle: str,
+        repository: LocalRepositoryConfig,
+        source_revision: str,
+        *,
+        permit_expires_at: datetime,
+    ) -> PreparedMirror:
+        prepared = original_prepare_mirror(
+            opaque_handle,
+            repository,
+            source_revision,
+            permit_expires_at=permit_expires_at,
+        )
+        packed_refs = prepared.path / "packed-refs"
+        packed_refs.write_text(
+            "# pack-refs with: peeled fully-peeled sorted \n"
+            f"{replaced_revision} refs/replace/{approved_revision}\n",
+            encoding="ascii",
+        )
+        injected.append(packed_refs)
+        return prepared
+
+    monkeypatch.setattr(manager._git, "prepare_mirror", prepare_mirror_then_inject)
+    workspace_id = uuid.uuid4()
+    with monkeypatch.context() as hostile_environment:
+        hostile_environment.setenv("GIT_DIR", os.fspath(source / ".git"))
+        hostile_environment.setenv(
+            "GIT_OBJECT_DIRECTORY",
+            os.fspath(source / ".git" / "objects"),
+        )
+        hostile_environment.setenv("GIT_NO_REPLACE_OBJECTS", "0")
+        hostile_environment.setenv("GIT_REPLACE_REF_BASE", "refs/replace")
+        _execute_prepare(manager, workspace_id, grant)
+
+    workspace = manager._git.workspace_path(workspace_id)
+    assert (workspace / "sandbox" / "tracked.txt").read_text(
+        encoding="utf-8"
+    ) == "independently approved revision\n"
+    assert manager._load_registry(workspace_id) is not None
+    assert len(injected) == 1
+    assert (
+        injected[0]
+        .read_text(encoding="ascii")
+        .endswith(f"{replaced_revision} refs/replace/{approved_revision}\n")
+    )
+
+    rejected_workspace_id = uuid.uuid4()
+    with pytest.raises(WorkspaceExecutionError) as error:
+        _execute_prepare(manager, rejected_workspace_id, grant)
+
+    assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+    assert not manager._git.workspace_path(rejected_workspace_id).exists()
+    assert workspace.is_dir()
+    assert _git(source, "rev-parse", "HEAD") == approved_revision
+    assert _git(source, "status", "--porcelain=v1") == source_status
+    assert tracked.read_text(encoding="utf-8") == "independently approved revision\n"
+
+
+def test_single_finding_checkout_manifest_enforces_expanded_entry_budget(
+    tmp_path: Path,
+) -> None:
+    """VE-P4-FREAUD-001: shared trees cannot expand past the manifest budget."""
+
+    source, _ = _source_repository(tmp_path)
+    leaf_entries: list[str] = []
+    for name in ("a.txt", "b.txt", "c.txt"):
+        blob = subprocess.run(
+            ["git", "-C", os.fspath(source), "hash-object", "-w", "--stdin"],
+            input=f"{name}\n",
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        leaf_entries.append(f"100644 blob {blob}\t{name}\n")
+    leaf_tree = subprocess.run(
+        ["git", "-C", os.fspath(source), "mktree"],
+        input="".join(leaf_entries),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    root_tree = subprocess.run(
+        ["git", "-C", os.fspath(source), "mktree"],
+        input=(f"040000 tree {leaf_tree}\tleft\n040000 tree {leaf_tree}\tright\n"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    revision = subprocess.run(
+        [
+            "git",
+            "-C",
+            os.fspath(source),
+            "commit-tree",
+            root_tree,
+            "-m",
+            "shared subtree manifest budget",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    _git(source, "update-ref", "refs/heads/main", revision)
+    source_status = _git(source, "status", "--porcelain=v1")
+
+    settings = _settings(tmp_path, source).model_copy(update={"mirror_max_tree_entries": 5})
+    operations = GitOperations(settings)
+    try:
+        prepared = operations.prepare_mirror(
+            HANDLE,
+            settings.repository_handles[HANDLE],
+            revision,
+            permit_expires_at=datetime.now(UTC) + timedelta(minutes=1),
+        )
+    except GitOperationError as error:
+        assert error.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    else:
+        assert _git(source, "rev-parse", "HEAD") == revision
+        assert _git(source, "status", "--porcelain=v1") == source_status
+        assert len(prepared.checkout_manifest) <= settings.mirror_max_tree_entries
 
 
 def test_reaudit_registry_loss_and_absent_root_requires_signed_recovery_proof(

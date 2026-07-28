@@ -1,10 +1,14 @@
 # Project Status
 
-- Phase: Phase 4 — Security Remediation Round 3
+- Phase: Phase 4 — Independent Single-Finding Security Re-Audit
 - Overall status:
-  `REMEDIATION ROUND 3 COMPLETE — READY FOR INDEPENDENT SINGLE-FINDING RE-AUDIT`
-- Governance qualifier: HISTORICAL SECURITY GATE FAIL; NOT IN MAIN
+  `SINGLE-FINDING RE-AUDIT COMPLETE — VE-P4-FREAUD-001 FAIL — REMEDIATION REQUIRED`
+- Governance qualifier: SECURITY GATE FAIL; NOT IN MAIN
 - Last updated: 2026-07-29
+- Single-finding audit branch:
+  `audit/phase-4-replacement-single-finding-max`
+- Audited Round 3 candidate:
+  `6cce662bf4cf34961c7d3f0d16741952cd2c1fd2`
 - Round 3 branch: `fix/phase-4-security-remediation-3`
 - Round 3 base / focused re-audit checkpoint:
   `8985fa0356e636602d1414a3ade9d9a7888c624a`
@@ -26,9 +30,49 @@
 - Remote: none
 - Remote CI: not run
 
+## Independent single-finding re-audit decision
+
+`VE-P4-FREAUD-001` remains **FAIL / REMEDIATION REQUIRED**.
+
+Round 3 closes the original packed `refs/replace` reproduction:
+
+- the unchanged original test passes `1/1`;
+- a distinct independent scenario inserts packed replacement metadata after
+  final mirror validation and before actual worktree checkout while hostile
+  host Git environment variables try to redirect and re-enable Git behavior;
+- the actual Workspace still contains the exact approved bytes, creates its
+  registry, and the polluted mirror fails closed on the next prepare;
+- the Round 3 replacement/manifest matrix passes `6/6`;
+- the source/object/ref/manifest focus passes `19/19`;
+- strict source invariance passes; and
+- the Workspace/Protocol target passes `58/58` plus its static isolation
+  check.
+
+The required Workspace semantic proof has one new stable Blocking Medium
+capacity defect. A shared Git subtree is charged once by the authorized object
+walk but expanded once per path by the new checkout-manifest walk. With
+`mirror_max_tree_entries=5`, production `prepare_mirror` returns an eight-entry
+manifest rather than rejecting it. The permanent secure-expectation test fails
+`8 <= 5` twice. The complete blocking file is `1 failed, 11 passed`, and the
+complete Runner/Protocol target is `1 failed, 76 passed`; both have the same
+sole failure.
+
+The later descriptor-rooted Workspace scanner does reject this minimal case
+with typed `mirror_budget_exceeded`, quarantines the checkout, removes its
+canonical address, and creates no registry. No unauthorized registered
+Workspace bytes were reproduced. The blocker is that compact shared-tree DAGs
+can expand expected-manifest CPU/memory exponentially before that enforcement
+point, threatening the declared bounded Runner and leaving incomplete mirror
+state requiring manual recovery.
+
+No production code was modified. No existing test was weakened, skipped, or
+marked expected-failing. No customer repository was accessed. No remote,
+push, merge, pull request, tag, delivery, deployment, or Phase 5 action
+occurred.
+
 ## Round 3 remediation candidate
 
-The current branch narrowly implements the production correction for
+The audited Round 3 branch narrowly implements the production correction for
 `VE-P4-FREAUD-001` / `VE-P4-AUD-001`:
 
 - new mirrors use `git init --bare --template=` followed by exact managed
@@ -63,8 +107,8 @@ process-group audit fixture; a bounded child-ready/leader-exit handshake made
 the fixture deterministic without changing production timeout logic or its
 secure assertions. The complete blocking file then passes `10/10`.
 
-This is an implementer candidate only. The focused re-audit FAIL remains the
-governing decision until a new independent single-finding review.
+This remains historical implementer evidence. The later independent
+single-finding decision above is the governing result.
 
 ## Focused re-audit decision
 
@@ -235,11 +279,12 @@ Docker evidence, and final Git state are recorded separately in
 
 ## Remaining limitations
 
-- The Critical packed-replacement finding has a local Round 3 remediation
-  candidate but still requires a fresh independent single-finding focused
-  re-audit.
+- The direct packed-replacement exploit is denied, but the Round 3
+  Workspace semantic proof does not enforce its expanded path-entry budget
+  during expected-manifest construction. `VE-P4-FREAUD-001` remains open.
 - The Permit, discard, and process-group scopes pass this focused review, but
-  those local PASS results do not override the object-closure Critical.
+  those historical local PASS results do not override the current
+  manifest-capacity blocker.
 - Python does not expose portable `openat2`/`renameat2` pathname-CAS; the
   implementation retains descriptor-rooted no-follow checks and a sole
   Runner-Writer assumption.
@@ -252,10 +297,12 @@ Docker evidence, and final Git state are recorded separately in
 
 ## Recommended next milestone
 
-**Perform a fresh independent single-finding focused read-only security
-re-audit of `VE-P4-FREAUD-001`.**
+**Perform a narrow Phase 4 remediation that bounds every expanded
+source-less checkout-manifest path before materialization, followed by another
+fresh independent single-finding read-only re-audit of
+`VE-P4-FREAUD-001`.**
 
 Do not merge `main`, access CreativeDeploy/Customer 0, push, create a pull
 request, or begin Phase 5 before a fresh independent PASS.
 
-`REMEDIATION ROUND 3 COMPLETE — READY FOR INDEPENDENT SINGLE-FINDING RE-AUDIT`
+`SINGLE-FINDING RE-AUDIT COMPLETE — VE-P4-FREAUD-001 FAIL — REMEDIATION REQUIRED`
