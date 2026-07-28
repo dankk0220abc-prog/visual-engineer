@@ -1,9 +1,13 @@
 # Project Status
 
-- Phase: Phase 4 — Independent Security Re-Audit Complete
-- Overall status: RE-AUDIT COMPLETE — SECURITY GATE FAIL — REMEDIATION
-  REQUIRED; NOT IN MAIN
+- Phase: Phase 4 — Security Remediation Round 2
+- Overall status:
+  `REMEDIATION ROUND 2 COMPLETE — READY FOR INDEPENDENT FOCUSED RE-AUDIT`
+- Governance qualifier: HISTORICAL SECURITY GATE FAIL PRESERVED; NOT IN MAIN
 - Last updated: 2026-07-28
+- Round 2 branch: `fix/phase-4-security-remediation-2`
+- Round 2 base / independent re-audit:
+  `b457b614bde6630fb50ff9546c92a4d6925ad38a`
 - Re-audit branch: `audit/phase-4-security-reaudit-max`
 - Re-audited repair commit:
   `e3d653023a55e387f22d0e453a1b9bdaeed6ac3c`
@@ -38,7 +42,42 @@ already failed. `VE-P4-AUD-004` and local `VE-P4-AUD-006` checks pass.
 The original audit FAIL and the repair implementer's evidence remain preserved
 history. Neither is rewritten as the current result.
 
-## Repair-candidate controls and re-audit disposition
+## Round 2 remediation candidate
+
+Round 2 locally implements the three production corrections required by the
+independent re-audit:
+
+- exact authorized commit/ancestor/tree/blob closure parsing and
+  Runner-owned loose-object materialization, including bounded loose and
+  packed OFS/REF delta input, without Git execution against the source;
+- domain-separated signed pending/completed discard proof with exact
+  registry, ownership, root device/inode, operation, Permit, Attempt, Lease,
+  digest, and time-window binding; and
+- monotonic complete-process-group monitoring after leader exit, with
+  nonblocking pipes, bounded TERM/KILL escalation, reaping, and explicit
+  termination failure.
+
+The unchanged re-audit file now passes `7/7` locally. Additive Runner,
+Protocol, source-invariance, and real-PostgreSQL Permit regressions also pass
+their focused Round 2 runs. Every named non-aggregate local target, including
+Docker, E2E `14/14`, both smoke targets, both chaos targets, security, and
+Eval, has exited zero. Live Runner isolation was inspected in a uniquely
+named disposable Compose project and its exact resources were removed.
+The corrected complete post-documentation `make verify` rerun exited zero.
+Final diff review then closed one further in-scope pack-directory enumeration
+budget gap; focused, complete Runner/Protocol, and source-invariance reruns
+pass, and the final post-correction aggregate rerun exited zero. Remote CI is
+not run.
+
+`VE-P4-AUD-002` received the previously missing real-PostgreSQL concurrency,
+revocation, binding, crash-ordering, retry, lineage, and budget matrix. No new
+production Permit defect was reproduced, so Round 2 does not change Permit
+production code.
+
+These are implementer-candidate facts only. The historical Security Gate
+remains FAIL until a new independent focused re-audit makes a new decision.
+
+## Preserved re-audit disposition
 
 - `VE-P4-AUD-001`: **FAIL / UNRESOLVED.** Source registration and mirror
   preparation no longer invoke Git against the source, but object copying is
@@ -66,8 +105,8 @@ history. Neither is rewritten as the current result.
 The API, database migration, pure Runner Protocol, generated OpenAPI/
 TypeScript contract, browser surfaces, E2E/chaos harnesses, Make targets, CI
 definition, threat models, architecture, ADRs, and runbooks remain part of the
-repair candidate. This re-audit does not repeat the repair implementer's PASS
-claim for checks stopped after the independent Gate failed.
+historical first-repair candidate. This section records the independent
+re-audit result at `b457b61`; it is intentionally not rewritten by Round 2.
 
 ## Product boundary
 
@@ -89,7 +128,7 @@ authentication, multi-tenancy, public hosting, and production deployment.
 CreativeDeploy is not authorized for this repair and was not mounted,
 accessed, read, written, built, tested, or cleaned.
 
-## Verification status
+## Preserved re-audit verification status
 
 The current re-audit evidence includes stable minimal filesystem/process
 reproductions, a strict independent source-invariance run, real PostgreSQL
@@ -112,13 +151,16 @@ Exact commands, exit codes, counts, first failures, root causes, corrections,
 runtime facts, and stopped-check rationale are in
 `docs/evidence/phase-4-security-reaudit-verification.md`.
 
+Round 2 commands, counts, production/source invariance, PostgreSQL ordering,
+Docker evidence, and final Git state are recorded separately in
+`docs/evidence/phase-4-security-remediation-2-verification.md`.
+
 ## Remaining limitations
 
-- Reachable-object closure, authenticated pending-discard recovery, and
-  process-group timeout enforcement require production remediation and a
-  fresh independent re-audit.
-- Complete independent closure of Side-effect Permit concurrency, crash, and
-  cancellation behavior remains pending.
+- Round 2 corrections still require a fresh independent focused re-audit;
+  local implementation evidence cannot approve them.
+- The Permit matrix is locally exercised but still requires independent
+  closure as part of that re-audit.
 - Python does not expose portable `openat2`/`renameat2` pathname-CAS; the
   implementation retains descriptor-rooted no-follow checks and a sole
   Runner-Writer assumption.
@@ -131,15 +173,10 @@ runtime facts, and stopped-check rationale are in
 
 ## Recommended next milestone
 
-**Phase 4 Security Remediation**
-
-Keep the repair narrow: authorize only the exact revision's reachable object
-closure, require trusted signed pending-discard state before treating absent
-local state as completed discard, and enforce timeout against the complete
-process group even after the leader exits. Then independently close
-`VE-P4-AUD-002` and rerun the focused and aggregate gates.
+**Phase 4 Independent Focused Security Re-Audit**. Round 2 implementer
+evidence cannot make that independent decision.
 
 Do not merge `main`, access CreativeDeploy/Customer 0, push, create a pull
 request, or begin Phase 5 before a fresh independent PASS.
 
-**RE-AUDIT COMPLETE — SECURITY GATE FAIL — REMEDIATION REQUIRED**
+`REMEDIATION ROUND 2 COMPLETE — READY FOR INDEPENDENT FOCUSED RE-AUDIT`

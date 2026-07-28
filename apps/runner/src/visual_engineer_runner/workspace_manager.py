@@ -22,6 +22,7 @@ from visual_engineer_runner.git_ops import (
 )
 from visual_engineer_runner.ownership import (
     OwnershipError,
+    WorkspaceDiscardProof,
     WorkspaceOwnershipManifest,
     WorkspaceOwnershipStore,
 )
@@ -199,6 +200,17 @@ class WorkspaceManager:
                     permit=side_effect_permit,
                     registry=registry,
                 )
+                workspace = self._git.workspace_path(spec.workspace_id)
+                if workspace.exists() or workspace.is_symlink():
+                    raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
+                proof = self._validate_discard_proof(
+                    spec,
+                    registry=registry,
+                    operation_id=operation_id,
+                    permit=replay_permit,
+                )
+                if proof.state != "completed":
+                    raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
                 discard_result = WorkspaceDiscardResult(
                     workspace_id=spec.workspace_id,
                     discarded=True,
@@ -245,7 +257,14 @@ class WorkspaceManager:
             and not workspace.exists()
             and not workspace.is_symlink()
         ):
-            self._validate_ownership_record(spec, registry)
+            proof = self._validate_discard_proof(
+                spec,
+                registry=registry,
+                operation_id=operation_id,
+                permit=permit,
+            )
+            if proof.state == "pending":
+                self._complete_discard_proof(proof, permit)
             registry.local_state = "discarded"
             registry.pending_operation = None
             registry.pending_permit_id = None
@@ -364,6 +383,13 @@ class WorkspaceManager:
                 current_tree_hash=existing.current_tree_hash,
                 side_effect_permit_id=permit.id,
             )
+        if (
+            self._ownership.path(spec.workspace_id).exists()
+            or self._ownership.path(spec.workspace_id).is_symlink()
+            or self._ownership.discard_proof_path(spec.workspace_id).exists()
+            or self._ownership.discard_proof_path(spec.workspace_id).is_symlink()
+        ):
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
 
         if self._settings.workspace_prepare_delay_ms and cancel_event.wait(
             self._settings.workspace_prepare_delay_ms / 1000
@@ -762,12 +788,19 @@ class WorkspaceManager:
         registry.pending_operation = pending_operation
         registry.pending_permit_id = permit.id
         self._ensure_permit_fresh(permit)
+        proof = self._create_discard_proof(
+            spec,
+            registry,
+            operation_id=operation_id,
+            permit=permit,
+        )
         self._save_registry(registry)
         self._git.discard_worktree(
             mirror,
             workspace,
             permit_expires_at=permit.expires_at,
         )
+        self._complete_discard_proof(proof, permit)
         registry.local_state = "discarded"
         registry.pending_operation = None
         registry.pending_permit_id = None
@@ -787,10 +820,17 @@ class WorkspaceManager:
         operation_id: uuid.UUID,
         permit: SideEffectPermit,
     ) -> WorkspaceDiscardResult:
-        del operation_id
         workspace = self._git.workspace_path(spec.workspace_id)
-        if workspace.exists():
+        if workspace.exists() or workspace.is_symlink():
             raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
+        proof = self._validate_discard_proof(
+            spec,
+            registry=None,
+            operation_id=operation_id,
+            permit=permit,
+        )
+        if proof.state == "pending":
+            self._complete_discard_proof(proof, permit)
         return WorkspaceDiscardResult(
             workspace_id=spec.workspace_id,
             discarded=True,
@@ -901,6 +941,250 @@ class WorkspaceManager:
         ):
             raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
         return manifest
+
+    def _create_discard_proof(
+        self,
+        spec: WorkspaceDiscardJobSpec,
+        registry: WorkspaceRegistry,
+        *,
+        operation_id: uuid.UUID,
+        permit: SideEffectPermit,
+    ) -> WorkspaceDiscardProof:
+        manifest = self._validate_ownership_record(spec, registry)
+        self._ensure_permit_fresh(permit)
+        existing = self._ownership.load_discard_proof(spec.workspace_id)
+        if existing is not None:
+            if existing.state != "pending" or not self._discard_proof_binding_matches(
+                existing,
+                spec,
+                registry=registry,
+                operation_id=operation_id,
+                permit=permit,
+            ):
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+            return existing
+        recorded_at = datetime.now(UTC)
+        if recorded_at > permit.expires_at:
+            raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_EXPIRED)
+        proof = WorkspaceDiscardProof(
+            state="pending",
+            workspace_id=registry.workspace_id,
+            runner_id=registry.runner_id,
+            grant_id=registry.grant_id,
+            repository_handle_id=registry.repository_handle_id,
+            repository_opaque_handle=registry.repository_opaque_handle,
+            source_revision=registry.source_revision,
+            policy_hash=registry.policy_hash,
+            creation_nonce=manifest.creation_nonce,
+            workspace_device=manifest.workspace_device,
+            workspace_inode=manifest.workspace_inode,
+            operation_id=operation_id,
+            permit_id=permit.id,
+            permit_sequence=permit.sequence,
+            attempt_id=permit.attempt_id,
+            lease_id=permit.lease_id,
+            job_digest=permit.job_digest,
+            operation_digest=permit.operation_digest,
+            expected_current=permit.expected_current,
+            proposed_digest=permit.proposed_digest,
+            issued_at=permit.issued_at,
+            consumed_at=permit.consumed_at,
+            expires_at=permit.expires_at,
+            recorded_at=recorded_at,
+            completed_at=None,
+            proof_nonce=uuid.uuid4().hex,
+        )
+        return self._ownership.save_discard_proof(proof)
+
+    def _complete_discard_proof(
+        self,
+        proof: WorkspaceDiscardProof,
+        permit: SideEffectPermit,
+    ) -> WorkspaceDiscardProof:
+        self._ensure_permit_fresh(permit)
+        completed_at = datetime.now(UTC)
+        if completed_at > proof.expires_at:
+            raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_EXPIRED)
+        completed = proof.model_copy(
+            update={
+                "state": "completed",
+                "completed_at": completed_at,
+            }
+        )
+        return self._ownership.save_discard_proof(completed)
+
+    def _validate_discard_proof(
+        self,
+        spec: WorkspaceDiscardJobSpec,
+        *,
+        registry: WorkspaceRegistry | None,
+        operation_id: uuid.UUID,
+        permit: SideEffectPermit,
+    ) -> WorkspaceDiscardProof:
+        proof = self._ownership.load_discard_proof(spec.workspace_id)
+        if proof is None:
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
+        if not self._discard_proof_binding_matches(
+            proof,
+            spec,
+            registry=registry,
+            operation_id=operation_id,
+            permit=permit,
+        ):
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+        self._ensure_permit_fresh(permit)
+        manifest = self._ownership.load(spec.workspace_id)
+        if (
+            manifest.workspace_id != proof.workspace_id
+            or manifest.runner_id != proof.runner_id
+            or manifest.grant_id != proof.grant_id
+            or manifest.repository_handle_id != proof.repository_handle_id
+            or manifest.repository_opaque_handle != proof.repository_opaque_handle
+            or manifest.source_revision != proof.source_revision
+            or manifest.policy_hash != proof.policy_hash
+            or manifest.creation_nonce != proof.creation_nonce
+            or manifest.workspace_device != proof.workspace_device
+            or manifest.workspace_inode != proof.workspace_inode
+        ):
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+        self._require_discarded_inode_absent(proof)
+        return proof
+
+    @staticmethod
+    def _discard_proof_binding_matches(
+        proof: WorkspaceDiscardProof,
+        spec: WorkspaceDiscardJobSpec,
+        *,
+        registry: WorkspaceRegistry | None,
+        operation_id: uuid.UUID,
+        permit: SideEffectPermit,
+    ) -> bool:
+        grant = spec.execution_grant
+        return not (
+            proof.workspace_id != spec.workspace_id
+            or proof.runner_id != permit.runner_id
+            or proof.grant_id != grant.id
+            or proof.repository_handle_id != grant.repository_handle_id
+            or proof.repository_opaque_handle != grant.repository_opaque_handle
+            or proof.source_revision != grant.source_revision
+            or proof.policy_hash != grant.policy_hash
+            or proof.operation_id != operation_id
+            or proof.permit_id != permit.id
+            or proof.permit_sequence != permit.sequence
+            or proof.attempt_id != permit.attempt_id
+            or proof.lease_id != permit.lease_id
+            or proof.job_digest != permit.job_digest
+            or proof.operation_digest != permit.operation_digest
+            or proof.expected_current != permit.expected_current
+            or proof.proposed_digest != permit.proposed_digest
+            or proof.issued_at != permit.issued_at
+            or proof.consumed_at != permit.consumed_at
+            or proof.expires_at != permit.expires_at
+            or (
+                registry is not None
+                and (
+                    registry.workspace_id != proof.workspace_id
+                    or registry.runner_id != proof.runner_id
+                    or registry.grant_id != proof.grant_id
+                    or registry.repository_handle_id != proof.repository_handle_id
+                    or registry.repository_opaque_handle != proof.repository_opaque_handle
+                    or registry.source_revision != proof.source_revision
+                    or registry.policy_hash != proof.policy_hash
+                    or registry.creation_nonce != proof.creation_nonce
+                    or registry.workspace_device != proof.workspace_device
+                    or registry.workspace_inode != proof.workspace_inode
+                    or not WorkspaceManager._registry_discard_binding_matches(
+                        registry,
+                        proof,
+                        operation_id=operation_id,
+                        permit=permit,
+                    )
+                )
+            )
+        )
+
+    @staticmethod
+    def _registry_discard_binding_matches(
+        registry: WorkspaceRegistry,
+        proof: WorkspaceDiscardProof,
+        *,
+        operation_id: uuid.UUID,
+        permit: SideEffectPermit,
+    ) -> bool:
+        pending_matches = (
+            registry.pending_operation
+            == {
+                "operation_id": str(operation_id),
+                "kind": "discard",
+            }
+            and registry.pending_permit_id == permit.id
+        )
+        if proof.state == "pending":
+            return pending_matches and registry.local_state != "discarded"
+        completed_payload = registry.completed_operations.get(str(operation_id))
+        if completed_payload is None:
+            return pending_matches
+        try:
+            completed = _RESULT_ADAPTER.validate_python(completed_payload)
+        except ValidationError:
+            return False
+        return (
+            registry.local_state == "discarded"
+            and registry.pending_operation is None
+            and registry.pending_permit_id is None
+            and isinstance(completed, WorkspaceDiscardResult)
+            and completed.workspace_id == proof.workspace_id
+            and completed.side_effect_permit_id == permit.id
+        )
+
+    def _require_discarded_inode_absent(self, proof: WorkspaceDiscardProof) -> None:
+        expected = self._git.workspace_path(proof.workspace_id)
+        if expected.exists() or expected.is_symlink():
+            raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
+        pending_directories = [self._settings.workspace_root]
+        seen_directories: set[tuple[int, int]] = set()
+        entries_checked = 0
+        while pending_directories:
+            directory = pending_directories.pop()
+            descriptor: int | None = None
+            try:
+                descriptor = os.open(
+                    directory,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                )
+                directory_metadata = os.fstat(descriptor)
+                if not stat.S_ISDIR(directory_metadata.st_mode):
+                    raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+                key = (directory_metadata.st_dev, directory_metadata.st_ino)
+                if key in seen_directories:
+                    continue
+                seen_directories.add(key)
+                child_directories: list[Path] = []
+                with os.scandir(descriptor) as entries:
+                    for entry in entries:
+                        entries_checked += 1
+                        if entries_checked > 200_000:
+                            raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+                        metadata = entry.stat(follow_symlinks=False)
+                        if (
+                            metadata.st_dev == proof.workspace_device
+                            and metadata.st_ino == proof.workspace_inode
+                        ):
+                            raise WorkspaceExecutionError(FailureCode.WORKSPACE_RECOVERY_REQUIRED)
+                        if (
+                            stat.S_ISDIR(metadata.st_mode)
+                            and not stat.S_ISLNK(metadata.st_mode)
+                            and metadata.st_dev == proof.workspace_device
+                        ):
+                            child_directories.append(directory / entry.name)
+                pending_directories.extend(child_directories)
+            except WorkspaceExecutionError:
+                raise
+            except OSError as exc:
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED) from exc
+            finally:
+                if descriptor is not None:
+                    os.close(descriptor)
 
     def _validate_ownership_record(
         self,

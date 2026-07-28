@@ -1,7 +1,9 @@
 import hashlib
+import subprocess
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -16,15 +18,31 @@ from visual_engineer_api.models.run import (
     RepositorySnapshot,
     Run,
 )
-from visual_engineer_api.models.runner import RunnerJob
+from visual_engineer_api.models.runner import RunnerJob, RunnerJobEvent
 from visual_engineer_api.models.task import Task
-from visual_engineer_api.models.workspace import ExecutionGrant, SideEffectPermit
+from visual_engineer_api.models.workspace import (
+    ExecutionGrant,
+    SideEffectPermit,
+    Workspace,
+    WorkspaceCheckpoint,
+    WorkspaceEvent,
+)
 from visual_engineer_api.services.runner import RunnerService, RunnerServiceError
 from visual_engineer_api.services.workspace import WorkspaceService
+from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
+from visual_engineer_runner.workspace_manager import WorkspaceManager
 from visual_engineer_runner_protocol import (
     JobAssignment,
     SideEffectPermitAcquireRequest,
+    WorkspacePrepareJobSpec,
+    WorkspacePrepareResult,
+    WorkspaceWriteTextJobSpec,
+    WorkspaceWriteTextResult,
     compute_side_effect_job_digest,
+    side_effect_permit_digest_matches,
+)
+from visual_engineer_runner_protocol import (
+    SideEffectPermit as ProtocolSideEffectPermit,
 )
 
 WORKSPACE_CAPABILITIES = [
@@ -56,6 +74,7 @@ def register_workspace_runner(
     bootstrap_token: str,
     *,
     name: str = "Phase 4 Runner",
+    current_revision: str = REVISION,
 ) -> tuple[dict[str, Any], str, dict[str, Any]]:
     registered = client.post(
         "/api/v1/runner-protocol/v1/register",
@@ -93,7 +112,7 @@ def register_workspace_runner(
             "display_name": "Phase 4 Adversarial Fixture",
             "vcs_kind": "git",
             "capabilities": ["committed_head_read", "isolated_workspace"],
-            "current_revision": REVISION,
+            "current_revision": current_revision,
             "current_branch": "main",
             "source_is_dirty": True,
             "dirty_path_count": 2,
@@ -104,7 +123,7 @@ def register_workspace_runner(
     return runner, token, cast(dict[str, Any], repository.json())
 
 
-def seed_approved_plan(db: Session) -> Plan:
+def seed_approved_plan(db: Session, *, source_revision: str = REVISION) -> Plan:
     task = Task(
         title="Phase 4 fixture execution",
         objective="Exercise only the isolated synthetic fixture workspace.",
@@ -130,7 +149,7 @@ def seed_approved_plan(db: Session) -> Plan:
     db.flush()
     snapshot = RepositorySnapshot(
         run_id=run.id,
-        source_revision=REVISION,
+        source_revision=source_revision,
         branch_name="main",
         repository_is_dirty=True,
         dirty_path_count=2,
@@ -535,6 +554,11 @@ def test_workspace_full_runner_protocol_state_machine_and_evidence(
         },
     )
     assert failed.status_code == 200
+    db_session.expire_all()
+    failed_permit = db_session.get(SideEffectPermit, uuid.UUID(permit["id"]))
+    assert failed_permit is not None
+    assert failed_permit.state == "failed"
+    assert failed_permit.terminal_at is not None
     assert client.get(f"/api/v1/workspaces/{workspace_id}").json()["state"] == "active"
 
     diff_action = client.post(f"/api/v1/workspaces/{workspace_id}/actions/diff")
@@ -1019,3 +1043,651 @@ def test_expired_lease_cannot_acquire_side_effect_permit(
         )
         is None
     )
+
+
+def test_concurrent_permit_acquire_has_one_postgresql_consumer(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    database_url: str,
+) -> None:
+    runner, token, repository = register_workspace_runner(client, runner_bootstrap_token)
+    plan = seed_approved_plan(db_session)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    created = client.post("/api/v1/workspaces", json={"grant_id": grant["id"]})
+    assert created.status_code == 201, created.text
+    job = created.json()["job"]
+    assignment, identity = claim_start(client, runner, token, job["id"])
+    typed_assignment = JobAssignment.model_validate(assignment)
+    request = SideEffectPermitAcquireRequest.model_validate(
+        {
+            **identity,
+            "job_digest": compute_side_effect_job_digest(typed_assignment.job),
+        }
+    )
+    job_id = uuid.UUID(job["id"])
+    barrier = threading.Barrier(2)
+    engine = create_engine(database_url, pool_pre_ping=True)
+
+    def acquire(index: int) -> tuple[str, bool]:
+        with Session(engine) as session:
+            service = RunnerService(session)
+            authenticated = service.authenticate(token)
+            barrier.wait(timeout=10)
+            permit = service.acquire_side_effect_permit(
+                authenticated,
+                job_id,
+                request,
+                request_id=f"single-consumer-{index}-{uuid.uuid4()}",
+            )
+            return str(permit.id), permit.idempotent_replay
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(acquire, range(2)))
+        assert results[0][0] == results[1][0]
+        assert sorted(result[1] for result in results) == [False, True]
+        with Session(engine) as session:
+            permits = list(
+                session.scalars(select(SideEffectPermit).where(SideEffectPermit.job_id == job_id))
+            )
+            acquired_events = list(
+                session.scalars(
+                    select(RunnerJobEvent).where(
+                        RunnerJobEvent.job_id == job_id,
+                        RunnerJobEvent.event_type == "side_effect_permit_acquired",
+                    )
+                )
+            )
+            assert len(permits) == 1
+            assert permits[0].state == "consumed"
+            assert len(acquired_events) == 1
+    finally:
+        engine.dispose()
+
+
+def test_real_postgresql_permit_crash_windows_retry_and_disk_db_ordering(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    tmp_path: Path,
+) -> None:
+    source, revision = _real_repository_fixture(tmp_path)
+    runner, token, repository = register_workspace_runner(
+        client,
+        runner_bootstrap_token,
+        current_revision=revision,
+    )
+    plan = seed_approved_plan(db_session, source_revision=revision)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    settings = RunnerSettings(
+        credential_path=tmp_path / "runner-state" / "credential.json",
+        repository_handles={
+            "fixture-repository-v1": LocalRepositoryConfig(
+                path=source,
+                display_name="Phase 4 Adversarial Fixture",
+            )
+        },
+        mirror_root=tmp_path / "runner-state" / "mirrors",
+        workspace_root=tmp_path / "runner-state" / "workspaces",
+        registry_root=tmp_path / "runner-state" / "registry",
+        require_source_read_only=False,
+    )
+    manager = WorkspaceManager(settings)
+    created = client.post("/api/v1/workspaces", json={"grant_id": grant["id"]})
+    assert created.status_code == 201, created.text
+    workspace_id = uuid.UUID(created.json()["workspace"]["id"])
+    prepare_job = created.json()["job"]
+    prepare_assignment, prepare_identity = claim_start(
+        client,
+        runner,
+        token,
+        prepare_job["id"],
+    )
+    typed_prepare_assignment = JobAssignment.model_validate(prepare_assignment)
+    assert isinstance(typed_prepare_assignment.job, WorkspacePrepareJobSpec)
+    prepare_endpoint = f"/api/v1/runner-protocol/v1/jobs/{prepare_job['id']}/side-effect-permit"
+
+    denied = client.post(
+        prepare_endpoint,
+        headers=runner_headers(token),
+        json={**prepare_identity, "job_digest": "f" * 64},
+    )
+    assert denied.status_code == 422, denied.text
+    assert denied.json()["error"]["code"] == "operation_digest_mismatch"
+    assert not manager._git.workspace_path(workspace_id).exists()
+    assert (
+        db_session.scalar(
+            select(SideEffectPermit).where(SideEffectPermit.job_id == uuid.UUID(prepare_job["id"]))
+        )
+        is None
+    )
+
+    prepare_permit_payload = acquire_side_effect_permit(
+        client,
+        token,
+        prepare_assignment,
+        prepare_identity,
+    )
+    prepare_permit = ProtocolSideEffectPermit.model_validate(prepare_permit_payload)
+    assert side_effect_permit_digest_matches(
+        prepare_permit,
+        prepare_permit.operation_digest,
+    )
+    assert prepare_permit.runner_id == uuid.UUID(runner["runner_id"])
+    assert prepare_permit.grant_id == uuid.UUID(grant["id"])
+    assert prepare_permit.workspace_id == workspace_id
+    assert prepare_permit.repository_handle_id == uuid.UUID(repository["repository_handle_id"])
+    assert prepare_permit.source_revision == revision
+    assert prepare_permit.policy_hash == grant["policy_hash"]
+    assert prepare_permit.job_digest == compute_side_effect_job_digest(typed_prepare_assignment.job)
+    assert not manager._git.workspace_path(workspace_id).exists()
+
+    prepare_result = cast(
+        WorkspacePrepareResult,
+        manager.execute(
+            typed_prepare_assignment.job,
+            operation_id=typed_prepare_assignment.job_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=prepare_permit,
+        ),
+    )
+    workspace_path = manager._git.workspace_path(workspace_id)
+    assert workspace_path.is_dir()
+    db_session.expire_all()
+    durable_prepare_permit = db_session.get(SideEffectPermit, prepare_permit.id)
+    durable_workspace = db_session.get(Workspace, workspace_id)
+    assert durable_prepare_permit is not None
+    assert durable_workspace is not None
+    assert durable_prepare_permit.state == "consumed"
+    assert durable_workspace.state == "preparing"
+    assert durable_workspace.current_tree_hash is None
+
+    prepare_replay = WorkspaceManager(settings).execute(
+        typed_prepare_assignment.job,
+        operation_id=typed_prepare_assignment.job_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=prepare_permit,
+    )
+    assert prepare_replay == prepare_result
+    complete(
+        client,
+        token,
+        prepare_job["id"],
+        prepare_identity,
+        prepare_result.model_dump(mode="json"),
+    )
+
+    original = (workspace_path / "sandbox" / "tracked.txt").read_text(encoding="utf-8")
+    original_hash = hashlib.sha256(original.encode()).hexdigest()
+    updated = "updated through a real PostgreSQL permit\n"
+    write_action = client.post(
+        f"/api/v1/workspaces/{workspace_id}/actions/write-text",
+        json={
+            "mode": "replace",
+            "relative_path": "sandbox/tracked.txt",
+            "content": updated,
+            "expected_sha256": original_hash,
+        },
+    )
+    assert write_action.status_code == 200, write_action.text
+    write_job = write_action.json()["job"]
+    write_assignment, write_identity = claim_start(client, runner, token, write_job["id"])
+    typed_write_assignment = JobAssignment.model_validate(write_assignment)
+    assert isinstance(typed_write_assignment.job, WorkspaceWriteTextJobSpec)
+    write_permit_payload = acquire_side_effect_permit(
+        client,
+        token,
+        write_assignment,
+        write_identity,
+    )
+    write_permit = ProtocolSideEffectPermit.model_validate(write_permit_payload)
+    assert write_permit.job_digest == compute_side_effect_job_digest(typed_write_assignment.job)
+    for budget_field in (
+        "max_files_changed",
+        "max_total_write_bytes",
+        "max_single_file_bytes",
+        "max_diff_bytes",
+        "workspace_ttl_seconds",
+    ):
+        assert (
+            getattr(typed_write_assignment.job.execution_grant, budget_field) == grant[budget_field]
+        )
+    assert (workspace_path / "sandbox" / "tracked.txt").read_text() == original
+    db_session.expire_all()
+    durable_write_permit = db_session.get(SideEffectPermit, write_permit.id)
+    durable_workspace = db_session.get(Workspace, workspace_id)
+    assert durable_write_permit is not None
+    assert durable_workspace is not None
+    assert durable_write_permit.state == "consumed"
+    assert durable_workspace.total_written_bytes == 0
+
+    write_result = cast(
+        WorkspaceWriteTextResult,
+        manager.execute(
+            typed_write_assignment.job,
+            operation_id=typed_write_assignment.job_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=write_permit,
+        ),
+    )
+    target = workspace_path / "sandbox" / "tracked.txt"
+    committed_inode = target.stat().st_ino
+    assert target.read_text(encoding="utf-8") == updated
+    assert write_result.side_effect_permit_id == write_permit.id
+    assert write_result.checkpoint.side_effect_permit_id == write_permit.id
+    local_registry = manager._load_registry(workspace_id)
+    assert local_registry is not None
+    assert local_registry.total_written_bytes == len(updated.encode())
+    db_session.expire_all()
+    durable_workspace = db_session.get(Workspace, workspace_id)
+    durable_write_permit = db_session.get(SideEffectPermit, write_permit.id)
+    assert durable_workspace is not None
+    assert durable_write_permit is not None
+    assert durable_workspace.total_written_bytes == 0
+    assert durable_write_permit.state == "consumed"
+
+    write_replay = WorkspaceManager(settings).execute(
+        typed_write_assignment.job,
+        operation_id=typed_write_assignment.job_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=write_permit,
+    )
+    assert write_replay == write_result
+    assert target.stat().st_ino == committed_inode
+    replay_registry = WorkspaceManager(settings)._load_registry(workspace_id)
+    assert replay_registry is not None
+    assert replay_registry.total_written_bytes == len(updated.encode())
+
+    _install_completion_crash_trigger(db_session)
+    failed_completion = client.post(
+        f"/api/v1/runner-protocol/v1/jobs/{write_job['id']}/complete",
+        headers=runner_headers(token, "forced-completion-crash"),
+        json={
+            **write_identity,
+            "result": write_result.model_dump(mode="json"),
+        },
+    )
+    assert failed_completion.status_code == 500, failed_completion.text
+    db_session.rollback()
+    db_session.expire_all()
+    durable_write_permit = db_session.get(SideEffectPermit, write_permit.id)
+    durable_write_job = db_session.get(RunnerJob, uuid.UUID(write_job["id"]))
+    durable_workspace = db_session.get(Workspace, workspace_id)
+    assert durable_write_permit is not None
+    assert durable_write_job is not None
+    assert durable_workspace is not None
+    assert durable_write_permit.state == "consumed"
+    assert durable_write_permit.terminal_at is None
+    assert durable_write_job.state == "running"
+    assert durable_workspace.total_written_bytes == 0
+    assert (
+        db_session.scalar(
+            select(WorkspaceCheckpoint).where(
+                WorkspaceCheckpoint.side_effect_permit_id == write_permit.id
+            )
+        )
+        is None
+    )
+    assert target.read_text(encoding="utf-8") == updated
+    assert target.stat().st_ino == committed_inode
+
+    _remove_completion_crash_trigger(db_session)
+    final_replay = WorkspaceManager(settings).execute(
+        typed_write_assignment.job,
+        operation_id=typed_write_assignment.job_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=write_permit,
+    )
+    assert final_replay == write_result
+    assert target.stat().st_ino == committed_inode
+    complete(
+        client,
+        token,
+        write_job["id"],
+        write_identity,
+        write_result.model_dump(mode="json"),
+    )
+    terminal_replay = client.post(
+        f"/api/v1/runner-protocol/v1/jobs/{write_job['id']}/complete",
+        headers=runner_headers(token),
+        json={
+            **write_identity,
+            "result": write_result.model_dump(mode="json"),
+        },
+    )
+    assert terminal_replay.status_code == 200, terminal_replay.text
+    assert terminal_replay.json()["idempotent_replay"] is True
+
+    db_session.expire_all()
+    durable_write_permit = db_session.get(SideEffectPermit, write_permit.id)
+    durable_write_job = db_session.get(RunnerJob, uuid.UUID(write_job["id"]))
+    durable_workspace = db_session.get(Workspace, workspace_id)
+    assert durable_write_permit is not None
+    assert durable_write_job is not None
+    assert durable_workspace is not None
+    assert durable_write_permit.state == "completed"
+    assert durable_write_permit.terminal_at is not None
+    assert durable_write_job.state == "succeeded"
+    assert durable_write_job.result is not None
+    assert durable_write_job.result["side_effect_permit_id"] == str(write_permit.id)
+    assert durable_write_job.result["checkpoint"]["side_effect_permit_id"] == str(write_permit.id)
+    assert durable_workspace.total_written_bytes == len(updated.encode())
+    checkpoints = list(
+        db_session.scalars(
+            select(WorkspaceCheckpoint).where(
+                WorkspaceCheckpoint.workspace_id == workspace_id,
+                WorkspaceCheckpoint.side_effect_permit_id == write_permit.id,
+            )
+        )
+    )
+    assert len(checkpoints) == 1
+    permit_workspace_events = list(
+        db_session.scalars(
+            select(WorkspaceEvent).where(
+                WorkspaceEvent.workspace_id == workspace_id,
+                WorkspaceEvent.side_effect_permit_id == write_permit.id,
+            )
+        )
+    )
+    assert {"permit_acquired", "permit_completed", "checkpoint_created"}.issubset(
+        {event.event_type for event in permit_workspace_events}
+    )
+    permit_runner_events = list(
+        db_session.scalars(
+            select(RunnerJobEvent).where(
+                RunnerJobEvent.job_id == uuid.UUID(write_job["id"]),
+                RunnerJobEvent.event_type.in_(
+                    (
+                        "side_effect_permit_acquired",
+                        "side_effect_permit_completed",
+                    )
+                ),
+            )
+        )
+    )
+    assert [event.event_type for event in permit_runner_events].count(
+        "side_effect_permit_acquired"
+    ) == 1
+    assert [event.event_type for event in permit_runner_events].count(
+        "side_effect_permit_completed"
+    ) == 1
+    assert target.read_text(encoding="utf-8") == updated
+    assert target.stat().st_ino == committed_inode
+
+
+def test_permit_identity_and_expired_grant_denials_leave_zero_disk_side_effects(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    tmp_path: Path,
+) -> None:
+    source, revision = _real_repository_fixture(tmp_path)
+    runner, token, repository = register_workspace_runner(
+        client,
+        runner_bootstrap_token,
+        current_revision=revision,
+    )
+    plan = seed_approved_plan(db_session, source_revision=revision)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    settings = RunnerSettings(
+        credential_path=tmp_path / "runner-state" / "credential.json",
+        repository_handles={
+            "fixture-repository-v1": LocalRepositoryConfig(
+                path=source,
+                display_name="Phase 4 Adversarial Fixture",
+            )
+        },
+        mirror_root=tmp_path / "runner-state" / "mirrors",
+        workspace_root=tmp_path / "runner-state" / "workspaces",
+        registry_root=tmp_path / "runner-state" / "registry",
+        require_source_read_only=False,
+    )
+    manager = WorkspaceManager(settings)
+    created = client.post("/api/v1/workspaces", json={"grant_id": grant["id"]})
+    assert created.status_code == 201, created.text
+    workspace_id = uuid.UUID(created.json()["workspace"]["id"])
+    job = created.json()["job"]
+    assignment, identity = claim_start(client, runner, token, job["id"])
+    typed_assignment = JobAssignment.model_validate(assignment)
+    endpoint = f"/api/v1/runner-protocol/v1/jobs/{job['id']}/side-effect-permit"
+    digest = compute_side_effect_job_digest(typed_assignment.job)
+    denials = (
+        (
+            {**identity, "runner_id": str(uuid.uuid4()), "job_digest": digest},
+            "runner_identity_mismatch",
+        ),
+        (
+            {**identity, "attempt_id": str(uuid.uuid4()), "job_digest": digest},
+            "stale_lease",
+        ),
+        (
+            {**identity, "lease_id": str(uuid.uuid4()), "job_digest": digest},
+            "stale_lease",
+        ),
+        (
+            {**identity, "job_digest": "f" * 64},
+            "operation_digest_mismatch",
+        ),
+    )
+    for payload, expected_code in denials:
+        response = client.post(endpoint, headers=runner_headers(token), json=payload)
+        assert response.status_code in {403, 409, 422}, response.text
+        assert response.json()["error"]["code"] == expected_code
+        assert (
+            db_session.scalar(
+                select(SideEffectPermit).where(SideEffectPermit.job_id == uuid.UUID(job["id"]))
+            )
+            is None
+        )
+        assert not manager._git.workspace_path(workspace_id).exists()
+
+    db_session.execute(
+        text("UPDATE execution_grants SET status = 'expired' WHERE id = :grant_id"),
+        {"grant_id": grant["id"]},
+    )
+    db_session.commit()
+    expired = client.post(
+        endpoint,
+        headers=runner_headers(token),
+        json={**identity, "job_digest": digest},
+    )
+    assert expired.status_code == 409, expired.text
+    assert expired.json()["error"]["code"] == "execution_grant_inactive"
+    assert (
+        db_session.scalar(
+            select(SideEffectPermit).where(SideEffectPermit.job_id == uuid.UUID(job["id"]))
+        )
+        is None
+    )
+    assert not manager._git.workspace_path(workspace_id).exists()
+
+
+def test_permit_last_moment_budget_recheck_prevents_disk_write(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    tmp_path: Path,
+) -> None:
+    source, revision = _real_repository_fixture(tmp_path)
+    runner, token, repository = register_workspace_runner(
+        client,
+        runner_bootstrap_token,
+        current_revision=revision,
+    )
+    plan = seed_approved_plan(db_session, source_revision=revision)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    settings = RunnerSettings(
+        credential_path=tmp_path / "runner-state" / "credential.json",
+        repository_handles={
+            "fixture-repository-v1": LocalRepositoryConfig(
+                path=source,
+                display_name="Phase 4 Adversarial Fixture",
+            )
+        },
+        mirror_root=tmp_path / "runner-state" / "mirrors",
+        workspace_root=tmp_path / "runner-state" / "workspaces",
+        registry_root=tmp_path / "runner-state" / "registry",
+        require_source_read_only=False,
+    )
+    manager = WorkspaceManager(settings)
+    created = client.post("/api/v1/workspaces", json={"grant_id": grant["id"]})
+    assert created.status_code == 201, created.text
+    workspace_id = uuid.UUID(created.json()["workspace"]["id"])
+    prepare_job = created.json()["job"]
+    prepare_assignment, prepare_identity = claim_start(
+        client,
+        runner,
+        token,
+        prepare_job["id"],
+    )
+    typed_prepare = JobAssignment.model_validate(prepare_assignment)
+    assert isinstance(typed_prepare.job, WorkspacePrepareJobSpec)
+    prepare_permit = ProtocolSideEffectPermit.model_validate(
+        acquire_side_effect_permit(
+            client,
+            token,
+            prepare_assignment,
+            prepare_identity,
+        )
+    )
+    prepare_result = cast(
+        WorkspacePrepareResult,
+        manager.execute(
+            typed_prepare.job,
+            operation_id=typed_prepare.job_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=prepare_permit,
+        ),
+    )
+    complete(
+        client,
+        token,
+        prepare_job["id"],
+        prepare_identity,
+        prepare_result.model_dump(mode="json"),
+    )
+    target = manager._git.workspace_path(workspace_id) / "sandbox" / "tracked.txt"
+    original = target.read_text(encoding="utf-8")
+    original_hash = hashlib.sha256(original.encode()).hexdigest()
+    write = client.post(
+        f"/api/v1/workspaces/{workspace_id}/actions/write-text",
+        json={
+            "mode": "replace",
+            "relative_path": "sandbox/tracked.txt",
+            "content": "must be denied by the final permit budget check\n",
+            "expected_sha256": original_hash,
+        },
+    )
+    assert write.status_code == 200, write.text
+    write_job = write.json()["job"]
+    write_assignment, write_identity = claim_start(client, runner, token, write_job["id"])
+    typed_write = JobAssignment.model_validate(write_assignment)
+    db_session.execute(
+        text("UPDATE workspaces SET total_written_bytes = :budget WHERE id = :workspace_id"),
+        {
+            "budget": grant["max_total_write_bytes"],
+            "workspace_id": str(workspace_id),
+        },
+    )
+    db_session.commit()
+
+    denied = client.post(
+        f"/api/v1/runner-protocol/v1/jobs/{write_job['id']}/side-effect-permit",
+        headers=runner_headers(token),
+        json={
+            **write_identity,
+            "job_digest": compute_side_effect_job_digest(typed_write.job),
+        },
+    )
+    assert denied.status_code == 422, denied.text
+    assert denied.json()["error"]["code"] == "total_write_budget_exceeded"
+    assert (
+        db_session.scalar(
+            select(SideEffectPermit).where(SideEffectPermit.job_id == uuid.UUID(write_job["id"]))
+        )
+        is None
+    )
+    assert target.read_text(encoding="utf-8") == original
+
+
+def _real_repository_fixture(tmp_path: Path) -> tuple[Path, str]:
+    source = tmp_path / "source"
+    source.mkdir()
+    _git(source, "init", "-b", "main")
+    _git(source, "config", "user.name", "Permit Fixture")
+    _git(source, "config", "user.email", "permit@example.invalid")
+    sandbox = source / "sandbox"
+    sandbox.mkdir()
+    (sandbox / "tracked.txt").write_text("original permit fixture\n", encoding="utf-8")
+    (source / "outside.txt").write_text("outside granted paths\n", encoding="utf-8")
+    _git(source, "add", "sandbox/tracked.txt", "outside.txt")
+    _git(source, "commit", "-m", "permit fixture")
+    revision = _git(source, "rev-parse", "HEAD")
+    (sandbox / "source-untracked.txt").write_text(
+        "must never enter the workspace\n",
+        encoding="utf-8",
+    )
+    return source, revision
+
+
+def _git(repository: Path, *arguments: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repository), *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _install_completion_crash_trigger(db_session: Session) -> None:
+    db_session.execute(
+        text(
+            """
+            CREATE OR REPLACE FUNCTION phase4_test_fail_permit_completion()
+            RETURNS trigger AS $$
+            BEGIN
+                IF NEW.event_type = 'side_effect_permit_completed' THEN
+                    RAISE EXCEPTION 'synthetic completion crash'
+                        USING ERRCODE = '40001';
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+            """
+        )
+    )
+    db_session.execute(
+        text(
+            """
+            CREATE TRIGGER phase4_test_fail_permit_completion
+            BEFORE INSERT ON runner_job_events
+            FOR EACH ROW EXECUTE FUNCTION phase4_test_fail_permit_completion()
+            """
+        )
+    )
+    db_session.commit()
+
+
+def _remove_completion_crash_trigger(db_session: Session) -> None:
+    db_session.execute(
+        text("DROP TRIGGER IF EXISTS phase4_test_fail_permit_completion ON runner_job_events")
+    )
+    db_session.execute(text("DROP FUNCTION IF EXISTS phase4_test_fail_permit_completion()"))
+    db_session.commit()

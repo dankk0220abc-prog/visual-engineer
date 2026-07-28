@@ -48,6 +48,18 @@ class RunnerSettings(BaseSettings):
         ge=1024,
         le=10 * 1024 * 1024 * 1024,
     )
+    mirror_max_single_object_bytes: int = Field(
+        default=64 * 1024 * 1024,
+        ge=1024,
+        le=1024 * 1024 * 1024,
+    )
+    mirror_max_pack_files: int = Field(default=256, ge=1, le=4096)
+    mirror_max_delta_depth: int = Field(default=64, ge=1, le=128)
+    mirror_max_tree_depth: int = Field(default=64, ge=1, le=256)
+    mirror_max_tree_entries: int = Field(default=1_000_000, ge=1, le=10_000_000)
+    mirror_max_object_references: int = Field(default=2_000_000, ge=1, le=20_000_000)
+    mirror_max_graph_depth: int = Field(default=50_000, ge=1, le=1_000_000)
+    git_termination_grace_seconds: float = Field(default=0.5, ge=0.05, le=5)
     workspace_prepare_delay_ms: int = Field(default=0, ge=0, le=10_000)
     workspace_write_commit_delay_ms: int = Field(default=0, ge=0, le=10_000)
     workspace_write_post_commit_delay_ms: int = Field(default=0, ge=0, le=10_000)

@@ -47,8 +47,17 @@ state even if it later returns.
   Workspace and enter `quarantined`.
 - Ignored, unknown, unexpected-type, or out-of-inventory content: preserve the
   Workspace and enter `quarantined`.
-- Interrupted discard: reconcile as complete only when the authenticated
-  pending-discard record is exact and the Workspace root is already absent.
+- Interrupted discard: reconcile as complete only when the domain-separated
+  signed pending/completed proof exactly binds the registry/manifest,
+  Workspace, Runner, Grant, Handle, revision, policy, nonce, root
+  device/inode, Job/operation, Permit sequence, Attempt, Lease, digests, and
+  authorization window; the expected root and original inode must both be
+  absent.
+- Registry and expected root both absent with no valid proof:
+  `recovery_required`, never idempotent success.
+- Terminal registry with missing, pending-rollback, mismatched, replayed, or
+  expired proof: fail closed. Preserve any recreated, replaced, or renamed
+  root and all siblings.
 
 Both recovery states disable destructive browser controls. Do not rename,
 remove, edit, resign, or database-reset the evidence manually. Capture the
@@ -73,6 +82,6 @@ recovery and compares the full source and `.git` evidence.
 
 For the normal running stack, `make workspace-smoke` performs the typed
 read/write/deny/diff/checkpoint/rollback/discard path and source comparison.
-Never point either command at CreativeDeploy. This repair is not an
-independent Gate decision; only Phase 4 Independent Security Re-Audit may
-approve it.
+Never point either command at CreativeDeploy. Round 2 is not an independent
+Gate decision; only Phase 4 Independent Focused Security Re-Audit may make a
+new decision.

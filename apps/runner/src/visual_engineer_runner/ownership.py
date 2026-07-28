@@ -6,15 +6,24 @@ import os
 import secrets
 import stat
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from visual_engineer_runner.config import RunnerSettings
 from visual_engineer_runner_protocol import FailureCode, canonical_json_bytes
 
 _MAX_MANIFEST_BYTES = 16 * 1024
+_MAX_DISCARD_PROOF_BYTES = 32 * 1024
 _KEY_BYTES = 32
 
 
@@ -39,6 +48,68 @@ class WorkspaceOwnershipManifest(BaseModel):
     workspace_device: int = Field(ge=0)
     workspace_inode: int = Field(gt=0)
     signature: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class WorkspaceDiscardProof(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[1] = 1
+    state: Literal["pending", "completed"]
+    workspace_id: uuid.UUID
+    runner_id: uuid.UUID
+    grant_id: uuid.UUID
+    repository_handle_id: uuid.UUID
+    repository_opaque_handle: str = Field(min_length=8, max_length=120)
+    source_revision: str = Field(pattern=r"^[0-9a-f]{40,64}$")
+    policy_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    creation_nonce: str = Field(pattern=r"^[0-9a-f]{32}$")
+    workspace_device: int = Field(ge=0)
+    workspace_inode: int = Field(gt=0)
+    operation_id: uuid.UUID
+    permit_id: uuid.UUID
+    permit_sequence: int = Field(ge=1)
+    attempt_id: uuid.UUID
+    lease_id: uuid.UUID
+    job_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_current: str = Field(min_length=1, max_length=128)
+    proposed_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    issued_at: datetime
+    consumed_at: datetime
+    expires_at: datetime
+    recorded_at: datetime
+    completed_at: datetime | None = None
+    proof_nonce: str = Field(pattern=r"^[0-9a-f]{32}$")
+    signature: str = Field(default="0" * 64, pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator(
+        "issued_at",
+        "consumed_at",
+        "expires_at",
+        "recorded_at",
+        "completed_at",
+    )
+    @classmethod
+    def require_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("Discard proof timestamps must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def validate_state_and_times(self) -> WorkspaceDiscardProof:
+        if (
+            self.issued_at > self.consumed_at
+            or self.consumed_at > self.recorded_at
+            or self.recorded_at > self.expires_at
+            or (self.state == "pending" and self.completed_at is not None)
+            or (self.state == "completed" and self.completed_at is None)
+            or (
+                self.completed_at is not None
+                and (self.completed_at < self.recorded_at or self.completed_at > self.expires_at)
+            )
+        ):
+            raise ValueError("Discard proof state or timestamps are invalid")
+        return self
 
 
 class WorkspaceOwnershipStore:
@@ -113,6 +184,40 @@ class WorkspaceOwnershipStore:
 
     def path(self, workspace_id: uuid.UUID) -> Path:
         return self._root / f"workspace-{workspace_id.hex}.ownership.json"
+
+    def discard_proof_path(self, workspace_id: uuid.UUID) -> Path:
+        return self._root / f"workspace-{workspace_id.hex}.discard-proof.json"
+
+    def save_discard_proof(self, proof: WorkspaceDiscardProof) -> WorkspaceDiscardProof:
+        values = proof.model_dump(mode="json", exclude={"signature"})
+        values["signature"] = self._signature(values, domain=b"workspace-discard-proof-v1")
+        signed = WorkspaceDiscardProof.model_validate(values)
+        payload = canonical_json_bytes(signed)
+        if len(payload) > _MAX_DISCARD_PROOF_BYTES:
+            raise OwnershipError(FailureCode.WORKSPACE_STATE_INVALID)
+        self._write_payload(self.discard_proof_path(signed.workspace_id).name, payload)
+        return signed
+
+    def load_discard_proof(
+        self,
+        workspace_id: uuid.UUID,
+    ) -> WorkspaceDiscardProof | None:
+        path = self.discard_proof_path(workspace_id)
+        try:
+            payload = self._read_payload(path, max_bytes=_MAX_DISCARD_PROOF_BYTES)
+        except FileNotFoundError:
+            return None
+        try:
+            proof = WorkspaceDiscardProof.model_validate_json(payload)
+        except ValidationError as exc:
+            raise OwnershipError(FailureCode.WORKSPACE_QUARANTINED) from exc
+        values = proof.model_dump(mode="json", exclude={"signature"})
+        if not hmac.compare_digest(
+            proof.signature,
+            self._signature(values, domain=b"workspace-discard-proof-v1"),
+        ):
+            raise OwnershipError(FailureCode.WORKSPACE_QUARANTINED)
+        return proof
 
     def sign_registry(self, values: dict[str, object]) -> str:
         return self._signature(values, domain=b"workspace-registry-v2")
@@ -195,7 +300,41 @@ class WorkspaceOwnershipStore:
         payload = canonical_json_bytes(manifest)
         if len(payload) > _MAX_MANIFEST_BYTES:
             raise OwnershipError(FailureCode.WORKSPACE_STATE_INVALID)
-        filename = self.path(manifest.workspace_id).name
+        self._write_payload(self.path(manifest.workspace_id).name, payload)
+
+    def _read_payload(self, path: Path, *, max_bytes: int) -> bytes:
+        try:
+            descriptor = os.open(
+                path,
+                os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            )
+        except FileNotFoundError:
+            raise
+        except OSError as exc:
+            raise OwnershipError(FailureCode.WORKSPACE_QUARANTINED) from exc
+        try:
+            metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+                or metadata.st_size > max_bytes
+            ):
+                raise OwnershipError(FailureCode.WORKSPACE_QUARANTINED)
+            payload = bytearray()
+            while len(payload) < metadata.st_size:
+                chunk = os.read(
+                    descriptor,
+                    min(64 * 1024, metadata.st_size - len(payload)),
+                )
+                if not chunk:
+                    raise OwnershipError(FailureCode.WORKSPACE_QUARANTINED)
+                payload.extend(chunk)
+        finally:
+            os.close(descriptor)
+        return bytes(payload)
+
+    def _write_payload(self, filename: str, payload: bytes) -> None:
         temporary = f".{filename}.{uuid.uuid4().hex}.tmp"
         root_descriptor = os.open(
             self._root,

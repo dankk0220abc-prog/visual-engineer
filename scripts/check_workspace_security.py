@@ -75,6 +75,18 @@ def main() -> None:
         ),
     )
     require_markers(
+        RUNNER_ROOT / "git_object_store.py",
+        (
+            "SourceObjectClosure",
+            "_parse_pack_index",
+            "_apply_delta",
+            "_validate_destination",
+            "_reject_source_indirection",
+            "gitlink",
+            "os.link",
+        ),
+    )
+    require_markers(
         RUNNER_ROOT / "workspace_manager.py",
         (
             "execution_grant_policy_hash_matches",

@@ -46,15 +46,27 @@ source, mirror, workspace, SSH, or Docker-socket mount.
 is invoked against the source repository. A no-follow reader validates a
 narrow ordinary `.git` layout, direct HEAD/ref data, and ordinary committed
 objects. Loose-ref parent components are type-checked and symbolic links fail
-closed. The adapter rejects links, alternates, graft/replacement metadata,
-malformed refs/objects, and unsupported indirection.
+closed. The adapter rejects links, alternates, HTTP alternates,
+graft/replacement metadata, malformed refs/objects, and unsupported
+indirection.
 
-Committed objects are copied byte-for-byte under object/byte budgets into a
-new Runner-owned bare mirror with new inodes and no source alternate. The
-opened source descriptor is rechecked against its byte ceiling, and existing
-destination objects count toward aggregate ceilings across repeated
-snapshots. All Git subprocesses then operate only on Runner-owned state. The
-adapter invokes one fixed Git executable with argument arrays and
+Starting only from the exact authorized commit, the adapter walks bounded
+commit ancestry and tree/blob references. It parses canonical loose objects
+and pack-index-v2/pack-v2-or-v3 normal/OFS-delta/REF-delta entries, validating
+pack/index hashes, entry CRCs, object IDs/types/declared and decompressed
+lengths, cycles, depth, tree entries, references, graph size, and cumulative
+object/storage budgets. A gitlink is validated only as inert superproject
+metadata: its target commit is not opened or imported and submodule recursion
+stays disabled. Other refs, unreachable loose objects, unreachable packed
+objects, and source dirty/untracked bytes do not join the closure.
+
+Only the validated closure is materialized as mode-0600 Runner-owned loose
+objects under new inodes; source zlib bytes are not blindly copied and no
+source alternate is created. Existing mirror config, object format,
+indirection paths, packs, and loose objects must already match the managed
+identity and exact closure before reuse. All Git subprocesses then operate
+only on Runner-owned state. The adapter invokes one fixed Git executable with
+argument arrays and
 `shell=False`, a managed environment/configuration, process-group timeouts,
 bounded streaming output, and disabled prompts, hooks, filters, fsmonitor,
 external diff/textconv, credential helpers, LFS, submodule recursion, URL
@@ -74,7 +86,8 @@ The Runner:
    policy hash, and write ledger in a descriptor-validated registry.
 
 Dirty tracked and untracked source content is not imported. Hooks do not run,
-submodules remain gitlinks, and Git LFS pointers are not fetched.
+gitlink targets are not imported or recursively checked out, and Git LFS
+pointers are not fetched.
 
 ## Descriptor-rooted file access
 
@@ -141,9 +154,19 @@ removing anything it requires an authenticated registry, a separate valid
 signed ownership manifest, matching Runner/Grant/Handle/revision/policy/nonce,
 the exact Workspace root device/inode, an allowed local state, the managed
 root boundary, and a complete no-follow inventory including ignored and
-unknown entries. Missing proof produces `recovery_required`; contradictory
-proof or unknown content produces `quarantined`. Both preserve the Workspace,
-mirror, source, and siblings. Exact normal discard is idempotent.
+unknown entries.
+
+Before deletion it durably writes a domain-separated signed `pending` proof
+that additionally binds Job/operation, Permit ID/sequence, Attempt, Lease,
+current/proposed/job/operation digests, authorization timestamps, root
+identity, and a proof nonce. After deletion it durably transitions that proof
+to `completed` before the registry becomes terminal. A crash retry can
+reconcile only those exact state combinations. Missing proof produces
+`recovery_required`; signature/state/binding/replay contradiction produces
+`quarantined`; expiry remains a typed Permit failure. Every terminal replay
+also proves the expected root and original inode are absent. All rejection
+paths preserve the Workspace or moved/replaced root, mirror, source, and
+siblings. Exact authorized discard is idempotent.
 
 An expired Workspace has a ten-minute cleanup window before its Grant expires.
 If the Grant itself is revoked or expired, every new Runner operation is
@@ -160,13 +183,17 @@ with the workspace volume, which removes the intended same-UID hostile writer
 from the deployed local threat model, but this is not a hostile multi-tenant
 sandbox guarantee.
 
-Git combined output is streamed into a fixed ceiling and the process group is
-terminated on overflow or timeout. Mirror import has explicit object-count and
-byte ceilings at the opened source descriptor and aggregate destination
-levels. Compose also bounds Runner CPU, memory, PIDs, and open files. These
-are local fixture controls, not production quotas or hostile multi-tenant
-isolation. Case-collision coverage is conditional on the source filesystem.
+Git combined output is streamed from nonblocking pipes into a fixed ceiling.
+A monotonic deadline remains live until leader, pipe, and process-group
+evidence are all terminal; timeout/overflow applies bounded group-wide TERM,
+KILL, absence verification, reap, and pipe closure. Mirror import has explicit
+pack, delta, tree, graph, reference, object-count, single-object,
+decompressed-byte, pack-byte, and aggregate destination ceilings. Compose
+also bounds Runner CPU, memory, PIDs, and open files. These are local fixture
+controls, not production quotas or hostile multi-tenant isolation.
+Case-collision coverage is conditional on the source filesystem.
 
-The independent Phase 4 audit remains **Security Gate: FAIL**. This repair
-design requires a Phase 4 Independent Security Re-Audit before merge,
-CreativeDeploy, Customer 0, or Phase 5.
+The original audit and independent re-audit remain **Security Gate: FAIL**.
+Round 2 is an implementer remediation candidate that requires a new Phase 4
+Independent Focused Security Re-Audit before merge, CreativeDeploy, Customer
+0, or Phase 5.

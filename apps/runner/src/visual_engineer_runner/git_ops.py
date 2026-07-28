@@ -15,6 +15,11 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
+from visual_engineer_runner.git_object_store import (
+    ObjectLimits,
+    SourceObjectClosure,
+    SourceObjectError,
+)
 from visual_engineer_runner_protocol import FailureCode, SourceStatus, WorkspaceStatusCode
 
 
@@ -70,9 +75,12 @@ class GitOperations:
                 raise GitOperationError(FailureCode.SOURCE_NOT_READ_ONLY)
 
         git_directory = self._source_git_directory(source)
-        head = self._read_source_file(git_directory / "HEAD", max_bytes=1024).decode(
-            "ascii", "strict"
-        )
+        try:
+            head = self._read_source_file(git_directory / "HEAD", max_bytes=1024).decode(
+                "ascii", "strict"
+            )
+        except UnicodeDecodeError as exc:
+            raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from exc
         head = head.strip()
         branch: str | None = None
         if head.startswith("ref: "):
@@ -114,9 +122,13 @@ class GitOperations:
         if metadata.current_revision != source_revision:
             raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
         mirror = self.mirror_path(opaque_handle)
-        if mirror.exists():
+        if mirror.exists() or mirror.is_symlink():
             if mirror.is_symlink() or not mirror.is_dir():
                 raise GitOperationError(FailureCode.WORKSPACE_IDENTITY_MISMATCH)
+            self._validate_managed_config(
+                mirror,
+                object_id_hex_length=len(source_revision),
+            )
             bare = (
                 self._run(
                     ["-C", os.fspath(mirror), "rev-parse", "--is-bare-repository"],
@@ -128,20 +140,40 @@ class GitOperations:
             )
             if bare != "true":
                 raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            object_format = (
+                self._run(
+                    ["-C", os.fspath(mirror), "rev-parse", "--show-object-format"],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                    permit_expires_at=permit_expires_at,
+                )
+                .decode("ascii", "strict")
+                .strip()
+            )
+            if object_format != _object_format(len(source_revision)):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
         else:
             mirror.mkdir(mode=0o700)
             self._run(
-                ["-C", os.fspath(mirror), "init", "--bare"],
+                [
+                    "-C",
+                    os.fspath(mirror),
+                    "init",
+                    "--bare",
+                    f"--object-format={_object_format(len(source_revision))}",
+                ],
                 failure=FailureCode.REPOSITORY_UNAVAILABLE,
                 permit_expires_at=permit_expires_at,
             )
+            self._write_managed_config(mirror, object_id_hex_length=len(source_revision))
         _require_fresh_permit(permit_expires_at)
-        self._write_managed_config(mirror)
         self._copy_source_objects(
             self._source_git_directory(self._validate_source_path(repository.path)),
             mirror / "objects",
+            source_revision=source_revision,
             permit_expires_at=permit_expires_at,
         )
+        if self.inspect_source(repository) != metadata:
+            raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
         self._run(
             ["-C", os.fspath(mirror), "cat-file", "-e", f"{source_revision}^{{commit}}"],
             failure=FailureCode.SOURCE_REVISION_MISMATCH,
@@ -474,31 +506,61 @@ class GitOperations:
             packed_path = git_directory / "packed-refs"
             packed = self._read_source_file(packed_path, max_bytes=8 * 1024 * 1024)
             value = ""
+            seen_references: set[str] = set()
+            object_id_length: int | None = None
+            previous_was_reference = False
             for raw_line in packed.splitlines():
-                if not raw_line or raw_line.startswith((b"#", b"^")):
+                if not raw_line or raw_line.startswith(b"#"):
+                    previous_was_reference = False
                     continue
-                object_id, separator, candidate = raw_line.partition(b" ")
-                if separator and candidate.decode("ascii", "strict") == reference:
-                    value = object_id.decode("ascii", "strict")
-                    break
+                if raw_line.startswith(b"^"):
+                    try:
+                        peeled = raw_line[1:].decode("ascii", "strict")
+                    except UnicodeDecodeError as exc:
+                        raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from exc
+                    if not previous_was_reference:
+                        raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from None
+                    _require_object_id(peeled)
+                    if object_id_length is not None and len(peeled) != object_id_length:
+                        raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from None
+                    previous_was_reference = False
+                    continue
+                fields = raw_line.split(b" ")
+                if len(fields) != 2:
+                    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from None
+                try:
+                    object_id = fields[0].decode("ascii", "strict")
+                    candidate = fields[1].decode("ascii", "strict")
+                except UnicodeDecodeError as exc:
+                    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from exc
+                _require_object_id(object_id)
+                if not _valid_packed_reference(candidate) or candidate in seen_references:
+                    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from None
+                if object_id_length is None:
+                    object_id_length = len(object_id)
+                elif len(object_id) != object_id_length:
+                    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from None
+                seen_references.add(candidate)
+                previous_was_reference = True
+                if candidate == reference:
+                    value = object_id
             if not value:
                 raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from None
         except OSError as exc:
             raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from exc
         else:
-            value = self._read_source_file(loose, max_bytes=1024).decode("ascii", "strict").strip()
+            try:
+                value = (
+                    self._read_source_file(loose, max_bytes=1024).decode("ascii", "strict").strip()
+                )
+            except UnicodeDecodeError as exc:
+                raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from exc
         _require_object_id(value)
         return value
 
-    def _write_managed_config(self, mirror: Path) -> None:
+    def _write_managed_config(self, mirror: Path, *, object_id_hex_length: int) -> None:
         config = mirror / "config"
-        payload = (
-            b"[core]\n"
-            b"\trepositoryformatversion = 0\n"
-            b"\tfilemode = true\n"
-            b"\tbare = true\n"
-            b"\tlogallrefupdates = false\n"
-        )
+        payload = _managed_config_payload(object_id_hex_length)
         temporary = mirror / f".config-{uuid.uuid4().hex}.tmp"
         try:
             descriptor = os.open(
@@ -519,11 +581,63 @@ class GitOperations:
                 temporary.unlink()
             except FileNotFoundError:
                 pass
-        for alternate in (
+        for forbidden in (
             mirror / "objects" / "info" / "alternates",
             mirror / "objects" / "info" / "http-alternates",
+            mirror / "info" / "grafts",
+            mirror / "refs" / "replace",
         ):
-            if alternate.exists() or alternate.is_symlink():
+            if forbidden.exists() or forbidden.is_symlink():
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+
+    def _validate_managed_config(
+        self,
+        mirror: Path,
+        *,
+        object_id_hex_length: int,
+    ) -> None:
+        config = mirror / "config"
+        try:
+            descriptor = os.open(
+                config,
+                os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            )
+        except OSError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        try:
+            before = os.fstat(descriptor)
+            expected = _managed_config_payload(object_id_hex_length)
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or stat.S_IMODE(before.st_mode) != 0o600
+                or before.st_size != len(expected)
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            payload = bytearray()
+            while len(payload) < before.st_size:
+                chunk = os.read(descriptor, before.st_size - len(payload))
+                if not chunk:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                payload.extend(chunk)
+            after = os.fstat(descriptor)
+            if (
+                bytes(payload) != expected
+                or before.st_dev != after.st_dev
+                or before.st_ino != after.st_ino
+                or before.st_size != after.st_size
+                or before.st_mtime_ns != after.st_mtime_ns
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        finally:
+            os.close(descriptor)
+        for forbidden in (
+            mirror / "objects" / "info" / "alternates",
+            mirror / "objects" / "info" / "http-alternates",
+            mirror / "info" / "grafts",
+            mirror / "refs" / "replace",
+        ):
+            if forbidden.exists() or forbidden.is_symlink():
                 raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
 
     def _copy_source_objects(
@@ -531,189 +645,37 @@ class GitOperations:
         source_git: Path,
         destination: Path,
         *,
+        source_revision: str,
         permit_expires_at: datetime,
     ) -> None:
-        _require_fresh_permit(permit_expires_at)
-        source_objects = source_git / "objects"
-        for alternate in (
-            source_objects / "info" / "alternates",
-            source_objects / "info" / "http-alternates",
-        ):
-            if alternate.exists() or alternate.is_symlink():
-                raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
         try:
-            source_metadata = os.lstat(source_objects)
-        except OSError as exc:
-            raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from exc
-        if not stat.S_ISDIR(source_metadata.st_mode) or stat.S_ISLNK(source_metadata.st_mode):
-            raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
-        destination.mkdir(mode=0o700, parents=True, exist_ok=True)
-        file_count, total_bytes = self._object_storage_usage(destination)
-        if (
-            file_count > self._settings.mirror_max_object_files
-            or total_bytes > self._settings.mirror_max_object_bytes
-        ):
-            raise GitOperationError(FailureCode.MIRROR_BUDGET_EXCEEDED)
-        try:
-            first_level = list(os.scandir(source_objects))
-        except OSError as exc:
-            raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from exc
-        for entry in sorted(first_level, key=lambda item: item.name):
-            _require_fresh_permit(permit_expires_at)
-            if entry.name == "info":
-                continue
-            if entry.name == "pack":
-                if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
-                    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
-                source_files = list(os.scandir(entry.path))
-                destination_directory = destination / "pack"
-            elif len(entry.name) == 2 and all(
-                character in "0123456789abcdef" for character in entry.name
-            ):
-                if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
-                    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
-                source_files = list(os.scandir(entry.path))
-                destination_directory = destination / entry.name
-            else:
-                raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
-            destination_directory.mkdir(mode=0o700, exist_ok=True)
-            for source_file in sorted(source_files, key=lambda item: item.name):
-                _require_fresh_permit(permit_expires_at)
-                if source_file.is_symlink() or not source_file.is_file(follow_symlinks=False):
-                    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
-                destination_file = destination_directory / source_file.name
-                try:
-                    destination_metadata = os.lstat(destination_file)
-                except FileNotFoundError:
-                    existing_bytes = 0
-                    file_count += 1
-                except OSError as exc:
-                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
-                else:
-                    if (
-                        not stat.S_ISREG(destination_metadata.st_mode)
-                        or stat.S_ISLNK(destination_metadata.st_mode)
-                        or destination_metadata.st_nlink != 1
-                    ):
-                        raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-                    existing_bytes = destination_metadata.st_size
-                if file_count > self._settings.mirror_max_object_files:
-                    raise GitOperationError(FailureCode.MIRROR_BUDGET_EXCEEDED)
-                copied_bytes = self._copy_object_file(
-                    Path(source_file.path),
-                    destination_file,
-                    max_bytes=(
-                        self._settings.mirror_max_object_bytes - total_bytes + existing_bytes
-                    ),
-                    permit_expires_at=permit_expires_at,
-                )
-                total_bytes = total_bytes - existing_bytes + copied_bytes
-
-    def _object_storage_usage(self, objects: Path) -> tuple[int, int]:
-        file_count = 0
-        total_bytes = 0
-        try:
-            first_level = list(os.scandir(objects))
-        except OSError as exc:
-            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
-        for entry in first_level:
-            if entry.name == "info":
-                if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
-                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-                try:
-                    with os.scandir(entry.path) as iterator:
-                        if next(iterator, None) is not None:
-                            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-                except OSError as exc:
-                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
-                continue
-            if entry.name != "pack" and not (
-                len(entry.name) == 2
-                and all(character in "0123456789abcdef" for character in entry.name)
-            ):
-                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-            if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
-                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-            try:
-                object_files = list(os.scandir(entry.path))
-            except OSError as exc:
-                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
-            for object_file in object_files:
-                if object_file.is_symlink() or not object_file.is_file(follow_symlinks=False):
-                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-                metadata = object_file.stat(follow_symlinks=False)
-                if metadata.st_nlink != 1:
-                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-                file_count += 1
-                total_bytes += metadata.st_size
-        return file_count, total_bytes
-
-    def _copy_object_file(
-        self,
-        source: Path,
-        destination: Path,
-        *,
-        max_bytes: int,
-        permit_expires_at: datetime,
-    ) -> int:
-        _require_fresh_permit(permit_expires_at)
-        try:
-            source_descriptor = os.open(
-                source,
-                os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            reader = SourceObjectClosure(
+                source_git,
+                object_id_hex_length=len(source_revision),
+                limits=ObjectLimits(
+                    max_objects=self._settings.mirror_max_object_files,
+                    max_bytes=self._settings.mirror_max_object_bytes,
+                    max_single_object_bytes=self._settings.mirror_max_single_object_bytes,
+                    max_pack_files=self._settings.mirror_max_pack_files,
+                    max_delta_depth=self._settings.mirror_max_delta_depth,
+                    max_tree_depth=self._settings.mirror_max_tree_depth,
+                    max_tree_entries=self._settings.mirror_max_tree_entries,
+                    max_references=self._settings.mirror_max_object_references,
+                    max_graph_depth=self._settings.mirror_max_graph_depth,
+                ),
             )
-        except OSError as exc:
-            raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE) from exc
-        temporary = destination.parent / f".{destination.name}.{uuid.uuid4().hex}.tmp"
-        destination_descriptor: int | None = None
-        try:
-            before = os.fstat(source_descriptor)
-            if not stat.S_ISREG(before.st_mode):
-                raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
-            if before.st_size > max_bytes:
-                raise GitOperationError(FailureCode.MIRROR_BUDGET_EXCEEDED)
-            destination_descriptor = os.open(
-                temporary,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
-                0o600,
-            )
-            copied = 0
-            while copied < before.st_size:
+
+            def require_fresh() -> None:
                 _require_fresh_permit(permit_expires_at)
-                chunk = os.read(source_descriptor, min(1024 * 1024, before.st_size - copied))
-                if not chunk:
-                    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
-                view = memoryview(chunk)
-                while view:
-                    written = os.write(destination_descriptor, view)
-                    if written <= 0:
-                        raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-                    view = view[written:]
-                copied += len(chunk)
-            after = os.fstat(source_descriptor)
-            if (
-                before.st_dev != after.st_dev
-                or before.st_ino != after.st_ino
-                or before.st_size != after.st_size
-                or before.st_mtime_ns != after.st_mtime_ns
-            ):
-                raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
-            os.fsync(destination_descriptor)
-            os.close(destination_descriptor)
-            destination_descriptor = None
-            _require_fresh_permit(permit_expires_at)
-            os.replace(temporary, destination)
-            return copied
-        except OSError as exc:
-            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
-        finally:
-            os.close(source_descriptor)
-            if destination_descriptor is not None:
-                os.close(destination_descriptor)
-            try:
-                temporary.unlink()
-            except FileNotFoundError:
-                pass
+
+            closure = reader.collect(source_revision, require_fresh=require_fresh)
+            reader.materialize(
+                destination,
+                closure,
+                require_fresh=require_fresh,
+            )
+        except SourceObjectError as exc:
+            raise GitOperationError(exc.code) from exc
 
     def _require_workspace(self, workspace: Path) -> None:
         expected_parent = self._settings.workspace_root.resolve(strict=True)
@@ -747,6 +709,10 @@ class GitOperations:
             "core.fsmonitor=false",
             "-c",
             "core.untrackedCache=false",
+            "-c",
+            "gc.auto=0",
+            "-c",
+            "maintenance.auto=false",
             "-c",
             "credential.helper=",
             "-c",
@@ -827,54 +793,100 @@ class GitOperations:
         if process.stdout is None or process.stderr is None:
             raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
         selector = selectors.DefaultSelector()
+        os.set_blocking(process.stdout.fileno(), False)
+        os.set_blocking(process.stderr.fileno(), False)
         selector.register(process.stdout, selectors.EVENT_READ, "stdout")
         selector.register(process.stderr, selectors.EVENT_READ, "stderr")
         stdout = bytearray()
         total = 0
         deadline = time.monotonic() + timeout_seconds
+        process_group_id = process.pid
         try:
-            while selector.get_map():
+            while True:
+                returncode = process.poll()
+                group_alive = self._process_group_alive(process_group_id)
+                if not selector.get_map() and returncode is not None and not group_alive:
+                    return bytes(stdout), returncode
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    self._terminate_process(process)
+                    self._terminate_process_group(process, process_group_id)
                     raise GitOperationError(timeout_failure)
-                events = selector.select(min(remaining, 0.25))
-                if not events and process.poll() is not None:
-                    events = [
-                        (key, selectors.EVENT_READ) for key in list(selector.get_map().values())
-                    ]
+                if selector.get_map():
+                    events = selector.select(min(remaining, 0.05))
+                else:
+                    time.sleep(min(remaining, 0.01))
+                    events = []
                 for key, _ in events:
-                    chunk = os.read(key.fd, 64 * 1024)
-                    if not chunk:
-                        selector.unregister(key.fileobj)
-                        continue
-                    total += len(chunk)
-                    if total > self._settings.git_max_output_bytes:
-                        self._terminate_process(process)
-                        raise GitOperationError(FailureCode.GIT_OUTPUT_LIMIT_EXCEEDED)
-                    if key.data == "stdout":
-                        stdout.extend(chunk)
-            return bytes(stdout), process.wait(timeout=1)
-        except subprocess.TimeoutExpired as exc:
-            self._terminate_process(process)
-            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+                    while True:
+                        try:
+                            chunk = os.read(key.fd, 64 * 1024)
+                        except BlockingIOError:
+                            break
+                        if not chunk:
+                            selector.unregister(key.fileobj)
+                            break
+                        total += len(chunk)
+                        if total > self._settings.git_max_output_bytes:
+                            self._terminate_process_group(process, process_group_id)
+                            raise GitOperationError(FailureCode.GIT_OUTPUT_LIMIT_EXCEEDED)
+                        if key.data == "stdout":
+                            stdout.extend(chunk)
         finally:
             selector.close()
             process.stdout.close()
             process.stderr.close()
 
+    def _terminate_process_group(
+        self,
+        process: subprocess.Popen[bytes],
+        process_group_id: int,
+    ) -> None:
+        process.poll()
+        if self._process_group_alive(process_group_id):
+            try:
+                os.killpg(process_group_id, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            except OSError as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        grace_deadline = time.monotonic() + self._settings.git_termination_grace_seconds
+        while time.monotonic() < grace_deadline:
+            process.poll()
+            if not self._process_group_alive(process_group_id):
+                break
+            time.sleep(0.01)
+        if self._process_group_alive(process_group_id):
+            try:
+                os.killpg(process_group_id, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        kill_deadline = time.monotonic() + self._settings.git_termination_grace_seconds
+        while time.monotonic() < kill_deadline:
+            process.poll()
+            if not self._process_group_alive(process_group_id):
+                break
+            time.sleep(0.01)
+        if self._process_group_alive(process_group_id):
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        try:
+            process.wait(timeout=self._settings.git_termination_grace_seconds)
+        except subprocess.TimeoutExpired as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+
     @staticmethod
-    def _terminate_process(process: subprocess.Popen[bytes]) -> None:
-        if process.poll() is not None:
-            return
+    def _process_group_alive(process_group_id: int) -> bool:
         try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except OSError:
-            process.kill()
-        try:
-            process.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            pass
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # Darwin reports EPERM for a just-reaped, now-empty high-numbered
+            # process group. A live descendant created by this same-UID group
+            # remains signalable and returns success here.
+            return False
+        return True
 
 
 def _validated_git_path(value: str) -> str:
@@ -924,7 +936,11 @@ def _status_code(code: str) -> WorkspaceStatusCode:
 
 
 def _valid_source_reference(value: str) -> bool:
-    if not value.startswith("refs/heads/") or len(value.encode("ascii", "ignore")) > 300:
+    return value.startswith("refs/heads/") and _valid_packed_reference(value)
+
+
+def _valid_packed_reference(value: str) -> bool:
+    if not value.startswith("refs/") or len(value.encode("ascii", "ignore")) > 300:
         return False
     components = value.split("/")
     return all(
@@ -944,3 +960,29 @@ def _require_object_id(value: str) -> None:
         character not in "0123456789abcdef" for character in value
     ):
         raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
+
+
+def _object_format(object_id_hex_length: int) -> str:
+    if object_id_hex_length == 40:
+        return "sha1"
+    if object_id_hex_length == 64:
+        return "sha256"
+    raise GitOperationError(FailureCode.REPOSITORY_UNAVAILABLE)
+
+
+def _managed_config_payload(object_id_hex_length: int) -> bytes:
+    object_format = _object_format(object_id_hex_length)
+    lines = [
+        "[core]",
+        f"\trepositoryformatversion = {1 if object_format == 'sha256' else 0}",
+        "\tfilemode = true",
+        "\tbare = true",
+        "\tlogallrefupdates = false",
+        "[gc]",
+        "\tauto = 0",
+        "[maintenance]",
+        "\tauto = false",
+    ]
+    if object_format == "sha256":
+        lines.extend(("[extensions]", "\tobjectFormat = sha256"))
+    return ("\n".join(lines) + "\n").encode("ascii")

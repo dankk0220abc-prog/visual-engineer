@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import threading
 import uuid
+import zlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -370,7 +371,8 @@ def _assert_independent_objects(
             and mirror_metadata.st_ino == source_object["inode"]
         ):
             raise RuntimeError("Runner mirror aliases a source Git object inode")
-        if hashlib.sha256(mirror_object.read_bytes()).hexdigest() != source_object["sha256"]:
+        source_path = source / ".git" / "objects" / relative_path
+        if zlib.decompress(mirror_object.read_bytes()) != zlib.decompress(source_path.read_bytes()):
             raise RuntimeError("Runner mirror object differs from the source object")
         checked += 1
         if checked == 8:

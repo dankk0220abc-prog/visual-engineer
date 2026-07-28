@@ -66,8 +66,11 @@ Workspace. Confirm clean status and matching initial/current tree hashes.
 
 Discard is allowed from sealed, rolled-back, failed, or expired Workspace
 states. It requires a current discard Permit, authenticated registry, valid
-signed ownership manifest, exact root identity, and complete safe inventory.
-It removes only that managed worktree and is idempotent.
+signed ownership manifest, exact root identity, complete safe inventory, and a
+durable signed pending-to-completed discard proof bound to the same
+operation/Permit/Attempt/Lease. It removes only that managed worktree.
+Idempotent retry revalidates the completed proof and proves both the expected
+root and original inode remain absent.
 
 If proof is missing, the page shows `recovery_required`; if proof conflicts or
 unknown content exists, it shows `quarantined`. Destructive controls are
@@ -82,6 +85,6 @@ expired or revoked Grant.
 touching another project. Runner mirror/workspace/registry volumes are local
 test state; do not manually delete their host paths.
 
-CreativeDeploy is prohibited for this lifecycle. Phase 4 is not in `main`; the
-independent audit remains Security Gate FAIL and the only next milestone is
-Phase 4 Independent Security Re-Audit.
+CreativeDeploy is prohibited for this lifecycle. Phase 4 is not in `main`;
+the original audit and independent re-audit remain Security Gate FAIL and the
+only next milestone is Phase 4 Independent Focused Security Re-Audit.

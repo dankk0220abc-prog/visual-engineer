@@ -1,11 +1,17 @@
 import hashlib
+import json
 import os
 import shutil
+import signal
 import socket
+import stat
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 import uuid
+import zlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -1127,6 +1133,12 @@ def test_interrupted_discard_reconciles_only_signed_owned_workspace(tmp_path: Pa
         "kind": "discard",
     }
     registry.pending_permit_id = permit.id
+    manager._create_discard_proof(
+        spec,
+        registry,
+        operation_id=operation_id,
+        permit=permit,
+    )
     manager._save_registry(registry)
     workspace = manager._git.workspace_path(workspace_id)
     manager._git.discard_worktree(
@@ -1152,6 +1164,9 @@ def test_interrupted_discard_reconciles_only_signed_owned_workspace(tmp_path: Pa
     assert recovered_registry is not None
     assert recovered_registry.local_state == "discarded"
     assert recovered_registry.pending_operation is None
+    recovered_proof = manager._ownership.load_discard_proof(workspace_id)
+    assert recovered_proof is not None
+    assert recovered_proof.state == "completed"
 
 
 def test_git_output_and_mirror_object_budgets_fail_closed(tmp_path: Path) -> None:
@@ -1181,39 +1196,11 @@ def test_git_output_and_mirror_object_budgets_fail_closed(tmp_path: Path) -> Non
     git(source, "add", "large-object.bin")
     git(source, "commit", "-m", "large synthetic object")
     large_revision = git(source, "rev-parse", "HEAD")
+    source_before_budget_rejections = _filesystem_snapshot(source)
     mirror_settings = runner_settings(tmp_path / "mirror-budget", source).model_copy(
         update={"mirror_max_object_bytes": 1024}
     )
     mirror_manager = WorkspaceManager(mirror_settings)
-    opened_object = tmp_path / "opened-object"
-    opened_object.write_bytes(os.urandom(2048))
-    opened_destination = tmp_path / "opened-object-copy"
-    with pytest.raises(GitOperationError) as opened_limit:
-        mirror_manager._git._copy_object_file(
-            opened_object,
-            opened_destination,
-            max_bytes=1024,
-            permit_expires_at=datetime.now(UTC) + timedelta(seconds=5),
-        )
-    assert opened_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
-    assert not opened_destination.exists()
-
-    accumulated_source = tmp_path / "accumulated-source"
-    accumulated_destination = tmp_path / "accumulated-destination"
-    (accumulated_source / "objects" / "aa").mkdir(parents=True)
-    (accumulated_destination / "aa").mkdir(parents=True)
-    (accumulated_destination / "bb").mkdir()
-    (accumulated_source / "objects" / "aa" / ("1" * 38)).write_bytes(os.urandom(400))
-    (accumulated_destination / "bb" / ("2" * 38)).write_bytes(os.urandom(800))
-    with pytest.raises(GitOperationError) as accumulated_limit:
-        mirror_manager._git._copy_source_objects(
-            accumulated_source,
-            accumulated_destination,
-            permit_expires_at=datetime.now(UTC) + timedelta(seconds=5),
-        )
-    assert accumulated_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
-    assert not (accumulated_destination / "aa" / ("1" * 38)).exists()
-
     mirror_workspace_id = uuid.uuid4()
     with pytest.raises(WorkspaceExecutionError) as mirror_limit:
         execute(
@@ -1226,3 +1213,807 @@ def test_git_output_and_mirror_object_budgets_fail_closed(tmp_path: Path) -> Non
     assert mirror_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
     assert not mirror_manager._git.workspace_path(mirror_workspace_id).exists()
     assert mirror_manager._load_registry(mirror_workspace_id) is None
+
+    count_settings = runner_settings(tmp_path / "mirror-count-budget", source).model_copy(
+        update={"mirror_max_object_files": 2}
+    )
+    count_manager = WorkspaceManager(count_settings)
+    with pytest.raises(WorkspaceExecutionError) as count_limit:
+        execute(
+            count_manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=uuid.uuid4(),
+                execution_grant=execution_grant(large_revision),
+            ),
+        )
+    assert count_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+
+    single_settings = runner_settings(tmp_path / "mirror-single-budget", source).model_copy(
+        update={"mirror_max_single_object_bytes": 1024}
+    )
+    single_manager = WorkspaceManager(single_settings)
+    with pytest.raises(WorkspaceExecutionError) as single_limit:
+        execute(
+            single_manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=uuid.uuid4(),
+                execution_grant=execution_grant(large_revision),
+            ),
+        )
+    assert single_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert _filesystem_snapshot(source) == source_before_budget_rejections
+
+    pack_directory = source / ".git" / "objects" / "pack"
+    pack_directory.mkdir(exist_ok=True)
+    for index in range(6):
+        (pack_directory / f"pack-{index:040x}.keep").write_bytes(b"")
+    source_before_pack_budget = _filesystem_snapshot(source)
+    pack_settings = runner_settings(tmp_path / "mirror-pack-budget", source).model_copy(
+        update={"mirror_max_pack_files": 1}
+    )
+    pack_manager = WorkspaceManager(pack_settings)
+    with pytest.raises(WorkspaceExecutionError) as pack_limit:
+        execute(
+            pack_manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=uuid.uuid4(),
+                execution_grant=execution_grant(large_revision),
+            ),
+        )
+    assert pack_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert _filesystem_snapshot(source) == source_before_pack_budget
+
+
+def test_reachable_packed_delta_closure_is_materialized_without_unreachable_object(
+    tmp_path: Path,
+) -> None:
+    source, _ = repository_fixture(tmp_path)
+    git(source, "restore", "sandbox/tracked.txt")
+    delta_file = source / "sandbox" / "delta.txt"
+    for index in range(8):
+        delta_file.write_text(
+            ("shared-prefix-" * 4096) + f"\nversion-{index}\n",
+            encoding="utf-8",
+        )
+        git(source, "add", "sandbox/delta.txt")
+        git(source, "commit", "-m", f"delta fixture {index}")
+    revision = git(source, "rev-parse", "HEAD")
+    unauthorized_file = source / "unreachable-packed.txt"
+    unauthorized_file.write_text("not authorized by the approved revision\n", encoding="utf-8")
+    unauthorized_blob = git(source, "hash-object", "-w", "unreachable-packed.txt")
+    unauthorized_tree = subprocess.run(
+        ["git", "-C", str(source), "mktree"],
+        input=f"100644 blob {unauthorized_blob}\textra-ref-only.txt\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    unauthorized_commit = subprocess.run(
+        ["git", "-C", str(source), "commit-tree", unauthorized_tree, "-m", "unauthorized ref"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    git(source, "update-ref", "refs/heads/not-authorized", unauthorized_commit)
+    authorized_ids = set(
+        git(source, "rev-list", "--objects", "--no-object-names", revision).splitlines()
+    )
+    object_ids = git(source, "rev-list", "--objects", "--no-object-names", "--all").splitlines()
+    assert {unauthorized_blob, unauthorized_tree, unauthorized_commit}.isdisjoint(authorized_ids)
+    pack_prefix = source / ".git" / "objects" / "pack" / "pack"
+    packed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "pack-objects",
+            "--window=50",
+            "--depth=50",
+            str(pack_prefix),
+        ],
+        input="\n".join(object_ids) + "\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    index_path = pack_prefix.with_name(f"pack-{packed}.idx")
+    verify_output = git(source, "verify-pack", "-v", str(index_path))
+    assert any(len(line.split()) >= 7 for line in verify_output.splitlines())
+    for object_id in object_ids:
+        loose = source / ".git" / "objects" / object_id[:2] / object_id[2:]
+        try:
+            loose.unlink()
+        except FileNotFoundError:
+            pass
+    (source / "sandbox" / "tracked.txt").write_text("dirty after pack\n", encoding="utf-8")
+    (source / "sandbox" / "untracked-after-pack.txt").write_text(
+        "not in the object graph\n",
+        encoding="utf-8",
+    )
+    before = _filesystem_snapshot(source)
+
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+    workspace_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=workspace_id,
+            execution_grant=execution_grant(revision),
+        ),
+    )
+
+    mirror = manager._git.mirror_path(HANDLE)
+    mirror_ids = {
+        directory.name + object_file.name
+        for directory in (mirror / "objects").iterdir()
+        if len(directory.name) == 2
+        for object_file in directory.iterdir()
+    }
+    assert mirror_ids == authorized_ids
+    for unauthorized_id in (
+        unauthorized_blob,
+        unauthorized_tree,
+        unauthorized_commit,
+    ):
+        assert not (mirror / "objects" / unauthorized_id[:2] / unauthorized_id[2:]).exists()
+    assert not any((mirror / "objects" / "pack").iterdir())
+    assert not (manager._git.workspace_path(workspace_id) / "unreachable-packed.txt").exists()
+    assert not (
+        manager._git.workspace_path(workspace_id) / "sandbox" / "untracked-after-pack.txt"
+    ).exists()
+    assert _filesystem_snapshot(source) == before
+
+
+def test_existing_mirror_rejects_valid_but_unauthorized_object_and_preserves_source(
+    tmp_path: Path,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+    grant = execution_grant(revision)
+    first_workspace = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=first_workspace, execution_grant=grant),
+    )
+    unauthorized = source / "unauthorized-object.txt"
+    unauthorized.write_text("valid object outside the closure\n", encoding="utf-8")
+    unauthorized_id = git(source, "hash-object", "-w", "unauthorized-object.txt")
+    source_object = source / ".git" / "objects" / unauthorized_id[:2] / unauthorized_id[2:]
+    destination_object = (
+        manager._git.mirror_path(HANDLE) / "objects" / unauthorized_id[:2] / unauthorized_id[2:]
+    )
+    destination_object.parent.mkdir(mode=0o700, exist_ok=True)
+    shutil.copyfile(source_object, destination_object)
+    source_inode = source_object.stat().st_ino
+    assert destination_object.stat().st_ino != source_inode
+    before = _filesystem_snapshot(source)
+    second_workspace = uuid.uuid4()
+
+    with pytest.raises(WorkspaceExecutionError) as error:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=second_workspace,
+                execution_grant=grant,
+            ),
+        )
+
+    assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+    assert manager._git.workspace_path(first_workspace).is_dir()
+    assert not manager._git.workspace_path(second_workspace).exists()
+    assert _filesystem_snapshot(source) == before
+
+
+def test_existing_mirror_config_is_validated_before_any_rewrite(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+    grant = execution_grant(revision)
+    first_workspace = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=first_workspace, execution_grant=grant),
+    )
+    config = manager._git.mirror_path(HANDLE) / "config"
+    malicious = config.read_bytes() + b"[include]\n\tpath = /untrusted/config\n"
+    config.write_bytes(malicious)
+    source_before = _filesystem_snapshot(source)
+
+    with pytest.raises(WorkspaceExecutionError) as error:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=uuid.uuid4(),
+                execution_grant=grant,
+            ),
+        )
+
+    assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+    assert config.read_bytes() == malicious
+    assert manager._git.workspace_path(first_workspace).is_dir()
+    assert _filesystem_snapshot(source) == source_before
+
+
+@pytest.mark.parametrize(
+    "indirection",
+    ["objects/info/alternates", "objects/info/http-alternates", "info/grafts", "refs/replace"],
+)
+def test_source_object_indirection_is_rejected_without_source_mutation(
+    tmp_path: Path,
+    indirection: str,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    path = source / ".git" / indirection
+    if indirection == "refs/replace":
+        path.mkdir(parents=True)
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("/untrusted/object-store\n", encoding="utf-8")
+    before = _filesystem_snapshot(source)
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+
+    with pytest.raises(WorkspaceExecutionError) as error:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=uuid.uuid4(),
+                execution_grant=execution_grant(revision),
+            ),
+        )
+
+    assert error.value.code == FailureCode.REPOSITORY_UNAVAILABLE
+    assert _filesystem_snapshot(source) == before
+
+
+def test_gitlink_is_inert_and_does_not_import_its_target_commit(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    tree = subprocess.run(
+        ["git", "-C", str(source), "mktree"],
+        input=f"160000 commit {revision}\tsynthetic-submodule\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    commit = subprocess.run(
+        ["git", "-C", str(source), "commit-tree", tree, "-m", "gitlink fixture"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    git(source, "update-ref", "refs/heads/main", commit)
+    before = _filesystem_snapshot(source)
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+    workspace_id = uuid.uuid4()
+
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=workspace_id,
+            execution_grant=execution_grant(commit),
+        ),
+    )
+
+    mirror = manager._git.mirror_path(HANDLE)
+    assert not (mirror / "objects" / revision[:2] / revision[2:]).exists()
+    assert manager._git.workspace_path(workspace_id).is_dir()
+    assert _filesystem_snapshot(source) == before
+
+
+def test_malformed_loose_object_declared_length_is_rejected(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    tree_id = git(source, "rev-parse", f"{revision}^{{tree}}")
+    content = (
+        f"tree {tree_id}\n"
+        "author Fixture <fixture@example.invalid> 0 +0000\n"
+        "committer Fixture <fixture@example.invalid> 0 +0000\n\n"
+        "malformed declaration\n"
+    ).encode()
+    malformed = b"commit 999999\0" + content
+    object_id = hashlib.sha1(malformed).hexdigest()
+    object_path = source / ".git" / "objects" / object_id[:2] / object_id[2:]
+    object_path.parent.mkdir(parents=True, exist_ok=True)
+    object_path.write_bytes(zlib.compress(malformed))
+    (source / ".git" / "HEAD").write_text(object_id + "\n", encoding="ascii")
+    before = _filesystem_snapshot(source)
+    manager = WorkspaceManager(runner_settings(tmp_path, source))
+
+    with pytest.raises(WorkspaceExecutionError) as error:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=uuid.uuid4(),
+                execution_grant=execution_grant(object_id),
+            ),
+        )
+
+    assert error.value.code == FailureCode.REPOSITORY_UNAVAILABLE
+    assert _filesystem_snapshot(source) == before
+
+
+def test_registry_loss_reconciles_only_exact_signed_pending_discard_proof(
+    tmp_path: Path,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    sibling_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+    )
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=sibling_id, execution_grant=grant),
+    )
+    spec = WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    operation_id = uuid.uuid4()
+    permit = side_effect_permit(manager, spec, operation_id)
+    registry = manager._load_registry(workspace_id)
+    assert registry is not None
+    registry.pending_operation = {"operation_id": str(operation_id), "kind": "discard"}
+    registry.pending_permit_id = permit.id
+    manager._create_discard_proof(
+        spec,
+        registry,
+        operation_id=operation_id,
+        permit=permit,
+    )
+    manager._save_registry(registry)
+    source_before = _filesystem_snapshot(source)
+    manager._git.discard_worktree(
+        manager._git.mirror_path(HANDLE),
+        manager._git.workspace_path(workspace_id),
+        permit_expires_at=permit.expires_at,
+    )
+    mirror_before = _filesystem_snapshot(manager._git.mirror_path(HANDLE))
+    manager._registry_path(workspace_id).unlink()
+
+    result = cast(
+        WorkspaceDiscardResult,
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        ),
+    )
+
+    assert result.discarded is True
+    assert result.idempotent is True
+    proof = manager._ownership.load_discard_proof(workspace_id)
+    assert proof is not None
+    assert proof.state == "completed"
+    assert manager._git.workspace_path(sibling_id).is_dir()
+    assert _filesystem_snapshot(source) == source_before
+    assert _filesystem_snapshot(manager._git.mirror_path(HANDLE)) == mirror_before
+
+
+def test_completed_discard_replay_requires_terminal_proof_and_absent_root(
+    tmp_path: Path,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    sibling_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+    )
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=sibling_id, execution_grant=grant),
+    )
+    spec = WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    operation_id = uuid.uuid4()
+    permit = side_effect_permit(manager, spec, operation_id)
+    source_before = _filesystem_snapshot(source)
+
+    first = cast(
+        WorkspaceDiscardResult,
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        ),
+    )
+    mirror_before = _filesystem_snapshot(manager._git.mirror_path(HANDLE))
+    replay = cast(
+        WorkspaceDiscardResult,
+        WorkspaceManager(settings).execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        ),
+    )
+    assert first.idempotent is False
+    assert replay.idempotent is True
+
+    workspace = manager._git.workspace_path(workspace_id)
+    workspace.mkdir()
+    preserved = workspace / "unknown-preserved.txt"
+    preserved.write_text("must not be removed\n", encoding="utf-8")
+    with pytest.raises(WorkspaceExecutionError) as replaced_root:
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        )
+    assert replaced_root.value.code == FailureCode.WORKSPACE_RECOVERY_REQUIRED
+    assert preserved.read_text(encoding="utf-8") == "must not be removed\n"
+    preserved.unlink()
+    workspace.rmdir()
+
+    completed = manager._ownership.load_discard_proof(workspace_id)
+    assert completed is not None
+    assert completed.state == "completed"
+    replayed_pending = completed.model_copy(
+        update={
+            "state": "pending",
+            "completed_at": None,
+        }
+    )
+    manager._ownership.save_discard_proof(replayed_pending)
+    with pytest.raises(WorkspaceExecutionError) as rolled_back_proof:
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        )
+    assert rolled_back_proof.value.code == FailureCode.WORKSPACE_QUARANTINED
+    assert manager._git.workspace_path(sibling_id).is_dir()
+    assert _filesystem_snapshot(source) == source_before
+    assert _filesystem_snapshot(manager._git.mirror_path(HANDLE)) == mirror_before
+
+
+def test_tampered_or_replayed_discard_proof_is_quarantined(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+    )
+    spec = WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    operation_id = uuid.uuid4()
+    permit = side_effect_permit(manager, spec, operation_id)
+    registry = manager._load_registry(workspace_id)
+    assert registry is not None
+    registry.pending_operation = {"operation_id": str(operation_id), "kind": "discard"}
+    registry.pending_permit_id = permit.id
+    original_proof = manager._create_discard_proof(
+        spec,
+        registry,
+        operation_id=operation_id,
+        permit=permit,
+    )
+    manager._save_registry(registry)
+    manager._git.discard_worktree(
+        manager._git.mirror_path(HANDLE),
+        manager._git.workspace_path(workspace_id),
+        permit_expires_at=permit.expires_at,
+    )
+    manager._registry_path(workspace_id).unlink()
+    proof_path = manager._ownership.discard_proof_path(workspace_id)
+    tampered = json.loads(proof_path.read_text(encoding="utf-8"))
+    tampered["permit_id"] = str(uuid.uuid4())
+    proof_path.write_text(json.dumps(tampered), encoding="utf-8")
+    os.chmod(proof_path, 0o600)
+
+    with pytest.raises(WorkspaceExecutionError) as tamper_error:
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        )
+    assert tamper_error.value.code == FailureCode.WORKSPACE_QUARANTINED
+
+    signed = manager._ownership.save_discard_proof(original_proof)
+    assert signed.state == "pending"
+    replay_operation = uuid.uuid4()
+    replay_permit = side_effect_permit(
+        manager,
+        spec,
+        replay_operation,
+        expected_current=registry.current_tree_hash,
+    )
+    with pytest.raises(WorkspaceExecutionError) as replay_error:
+        manager.execute(
+            spec,
+            operation_id=replay_operation,
+            cancel_event=threading.Event(),
+            side_effect_permit=replay_permit,
+        )
+    assert replay_error.value.code == FailureCode.WORKSPACE_QUARANTINED
+
+
+def test_discard_proof_inode_rename_and_expiry_fail_closed(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=workspace_id, execution_grant=grant),
+    )
+    spec = WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    operation_id = uuid.uuid4()
+    permit = side_effect_permit(manager, spec, operation_id)
+    registry = manager._load_registry(workspace_id)
+    assert registry is not None
+    registry.pending_operation = {"operation_id": str(operation_id), "kind": "discard"}
+    registry.pending_permit_id = permit.id
+    manager._create_discard_proof(
+        spec,
+        registry,
+        operation_id=operation_id,
+        permit=permit,
+    )
+    manager._save_registry(registry)
+    workspace = manager._git.workspace_path(workspace_id)
+    nested_preservation = settings.workspace_root / "nested-preservation"
+    nested_preservation.mkdir()
+    preserved = nested_preservation / workspace.name
+    workspace.rename(preserved)
+    manager._registry_path(workspace_id).unlink()
+
+    with pytest.raises(WorkspaceExecutionError) as rename_error:
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        )
+    assert rename_error.value.code == FailureCode.WORKSPACE_RECOVERY_REQUIRED
+    assert preserved.is_dir()
+
+    expiry_workspace = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(workspace_id=expiry_workspace, execution_grant=grant),
+    )
+    expiry_spec = WorkspaceDiscardJobSpec(
+        workspace_id=expiry_workspace,
+        execution_grant=grant,
+    )
+    expiry_operation = uuid.uuid4()
+    expiry_permit = side_effect_permit(
+        manager,
+        expiry_spec,
+        expiry_operation,
+        expires_at=datetime.now(UTC) + timedelta(milliseconds=300),
+    )
+    expiry_registry = manager._load_registry(expiry_workspace)
+    assert expiry_registry is not None
+    expiry_registry.pending_operation = {
+        "operation_id": str(expiry_operation),
+        "kind": "discard",
+    }
+    expiry_registry.pending_permit_id = expiry_permit.id
+    manager._create_discard_proof(
+        expiry_spec,
+        expiry_registry,
+        operation_id=expiry_operation,
+        permit=expiry_permit,
+    )
+    manager._save_registry(expiry_registry)
+    manager._git.discard_worktree(
+        manager._git.mirror_path(HANDLE),
+        manager._git.workspace_path(expiry_workspace),
+        permit_expires_at=expiry_permit.expires_at,
+    )
+    manager._registry_path(expiry_workspace).unlink()
+    time.sleep(0.35)
+    with pytest.raises(WorkspaceExecutionError) as expiry_error:
+        manager.execute(
+            expiry_spec,
+            operation_id=expiry_operation,
+            cancel_event=threading.Event(),
+            side_effect_permit=expiry_permit,
+        )
+    assert expiry_error.value.code == FailureCode.SIDE_EFFECT_PERMIT_EXPIRED
+
+
+def test_git_deadline_monitors_group_after_pipes_close_and_escalates_to_kill(
+    tmp_path: Path,
+) -> None:
+    source, _ = repository_fixture(tmp_path)
+    operations = GitOperations(
+        runner_settings(tmp_path, source).model_copy(update={"git_termination_grace_seconds": 0.05})
+    )
+    marker = tmp_path / "term-resistant-marker"
+    child_code = (
+        "import pathlib,signal,time;"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN);"
+        f"time.sleep(0.5);pathlib.Path({str(marker)!r}).touch()"
+    )
+    parent_code = (
+        "import subprocess,sys;"
+        "subprocess.Popen("
+        f"[sys.executable,'-c',{child_code!r}],"
+        "stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,"
+        "stderr=subprocess.DEVNULL,close_fds=True)"
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", parent_code],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        with pytest.raises(GitOperationError) as error:
+            operations._collect_bounded_output(
+                process,
+                timeout_seconds=0.05,
+                timeout_failure=FailureCode.WORKSPACE_STATE_INVALID,
+            )
+        assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+        operations._terminate_process_group(process, process.pid)
+        operations._terminate_process_group(process, process.pid)
+        time.sleep(0.55)
+        assert not marker.exists()
+        assert not operations._process_group_alive(process.pid)
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        process.wait(timeout=1)
+
+
+def test_git_deadline_kills_multiple_descendants_after_leader_is_reaped(
+    tmp_path: Path,
+) -> None:
+    source, _ = repository_fixture(tmp_path)
+    operations = GitOperations(runner_settings(tmp_path, source))
+    markers = [tmp_path / f"descendant-{index}" for index in range(3)]
+    child_codes = [
+        f"import pathlib,time;time.sleep(0.4);pathlib.Path({str(marker)!r}).touch()"
+        for marker in markers
+    ]
+    parent_code = "import subprocess,sys;" + ";".join(
+        "subprocess.Popen("
+        f"[sys.executable,'-c',{code!r}],"
+        "stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,"
+        "stderr=subprocess.DEVNULL,close_fds=True)"
+        for code in child_codes
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", parent_code],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    process.wait(timeout=1)
+    try:
+        with pytest.raises(GitOperationError) as error:
+            operations._collect_bounded_output(
+                process,
+                timeout_seconds=0.05,
+                timeout_failure=FailureCode.WORKSPACE_STATE_INVALID,
+            )
+        assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+        time.sleep(0.5)
+        assert not any(marker.exists() for marker in markers)
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def test_git_output_overflow_kills_descendant_and_normal_exit_is_bounded(
+    tmp_path: Path,
+) -> None:
+    source, _ = repository_fixture(tmp_path)
+    operations = GitOperations(
+        runner_settings(tmp_path, source).model_copy(update={"git_max_output_bytes": 4096})
+    )
+    normal = subprocess.Popen(
+        [sys.executable, "-c", "print('bounded-output')"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    output, returncode = operations._collect_bounded_output(
+        normal,
+        timeout_seconds=1,
+        timeout_failure=FailureCode.WORKSPACE_STATE_INVALID,
+    )
+    assert output == b"bounded-output\n"
+    assert returncode == 0
+
+    marker = tmp_path / "overflow-child-marker"
+    child_code = f"import pathlib,time;time.sleep(0.4);pathlib.Path({str(marker)!r}).touch()"
+    parent_code = (
+        "import subprocess,sys;"
+        f"subprocess.Popen([sys.executable,'-c',{child_code!r}]);"
+        "sys.stdout.write('x'*8192);sys.stdout.flush()"
+    )
+    overflowing = subprocess.Popen(
+        [sys.executable, "-c", parent_code],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        with pytest.raises(GitOperationError) as error:
+            operations._collect_bounded_output(
+                overflowing,
+                timeout_seconds=1,
+                timeout_failure=FailureCode.WORKSPACE_STATE_INVALID,
+            )
+        assert error.value.code == FailureCode.GIT_OUTPUT_LIMIT_EXCEEDED
+        time.sleep(0.5)
+        assert not marker.exists()
+    finally:
+        try:
+            os.killpg(overflowing.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        overflowing.wait(timeout=1)
+
+
+def test_git_group_termination_failure_has_stable_typed_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, _ = repository_fixture(tmp_path)
+    operations = GitOperations(
+        runner_settings(tmp_path, source).model_copy(update={"git_termination_grace_seconds": 0.05})
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time;time.sleep(1)"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    monkeypatch.setattr(operations, "_process_group_alive", lambda _group_id: True)
+    try:
+        with pytest.raises(GitOperationError) as error:
+            operations._collect_bounded_output(
+                process,
+                timeout_seconds=0.02,
+                timeout_failure=FailureCode.GIT_OUTPUT_LIMIT_EXCEEDED,
+            )
+        assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+    finally:
+        monkeypatch.undo()
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        process.wait(timeout=1)
+
+
+def _filesystem_snapshot(root: Path) -> list[tuple[str, int, int, str]]:
+    snapshot: list[tuple[str, int, int, str]] = []
+    for path in sorted(root.rglob("*")):
+        metadata = os.lstat(path)
+        digest = ""
+        if stat.S_ISREG(metadata.st_mode):
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        snapshot.append(
+            (
+                path.relative_to(root).as_posix(),
+                stat.S_IFMT(metadata.st_mode),
+                metadata.st_size,
+                digest,
+            )
+        )
+    return snapshot

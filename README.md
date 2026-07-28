@@ -29,11 +29,12 @@ commands and delivery integrations remain future capabilities.
 
 The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
 read-only repository intelligence, Phase 3 browser-orchestrated Local Runner,
-and a Phase 4 security-repair candidate for Runner-owned isolated workspaces
-against the synthetic adversarial fixture. The independent Phase 4 audit
-recorded **Security Gate: FAIL**; that verdict and all six findings remain
-preserved. This repair branch may become ready for a different reviewer, but
-it is not an independent approval and Phase 4 is not in `main`.
+and a Phase 4 Round 2 security-remediation candidate for Runner-owned isolated
+workspaces against the synthetic adversarial fixture. The original audit and
+independent re-audit both recorded **Security Gate: FAIL**; those historical
+verdicts remain preserved. Round 2 may become ready for a new independent
+focused reviewer after all local gates pass, but it is not an approval and
+Phase 4 is not in `main`.
 
 A local user can independently approve a narrow Execution Grant, prepare an
 exact detached workspace, use closed UTF-8 file tools, inspect bounded
@@ -59,13 +60,15 @@ The implemented target is:
 - immutable, independently decided Execution Grants bound to an approved
   Plan/Snapshot/revision with `sandbox/**`, denied sensitive paths, budgets,
   no network, no shell, no source write, and no Git delivery;
-- a no-source-Git snapshot adapter that copies bounded committed objects into
-  a new Runner-owned bare mirror with no alternates/shared inodes, plus
-  detached exact-revision workspaces in dedicated volumes;
+- a no-source-Git snapshot adapter that validates bounded loose/packed Git
+  objects, computes only the authorized revision's commit/tree/blob closure,
+  and materializes it into new Runner-owned loose-object inodes with no
+  alternates, plus detached exact-revision workspaces in dedicated volumes;
 - short-lived PostgreSQL-backed Side-effect Permits for prepare, create/
   replace, rollback, and discard, with bounded Grant revocation semantics;
-- signed Runner-local Workspace ownership evidence, authenticated registry
-  state, and fail-closed recovery/quarantine rather than unproven deletion;
+- signed Runner-local Workspace ownership and pending/completed discard
+  evidence, authenticated registry state, exact root-inode reconciliation,
+  and fail-closed recovery/quarantine rather than unproven deletion;
 - descriptor-rooted list/read/create/compare-and-swap replace, fixed Git
   status/diff, immutable checkpoints, baseline rollback, and exact discard;
 - browser Runner registry, dispatch, Job detail, progress, result, cancellation,
@@ -254,6 +257,9 @@ production identity scheme. Never add real secrets. Read
 - [Phase 4 independent security audit](docs/security/audits/phase-4-workspace-security-audit.md)
 - [Phase 4 security repair ExecPlan](docs/exec-plans/phase-4-security-repair.md)
 - [Phase 4 security repair evidence](docs/evidence/phase-4-security-repair-verification.md)
+- [Phase 4 independent security re-audit](docs/security/audits/phase-4-security-reaudit.md)
+- [Phase 4 Security Remediation Round 2 ExecPlan](docs/exec-plans/phase-4-security-remediation-2.md)
+- [Phase 4 Security Remediation Round 2 evidence](docs/evidence/phase-4-security-remediation-2-verification.md)
 - [Local development runbook](docs/runbooks/local-development.md)
 - [Local Runner runbook](docs/runbooks/local-runner.md)
 - [Runner recovery runbook](docs/runbooks/runner-recovery.md)

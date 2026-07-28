@@ -79,7 +79,7 @@ def _check_source_adapter() -> None:
             "SourceStatus.UNKNOWN",
             "_read_source_reference",
             "_copy_source_objects",
-            'source_objects / "info" / "alternates"',
+            "SourceObjectClosure",
             "core.hooksPath=/dev/null",
             "core.fsmonitor=false",
             "credential.helper=",
@@ -90,7 +90,28 @@ def _check_source_adapter() -> None:
             "GIT_SSH_COMMAND",
             "start_new_session=True",
             "GIT_OUTPUT_LIMIT_EXCEEDED",
+        ),
+    )
+    _require_markers(
+        "apps/runner/src/visual_engineer_runner/git_object_store.py",
+        (
+            "class SourceObjectClosure",
+            '"alternates"',
+            '"http-alternates"',
+            '"grafts"',
+            '"replace"',
+            "_parse_pack_index",
+            "_read_packed_object",
+            "_apply_delta",
+            '"gitlink"',
+            "_validate_destination",
+            "_write_new_object",
+            "max_tree_depth",
+            "max_delta_depth",
+            "max_references",
             "MIRROR_BUDGET_EXCEEDED",
+            "st_nlink",
+            "os.link",
         ),
     )
     _require_markers(
@@ -139,6 +160,8 @@ def _check_permit_and_ownership() -> None:
             "_validate_ownership_record",
             "WorkspaceOwnershipStore",
             "registry_signature_matches",
+            "_validate_discard_proof",
+            "_require_discarded_inode_absent",
             "WORKSPACE_RECOVERY_REQUIRED",
             "WORKSPACE_QUARANTINED",
             "WorkspaceStatusCode.IGNORED",
@@ -153,6 +176,8 @@ def _check_permit_and_ownership() -> None:
             "creation_nonce",
             "workspace_device",
             "workspace_inode",
+            "WorkspaceDiscardProof",
+            "workspace-discard-proof-v1",
             "os.O_NOFOLLOW",
             "st_nlink",
             "0o600",
@@ -186,6 +211,10 @@ def _check_resources_and_immutable_refs() -> None:
         "RUNNER_GIT_MAX_OUTPUT_BYTES",
         "RUNNER_MIRROR_MAX_OBJECT_FILES",
         "RUNNER_MIRROR_MAX_OBJECT_BYTES",
+        "RUNNER_MIRROR_MAX_SINGLE_OBJECT_BYTES",
+        "RUNNER_MIRROR_MAX_DELTA_DEPTH",
+        "RUNNER_MIRROR_MAX_TREE_DEPTH",
+        "RUNNER_GIT_TERMINATION_GRACE_SECONDS",
     ):
         if marker not in compose:
             raise SystemExit(f"Runner resource boundary is missing: {marker}")
@@ -225,6 +254,10 @@ def _check_regressions() -> None:
             "test_discard_quarantines_unowned_inventory_and_preserves_sibling",
             "test_interrupted_discard_reconciles_only_signed_owned_workspace",
             "test_git_output_and_mirror_object_budgets_fail_closed",
+            "test_reachable_packed_delta_closure_is_materialized_without_unreachable_object",
+            "test_existing_mirror_rejects_valid_but_unauthorized_object",
+            "test_registry_loss_reconciles_only_exact_signed_pending_discard_proof",
+            "test_git_deadline_monitors_group_after_pipes_close",
         ),
     )
     _require_markers(
@@ -234,6 +267,10 @@ def _check_regressions() -> None:
             "test_permit_acquire_and_grant_revoke_serialize_without_deadlock",
             "test_revocation_waits_for_consumed_permit_then_cancel_ack_finalizes",
             "test_expired_lease_cannot_acquire_side_effect_permit",
+            "test_concurrent_permit_acquire_has_one_postgresql_consumer",
+            "test_real_postgresql_permit_crash_windows_retry_and_disk_db_ordering",
+            "test_permit_identity_and_expired_grant_denials_leave_zero_disk_side_effects",
+            "test_permit_last_moment_budget_recheck_prevents_disk_write",
         ),
     )
 

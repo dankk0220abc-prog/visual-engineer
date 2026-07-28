@@ -58,11 +58,13 @@ shell/source write/Git delivery = false
 ```
 
 Only Runner knows the source path. The source is read-only, no Git process is
-run against it, and every write occurs in a detached Runner-owned worktree.
-List/read/create/compare-and-swap replace are descriptor-rooted and bounded.
-Fixed Runner-owned Git status/diff, immutable checkpoints, initial-baseline
-rollback, and Permit plus signed-ownership-bound UUID-only discard complete
-the scope. There is no delete/rename/binary tool or target command.
+run against it, and only the bounded exact authorized commit/tree/blob closure
+is materialized into new Runner-owned object inodes. Every write occurs in a
+detached Runner-owned worktree. List/read/create/compare-and-swap replace are
+descriptor-rooted and bounded. Fixed Runner-owned Git status/diff, immutable
+checkpoints, initial-baseline rollback, and Permit plus signed
+ownership/pending/completed-proof-bound UUID-only discard complete the scope.
+There is no delete/rename/binary tool or target command.
 
 ## Implemented Level 0 controls
 
@@ -137,6 +139,5 @@ Foundation plan string validation blocks obvious policy violations but is not
 a complete security system. Any later non-fixture access or target command
 requires a new independent runtime authorization, path/argument confinement,
 resource/network limits, attributable results, and recovery design. A maximum-
-depth security audit is mandatory before Phase 5. The prior independent Phase
-4 audit remains Security Gate FAIL; the only next milestone is Phase 4
-Independent Security Re-Audit.
+4 audit and re-audit remain Security Gate FAIL; the only next milestone is
+Phase 4 Independent Focused Security Re-Audit.

@@ -27,31 +27,31 @@ deployment, or external integration exists.
 
 ## Threats and controls
 
-| Threat                            | Current control                                                                                                                     | Residual / future requirement                             |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Bootstrap credential disclosure   | Generated into ignored mode-0600 local file; never printed, logged, persisted in DB, or sent to Web                                 | Enterprise secret manager and audited provisioning        |
-| Runner Token disclosure           | Returned once, digest-only DB storage, mode-0600 credential file in dedicated volume, no body/auth logging                          | Rotation, short-lived credentials, workload identity      |
-| Offline token guessing            | At least 256 random bits; SHA-256 digest is safe for high-entropy input; constant-time comparison                                   | mTLS or workload identity                                 |
-| Runner impersonation              | Bearer identity plus body Runner ID equality; stable 401/403                                                                        | Mutual authentication and device attestation              |
-| Revoked Runner continues          | Every authenticated request checks revocation; active work receives cancellation                                                    | Rotation/revocation propagation SLO                       |
-| Grant revoked during mutation     | Requested/effective lifecycle; new Permits blocked immediately; effective waits for consumed Permit terminal/expiry                 | Already consumed exact operation has a bounded window     |
-| Duplicate claim                   | PostgreSQL transaction, `FOR UPDATE SKIP LOCKED`, active-attempt unique index                                                       | Queue partitioning only if measured scale needs it        |
-| Stale Runner overwrites result    | Runner/Attempt/Lease triple, active pointer, deadline, row lock, `409 stale_lease`                                                  | Cryptographic signed leases are not needed locally        |
-| Stale Runner mutates filesystem   | Current single-use Permit binds Runner/Job/Attempt/Lease/Grant/Workspace/digest/deadline and is checked immediately before mutation | Runner/API clock and transport remain trusted locally     |
-| Cancellation races success        | Locked transition table; `cancel_requested` rejects completion; cancellation acknowledgement is typed                               | Distributed-clock and multi-region concerns are absent    |
-| Envelope expansion/tamper         | Server-derived immutable row, DB trigger, canonical hash, Runner-side revalidation, literal authority fields                        | Signed policy issued by enterprise identity               |
-| Arbitrary code execution          | Closed Pydantic Job union; no shell/general subprocess, command string, plugin, import hook, or target command                      | Future validation needs separate isolation and policy     |
-| Repository/customer data exposure | Opaque local Handle for exact synthetic read-only bind only; no parent/customer/CreativeDeploy mount; Control Plane sees no path    | Real repositories require a new audit and authority       |
-| Source-configured helper executes | No Git process targets source; bounded no-follow object snapshot; managed Runner-only Git configuration                             | Narrow ordinary Git layout only; unusual layouts denied   |
-| DB/Web lateral access             | Runner joins only internal `runner-control`; it has no DB/Web network or published port                                             | Production network policy and egress proxy                |
-| Public egress                     | Docker internal network leaves only the API peer reachable                                                                          | Host-level Docker/network compromise remains out of scope |
-| Container privilege escalation    | Non-root, read-only rootfs, all capabilities dropped, no-new-privileges, no Docker/SSH mount, tmpfs `/tmp`                          | A container alone is not a hostile-code sandbox           |
-| Result or event exfiltration      | Closed result schemas, key/value classifiers, byte limits, metadata allowlist                                                       | Broader DLP and retention policy                          |
-| Payload/event DoS                 | 64 KiB protocol request bound, strict field limits, result bound, heartbeat coalescing                                              | Global rate limits and quotas before public exposure      |
-| Runner resource exhaustion        | CPU 1, memory 512 MiB, 128 PIDs, 256 open files, Git streaming-output plus opened-object and aggregate mirror bounds                | Host-wide quotas and fleet admission remain future        |
-| Reaper double-processing          | PostgreSQL advisory lock and locked deadline recheck                                                                                | Dedicated worker only when operational isolation warrants |
-| Retry storm                       | Bounded polling; capped exponential backoff with jitter; finite attempts                                                            | Fleet-wide admission control at scale                     |
-| Log leakage                       | Structured identifiers use short hints; no body, token, auth header, environment, hostname, username, or full exception path        | Central redaction and access control                      |
+| Threat                                                    | Current control                                                                                                                                            | Residual / future requirement                             |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Bootstrap credential disclosure                           | Generated into ignored mode-0600 local file; never printed, logged, persisted in DB, or sent to Web                                                        | Enterprise secret manager and audited provisioning        |
+| Runner Token disclosure                                   | Returned once, digest-only DB storage, mode-0600 credential file in dedicated volume, no body/auth logging                                                 | Rotation, short-lived credentials, workload identity      |
+| Offline token guessing                                    | At least 256 random bits; SHA-256 digest is safe for high-entropy input; constant-time comparison                                                          | mTLS or workload identity                                 |
+| Runner impersonation                                      | Bearer identity plus body Runner ID equality; stable 401/403                                                                                               | Mutual authentication and device attestation              |
+| Revoked Runner continues                                  | Every authenticated request checks revocation; active work receives cancellation                                                                           | Rotation/revocation propagation SLO                       |
+| Grant revoked during mutation                             | Requested/effective lifecycle; new Permits blocked immediately; effective waits for consumed Permit terminal/expiry                                        | Already consumed exact operation has a bounded window     |
+| Duplicate claim                                           | PostgreSQL transaction, `FOR UPDATE SKIP LOCKED`, active-attempt unique index                                                                              | Queue partitioning only if measured scale needs it        |
+| Stale Runner overwrites result                            | Runner/Attempt/Lease triple, active pointer, deadline, row lock, `409 stale_lease`                                                                         | Cryptographic signed leases are not needed locally        |
+| Stale Runner mutates filesystem                           | Current single-use Permit binds Runner/Job/Attempt/Lease/Grant/Workspace/digest/deadline and is checked immediately before mutation                        | Runner/API clock and transport remain trusted locally     |
+| Cancellation races success                                | Locked transition table; `cancel_requested` rejects completion; cancellation acknowledgement is typed                                                      | Distributed-clock and multi-region concerns are absent    |
+| Envelope expansion/tamper                                 | Server-derived immutable row, DB trigger, canonical hash, Runner-side revalidation, literal authority fields                                               | Signed policy issued by enterprise identity               |
+| Arbitrary code execution                                  | Closed Pydantic Job union; no shell/general subprocess, command string, plugin, import hook, or target command                                             | Future validation needs separate isolation and policy     |
+| Repository/customer data exposure                         | Opaque local Handle for exact synthetic read-only bind only; no parent/customer/CreativeDeploy mount; Control Plane sees no path                           | Real repositories require a new audit and authority       |
+| Source-configured helper or extra object enters authority | No Git process targets source; bounded no-follow loose/pack parser computes only the exact authorized closure; exact managed Runner-only Git configuration | Narrow ordinary Git layout only; unusual layouts denied   |
+| DB/Web lateral access                                     | Runner joins only internal `runner-control`; it has no DB/Web network or published port                                                                    | Production network policy and egress proxy                |
+| Public egress                                             | Docker internal network leaves only the API peer reachable                                                                                                 | Host-level Docker/network compromise remains out of scope |
+| Container privilege escalation                            | Non-root, read-only rootfs, all capabilities dropped, no-new-privileges, no Docker/SSH mount, tmpfs `/tmp`                                                 | A container alone is not a hostile-code sandbox           |
+| Result or event exfiltration                              | Closed result schemas, key/value classifiers, byte limits, metadata allowlist                                                                              | Broader DLP and retention policy                          |
+| Payload/event DoS                                         | 64 KiB protocol request bound, strict field limits, result bound, heartbeat coalescing                                                                     | Global rate limits and quotas before public exposure      |
+| Runner resource/process escape                            | CPU 1, memory 512 MiB, 128 PIDs, 256 open files, Git streaming-output and complete-group deadlines plus pack/delta/tree/graph/object/mirror bounds         | Host-wide quotas and fleet admission remain future        |
+| Reaper double-processing                                  | PostgreSQL advisory lock and locked deadline recheck                                                                                                       | Dedicated worker only when operational isolation warrants |
+| Retry storm                                               | Bounded polling; capped exponential backoff with jitter; finite attempts                                                                                   | Fleet-wide admission control at scale                     |
+| Log leakage                                               | Structured identifiers use short hints; no body, token, auth header, environment, hostname, username, or full exception path                               | Central redaction and access control                      |
 
 ## Security invariants
 
@@ -77,7 +77,10 @@ deployment, or external integration exists.
 13. Only `git_ops.py` invokes subprocess, only fixed Git against Runner-owned
     state; no Git process targets source. Source and sibling Workspace
     integrity are mandatory.
-14. Unprovable Workspace ownership never authorizes deletion.
+14. Unprovable Workspace ownership or discard completion never authorizes
+    deletion or idempotent success.
+15. A Git subprocess is complete only when leader, pipes, and process-group
+    evidence are terminal; timeout cleanup failure is itself a typed failure.
 
 ## Verification
 
@@ -95,8 +98,10 @@ old completion and receives `409 stale_lease`, restores the Runner, and waits
 for success.
 
 Phase 4 adds Permit/digest/revocation, descriptor/path/atomicity,
-ownership/quarantine, source-extension, and resource-bound adversarial tests
-plus a real fixture browser flow. `make workspace-chaos-check` covers
+ownership/quarantine, exact loose/packed source closure, and complete
+process-group adversarial tests plus a real fixture browser flow. Round 2 adds
+real PostgreSQL concurrent Permit acquisition and injected terminal-transaction
+rollback with committed-disk idempotent retry. `make workspace-chaos-check` covers
 pre-commit and post-rename interruption, stale Lease/Attempt/Permit denial,
 budget replay, concurrent revocation, recovery, rollback, and disposal. The
 strict source harness compares the full no-follow source plus `.git` manifest.
@@ -114,6 +119,6 @@ production network policy. PostgreSQL polling is suitable for this bounded
 local queue; a broker is justified only by measured fan-out, throughput,
 delayed scheduling, independent scaling, or operational availability needs.
 
-The original independent audit remains Security Gate FAIL. These controls are
-a repair candidate for Phase 4 Independent Security Re-Audit, not a security
-certification.
+The original audit and independent re-audit remain Security Gate FAIL. These
+Round 2 controls are a repair candidate for Phase 4 Independent Focused
+Security Re-Audit, not a security certification.
