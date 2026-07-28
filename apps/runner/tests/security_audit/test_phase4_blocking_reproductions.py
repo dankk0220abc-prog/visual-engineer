@@ -44,6 +44,7 @@ from visual_engineer_runner_protocol import (
     SideEffectPermitAcquireRequest,
     StartRequest,
     WorkspaceDiscardJobSpec,
+    WorkspaceDiscardResult,
     WorkspaceOperation,
     WorkspacePrepareJobSpec,
     WorkspaceWriteMode,
@@ -427,6 +428,48 @@ def test_reaudit_unreachable_uncommitted_object_is_not_imported_into_mirror(
     assert not mirror_object.exists()
 
 
+def test_focused_existing_mirror_packed_replace_cannot_change_checkout(
+    tmp_path: Path,
+) -> None:
+    """VE-P4-AUD-001: packed replacement refs cannot reinterpret the revision."""
+
+    source, replaced_revision = _source_repository(tmp_path)
+    tracked = source / "sandbox" / "tracked.txt"
+    tracked.write_text("approved second revision\n", encoding="utf-8")
+    _git(source, "add", "sandbox/tracked.txt")
+    _git(source, "commit", "-m", "approved second revision")
+    approved_revision = _git(source, "rev-parse", "HEAD")
+
+    settings = _settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = _grant(approved_revision)
+    _execute_prepare(manager, uuid.uuid4(), grant)
+
+    mirror = manager._git.mirror_path(HANDLE)
+    (mirror / "packed-refs").write_text(
+        "# pack-refs with: peeled fully-peeled sorted \n"
+        f"{replaced_revision} refs/replace/{approved_revision}\n",
+        encoding="ascii",
+    )
+
+    second_workspace_id = uuid.uuid4()
+    try:
+        _execute_prepare(manager, second_workspace_id, grant)
+    except WorkspaceExecutionError as error:
+        assert error.code in {
+            FailureCode.REPOSITORY_UNAVAILABLE,
+            FailureCode.WORKSPACE_STATE_INVALID,
+        }
+        assert not manager._git.workspace_path(second_workspace_id).exists()
+    else:
+        workspace = manager._git.workspace_path(second_workspace_id)
+        assert (workspace / "sandbox" / "tracked.txt").read_text(
+            encoding="utf-8"
+        ) == "approved second revision\n"
+    assert _git(source, "rev-parse", "HEAD") == approved_revision
+    assert tracked.read_text(encoding="utf-8") == "approved second revision\n"
+
+
 def test_reaudit_registry_loss_and_absent_root_requires_signed_recovery_proof(
     tmp_path: Path,
 ) -> None:
@@ -464,6 +507,59 @@ def test_reaudit_registry_loss_and_absent_root_requires_signed_recovery_proof(
     assert preserved.is_dir()
 
 
+def test_focused_completed_proof_replay_preserves_symlink_root_replacement(
+    tmp_path: Path,
+) -> None:
+    """VE-P4-AUD-003: a replacement root cannot inherit terminal proof."""
+
+    source, revision = _source_repository(tmp_path)
+    settings = _settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    grant = _grant(revision)
+    workspace_id = uuid.uuid4()
+    sibling_id = uuid.uuid4()
+    _execute_prepare(manager, workspace_id, grant)
+    _execute_prepare(manager, sibling_id, grant)
+    registry = manager._load_registry(workspace_id)
+    assert registry is not None
+
+    operation_id = uuid.uuid4()
+    spec = WorkspaceDiscardJobSpec(workspace_id=workspace_id, execution_grant=grant)
+    permit = _permit(
+        spec,
+        operation_id=operation_id,
+        expected_current=registry.current_tree_hash,
+    )
+    result = manager.execute(
+        spec,
+        operation_id=operation_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=permit,
+    )
+    assert isinstance(result, WorkspaceDiscardResult)
+    assert result.discarded is True
+
+    manager._registry_path(workspace_id).unlink()
+    sibling = manager._git.workspace_path(sibling_id)
+    sibling_marker = sibling / "sandbox" / "sibling-preserved.txt"
+    sibling_marker.write_text("sibling must survive replay\n", encoding="utf-8")
+    replacement = manager._git.workspace_path(workspace_id)
+    replacement.symlink_to(sibling, target_is_directory=True)
+
+    with pytest.raises(WorkspaceExecutionError) as error:
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=permit,
+        )
+
+    assert error.value.code == FailureCode.WORKSPACE_RECOVERY_REQUIRED
+    assert replacement.is_symlink()
+    assert sibling_marker.read_text(encoding="utf-8") == "sibling must survive replay\n"
+    assert _git(source, "rev-parse", "HEAD") == revision
+
+
 def test_reaudit_timeout_kills_process_group_after_leader_exits(tmp_path: Path) -> None:
     """VE-P4-AUD-005: a timed-out subprocess group must leave no orphan."""
 
@@ -488,6 +584,53 @@ def test_reaudit_timeout_kills_process_group_after_leader_exits(tmp_path: Path) 
             )
         assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
         time.sleep(0.6)
+        assert not marker.exists()
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=1)
+
+
+def test_focused_timeout_kills_child_that_closes_output_after_leader_exit(
+    tmp_path: Path,
+) -> None:
+    """VE-P4-AUD-005: closed capture pipes do not end the group deadline."""
+
+    source, _ = _source_repository(tmp_path)
+    operations = GitOperations(_settings(tmp_path, source))
+    child_pid_path = tmp_path / "closed-output-child.pid"
+    marker = tmp_path / "closed-output-child-marker"
+    child_code = (
+        "import os,pathlib,time;"
+        "os.close(1);os.close(2);"
+        f"pathlib.Path({str(child_pid_path)!r}).write_text(str(os.getpid()));"
+        f"time.sleep(0.5);pathlib.Path({str(marker)!r}).touch()"
+    )
+    parent_code = (
+        "import subprocess,sys,time;"
+        f"subprocess.Popen([sys.executable,'-c',{child_code!r}]);"
+        "time.sleep(0.05)"
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", parent_code],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        with pytest.raises(GitOperationError) as error:
+            operations._collect_bounded_output(
+                process,
+                timeout_seconds=0.1,
+                timeout_failure=FailureCode.WORKSPACE_STATE_INVALID,
+            )
+        assert error.value.code == FailureCode.WORKSPACE_STATE_INVALID
+        assert child_pid_path.is_file()
+        assert not operations._process_group_alive(process.pid)
+        time.sleep(0.55)
         assert not marker.exists()
     finally:
         try:

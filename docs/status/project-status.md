@@ -1,10 +1,13 @@
 # Project Status
 
-- Phase: Phase 4 — Security Remediation Round 2
+- Phase: Phase 4 — Independent Focused Security Re-Audit
 - Overall status:
-  `REMEDIATION ROUND 2 COMPLETE — READY FOR INDEPENDENT FOCUSED RE-AUDIT`
-- Governance qualifier: HISTORICAL SECURITY GATE FAIL PRESERVED; NOT IN MAIN
-- Last updated: 2026-07-28
+  `FOCUSED RE-AUDIT COMPLETE — SECURITY GATE FAIL — REMEDIATION REQUIRED`
+- Governance qualifier: SECURITY GATE FAIL; NOT IN MAIN
+- Last updated: 2026-07-29
+- Focused re-audit branch: `audit/phase-4-security-focused-reaudit-max`
+- Focused candidate:
+  `cb799bcf1407c2c797da46c5a2d0aa0a6b73d3f1`
 - Round 2 branch: `fix/phase-4-security-remediation-2`
 - Round 2 base / independent re-audit:
   `b457b614bde6630fb50ff9546c92a4d6925ad38a`
@@ -20,7 +23,39 @@
 - Remote: none
 - Remote CI: not run
 
-## Governance status
+## Focused re-audit decision
+
+The Round 2 candidate remains **Security Gate: FAIL**. Three named blocker
+scopes pass current independent focused checks:
+
+- `VE-P4-AUD-003`: authenticated discard proof;
+- `VE-P4-AUD-005`: complete process-group deadline; and
+- `VE-P4-AUD-002`: real-PostgreSQL Side-effect Permit closure.
+
+`VE-P4-AUD-001` fails on new Critical finding `VE-P4-FREAUD-001`. An existing
+managed mirror can encode `refs/replace` in `packed-refs`. Current validation
+does not reject that representation and the Runner-owned Git subprocesses
+interpret it. The exact authorized object-ID set and requested `HEAD` can
+remain intact while checkout materializes another reachable commit's tree.
+This violates the exact authorized revision boundary.
+
+The corrected complete blocking-reproduction file produces
+`1 failed, 9 passed`; the sole failure is the packed replacement secure
+assertion. The complete Runner/Protocol focused files produce `52 passed`.
+The real-PostgreSQL Workspace API file produces `13 passed`, including an
+independent five-session convergence test. The strict source-invariance target
+passes.
+
+Because one Critical blocker is stable, the final full Gate, aggregate
+`make verify`, full Docker isolation Gate, browser/E2E, smoke, chaos,
+security, and Eval are **NOT VERIFIED** in this review. They were not run or
+inferred after the stop condition.
+
+No production code was modified. No customer repository was accessed. No
+remote, push, merge, pull request, tag, delivery, deployment, or Phase 5 action
+occurred.
+
+## Preserved pre-focused governance status
 
 The independent re-audit of the isolated security-repair commit completed with
 **Security Gate: FAIL**. Three production defects are independently stable:
@@ -157,10 +192,10 @@ Docker evidence, and final Git state are recorded separately in
 
 ## Remaining limitations
 
-- Round 2 corrections still require a fresh independent focused re-audit;
-  local implementation evidence cannot approve them.
-- The Permit matrix is locally exercised but still requires independent
-  closure as part of that re-audit.
+- The new Critical packed-replacement finding requires a narrow production
+  remediation and another fresh independent focused re-audit.
+- The Permit, discard, and process-group scopes pass this focused review, but
+  those local PASS results do not override the object-closure Critical.
 - Python does not expose portable `openat2`/`renameat2` pathname-CAS; the
   implementation retains descriptor-rooted no-follow checks and a sole
   Runner-Writer assumption.
@@ -173,10 +208,10 @@ Docker evidence, and final Git state are recorded separately in
 
 ## Recommended next milestone
 
-**Phase 4 Independent Focused Security Re-Audit**. Round 2 implementer
-evidence cannot make that independent decision.
+**Narrow Phase 4 security remediation for `VE-P4-FREAUD-001`, followed by a
+fresh independent focused read-only security re-audit.**
 
 Do not merge `main`, access CreativeDeploy/Customer 0, push, create a pull
 request, or begin Phase 5 before a fresh independent PASS.
 
-`REMEDIATION ROUND 2 COMPLETE — READY FOR INDEPENDENT FOCUSED RE-AUDIT`
+`FOCUSED RE-AUDIT COMPLETE — SECURITY GATE FAIL — REMEDIATION REQUIRED`

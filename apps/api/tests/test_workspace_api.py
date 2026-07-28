@@ -1110,6 +1110,82 @@ def test_concurrent_permit_acquire_has_one_postgresql_consumer(
         engine.dispose()
 
 
+def test_focused_five_way_permit_consume_converges_on_one_postgresql_row(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    database_url: str,
+) -> None:
+    """VE-P4-AUD-002: five independent consumers still spend one Permit."""
+
+    runner, token, repository = register_workspace_runner(client, runner_bootstrap_token)
+    plan = seed_approved_plan(db_session)
+    grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    created = client.post("/api/v1/workspaces", json={"grant_id": grant["id"]})
+    assert created.status_code == 201, created.text
+    job = created.json()["job"]
+    assignment, identity = claim_start(client, runner, token, job["id"])
+    typed_assignment = JobAssignment.model_validate(assignment)
+    request = SideEffectPermitAcquireRequest.model_validate(
+        {
+            **identity,
+            "job_digest": compute_side_effect_job_digest(typed_assignment.job),
+        }
+    )
+    job_id = uuid.UUID(job["id"])
+    consumer_count = 5
+    barrier = threading.Barrier(consumer_count)
+    engine = create_engine(database_url, pool_pre_ping=True)
+
+    def acquire(index: int) -> tuple[uuid.UUID, bool, int]:
+        with Session(engine) as session:
+            service = RunnerService(session)
+            authenticated = service.authenticate(token)
+            barrier.wait(timeout=10)
+            permit = service.acquire_side_effect_permit(
+                authenticated,
+                job_id,
+                request,
+                request_id=f"focused-five-way-{index}-{uuid.uuid4()}",
+            )
+            return permit.id, permit.idempotent_replay, permit.sequence
+
+    try:
+        with ThreadPoolExecutor(max_workers=consumer_count) as executor:
+            results = list(executor.map(acquire, range(consumer_count)))
+        assert len({permit_id for permit_id, _, _ in results}) == 1
+        assert sorted(replay for _, replay, _ in results) == [
+            False,
+            True,
+            True,
+            True,
+            True,
+        ]
+        assert {sequence for _, _, sequence in results} == {1}
+
+        with Session(engine) as session:
+            permits = list(
+                session.scalars(select(SideEffectPermit).where(SideEffectPermit.job_id == job_id))
+            )
+            acquired_events = list(
+                session.scalars(
+                    select(RunnerJobEvent).where(
+                        RunnerJobEvent.job_id == job_id,
+                        RunnerJobEvent.event_type == "side_effect_permit_acquired",
+                    )
+                )
+            )
+            assert len(permits) == 1
+            assert permits[0].state == "consumed"
+            assert len(acquired_events) == 1
+    finally:
+        engine.dispose()
+
+
 def test_real_postgresql_permit_crash_windows_retry_and_disk_db_ordering(
     client: TestClient,
     db_session: Session,
