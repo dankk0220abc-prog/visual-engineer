@@ -6,9 +6,11 @@
   `c9e5268f1287f49ac0ba5c5d26045395b8e72dc0`
 - Independent FAIL checkpoint:
   `4ce5a1a8e63ec530517f17ae82fc3aeb7747c4de`
+- Aggregate-environment FAIL checkpoint:
+  `61151bd7f2fe68f8076af45dfec9977858f51e04`
 - Main baseline:
   `928a89d2055d172bbd7c6670b42f668d103dcb03`
-- Status: `COMPLETE — OVERALL FAIL — AGGREGATE ENVIRONMENT BLOCKED`
+- Status: `COMPLETE — PASS — FIRST VERTICAL SLICE SEALED`
 - Remote CI: `NOT VERIFIED`
 
 ## Goal
@@ -78,9 +80,19 @@ read-only.
   Git scope, and exact resource cleanup
 - done — one final `make verify`; passed every stage before E2E setup, then
   failed with exit `2` because fixed host port `18000` was already in use
+- done — local FAIL checkpoint
+  `61151bd7f2fe68f8076af45dfec9977858f51e04` preserves the first aggregate
+  failure
+- done — project-control authorization for one environment-clearance retry
+- done — retry preflight found no current listener on `18000`; the historical
+  owner remained unattributed and no process/service was stopped
+- done — formal E2E port inputs selected bind-probed isolated ports
+  `25432/28000/23000`
+- done — the one authorized `make verify` retry completed every aggregate
+  target with exit `0`
 - done — final audit, evidence, and project status
-- prepared — local FAIL checkpoint; the reserved PASS sealing subject is
-  forbidden
+- prepared — local PASS sealing checkpoint; its object ID and clean state are
+  reported after commit
 
 ## Decisions
 
@@ -95,6 +107,10 @@ read-only.
 4. Preserve all production paths at the exact remediation candidate tree.
 5. Reserve the first final aggregate for the independent review and avoid
    repeating expensive gates already contained in `make verify`.
+6. Preserve the first aggregate failure in a local FAIL checkpoint. For the
+   explicitly authorized retry, do not infer ownership from a vanished
+   listener and do not stop any process. Use only the repository's formal E2E
+   port environment variables after real bind probes.
 
 ## Verification strategy
 
@@ -149,17 +165,25 @@ The required blocker handoff is:
 stale/mismatch/replay, canonical Workspace invariance, and strict configured
 mypy discovery also pass with no Critical, High, or blocking Medium Finding.
 
-The one authorized final `make verify` returns exit `2` during E2E setup
-because the fixed API host port `127.0.0.1:18000` is already in use. No
-Playwright test runs, and the aggregate stops before Chaos and the remaining
-security/eval targets. The exact audit-owned E2E project cleans itself to zero
-containers, networks, and volumes.
+The first final `make verify` attempt returns exit `2` during E2E setup because
+fixed API host port `127.0.0.1:18000` is already in use. That result remains
+preserved at local FAIL checkpoint
+`61151bd7f2fe68f8076af45dfec9977858f51e04`.
 
-The task authorizes a second aggregate only after an audit-test or
-documentation-format failure. This failure is environmental, so the review
-does not retry, does not inspect or stop the port owner, does not use alternate
-ports without user authorization, and does not create the reserved PASS
-sealing commit.
+Project control subsequently authorized exactly one environment-clearance
+retry. At recovery preflight, `18000` had no current listener, so the
+historical owner could not be safely attributed and no process or service was
+stopped. The repository's formal `E2E_DB_PORT`, `E2E_API_PORT`, and
+`E2E_WEB_PORT` inputs were set to bind-probed isolated ports
+`25432/28000/23000`.
 
-The next action is user-directed verification-environment remediation or
-explicit authorization for a fresh aggregate with isolated ports.
+The one authorized retry completes `make verify` with exit `0`, including
+Playwright `16/16`, Workspace Chaos, Workspace Security `63/63`, Validation
+Security, broad Runner Security `109/109`, Eval 58 cases, source/canonical
+Workspace invariance, and final `git diff --check`. Exact gate-owned project
+resource counts are zero after cleanup.
+
+All PASS completion conditions are satisfied. The next eligible action after
+the local sealing checkpoint is user-authorized main integration; no merge,
+push, pull request, tag, deployment, later Phase 5 slice, or Phase 6 action is
+performed by this review.

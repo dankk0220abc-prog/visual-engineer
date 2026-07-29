@@ -2,14 +2,16 @@
 
 - Phase: Phase 5 — Governed Validation Execution
 - Overall status:
-  `PHASE 5 SINGLE-FINDING RE-AUDIT FAIL — REMEDIATION REQUIRED`
-- Governance qualifier: SINGLE-FINDING AND MYPY GOVERNANCE PASS; FINAL
-  AGGREGATE FAILED ON LOCAL E2E PORT COLLISION; PASS SEALING NOT CREATED
+  `PHASE 5 SINGLE-FINDING RE-AUDIT PASS — FIRST VERTICAL SLICE SEALED — READY FOR USER-AUTHORIZED MAIN INTEGRATION`
+- Governance qualifier: SINGLE-FINDING, MYPY GOVERNANCE, AND FINAL AGGREGATE
+  PASS; MAIN REMAINS UNCHANGED
 - Last updated: 2026-07-30
 - Phase 5 single-finding re-audit branch:
   `audit/phase-5-cancel-permit-single-finding-max`
 - Phase 5 single-finding re-audit candidate:
   `c9e5268f1287f49ac0ba5c5d26045395b8e72dc0`
+- Phase 5 aggregate-environment FAIL checkpoint:
+  `61151bd7f2fe68f8076af45dfec9977858f51e04`
 - Phase 5 final targeted remediation 2 branch:
   `fix/phase-5-validation-cancel-permit-remediation-2`
 - Phase 5 final targeted remediation 2 base:
@@ -70,7 +72,7 @@ The narrow independent decisions are:
 - `VE-P5-FREAUD-001`: **PASS**;
 - strict mypy governance: **PASS**;
 - new Critical/High/blocking Medium Findings: **0**; and
-- final first-slice aggregate/sealing Gate: **FAIL**.
+- final first-slice aggregate/sealing Gate: **PASS**.
 
 Real PostgreSQL proves normal active cancellation now atomically terminalizes
 Job, Attempt, Validation Run, step, and the exact Permit as `cancelled`, with
@@ -91,29 +93,37 @@ remediation, cancel-Permit remediation, and current audit files as distinct
 modules. Strict mypy passes 91 source files. No targeted exclusion,
 `ignore_errors`, new blanket ignore, or strictness reduction exists.
 
-The one authorized final `make verify` passes contracts, format, lint,
-typecheck, Python/API/Runner/Protocol `227/227` at 82.95% coverage, Web
-`44/44`, build, Docker config, migration, Phase 4 permanent Finding controls,
-Runner security audit `22/22`, source invariance, and the Phase 4 workspace
-security repair target. It then stops with exit `2` before Playwright because
-fixed host port `127.0.0.1:18000` is already in use.
+The first final `make verify` attempt passes all stages before E2E setup, then
+stops with exit `2` because fixed host port `127.0.0.1:18000` is already in
+use. Historical FAIL checkpoint
+`61151bd7f2fe68f8076af45dfec9977858f51e04` preserves that result.
 
-The port owner was not inspected or stopped, and a second aggregate was not
-run. E2E, Chaos, the remaining Security targets, Eval, and a complete exit-0
-aggregate are therefore not independently verified. The exact audit-owned
-PostgreSQL and E2E Compose projects have zero container/network/volume
-residue. Four current-repository platform services reporting 8–31 hours
-uptime predate the review and remain untouched.
+After explicit project-control authorization, retry preflight finds no current
+listener on `18000`; the historical owner cannot be safely attributed, and no
+process or service is stopped. The repository's formal E2E environment inputs
+use bind-probed isolated ports `25432/28000/23000`.
+
+The one authorized Final Aggregate Retry exits `0`. It passes contracts,
+format, lint, typecheck, Python/API/Runner/Protocol `227/227` at 82.95%
+coverage, Web `44/44`, build, Docker config, migration, permanent Finding
+controls, Runner security audit `22/22`, source invariance, workspace repair
+`85/85` plus API `14/14`, Playwright `16/16`, Workspace Chaos, Workspace
+Security `63/63`, Validation Security, broad Runner Security `109/109`, Eval
+58 cases, and final `git diff --check`.
+
+The exact audit-owned PostgreSQL, E2E, and Chaos Compose projects have zero
+container/network/volume residue. Four current-repository platform services
+predate the review and remain untouched.
 
 No production code changed. Main remains unchanged. No CreativeDeploy or
 sibling repository content was accessed; no remote, push, merge, pull request,
 tag, Customer 0, later Phase 5 slice, or Phase 6 action occurred.
 
-The reserved PASS subject
-`chore: seal phase 5 governed validation first slice` is not used. The next
-action is to make port `18000` available or explicitly authorize a fresh
-aggregate on isolated alternate ports. No production remediation is supported
-by the current focused evidence.
+The reserved local PASS subject is now eligible:
+`chore: seal phase 5 governed validation first slice`. Even after sealing,
+main is not moved. The next eligible action is user-authorized main
+integration. Remote CI, push, pull request, tag, deployment, Customer 0, later
+Phase 5 slices, and Phase 6 remain separate authorizations.
 
 Detailed independent artifacts:
 

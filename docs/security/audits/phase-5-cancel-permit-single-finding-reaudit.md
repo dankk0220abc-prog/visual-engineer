@@ -5,6 +5,8 @@
   `c9e5268f1287f49ac0ba5c5d26045395b8e72dc0`
 - Independent FAIL checkpoint:
   `4ce5a1a8e63ec530517f17ae82fc3aeb7747c4de`
+- Aggregate-environment FAIL checkpoint:
+  `61151bd7f2fe68f8076af45dfec9977858f51e04`
 - Main baseline:
   `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Review branch: `audit/phase-5-cancel-permit-single-finding-max`
@@ -12,8 +14,8 @@
 - Status: **COMPLETE**
 - Single-Finding decision: **PASS**
 - mypy governance decision: **PASS**
-- Final Aggregate: **FAIL — ENVIRONMENTAL PORT COLLISION**
-- Overall Gate: **FAIL**
+- Final Aggregate: **PASS**
+- Overall Gate: **PASS**
 
 ## 1. Completion status
 
@@ -22,16 +24,20 @@ The authorized single-finding and mypy-governance review is complete.
 strict mypy independently discovers every named Phase 5 focused-review,
 re-audit, remediation, and current audit test.
 
-The overall first-slice sealing Gate is nevertheless **FAIL** because the one
-authorized final `make verify` stopped in E2E setup with exit `2`: TCP
-`127.0.0.1:18000` was already in use before the audit-owned API container
-could bind. The task permits a second full aggregate only after an audit-test
-or documentation-format failure. This was neither, so no second aggregate was
-started and the reserved PASS sealing subject was not used.
+The first final `make verify` attempt remains preserved at local FAIL
+checkpoint `61151bd7f2fe68f8076af45dfec9977858f51e04`. It stopped in E2E setup
+with exit `2` because TCP `127.0.0.1:18000` was already in use.
 
-No new production security Finding was discovered. The remaining blocker is
-verification-environment availability, not evidence supporting another
-production remediation.
+Project control then explicitly authorized one environment-clearance retry.
+At retry preflight, port `18000` had no current listener, so the historical
+owner could not be safely attributed and no process or service was stopped.
+The repository's formal `E2E_DB_PORT`, `E2E_API_PORT`, and `E2E_WEB_PORT`
+entrypoints were used with bind-probed isolated ports `25432`, `28000`, and
+`23000`. The one authorized retry completed `make verify` with exit `0`.
+
+No new production security Finding was discovered. The first governed
+Validation vertical slice is independently sealed locally and is ready only
+for user-authorized main integration.
 
 ## 2. Single-Finding decision
 
@@ -80,30 +86,31 @@ audit test.
 
 ## 4. Final Aggregate
 
-**FAIL, exit `2`.**
+**PASS, exit `0`.**
 
-The single authorized `make verify` passed:
+The first attempt's exit `2` port collision is retained as historical
+environment evidence. The authorized retry used only the repository's formal
+E2E port environment variables and the fixed official
+`visualengineer-e2e` Compose project. No source or test patch was used.
 
-- contract regeneration drift;
-- repository format;
-- Ruff and ESLint;
-- mypy and TypeScript;
-- Python/API/Runner/Protocol tests and coverage;
-- Web tests and coverage;
-- Next.js production build;
-- all Compose rendering;
-- empty-PostgreSQL migration roundtrip;
-- permanent Phase 4 Finding controls and security-audit tests;
-- source invariance; and
-- the Phase 4 workspace security repair target.
+The complete retry passed:
 
-It then failed before Playwright execution when the E2E API container could
-not bind fixed host port `18000`. E2E behavior, Workspace Chaos, Workspace
-Security, Validation Security, the later broad Security target, Eval, and the
-aggregate's final `git diff --check` were not reached by that command.
+- contract regeneration drift, format, lint, mypy, and TypeScript;
+- Python/API/Runner/Protocol `227/227` at 82.95% coverage;
+- Web `44/44` and Next.js production build;
+- all Compose rendering and PostgreSQL migration roundtrip;
+- permanent Finding controls and Runner security audit `22/22`;
+- source invariance and Phase 4 workspace repair `85/85` plus API `14/14`;
+- Playwright E2E `16/16` on desktop and narrow viewports;
+- Workspace Chaos with unchanged source and `.git` fingerprint;
+- Workspace Security `63/63` plus static isolation;
+- Validation sandbox isolation;
+- broad Runner Security `109/109` plus scanner `7/7`;
+- Eval 58 deterministic cases plus scanner `7/7`; and
+- final `git diff --check`.
 
-The port owner was not inspected or stopped. The exact audit-owned E2E Compose
-project cleaned itself to zero containers, networks, and volumes.
+All exact E2E, Chaos, focused PostgreSQL, and migration Compose project
+container/network/volume inventories are zero after cleanup.
 
 ## 5. Git baseline and branch
 
@@ -202,18 +209,21 @@ The dedicated matrix passes `4/4`. It proves:
 | configured mypy                         |    0 | `91 source files`      |
 | aggregate Python/API/Runner/Protocol    |    0 | `227 passed`, `82.95%` |
 | aggregate Web unit tests                |    0 | `44 passed`            |
-| final `make verify`                     |    2 | E2E port bind failure  |
+| aggregate Playwright E2E                |    0 | `16 passed`            |
+| aggregate Runner Security               |    0 | `109 passed`           |
+| final authorized `make verify` retry    |    0 | complete aggregate     |
 
 Every focused behavior run used current candidate code. API matrices used a
 real PostgreSQL service, not SQLite or mocks.
 
 ## 11. Final `make verify`
 
-**FAIL, exit `2`; run count: exactly one.**
+**PASS, exit `0`.**
 
-The failure is retained verbatim in the verification evidence. A second full
-aggregate was not run. The branch is therefore not eligible for the reserved
-commit:
+The first attempt's exit `2` environment failure remains in Git history and
+verification evidence. After explicit user authorization, exactly one retry
+used the formal E2E port overrides and completed every aggregate target. The
+branch is eligible for the reserved commit:
 
 `chore: seal phase 5 governed validation first slice`
 
@@ -239,30 +249,24 @@ the canonical Workspace fingerprint directly. No mismatch was observed.
 - High: 0
 - blocking Medium: 0
 - non-blocking production security Findings: 0
-- aggregate environment blockers: 1
+- unresolved aggregate environment blockers: 0
 
-The fixed-port collision is not classified as a production security Finding.
+The historical fixed-port collision is not classified as a production
+security Finding and is resolved for the final retry.
 
 ## 14. Remaining limitations
 
-Because the final aggregate stopped during E2E setup:
-
-- Playwright E2E/accessibility is not verified by this review;
-- Workspace Chaos is not verified by this review;
-- the later Workspace Security, Validation Security, broad Security, and Eval
-  aggregate targets are not verified by this review; and
-- remote CI, deployment, customer behavior, hostile multi-tenant execution,
-  later Phase 5 slices, and Phase 6 remain unverified or out of scope.
-
-Historical passing results are not promoted into this review's final
-aggregate ledger.
+Remote CI, deployment, customer behavior, hostile multi-tenant execution,
+later Phase 5 slices, and Phase 6 remain unverified or out of scope. These are
+not blockers for the authorized local first-slice seal.
 
 ## 15. Git checkpoint
 
-This report belongs to a local FAIL audit checkpoint, not the Phase 5 PASS
-sealing commit. A commit cannot embed its own object ID without changing that
-ID; the exact checkpoint is reported in the post-commit administrative
-handoff.
+The historical FAIL audit checkpoint remains
+`61151bd7f2fe68f8076af45dfec9977858f51e04`. This updated report belongs to
+the Phase 5 PASS sealing commit. A commit cannot embed its own object ID
+without changing that ID; the exact sealing checkpoint is reported in the
+post-commit administrative handoff.
 
 ## 16. Worktree, index, and untracked inventory
 
@@ -274,8 +278,8 @@ Before the checkpoint, all changes are confined to:
 - verification evidence; and
 - project status.
 
-After the local FAIL checkpoint, the worktree, index, and untracked inventory
-must be empty.
+After the local sealing checkpoint, the worktree, index, and untracked
+inventory must be empty.
 
 ## 17. CreativeDeploy, remote, and delivery status
 
@@ -290,8 +294,8 @@ must be empty.
 - later Phase 5 slice / Phase 6: not started
 
 Four long-running current-repository platform services predated this review
-and were left untouched. Every exact audit-owned PostgreSQL and E2E Compose
-project has zero container/network/volume residue.
+and were left untouched. Every exact audit-owned PostgreSQL, E2E, and Chaos
+Compose project has zero container/network/volume residue.
 
 ## 18. CONFIRMED / INFERRED / NOT VERIFIED ledger
 
@@ -305,33 +309,36 @@ project has zero container/network/volume residue.
 - Strict mypy discovers all eight target files and checks 91 sources.
 - Format, lint, typecheck, empty-database migration, production-tree
   invariance, source/canonical Workspace invariance, and focused cleanup pass.
-- The one final aggregate passes all recorded stages before E2E setup and
-  fails with exit `2` on fixed port `18000`.
+- The first aggregate attempt fails with exit `2` on fixed port `18000`, and
+  the historical FAIL checkpoint preserves that result.
+- Retry preflight finds no current port-18000 listener; no unknown process or
+  service is stopped.
+- Formal isolated E2E ports pass bind probes, and the one authorized retry
+  completes `make verify` with exit `0`.
+- E2E `16/16`, Chaos, Docker, Workspace/Validation/Runner Security, Eval, and
+  final diff check pass.
 - No production code was changed.
-- The audit-owned E2E project cleaned to zero resource residue.
+- All exact gate-owned projects clean to zero resource residue.
 - Main, remote, push, merge, pull request, and tag state are unchanged.
 
 ### INFERRED
 
 - The four current-repository platform services were pre-existing: Docker
   reports 8–31 hours uptime, while this review ran for minutes.
-- The fixed port was occupied by external local state rather than candidate
-  behavior; the owner was deliberately not inspected.
+- The historical port owner cannot be attributed because no listener remained
+  at retry preflight.
 
 ### NOT VERIFIED
 
-- A complete exit-0 final aggregate.
-- Playwright E2E/accessibility and every aggregate target after E2E.
 - Remote CI, deployment, production, customer, or hostile multi-tenant use.
 - Any scope outside this first governed-validation vertical slice.
 
 ## 19. Recommended next action
 
-Do not modify production code or merge main. The user should first make fixed
-E2E port `18000` available, or explicitly authorize a fresh aggregate with
-isolated alternate ports. Then a new independent continuation may run one
-complete aggregate. Only an exit-0 result may create the reserved Phase 5
-sealing commit and authorize a recommendation for user-controlled main
-integration.
+Do not modify production code or automatically merge main. The next eligible
+action is user-authorized local main integration of the sealed first vertical
+slice. Remote CI, push, pull request, tag, deployment, Customer 0, later Phase
+5 slices, and Phase 6 remain separate authorizations.
 
-**PHASE 5 SINGLE-FINDING RE-AUDIT FAIL — REMEDIATION REQUIRED**
+**PHASE 5 SINGLE-FINDING RE-AUDIT PASS — FIRST VERTICAL SLICE SEALED — READY
+FOR USER-AUTHORIZED MAIN INTEGRATION**

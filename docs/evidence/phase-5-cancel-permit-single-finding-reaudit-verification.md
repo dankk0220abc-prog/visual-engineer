@@ -5,11 +5,13 @@
 - Branch: `audit/phase-5-cancel-permit-single-finding-max`
 - Candidate: `c9e5268f1287f49ac0ba5c5d26045395b8e72dc0`
 - FAIL checkpoint: `4ce5a1a8e63ec530517f17ae82fc3aeb7747c4de`
+- Aggregate-environment FAIL checkpoint:
+  `61151bd7f2fe68f8076af45dfec9977858f51e04`
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
-- Status: COMPLETE — OVERALL FAIL
+- Status: COMPLETE — PASS
 - Single-Finding: PASS
 - mypy governance: PASS
-- Final aggregate: FAIL, exit `2`
+- Final aggregate retry: PASS, exit `0`
 - Remote CI: NOT VERIFIED
 
 ## Evidence boundary
@@ -271,9 +273,10 @@ git ls-tree SHA-256 =
 beae532e006bcf280a9b05a76e4286eaa344c1cffe3622a7a837c9cc00c018b5
 ```
 
-## Final `make verify` ledger
+## First final `make verify` attempt
 
-The command was invoked exactly once.
+The first attempt is preserved at FAIL checkpoint
+`61151bd7f2fe68f8076af45dfec9977858f51e04`.
 
 | Aggregate stage                          | Result                                   |
 | ---------------------------------------- | ---------------------------------------- |
@@ -308,8 +311,88 @@ make e2e exit = 2
 make verify exit = 2
 ```
 
-The owner of the occupied port was not inspected, stopped, or modified. No
-second aggregate was run.
+The owner of the occupied port was not inspected, stopped, or modified before
+the FAIL checkpoint.
+
+## Authorized environment-clearance retry
+
+Project control explicitly authorized one Final Aggregate Retry. Recovery
+preflight reconfirmed:
+
+```text
+branch = audit/phase-5-cancel-permit-single-finding-max
+HEAD = 61151bd7f2fe68f8076af45dfec9977858f51e04
+main = 928a89d2055d172bbd7c6670b42f668d103dcb03
+worktree/index/untracked = clean
+remote/stash/Git lock = none
+```
+
+Read-only `lsof` returned no current listener on TCP `18000`. Therefore no
+PID, parent process, command, or working directory could be safely attributed
+to the historical collision. No process, container, or service was stopped.
+
+Repository source inspection confirmed the formal E2E harness inputs:
+
+```text
+PROJECT_NAME = visualengineer-e2e
+E2E_DB_PORT
+E2E_API_PORT
+E2E_WEB_PORT
+```
+
+Loopback bind probes passed for isolated ports:
+
+```text
+E2E_DB_PORT = 25432
+E2E_API_PORT = 28000
+E2E_WEB_PORT = 23000
+```
+
+Exact pre-retry E2E and audit-owned Compose container/network/volume counts
+were all zero. The authorized retry command was:
+
+```text
+E2E_DB_PORT=25432 \
+E2E_API_PORT=28000 \
+E2E_WEB_PORT=23000 \
+make verify
+```
+
+No production source, test, Compose, or harness patch was used.
+
+## Final Aggregate Retry ledger
+
+| Aggregate stage                          | Result                               |
+| ---------------------------------------- | ------------------------------------ |
+| contracts drift                          | PASS                                 |
+| format                                   | PASS, Ruff 120 files                 |
+| lint                                     | PASS                                 |
+| typecheck                                | PASS, mypy 91 files                  |
+| Python/API/Runner/Protocol               | PASS, 227 tests, 82.95% coverage     |
+| Web unit                                 | PASS, 44 tests                       |
+| Next.js production build                 | PASS                                 |
+| Docker Compose rendering                 | PASS                                 |
+| PostgreSQL migration roundtrip           | PASS                                 |
+| Phase 4 permanent Finding controls       | PASS                                 |
+| Runner security audit                    | PASS, 22 tests                       |
+| source invariance                        | PASS                                 |
+| Phase 4 workspace security repair target | PASS, 85 plus 14 tests               |
+| Playwright E2E                           | PASS, 16 tests                       |
+| Workspace Chaos                          | PASS, source and `.git` unchanged    |
+| Workspace Security                       | PASS, 63 tests plus static isolation |
+| Validation Security                      | PASS, sandbox isolation              |
+| broad Runner Security                    | PASS, 109 tests plus scanner 7 tests |
+| Eval                                     | PASS, 58 cases plus scanner 7 tests  |
+| aggregate final `git diff --check`       | PASS                                 |
+
+Final retry result:
+
+```text
+make verify exit = 0
+```
+
+This was the only explicitly authorized Final Aggregate Retry. E2E, Chaos, or
+Security were not run separately.
 
 ## Audit-document formatting ledger
 
@@ -318,6 +401,12 @@ Markdown files; exit `2`. Prettier was applied only to those exact documents.
 The complete format, lint, and typecheck rerun then passed with Ruff 120 files,
 mypy 91 files, ESLint, and TypeScript; exit `0`. No test or production source
 changed during that correction.
+
+After the authorized aggregate retry passed, the first PASS-document
+`make format-check` found only this updated evidence Markdown file; exit `2`.
+Prettier was applied only to this file, followed by the affected repository
+static checks. No production source, audit-test assertion, or aggregate result
+changed, and no additional aggregate was run.
 
 ## Docker cleanup and existing-platform ledger
 
@@ -328,6 +417,7 @@ Exact audit-owned resource checks after cleanup:
 | `visualengineer-phase5-single-reaudit-20260730`           |          0 |        0 |       0 |
 | `visualengineer-phase5-single-reaudit-migration-20260730` |          0 |        0 |       0 |
 | `visualengineer-e2e`                                      |          0 |        0 |       0 |
+| `visualengineer-workspace-chaos`                          |          0 |        0 |       0 |
 
 The current-repository default platform has four services reporting 8–31
 hours uptime:
@@ -364,10 +454,11 @@ Critical = 0
 High = 0
 blocking Medium = 0
 new production security Findings = 0
-aggregate environment blockers = 1
+unresolved aggregate environment blockers = 0
 ```
 
-The port collision blocks sealing but is not a production security Finding.
+The historical port collision is not a production security Finding. The
+formal isolated-port retry resolves the aggregate blocker.
 
 ## Final allowed-write and Git checks
 
@@ -383,7 +474,8 @@ docs/status/project-status.md
 
 No production path is permitted in the checkpoint. Final format, lint,
 typecheck, diff, production-invariance, main/ref, and clean-state checks are
-recorded before and after the local FAIL checkpoint.
+recorded before and after the local sealing checkpoint. Historical FAIL
+checkpoint `61151bd7...` remains unchanged in branch history.
 
 ## CONFIRMED / INFERRED / NOT VERIFIED
 
@@ -396,9 +488,14 @@ recorded before and after the local FAIL checkpoint.
 - Real PostgreSQL, strict configured mypy, format, lint, typecheck, migration,
   source/canonical Workspace, production-tree invariance, and focused cleanup
   evidence above.
-- The one final aggregate passes every recorded stage before E2E setup and
-  returns exit `2` on the fixed API port.
-- Audit-owned E2E resources clean to zero.
+- The first aggregate attempt returns exit `2` on the fixed API port and is
+  preserved in the historical FAIL checkpoint.
+- TCP `18000` has no current listener at retry preflight; no unknown process
+  or service is stopped.
+- The repository's formal isolated-port inputs pass bind probes.
+- The one authorized Final Aggregate Retry completes every target with exit
+  `0`, including E2E, Chaos, Docker, Security, Eval, and final diff check.
+- Exact gate-owned resources clean to zero.
 - No production change, remote, push, merge, pull request, tag, or
   CreativeDeploy access occurred.
 
@@ -406,13 +503,13 @@ recorded before and after the local FAIL checkpoint.
 
 - Existing default platform resources predate the review based on reported
   uptime.
-- The port conflict is external local state rather than candidate behavior.
+- The historical listener identity cannot be recovered from the later
+  no-listener state.
 
 ### NOT VERIFIED
 
-- A complete exit-0 final aggregate.
-- Playwright and aggregate targets after E2E.
 - Remote CI, deployment, production, customer, hostile multi-tenant behavior,
   later Phase 5 slices, or Phase 6.
 
-**PHASE 5 SINGLE-FINDING RE-AUDIT FAIL — REMEDIATION REQUIRED**
+**PHASE 5 SINGLE-FINDING RE-AUDIT PASS — FIRST VERTICAL SLICE SEALED — READY
+FOR USER-AUTHORIZED MAIN INTEGRATION**
