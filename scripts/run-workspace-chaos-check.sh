@@ -6,6 +6,11 @@ CHAOS_DB_PORT=${WORKSPACE_CHAOS_DB_PORT:-15436}
 CHAOS_API_PORT=${WORKSPACE_CHAOS_API_PORT:-18003}
 WORKSPACE_FIXTURE_REPOSITORY=${WORKSPACE_FIXTURE_REPOSITORY_PATH:-"$PWD/.runtime/workspace-fixture"}
 RUNNER_BOOTSTRAP_TOKEN=$(uv run python -c 'import secrets; print(secrets.token_urlsafe(48))')
+if [ "${CHAOS_SKIP_BUILD:-0}" = "1" ]; then
+  BUILD_FLAG=--no-build
+else
+  BUILD_FLAG=--build
+fi
 
 cleanup() {
   WORKSPACE_FIXTURE_REPOSITORY_PATH="$WORKSPACE_FIXTURE_REPOSITORY" \
@@ -33,7 +38,7 @@ export RUNNER_WORKSPACE_WRITE_COMMIT_DELAY_MS=2000
 export RUNNER_WORKSPACE_WRITE_POST_COMMIT_DELAY_MS=1500
 
 docker compose -p "$PROJECT_NAME" -f compose.yaml -f infra/compose.workspace.yaml \
-  up -d --build --wait db api runner
+  up -d "$BUILD_FLAG" --wait db api runner
 
 WORKSPACE_API_BASE_URL="http://127.0.0.1:$CHAOS_API_PORT" \
 WORKSPACE_DATABASE_URL="postgresql+psycopg://visualengineer:visualengineer-local@127.0.0.1:$CHAOS_DB_PORT/visualengineer" \

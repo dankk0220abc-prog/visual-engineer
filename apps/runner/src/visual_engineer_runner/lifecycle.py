@@ -28,6 +28,7 @@ from visual_engineer_runner_protocol import (
     SideEffectPermit,
     SideEffectPermitAcquireRequest,
     StartRequest,
+    ValidationExecuteJobSpec,
     WorkspaceBoundJobSpec,
     WorkspaceDiscardJobSpec,
     WorkspacePrepareJobSpec,
@@ -50,6 +51,7 @@ WORKSPACE_CAPABILITIES = [
     Capability.WORKSPACE_DIFF_V1,
     Capability.WORKSPACE_ROLLBACK_V1,
     Capability.WORKSPACE_DISCARD_V1,
+    Capability.VALIDATION_EXECUTE_V1,
 ]
 
 
@@ -212,6 +214,7 @@ class RunnerLifecycle:
                 WorkspaceWriteTextJobSpec,
                 WorkspaceRollbackJobSpec,
                 WorkspaceDiscardJobSpec,
+                ValidationExecuteJobSpec,
             ),
         ):
             side_effect_permit = await self._client.acquire_side_effect_permit(

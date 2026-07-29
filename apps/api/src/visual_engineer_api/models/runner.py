@@ -131,7 +131,7 @@ class RunnerJob(Base):
             "kind IN ('system_diagnostic_v1', 'controlled_wait_v1', "
             "'workspace_prepare_v1', 'workspace_list_v1', 'workspace_read_text_v1', "
             "'workspace_write_text_v1', 'workspace_status_v1', 'workspace_diff_v1', "
-            "'workspace_rollback_v1', 'workspace_discard_v1')",
+            "'workspace_rollback_v1', 'workspace_discard_v1', 'validation_execute_v1')",
             name="ck_runner_jobs_kind",
         ),
         CheckConstraint(
@@ -151,7 +151,8 @@ class RunnerJob(Base):
             "AND execution_grant_id IS NULL AND workspace_id IS NULL "
             "AND repository_handle_id IS NULL AND source_revision IS NULL "
             "AND execution_policy_hash IS NULL) OR "
-            "(kind LIKE 'workspace_%' AND execution_grant_id IS NOT NULL "
+            "(kind NOT IN ('system_diagnostic_v1', 'controlled_wait_v1') "
+            "AND execution_grant_id IS NOT NULL "
             "AND workspace_id IS NOT NULL AND repository_handle_id IS NOT NULL "
             "AND source_revision IS NOT NULL AND execution_policy_hash IS NOT NULL)",
             name="ck_runner_jobs_workspace_binding",

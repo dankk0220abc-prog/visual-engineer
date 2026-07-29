@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from visual_engineer_api.models.run import Plan, RepositorySnapshot, Run
@@ -406,7 +406,13 @@ class WorkspaceRepository:
     ) -> tuple[ExecutionGrant, Workspace] | None:
         row = self._session.execute(
             select(ExecutionGrant, Workspace)
-            .join(Workspace, Workspace.grant_id == ExecutionGrant.id)
+            .join(
+                Workspace,
+                or_(
+                    Workspace.grant_id == ExecutionGrant.id,
+                    Workspace.id == ExecutionGrant.validation_workspace_id,
+                ),
+            )
             .where(
                 ExecutionGrant.id == grant_id,
                 ExecutionGrant.status.in_(("approved", "revoke_requested")),

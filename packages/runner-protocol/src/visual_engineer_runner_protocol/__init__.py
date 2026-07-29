@@ -51,6 +51,8 @@ from visual_engineer_runner_protocol.models import (
     SourceStatus,
     StartRequest,
     SystemDiagnosticJobSpec,
+    ValidationExecuteJobSpec,
+    ValidationExecutionResult,
     WorkspaceBoundJobSpec,
     WorkspaceCheckpointPayload,
     WorkspaceDiffJobSpec,
@@ -80,15 +82,23 @@ from visual_engineer_runner_protocol.models import (
     validate_result_payload,
     validate_safe_error_message,
 )
+from visual_engineer_runner_protocol.profiles import (
+    FIXTURE_PYTHON_STDLIB_V1,
+    VALIDATION_PROFILE_CATALOG,
+    ValidationProfile,
+    validation_profile,
+)
 
 __version__ = "1.0.0"
 
 __all__ = [
+    "FIXTURE_PYTHON_STDLIB_V1",
     "MAX_PROTOCOL_PAYLOAD_BYTES",
     "MAX_WORKSPACE_DIFF_BYTES",
     "MAX_WORKSPACE_TEXT_BYTES",
     "RUNNER_PROTOCOL_PREFIX",
     "RUNNER_PROTOCOL_VERSION",
+    "VALIDATION_PROFILE_CATALOG",
     "AttemptState",
     "CancelledRequest",
     "Capability",
@@ -126,6 +136,9 @@ __all__ = [
     "SourceStatus",
     "StartRequest",
     "SystemDiagnosticJobSpec",
+    "ValidationExecuteJobSpec",
+    "ValidationExecutionResult",
+    "ValidationProfile",
     "WorkspaceBoundJobSpec",
     "WorkspaceCheckpointPayload",
     "WorkspaceDiffJobSpec",
@@ -162,4 +175,5 @@ __all__ = [
     "side_effect_permit_digest_matches",
     "validate_result_payload",
     "validate_safe_error_message",
+    "validation_profile",
 ]

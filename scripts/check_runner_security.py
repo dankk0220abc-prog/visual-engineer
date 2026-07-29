@@ -55,20 +55,24 @@ def main() -> None:
             raise SystemExit(f"Runner executor contains prohibited marker: {marker}")
 
     git_boundary = RUNNER_ROOT / "git_ops.py"
+    validation_boundary = RUNNER_ROOT / "validation_executor.py"
+    process_boundaries = {git_boundary, validation_boundary}
     for path in sorted(RUNNER_ROOT.glob("*.py")):
         source = path.read_text(encoding="utf-8")
-        if "subprocess" in imports(path) and path != git_boundary:
+        if "subprocess" in imports(path) and path not in process_boundaries:
             raise SystemExit(
-                f"{path.relative_to(REPOSITORY_ROOT)} imports subprocess outside git_ops.py"
+                f"{path.relative_to(REPOSITORY_ROOT)} imports subprocess outside the "
+                "fixed Git and Validation boundaries"
             )
         for marker in ("shell=True", "os.system("):
             if marker in source:
                 raise SystemExit(
                     f"{path.relative_to(REPOSITORY_ROOT)} contains prohibited marker: {marker}"
                 )
-        if "Popen(" in source and path != git_boundary:
+        if "Popen(" in source and path not in process_boundaries:
             raise SystemExit(
-                f"{path.relative_to(REPOSITORY_ROOT)} starts a process outside git_ops.py"
+                f"{path.relative_to(REPOSITORY_ROOT)} starts a process outside the fixed "
+                "Git and Validation boundaries"
             )
     git_source = git_boundary.read_text(encoding="utf-8")
     required_git_controls = (
@@ -88,6 +92,26 @@ def main() -> None:
     missing_git_controls = [value for value in required_git_controls if value not in git_source]
     if missing_git_controls:
         raise SystemExit(f"Runner fixed Git boundary is missing controls: {missing_git_controls}")
+    validation_source = validation_boundary.read_text(encoding="utf-8")
+    required_validation_controls = (
+        "subprocess.Popen(",
+        "shell=False",
+        '"-I"',
+        '"-S"',
+        '"validation_worker.py"',
+        "stdin=subprocess.DEVNULL",
+        "start_new_session=True",
+        "_collect(",
+        "_ensure_process_group_absent(",
+        "_cleanup_sandbox(",
+    )
+    missing_validation_controls = [
+        value for value in required_validation_controls if value not in validation_source
+    ]
+    if missing_validation_controls:
+        raise SystemExit(
+            f"Runner fixed Validation boundary is missing controls: {missing_validation_controls}"
+        )
 
     compose = (REPOSITORY_ROOT / "compose.yaml").read_text(encoding="utf-8")
     required = (

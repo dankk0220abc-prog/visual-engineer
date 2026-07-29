@@ -32,13 +32,14 @@ class RunnerSettings(BaseSettings):
     control_plane_url: str = "http://api:8000"
     bootstrap_token: SecretStr = SecretStr("")
     display_name: str = Field(default="Local Runner", min_length=1, max_length=120)
-    software_version: str = Field(default="0.4.0", pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+    software_version: str = Field(default="0.5.0", pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
     credential_path: Path = Path("/var/lib/visual-engineer-runner/credentials.json")
     ownership_key_path: Path = Path("/var/lib/visual-engineer-runner/ownership.key")
     repository_handles: dict[str, LocalRepositoryConfig] = Field(default_factory=dict)
     mirror_root: Path = Path("/var/lib/visual-engineer-runner/mirrors")
     workspace_root: Path = Path("/var/lib/visual-engineer-runner/workspaces")
     registry_root: Path = Path("/var/lib/visual-engineer-runner/registry")
+    validation_root: Path = Path("/var/lib/visual-engineer-runner/validations")
     require_source_read_only: bool = True
     git_timeout_seconds: float = Field(default=15.0, ge=1, le=60)
     git_max_output_bytes: int = Field(default=1024 * 1024, ge=4096, le=8 * 1024 * 1024)
@@ -92,6 +93,7 @@ class RunnerSettings(BaseSettings):
         "mirror_root",
         "workspace_root",
         "registry_root",
+        "validation_root",
     )
     @classmethod
     def require_absolute_credential_path(cls, value: Path) -> Path:
@@ -126,9 +128,22 @@ class RunnerSettings(BaseSettings):
             str(self.mirror_root),
             str(self.workspace_root),
             str(self.registry_root),
+            str(self.validation_root),
         }
-        if len(roots) != 3:
-            raise ValueError("Runner mirror, workspace, and registry roots must be distinct")
+        if len(roots) != 4:
+            raise ValueError(
+                "Runner mirror, workspace, registry, and validation roots must be distinct"
+            )
+        state_roots = (
+            self.mirror_root,
+            self.workspace_root,
+            self.registry_root,
+            self.validation_root,
+        )
+        for index, root in enumerate(state_roots):
+            for other in state_roots[index + 1 :]:
+                if root.is_relative_to(other) or other.is_relative_to(root):
+                    raise ValueError("Runner state roots must not contain one another")
         if self.credential_path == self.ownership_key_path:
             raise ValueError("Runner credential and ownership key paths must be distinct")
         if self.credential_path.parent != self.ownership_key_path.parent:

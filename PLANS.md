@@ -52,12 +52,21 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The completed active plan is
+The active plan is
+[`docs/exec-plans/phase-5-governed-validation-execution.md`](docs/exec-plans/phase-5-governed-validation-execution.md).
+Phase 5 is **Governed Validation Execution**: a Browser-first, fixed-profile,
+fixture-only validation path from an independently approved Execution Grant
+and exact Workspace Checkpoint to a disposable Runner sandbox and structured
+evidence. It excludes LLMs, Agents SDK, external providers, credentials,
+Customer 0, arbitrary commands, package installation, Git delivery, and
+deployment.
+
+The completed Phase 4 Final Integration Gate plan remains at
 [`docs/exec-plans/phase-4-final-integration-gate.md`](docs/exec-plans/phase-4-final-integration-gate.md).
-It preserves the historical audit FAIL decisions, verifies the complete
-independently closed Phase 4 candidate, records the single final local
-aggregate and supplemental runtime gates, and permits only one local sealing
-checkpoint. Its PASS does not authorize integration into `main`.
+Its candidate was integrated into `main` by the explicitly authorized local
+fast-forward sealed at
+`928a89d2055d172bbd7c6670b42f668d103dcb03`. Historical audit FAIL decisions
+and their later remediation and independent closure records remain unchanged.
 
 The implementation plan remains at
 [`docs/exec-plans/phase-4-isolated-workspace-tools.md`](docs/exec-plans/phase-4-isolated-workspace-tools.md),
@@ -73,9 +82,7 @@ and
 [`docs/exec-plans/phase-4-security-focused-reaudit-max.md`](docs/exec-plans/phase-4-security-focused-reaudit-max.md).
 The Round 3, single-finding re-audit, Round 4, and independent budget re-audit
 plans also remain in `docs/exec-plans/`. None is rewritten as if the findings
-never occurred. The only permitted next milestone after the local Final
-Integration Gate PASS is a separate explicit user decision on integration
-into `main`.
+never occurred.
 The completed Phase 3 record remains at
 [`docs/exec-plans/phase-3-browser-orchestrated-local-runner.md`](docs/exec-plans/phase-3-browser-orchestrated-local-runner.md).
 The completed Phase 2 record remains at

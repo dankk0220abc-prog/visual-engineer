@@ -8,7 +8,8 @@ objective, a Deployment Pack, or Plan approval cannot grant a capability.
 
 Phase 2 implements Level 0 repository intelligence. Phase 3 additionally
 implements repository-free execution-plane capabilities. Phase 4 implements
-Level 1 only for the synthetic fixture and still has no generic tool executor.
+Level 1 only for the synthetic fixture. Phase 5 implements one fixture-only
+Level 2 Profile and still has no generic tool executor.
 
 ## Levels
 
@@ -16,7 +17,7 @@ Level 1 only for the synthetic fixture and still has no generic tool executor.
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | 0: Read only             | Fixed metadata and selected committed-object reads inside one exact allowlisted Git root. No target command or write. | **Implemented**  |
 | 1: Isolated write        | Edit exact approved UTF-8 paths in a Runner-owned isolated fixture worktree.                                          | **Fixture only** |
-| 2: Controlled validation | Run allowlisted install/format/lint/test/build/browser schemas in isolation.                                          | Not implemented  |
+| 2: Controlled validation | Run one system-owned, versioned fixture validation Profile in a disposable sandbox.                                   | **Fixture only** |
 | 3: Branch and commit     | Create a scoped branch and local commit after gates.                                                                  | Not implemented  |
 | 4: Pull request          | Push the approved branch and create/update a PR.                                                                      | Not implemented  |
 
@@ -66,6 +67,24 @@ checkpoints, initial-baseline rollback, and Permit plus signed
 ownership/pending/completed-proof-bound UUID-only discard complete the scope.
 There is no delete/rename/binary tool or target command.
 
+## Implemented fixture-only Level 2
+
+Phase 5 adds exactly one immutable Profile,
+`fixture-python-stdlib-v1:v1`. A separate validation-scoped Grant binds one
+existing canonical Workspace and Checkpoint, the exact revision, one Profile,
+one run, a ten-second timeout, 8-KiB aggregate output, zero artifacts, five CPU
+seconds, 128 MiB memory, eight PIDs, and 64 file descriptors.
+
+The API and Web accept only the Profile ID and approved Grant; no command,
+argv, cwd, environment, package, URL, or shell fragment exists in the request
+or Runner Job schema. Runner owns the fixed Python standard-library argv,
+copies only bounded regular fixture inputs into a UUID-addressed validation
+root, and gives the child a minimal environment. Linux Landlock denies
+canonical Workspace and other Runner paths, while seccomp denies network
+syscalls. A monotonic timeout/cancel path terminates, kills where necessary,
+reaps, and proves process-group absence. Exact sandbox cleanup is required for
+success. Validation never mutates or advances canonical Workspace state.
+
 ## Implemented Level 0 controls
 
 - `permission_level` is fixed to `read_only` in schema and database.
@@ -106,7 +125,9 @@ record. It does not elevate the Run or create a worktree. Only a separately
 approved immutable Grant can scope the implemented fixture tools, and only a
 current exact Permit can authorize a mutation. A revoked, expired, stale,
 cancelled, mismatched, or replayed identity cannot do so. The Grant cannot
-authorize target validation, source Git changes, GitHub, or deployment.
+authorize source Git changes, GitHub, or deployment. A Phase 4 implementation
+Grant cannot validate. A Phase 5 validation Grant can select only its fixed
+Profile against its exact Checkpoint and cannot authorize Phase 4 file tools.
 
 ## Always prohibited
 
@@ -139,5 +160,7 @@ Foundation plan string validation blocks obvious policy violations but is not
 a complete security system. Any later non-fixture access or target command
 requires a new independent runtime authorization, path/argument confinement,
 resource/network limits, attributable results, and recovery design. A maximum-
-4 audit and re-audit remain Security Gate FAIL; the only next milestone is
-Phase 4 Independent Focused Security Re-Audit.
+safe fixture validation does not authorize package installation, browser
+automation, real repository commands, Git delivery, or deployment. The Phase 5
+implementation checkpoint requires an independent focused read-only review
+before any broader milestone.

@@ -226,5 +226,37 @@ database evidence. `recovery_required` and `quarantined` disable destructive
 controls and preserve all local data for controlled diagnosis; they do not
 auto-transition back or authorize garbage collection.
 
-This is repair-candidate state. The independent audit remains Security Gate
-FAIL until Phase 4 Independent Security Re-Audit.
+## Phase 5 Validation Run lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> requested
+    requested --> queued: exact Grant/Profile/Checkpoint accepted
+    queued --> claimed: fenced Runner claim
+    claimed --> running: active Attempt starts
+    requested --> cancel_requested: user cancel
+    queued --> cancel_requested: user cancel
+    claimed --> cancel_requested: user cancel
+    running --> cancel_requested: user cancel
+    running --> succeeded: fixed Profile passes + cleanup proved
+    running --> failed: fixed Profile or policy failure
+    running --> timed_out: monotonic deadline + group cleanup
+    cancel_requested --> cancelled: process/group/sandbox cleanup proved
+    running --> recovery_required: cleanup proof fails
+    cancel_requested --> recovery_required: cleanup proof fails
+```
+
+Terminal states are immutable. Creation binds the exact approved validation
+Grant, Profile/version, canonical Workspace and Checkpoint, revision, policy
+digest, and run budget. Claim/start/renew/cancel/terminal mutation remains
+Runner/Attempt/Lease fenced. An idempotent replay returns the existing Run and
+cannot create a second evidence row or consume the Grant run budget twice.
+
+Validation reads a bounded copy in a separate disposable sandbox. Success,
+failure, timeout, and cancellation do not transition or mutate the canonical
+Workspace. `recovery_required` is mandatory if complete process-group absence
+or exact sandbox cleanup cannot be proven.
+
+Phase 4 is complete in local `main`. This Phase 5 implementation checkpoint
+requires an independent focused read-only review; it is not a Phase 5 Security
+Gate approval.

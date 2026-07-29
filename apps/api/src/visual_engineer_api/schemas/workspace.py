@@ -87,6 +87,14 @@ class ExecutionGrantCreate(BaseModel):
 
     plan_id: uuid.UUID
     repository_handle_id: uuid.UUID
+    validation_checkpoint_id: uuid.UUID | None = None
+    validation_profile_id: Literal["fixture-python-stdlib-v1"] | None = None
+
+    @model_validator(mode="after")
+    def validate_optional_validation_scope(self) -> "ExecutionGrantCreate":
+        if (self.validation_checkpoint_id is None) != (self.validation_profile_id is None):
+            raise ValueError("validation checkpoint and Profile must be supplied together")
+        return self
 
 
 class ExecutionGrantDecisionCreate(BaseModel):
@@ -139,6 +147,18 @@ class ExecutionGrantResponse(BaseModel):
     shell_access: Literal[False]
     git_delivery_access: Literal[False]
     source_repository_write_access: Literal[False]
+    validation_workspace_id: uuid.UUID | None
+    validation_checkpoint_id: uuid.UUID | None
+    allowed_validation_profiles: list[str]
+    max_validation_runs: int
+    validation_timeout_seconds: int
+    validation_cpu_seconds: int
+    validation_memory_bytes: int
+    validation_pid_limit: int
+    validation_fd_limit: int
+    validation_output_bytes: int
+    validation_artifact_bytes: int
+    validation_artifact_count: int
     status: ExecutionGrantStatus
     policy_hash: str
     requested_at: datetime

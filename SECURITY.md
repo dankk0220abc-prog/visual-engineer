@@ -9,8 +9,10 @@ inspected. Those historical decisions are preserved. Four focused remediation
 rounds and their independent closure checkpoints now culminate in a complete
 local Phase 4 Final Integration Gate PASS. That local result does not claim
 remote CI, customer, hostile multi-tenant, or production validation. Phase 4
-is not in `main` and still requires explicit user authorization before
-integration.
+was explicitly integrated into local `main` at
+`928a89d2055d172bbd7c6670b42f668d103dcb03`. Phase 5 is limited to governed
+fixed-profile validation of the trusted synthetic fixture and remains pending
+independent focused review.
 
 The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
@@ -83,7 +85,7 @@ contact address and response SLA remain `PLANNED`.
 - Redact secrets and connection strings from errors, traces, test artifacts,
   and structured logs.
 - No OpenAI, GitHub, Figma, cloud, or production credential is required in
-  Phase 4.
+  Phase 4 or the Phase 5 fixture validation slice.
 - `.env.runner.local` is ignored local bootstrap state. The Bootstrap Token
   must never be printed or stored in PostgreSQL. Per-Runner Tokens are returned
   once, persisted only in the dedicated Runner volume, and stored in the

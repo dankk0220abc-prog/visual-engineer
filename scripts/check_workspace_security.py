@@ -32,9 +32,10 @@ def main() -> None:
         for path in sorted(RUNNER_ROOT.glob("*.py"))
         if "subprocess" in imported_modules(path)
     ]
-    if subprocess_users != ["git_ops.py"]:
+    if subprocess_users != ["git_ops.py", "validation_executor.py"]:
         raise SystemExit(
-            f"Runner subprocess boundary is not closed to git_ops.py: {subprocess_users}"
+            "Runner subprocess boundary is not closed to the Git and fixed Validation "
+            f"executors: {subprocess_users}"
         )
     for path in sorted(RUNNER_ROOT.glob("*.py")):
         source = path.read_text(encoding="utf-8")
@@ -84,6 +85,21 @@ def main() -> None:
             "_reject_source_indirection",
             "gitlink",
             "os.link",
+        ),
+    )
+    require_markers(
+        RUNNER_ROOT / "validation_executor.py",
+        (
+            "subprocess.Popen(",
+            "shell=False",
+            '"-I"',
+            '"-S"',
+            '"validation_worker.py"',
+            "stdin=subprocess.DEVNULL",
+            "start_new_session=True",
+            "_collect(",
+            "_ensure_process_group_absent(",
+            "_cleanup_sandbox(",
         ),
     )
     require_markers(

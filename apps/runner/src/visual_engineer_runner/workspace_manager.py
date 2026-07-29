@@ -27,11 +27,16 @@ from visual_engineer_runner.ownership import (
     WorkspaceOwnershipStore,
 )
 from visual_engineer_runner.safe_fs import SafeFilesystemError, SafeWorkspaceFilesystem
+from visual_engineer_runner.validation_executor import (
+    ValidationExecutionError,
+    ValidationExecutor,
+)
 from visual_engineer_runner_protocol import (
     FailureCode,
     RepositoryRegistrationRequest,
     ResultPayload,
     SideEffectPermit,
+    ValidationExecuteJobSpec,
     WorkspaceCheckpointPayload,
     WorkspaceDiffJobSpec,
     WorkspaceDiffResult,
@@ -107,6 +112,7 @@ class WorkspaceManager:
         self._settings = settings
         self._git = GitOperations(settings)
         self._ownership = WorkspaceOwnershipStore(settings)
+        self._validation = ValidationExecutor(settings)
         self._lock = threading.RLock()
 
     def registration_requests(self, runner_id: uuid.UUID) -> list[RepositoryRegistrationRequest]:
@@ -147,7 +153,12 @@ class WorkspaceManager:
                     cancel_event=cancel_event,
                     side_effect_permit=side_effect_permit,
                 )
-            except (GitOperationError, OwnershipError, SafeFilesystemError) as exc:
+            except (
+                GitOperationError,
+                OwnershipError,
+                SafeFilesystemError,
+                ValidationExecutionError,
+            ) as exc:
                 raise WorkspaceExecutionError(exc.code) from exc
 
     def _execute(
@@ -227,6 +238,7 @@ class WorkspaceManager:
                 WorkspaceWriteTextJobSpec,
                 WorkspaceRollbackJobSpec,
                 WorkspaceDiscardJobSpec,
+                ValidationExecuteJobSpec,
             ),
         ):
             permit = self._require_side_effect_permit(
@@ -299,6 +311,27 @@ class WorkspaceManager:
             registry.workspace_inode,
         )
         self._validate_ownership_manifest(spec, registry, filesystem)
+        if isinstance(spec, ValidationExecuteJobSpec):
+            if permit is None:
+                raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_REQUIRED)
+            status = self._authorized_status(spec, filesystem)
+            current_tree_hash = _tree_fingerprint(
+                spec.execution_grant.source_revision,
+                status,
+                filesystem,
+            )
+            if (
+                registry.current_tree_hash != spec.checkpoint_fingerprint
+                or current_tree_hash != spec.checkpoint_fingerprint
+            ):
+                raise WorkspaceExecutionError(FailureCode.VALIDATION_CHECKPOINT_MISMATCH)
+            return self._validation.execute(
+                spec,
+                cancel_event=cancel_event,
+                side_effect_permit=permit,
+                filesystem=filesystem,
+                canonical_workspace=workspace,
+            )
         if isinstance(spec, WorkspaceListJobSpec):
             return self._list(spec, filesystem)
         if isinstance(spec, WorkspaceReadTextJobSpec):
@@ -880,6 +913,18 @@ class WorkspaceManager:
         registry: WorkspaceRegistry,
     ) -> None:
         grant = spec.execution_grant
+        if isinstance(spec, ValidationExecuteJobSpec):
+            if (
+                registry.workspace_id != spec.workspace_id
+                or grant.validation_workspace_id != registry.workspace_id
+                or grant.validation_checkpoint_id != spec.checkpoint_id
+                or registry.current_tree_hash != spec.checkpoint_fingerprint
+                or registry.repository_handle_id != grant.repository_handle_id
+                or registry.repository_opaque_handle != grant.repository_opaque_handle
+                or registry.source_revision != grant.source_revision
+            ):
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+            return
         if (
             registry.workspace_id != spec.workspace_id
             or registry.grant_id != grant.id
@@ -1337,6 +1382,8 @@ def _operation_for_spec(spec: WorkspaceJobSpec) -> WorkspaceOperation:
         return WorkspaceOperation.ROLLBACK
     if isinstance(spec, WorkspaceDiscardJobSpec):
         return WorkspaceOperation.DISCARD
+    if isinstance(spec, ValidationExecuteJobSpec):
+        return WorkspaceOperation.VALIDATE
     raise WorkspaceExecutionError(FailureCode.UNSUPPORTED_CAPABILITY)
 
 

@@ -13,6 +13,11 @@ from visual_engineer_api.models.runner import (
     RunnerJobEvent,
 )
 from visual_engineer_api.models.task import Task
+from visual_engineer_api.models.validation import (
+    ValidationEvidence,
+    ValidationRun,
+    ValidationStepRun,
+)
 from visual_engineer_api.models.workspace import (
     ExecutionGrant,
     ExecutionGrantDecision,
@@ -39,6 +44,9 @@ __all__ = [
     "RunnerJobEvent",
     "SideEffectPermit",
     "Task",
+    "ValidationEvidence",
+    "ValidationRun",
+    "ValidationStepRun",
     "Workspace",
     "WorkspaceCheckpoint",
     "WorkspaceEvent",

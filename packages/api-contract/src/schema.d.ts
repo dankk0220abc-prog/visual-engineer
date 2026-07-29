@@ -639,6 +639,75 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/validation-profiles": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List immutable system-owned Validation Profiles */
+    get: operations["list_validation_profiles_api_v1_validation_profiles_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-runs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List governed Validation Runs */
+    get: operations["list_validation_runs_api_v1_validation_runs_get"];
+    put?: never;
+    /** Queue one exact-Checkpoint fixed-Profile Validation Run */
+    post: operations["create_validation_run_api_v1_validation_runs_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-runs/{validation_run_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get structured Validation status and bounded evidence */
+    get: operations["get_validation_run_api_v1_validation_runs__validation_run_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-runs/{validation_run_id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Request cancellation through the fenced Runner Job */
+    post: operations["cancel_validation_run_api_v1_validation_runs__validation_run_id__cancel_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/workspaces": {
     parameters: {
       query?: never;
@@ -996,7 +1065,8 @@ export interface components {
       | "workspace_status_v1"
       | "workspace_diff_v1"
       | "workspace_rollback_v1"
-      | "workspace_discard_v1";
+      | "workspace_discard_v1"
+      | "validation_execute_v1";
     /** ClaimRequest */
     ClaimRequest: {
       /**
@@ -1042,7 +1112,8 @@ export interface components {
         | components["schemas"]["WorkspaceStatusResult"]
         | components["schemas"]["WorkspaceDiffResult"]
         | components["schemas"]["WorkspaceRollbackResult"]
-        | components["schemas"]["WorkspaceDiscardResult"];
+        | components["schemas"]["WorkspaceDiscardResult"]
+        | components["schemas"]["ValidationExecutionResult"];
       /**
        * Runner Id
        * Format: uuid
@@ -1205,6 +1276,10 @@ export interface components {
        * Format: uuid
        */
       repository_handle_id: string;
+      /** Validation Checkpoint Id */
+      validation_checkpoint_id?: string | null;
+      /** Validation Profile Id */
+      validation_profile_id?: "fixture-python-stdlib-v1" | null;
     };
     /** ExecutionGrantDecisionCreate */
     ExecutionGrantDecisionCreate: {
@@ -1261,6 +1336,8 @@ export interface components {
       allowed_operations: components["schemas"]["WorkspaceOperation"][];
       /** Allowed Paths */
       allowed_paths: string[];
+      /** Allowed Validation Profiles */
+      allowed_validation_profiles?: string[];
       /** Denied Paths */
       denied_paths: string[];
       /**
@@ -1293,6 +1370,11 @@ export interface components {
       max_single_file_bytes: number;
       /** Max Total Write Bytes */
       max_total_write_bytes: number;
+      /**
+       * Max Validation Runs
+       * @default 0
+       */
+      max_validation_runs: number;
       /**
        * Network Policy
        * @default none
@@ -1333,6 +1415,50 @@ export interface components {
       source_revision: string;
       /** Task Id */
       task_id?: string | null;
+      /**
+       * Validation Artifact Bytes
+       * @default 0
+       */
+      validation_artifact_bytes: number;
+      /**
+       * Validation Artifact Count
+       * @default 0
+       */
+      validation_artifact_count: number;
+      /** Validation Checkpoint Id */
+      validation_checkpoint_id?: string | null;
+      /**
+       * Validation Cpu Seconds
+       * @default 0
+       */
+      validation_cpu_seconds: number;
+      /**
+       * Validation Fd Limit
+       * @default 0
+       */
+      validation_fd_limit: number;
+      /**
+       * Validation Memory Bytes
+       * @default 0
+       */
+      validation_memory_bytes: number;
+      /**
+       * Validation Output Bytes
+       * @default 0
+       */
+      validation_output_bytes: number;
+      /**
+       * Validation Pid Limit
+       * @default 0
+       */
+      validation_pid_limit: number;
+      /**
+       * Validation Timeout Seconds
+       * @default 0
+       */
+      validation_timeout_seconds: number;
+      /** Validation Workspace Id */
+      validation_workspace_id?: string | null;
       /** Workspace Ttl Seconds */
       workspace_ttl_seconds: number;
     };
@@ -1342,6 +1468,8 @@ export interface components {
       allowed_operations: components["schemas"]["WorkspaceOperation"][];
       /** Allowed Paths */
       allowed_paths: string[];
+      /** Allowed Validation Profiles */
+      allowed_validation_profiles: string[];
       /**
        * Created At
        * Format: date-time
@@ -1382,6 +1510,8 @@ export interface components {
       max_single_file_bytes: number;
       /** Max Total Write Bytes */
       max_total_write_bytes: number;
+      /** Max Validation Runs */
+      max_validation_runs: number;
       /**
        * Network Policy
        * @constant
@@ -1434,6 +1564,26 @@ export interface components {
       status: components["schemas"]["ExecutionGrantStatus"];
       /** Task Id */
       task_id: string | null;
+      /** Validation Artifact Bytes */
+      validation_artifact_bytes: number;
+      /** Validation Artifact Count */
+      validation_artifact_count: number;
+      /** Validation Checkpoint Id */
+      validation_checkpoint_id: string | null;
+      /** Validation Cpu Seconds */
+      validation_cpu_seconds: number;
+      /** Validation Fd Limit */
+      validation_fd_limit: number;
+      /** Validation Memory Bytes */
+      validation_memory_bytes: number;
+      /** Validation Output Bytes */
+      validation_output_bytes: number;
+      /** Validation Pid Limit */
+      validation_pid_limit: number;
+      /** Validation Timeout Seconds */
+      validation_timeout_seconds: number;
+      /** Validation Workspace Id */
+      validation_workspace_id: string | null;
       /** Workspace Ttl Seconds */
       workspace_ttl_seconds: number;
     };
@@ -1513,7 +1663,17 @@ export interface components {
       | "workspace_recovery_required"
       | "workspace_quarantined"
       | "git_output_limit_exceeded"
-      | "mirror_budget_exceeded";
+      | "mirror_budget_exceeded"
+      | "validation_profile_denied"
+      | "validation_checkpoint_mismatch"
+      | "validation_sandbox_unavailable"
+      | "validation_sandbox_denied"
+      | "validation_command_failed"
+      | "validation_timed_out"
+      | "validation_output_limit_exceeded"
+      | "validation_artifact_limit_exceeded"
+      | "validation_cleanup_failed"
+      | "validation_process_remained";
     /** HealthResponse */
     HealthResponse: {
       /** Status */
@@ -1571,7 +1731,8 @@ export interface components {
         | components["schemas"]["WorkspaceStatusJobSpec"]
         | components["schemas"]["WorkspaceDiffJobSpec"]
         | components["schemas"]["WorkspaceRollbackJobSpec"]
-        | components["schemas"]["WorkspaceDiscardJobSpec"];
+        | components["schemas"]["WorkspaceDiscardJobSpec"]
+        | components["schemas"]["ValidationExecuteJobSpec"];
       /**
        * Job Id
        * Format: uuid
@@ -1603,7 +1764,8 @@ export interface components {
       | "workspace_status_v1"
       | "workspace_diff_v1"
       | "workspace_rollback_v1"
-      | "workspace_discard_v1";
+      | "workspace_discard_v1"
+      | "validation_execute_v1";
     /**
      * JobState
      * @enum {string}
@@ -1904,9 +2066,9 @@ export interface components {
       /**
        * Message Code
        * @default waiting
-       * @constant
+       * @enum {string}
        */
-      message_code: "waiting";
+      message_code: "waiting" | "validating";
       /** Progress Percent */
       progress_percent: number;
       /**
@@ -2348,6 +2510,7 @@ export interface components {
             | components["schemas"]["WorkspaceDiffResult"]
             | components["schemas"]["WorkspaceRollbackResult"]
             | components["schemas"]["WorkspaceDiscardResult"]
+            | components["schemas"]["ValidationExecutionResult"]
           )
         | null;
       /** Source Revision */
@@ -2688,6 +2851,445 @@ export interface components {
      * @enum {string}
      */
     TaskStatus: "draft";
+    /** ValidationEvidenceResponse */
+    ValidationEvidenceResponse: {
+      /** Artifact Bytes */
+      artifact_bytes: number;
+      /** Artifact Count */
+      artifact_count: number;
+      /** Artifact Summary */
+      artifact_summary: {
+        [key: string]: unknown;
+      };
+      /**
+       * Attempt Id
+       * Format: uuid
+       */
+      attempt_id: string;
+      /** Cancelled */
+      cancelled: boolean;
+      /**
+       * Completed At
+       * Format: date-time
+       */
+      completed_at: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Duration Ms */
+      duration_ms: number;
+      /** Exit Code */
+      exit_code: number;
+      /** Filesystem Isolated */
+      filesystem_isolated: boolean;
+      /** Fixed Argv */
+      fixed_argv: string[];
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Lease Id
+       * Format: uuid
+       */
+      lease_id: string;
+      /** Network Isolated */
+      network_isolated: boolean;
+      /** Redaction Count */
+      redaction_count: number;
+      /**
+       * Runner Id
+       * Format: uuid
+       */
+      runner_id: string;
+      /** Sandbox Cleaned */
+      sandbox_cleaned: boolean;
+      /**
+       * Side Effect Permit Id
+       * Format: uuid
+       */
+      side_effect_permit_id: string;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+      /** Stderr */
+      stderr: string;
+      /** Stderr Truncated */
+      stderr_truncated: boolean;
+      /** Stdout */
+      stdout: string;
+      /** Stdout Truncated */
+      stdout_truncated: boolean;
+      /** Timed Out */
+      timed_out: boolean;
+    };
+    /** ValidationExecuteJobSpec */
+    ValidationExecuteJobSpec: {
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "validation_execute_v1";
+      /** Max Artifact Bytes */
+      max_artifact_bytes: number;
+      /** Max Artifact Count */
+      max_artifact_count: number;
+      /** Max Output Bytes */
+      max_output_bytes: number;
+      /**
+       * Profile Id
+       * @default fixture-python-stdlib-v1
+       * @constant
+       */
+      profile_id: "fixture-python-stdlib-v1";
+      /**
+       * Profile Version
+       * @default 1
+       * @constant
+       */
+      profile_version: 1;
+      /** Timeout Seconds */
+      timeout_seconds: number;
+      /**
+       * Validation Run Id
+       * Format: uuid
+       */
+      validation_run_id: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** ValidationExecutionResult */
+    ValidationExecutionResult: {
+      /** Artifact Bytes */
+      artifact_bytes: number;
+      /** Artifact Count */
+      artifact_count: number;
+      /** Cancelled */
+      cancelled: boolean;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /**
+       * Completed At
+       * Format: date-time
+       */
+      completed_at: string;
+      /** Duration Ms */
+      duration_ms: number;
+      /** Exit Code */
+      exit_code: number;
+      /**
+       * Filesystem Isolated
+       * @default true
+       * @constant
+       */
+      filesystem_isolated: true;
+      /** Fixed Argv */
+      fixed_argv: (
+        "python" | "-I" | "-S" | "<system-owned-fixture-validator>"
+      )[];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "validation_execute_v1";
+      /**
+       * Network Isolated
+       * @default true
+       * @constant
+       */
+      network_isolated: true;
+      /**
+       * Profile Id
+       * @default fixture-python-stdlib-v1
+       * @constant
+       */
+      profile_id: "fixture-python-stdlib-v1";
+      /**
+       * Profile Version
+       * @default 1
+       * @constant
+       */
+      profile_version: 1;
+      /** Redaction Count */
+      redaction_count: number;
+      /**
+       * Sandbox Cleaned
+       * @default true
+       * @constant
+       */
+      sandbox_cleaned: true;
+      /**
+       * Side Effect Permit Id
+       * Format: uuid
+       */
+      side_effect_permit_id: string;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+      /** Stderr */
+      stderr: string;
+      /** Stderr Truncated */
+      stderr_truncated: boolean;
+      /** Stdout */
+      stdout: string;
+      /** Stdout Truncated */
+      stdout_truncated: boolean;
+      /** Timed Out */
+      timed_out: boolean;
+      /**
+       * Validation Run Id
+       * Format: uuid
+       */
+      validation_run_id: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** ValidationProfileListResponse */
+    ValidationProfileListResponse: {
+      /** Items */
+      items: components["schemas"]["ValidationProfileResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** ValidationProfileResponse */
+    ValidationProfileResponse: {
+      /** Description */
+      description: string;
+      /** Display Name */
+      display_name: string;
+      /** Max Artifact Bytes */
+      max_artifact_bytes: number;
+      /** Max Artifact Count */
+      max_artifact_count: number;
+      /** Max Output Bytes */
+      max_output_bytes: number;
+      /**
+       * Network Policy
+       * @default none
+       * @constant
+       */
+      network_policy: "none";
+      /**
+       * Profile Id
+       * @constant
+       */
+      profile_id: "fixture-python-stdlib-v1";
+      /** Safe Argv */
+      safe_argv: string[];
+      /**
+       * Shell Access
+       * @default false
+       * @constant
+       */
+      shell_access: false;
+      /**
+       * Step Id
+       * @constant
+       */
+      step_id: "fixture-contract";
+      /** Timeout Seconds */
+      timeout_seconds: number;
+      /**
+       * User Command Input
+       * @default false
+       * @constant
+       */
+      user_command_input: false;
+      /**
+       * Version
+       * @constant
+       */
+      version: 1;
+    };
+    /** ValidationRunCreate */
+    ValidationRunCreate: {
+      /**
+       * Execution Grant Id
+       * Format: uuid
+       */
+      execution_grant_id: string;
+      /**
+       * Profile Id
+       * @constant
+       */
+      profile_id: "fixture-python-stdlib-v1";
+    };
+    /** ValidationRunListResponse */
+    ValidationRunListResponse: {
+      /** Items */
+      items: components["schemas"]["ValidationRunResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** ValidationRunResponse */
+    ValidationRunResponse: {
+      /** Attempt Id */
+      attempt_id: string | null;
+      /** Cancel Requested At */
+      cancel_requested_at: string | null;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /** Claimed At */
+      claimed_at: string | null;
+      /** Completed At */
+      completed_at: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Error Code */
+      error_code: string | null;
+      /** Error Message */
+      error_message: string | null;
+      evidence: components["schemas"]["ValidationEvidenceResponse"] | null;
+      /**
+       * Execution Grant Id
+       * Format: uuid
+       */
+      execution_grant_id: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      job: components["schemas"]["RunnerJobResponse"] | null;
+      /** Lease Id */
+      lease_id: string | null;
+      /** Max Artifact Bytes */
+      max_artifact_bytes: number;
+      /** Max Artifact Count */
+      max_artifact_count: number;
+      /** Max Output Bytes */
+      max_output_bytes: number;
+      /**
+       * Plan Id
+       * Format: uuid
+       */
+      plan_id: string;
+      /** Policy Digest */
+      policy_digest: string;
+      /**
+       * Profile Id
+       * @constant
+       */
+      profile_id: "fixture-python-stdlib-v1";
+      /**
+       * Profile Version
+       * @constant
+       */
+      profile_version: 1;
+      /**
+       * Requested At
+       * Format: date-time
+       */
+      requested_at: string;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+      /** Runner Id */
+      runner_id: string | null;
+      /** Runner Job Id */
+      runner_job_id: string | null;
+      /** Source Revision */
+      source_revision: string;
+      /** Started At */
+      started_at: string | null;
+      state: components["schemas"]["ValidationRunState"];
+      step: components["schemas"]["ValidationStepResponse"];
+      /** Timeout Seconds */
+      timeout_seconds: number;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Version */
+      version: number;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /**
+     * ValidationRunState
+     * @enum {string}
+     */
+    ValidationRunState:
+      | "requested"
+      | "queued"
+      | "claimed"
+      | "running"
+      | "cancel_requested"
+      | "succeeded"
+      | "failed"
+      | "timed_out"
+      | "cancelled"
+      | "recovery_required";
+    /** ValidationStepResponse */
+    ValidationStepResponse: {
+      /** Completed At */
+      completed_at: string | null;
+      /** Duration Ms */
+      duration_ms: number | null;
+      /** Exit Code */
+      exit_code: number | null;
+      /** Failure Code */
+      failure_code: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Sequence
+       * @constant
+       */
+      sequence: 1;
+      /** Started At */
+      started_at: string | null;
+      /** State */
+      state: string;
+      /**
+       * Step Id
+       * @constant
+       */
+      step_id: "fixture-contract";
+    };
     /** WorkspaceActionResponse */
     WorkspaceActionResponse: {
       job: components["schemas"]["RunnerJobResponse"];
@@ -2972,7 +3574,8 @@ export interface components {
       | "status"
       | "diff"
       | "rollback"
-      | "discard";
+      | "discard"
+      | "validate";
     /** WorkspacePrepareJobSpec */
     WorkspacePrepareJobSpec: {
       execution_grant: components["schemas"]["ExecutionGrantPolicy"];
@@ -5912,6 +6515,226 @@ export interface operations {
         };
       };
       /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_validation_profiles_api_v1_validation_profiles_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationProfileListResponse"];
+        };
+      };
+    };
+  };
+  list_validation_runs_api_v1_validation_runs_get: {
+    parameters: {
+      query?: {
+        workspace_id?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationRunListResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_validation_run_api_v1_validation_runs_post: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ValidationRunCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationRunResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_validation_run_api_v1_validation_runs__validation_run_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        validation_run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationRunResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  cancel_validation_run_api_v1_validation_runs__validation_run_id__cancel_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        validation_run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationRunResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
       422: {
         headers: {
           [name: string]: unknown;

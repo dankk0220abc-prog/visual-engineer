@@ -122,6 +122,23 @@ type WorkspaceCheckpointsOperation = OperationAt<
   "/api/v1/workspaces/{workspace_id}/checkpoints",
   "get"
 >;
+type ValidationProfileListOperation = OperationAt<
+  "/api/v1/validation-profiles",
+  "get"
+>;
+type ValidationRunListOperation = OperationAt<"/api/v1/validation-runs", "get">;
+type ValidationRunCreateOperation = OperationAt<
+  "/api/v1/validation-runs",
+  "post"
+>;
+type ValidationRunDetailOperation = OperationAt<
+  "/api/v1/validation-runs/{validation_run_id}",
+  "get"
+>;
+type ValidationRunCancelOperation = OperationAt<
+  "/api/v1/validation-runs/{validation_run_id}/cancel",
+  "post"
+>;
 
 export type Task = JsonResponse<TaskDetailOperation, 200>;
 export type CreateTaskInput = JsonRequest<TaskCreateOperation>;
@@ -192,6 +209,15 @@ type WorkspaceCheckpointListPayload = JsonResponse<
 >;
 export type WorkspaceCheckpoint =
   WorkspaceCheckpointListPayload["items"][number];
+type ValidationProfileListPayload = JsonResponse<
+  ValidationProfileListOperation,
+  200
+>;
+export type ValidationProfile = ValidationProfileListPayload["items"][number];
+type ValidationRunListPayload = JsonResponse<ValidationRunListOperation, 200>;
+export type ValidationRun = JsonResponse<ValidationRunDetailOperation, 200>;
+export type CreateValidationRunInput =
+  JsonRequest<ValidationRunCreateOperation>;
 
 export type HealthCheck = "live" | "ready";
 export type RepositoryKind = CreateTaskInput extends {
@@ -776,4 +802,65 @@ export async function listWorkspaceCheckpoints(
     { cache: "no-store" },
   );
   return data.items;
+}
+
+export async function listValidationProfiles(): Promise<ValidationProfile[]> {
+  const { data } = await request<ValidationProfileListPayload>(
+    "/api/v1/validation-profiles",
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function listValidationRuns(
+  workspaceId?: string,
+): Promise<ValidationRun[]> {
+  const query = workspaceId
+    ? `?workspace_id=${encodeURIComponent(workspaceId)}`
+    : "";
+  const { data } = await request<ValidationRunListPayload>(
+    `/api/v1/validation-runs${query}`,
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function createValidationRun(
+  input: CreateValidationRunInput,
+  idempotencyKey: string,
+): Promise<ValidationRun> {
+  const { data } = await request<
+    JsonResponse<ValidationRunCreateOperation, 201>
+  >("/api/v1/validation-runs", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function getValidationRun(
+  validationRunId: string,
+): Promise<ValidationRun> {
+  const { data } = await request<ValidationRun>(
+    `/api/v1/validation-runs/${encodeURIComponent(validationRunId)}`,
+    { cache: "no-store" },
+  );
+  return data;
+}
+
+export async function cancelValidationRun(
+  validationRunId: string,
+): Promise<ValidationRun> {
+  const { data } = await request<
+    JsonResponse<ValidationRunCancelOperation, 200>
+  >(`/api/v1/validation-runs/${encodeURIComponent(validationRunId)}/cancel`, {
+    method: "POST",
+    headers: { "X-Request-ID": crypto.randomUUID() },
+  });
+  return data;
 }

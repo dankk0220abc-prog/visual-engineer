@@ -22,6 +22,8 @@ RUN apt-get update \
     /var/lib/visual-engineer-runner/workspaces \
     /var/lib/visual-engineer-runner/registry \
   && chown -R runner:runner /var/lib/visual-engineer-runner
+RUN mkdir -p /var/lib/visual-engineer-runner/validations \
+  && chown runner:runner /var/lib/visual-engineer-runner/validations
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY packages/runner-protocol/src packages/runner-protocol/src

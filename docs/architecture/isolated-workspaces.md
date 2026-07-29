@@ -182,6 +182,32 @@ If the Grant itself is revoked or expired, every new Runner operation is
 rejected, including discard; operators must not bypass that fence. Automated
 privileged garbage collection is not implemented in Phase 4.
 
+## Phase 5 disposable validation sandbox
+
+Validation never runs inside or writes to the canonical Workspace. One
+validation-scoped Grant binds an exact sealed Checkpoint, revision, Workspace,
+Profile/version, policy digest, run budget, and resource limits. Immediately
+before dispatch, the Control Plane and Runner revalidate those bindings and the
+Runner derives the exact current Workspace fingerprint.
+
+Runner creates a UUID-addressed root below the dedicated validation volume and
+copies only the fixed Profile's bounded, descriptor-opened, no-follow regular
+inputs. Scratch and output directories exist only inside that root. The
+system-owned child receives no user argv/cwd/environment and runs with
+`python -I -S`; Linux Landlock limits filesystem access to the copied input and
+per-run writable directories, and seccomp denies network syscalls. Absence of
+either enforcement fails closed.
+
+Output is streamed under one aggregate ceiling. Cancellation and the monotonic
+deadline apply bounded process-group TERM/KILL, reap, pipe closure, and group-
+absence verification. Artifacts are inventoried against the fixed
+zero-artifact budget. The exact validation root must be removed and its
+absence proved before a result can succeed. A process or sandbox cleanup
+failure becomes `recovery_required`; it never authorizes recursive cleanup
+outside the exact UUID-bound validation root. Canonical Workspace state and
+fingerprints remain unchanged for pass, non-zero result, timeout, cancellation,
+and recovery.
+
 ## Platform limitations
 
 Python's portable standard library does not expose Linux `openat2` resolution
@@ -204,7 +230,7 @@ bounds Runner CPU, memory, PIDs, and open files. These are local fixture
 controls, not production quotas or hostile multi-tenant isolation.
 Case-collision coverage is conditional on the source filesystem.
 
-The original audit and all preserved independent FAIL decisions remain
-**Security Gate: FAIL**. Round 4 is an implementer budget-remediation
-candidate that requires a new Phase 4 Independent Budget Re-Audit before
-merge, CreativeDeploy, Customer 0, or Phase 5.
+Historical audit FAIL decisions remain preserved for their inspected
+revisions. Phase 4 is complete in local `main`; the Phase 5 fixture validation
+sandbox is an implementation checkpoint pending independent focused review,
+not a production or hostile multi-tenant sandbox claim.

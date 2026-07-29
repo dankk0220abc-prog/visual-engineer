@@ -3,6 +3,7 @@ import subprocess
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -1767,3 +1768,308 @@ def _remove_completion_crash_trigger(db_session: Session) -> None:
     )
     db_session.execute(text("DROP FUNCTION IF EXISTS phase4_test_fail_permit_completion()"))
     db_session.commit()
+
+
+def test_validation_grant_run_success_failure_and_evidence_are_governed(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+) -> None:
+    runner, token, repository = register_workspace_runner(client, runner_bootstrap_token)
+    validation_capabilities = [*WORKSPACE_CAPABILITIES, "validation_execute_v1"]
+    heartbeat = client.post(
+        "/api/v1/runner-protocol/v1/heartbeat",
+        headers=runner_headers(token),
+        json={
+            "runner_id": runner["runner_id"],
+            "protocol_version": 1,
+            "software_version": "0.5.0",
+            "capabilities": validation_capabilities,
+        },
+    )
+    assert heartbeat.status_code == 200, heartbeat.text
+    plan = seed_approved_plan(db_session)
+    implementation_grant = create_and_approve_grant(
+        client,
+        plan.id,
+        repository["repository_handle_id"],
+    )
+    created = client.post(
+        "/api/v1/workspaces",
+        headers={"X-Request-ID": str(uuid.uuid4())},
+        json={"grant_id": implementation_grant["id"]},
+    )
+    assert created.status_code == 201, created.text
+    workspace_id = created.json()["workspace"]["id"]
+    prepare_job = created.json()["job"]
+    assignment, identity = claim_start(client, runner, token, prepare_job["id"])
+    prepare_permit = acquire_side_effect_permit(client, token, assignment, identity)
+    complete(
+        client,
+        token,
+        prepare_job["id"],
+        identity,
+        {
+            "kind": "workspace_prepare_v1",
+            "workspace_id": workspace_id,
+            "repository_handle_id": repository["repository_handle_id"],
+            "source_revision": REVISION,
+            "workspace_fingerprint": hashlib.sha256(b"validation-workspace").hexdigest(),
+            "initial_tree_hash": INITIAL_TREE_HASH,
+            "current_tree_hash": INITIAL_TREE_HASH,
+            "side_effect_permit_id": prepare_permit["id"],
+        },
+    )
+
+    checkpoint_fingerprint = hashlib.sha256(b"validation-checkpoint").hexdigest()
+    persisted_workspace = db_session.get(Workspace, uuid.UUID(workspace_id))
+    assert persisted_workspace is not None
+    persisted_workspace.current_tree_hash = checkpoint_fingerprint
+    persisted_workspace.changed_file_count = 1
+    persisted_workspace.state = "sealed"
+    persisted_workspace.sealed_at = datetime.now(UTC)
+    persisted_checkpoint = WorkspaceCheckpoint(
+        workspace_id=persisted_workspace.id,
+        sequence=1,
+        source_revision=REVISION,
+        tree_fingerprint=checkpoint_fingerprint,
+        diff_hash=hashlib.sha256(b"validation diff").hexdigest(),
+        changed_paths=["sandbox/original.txt"],
+        changed_file_count=1,
+        total_diff_bytes=len(b"validation diff"),
+        diff_artifact="validation diff",
+    )
+    db_session.add(persisted_checkpoint)
+    db_session.commit()
+    db_session.refresh(persisted_checkpoint)
+
+    profiles = client.get("/api/v1/validation-profiles")
+    assert profiles.status_code == 200, profiles.text
+    assert profiles.json() == {
+        "items": [
+            {
+                "profile_id": "fixture-python-stdlib-v1",
+                "version": 1,
+                "display_name": "Trusted fixture Python contract",
+                "description": (
+                    "Runs one system-owned Python standard-library contract check against "
+                    "a disposable exact-Checkpoint fixture copy."
+                ),
+                "step_id": "fixture-contract",
+                "safe_argv": [
+                    "python",
+                    "-I",
+                    "-S",
+                    "<system-owned-fixture-validator>",
+                ],
+                "timeout_seconds": 10,
+                "max_output_bytes": 8192,
+                "max_artifact_bytes": 0,
+                "max_artifact_count": 0,
+                "network_policy": "none",
+                "shell_access": False,
+                "user_command_input": False,
+            }
+        ],
+        "total": 1,
+    }
+    arbitrary_command = client.post(
+        "/api/v1/validation-runs",
+        headers={"Idempotency-Key": "arbitrary-command-denial"},
+        json={
+            "execution_grant_id": implementation_grant["id"],
+            "profile_id": "fixture-python-stdlib-v1",
+            "command": "pytest",
+        },
+    )
+    assert arbitrary_command.status_code == 422
+
+    pending = client.post(
+        "/api/v1/execution-grants",
+        headers={"X-Request-ID": str(uuid.uuid4())},
+        json={
+            "plan_id": str(plan.id),
+            "repository_handle_id": repository["repository_handle_id"],
+            "validation_checkpoint_id": str(persisted_checkpoint.id),
+            "validation_profile_id": "fixture-python-stdlib-v1",
+        },
+    )
+    assert pending.status_code == 201, pending.text
+    validation_grant = pending.json()
+    assert validation_grant["allowed_operations"] == ["validate"]
+    assert validation_grant["validation_workspace_id"] == workspace_id
+    assert validation_grant["validation_checkpoint_id"] == str(persisted_checkpoint.id)
+    assert validation_grant["allowed_validation_profiles"] == ["fixture-python-stdlib-v1:v1"]
+    assert validation_grant["shell_access"] is False
+    assert validation_grant["network_policy"] == "none"
+
+    denied_before_approval = client.post(
+        "/api/v1/validation-runs",
+        headers={"Idempotency-Key": "before-approval"},
+        json={
+            "execution_grant_id": validation_grant["id"],
+            "profile_id": "fixture-python-stdlib-v1",
+        },
+    )
+    assert denied_before_approval.status_code == 409
+    approved = client.post(
+        f"/api/v1/execution-grants/{validation_grant['id']}/decisions",
+        headers={"X-Request-ID": str(uuid.uuid4())},
+        json={
+            "decision": "approve",
+            "reason": "Exact validation-only scope approved.",
+        },
+    )
+    assert approved.status_code == 200, approved.text
+
+    def create_validation(idempotency_key: str) -> dict[str, Any]:
+        response = client.post(
+            "/api/v1/validation-runs",
+            headers={"Idempotency-Key": idempotency_key},
+            json={
+                "execution_grant_id": validation_grant["id"],
+                "profile_id": "fixture-python-stdlib-v1",
+            },
+        )
+        assert response.status_code == 201, response.text
+        return cast(dict[str, Any], response.json())
+
+    successful_run = create_validation("validation-success")
+    replay = create_validation("validation-success")
+    assert replay["id"] == successful_run["id"]
+    assignment, identity = claim_start(
+        client,
+        runner,
+        token,
+        successful_run["runner_job_id"],
+    )
+    assert assignment["job"]["kind"] == "validation_execute_v1"
+    assert "command" not in assignment["job"]
+    assert "env" not in assignment["job"]
+    permit = acquire_side_effect_permit(client, token, assignment, identity)
+    completed = client.post(
+        f"/api/v1/runner-protocol/v1/jobs/{successful_run['runner_job_id']}/complete",
+        headers=runner_headers(token),
+        json={
+            **identity,
+            "result": {
+                "kind": "validation_execute_v1",
+                "validation_run_id": successful_run["id"],
+                "workspace_id": workspace_id,
+                "checkpoint_id": str(persisted_checkpoint.id),
+                "checkpoint_fingerprint": checkpoint_fingerprint,
+                "profile_id": "fixture-python-stdlib-v1",
+                "profile_version": 1,
+                "fixed_argv": [
+                    "python",
+                    "-I",
+                    "-S",
+                    "<system-owned-fixture-validator>",
+                ],
+                "started_at": "2026-07-29T01:00:00Z",
+                "completed_at": "2026-07-29T01:00:01Z",
+                "duration_ms": 50,
+                "exit_code": 0,
+                "stdout": "VE_VALIDATION_PROFILE_PASS\n",
+                "stderr": "",
+                "stdout_truncated": False,
+                "stderr_truncated": False,
+                "redaction_count": 0,
+                "timed_out": False,
+                "cancelled": False,
+                "network_isolated": True,
+                "filesystem_isolated": True,
+                "sandbox_cleaned": True,
+                "artifact_count": 0,
+                "artifact_bytes": 0,
+                "side_effect_permit_id": permit["id"],
+            },
+        },
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["state"] == "succeeded"
+    successful = client.get(f"/api/v1/validation-runs/{successful_run['id']}")
+    assert successful.status_code == 200, successful.text
+    successful_payload = successful.json()
+    assert successful_payload["state"] == "succeeded"
+    assert successful_payload["evidence"]["network_isolated"] is True
+    assert successful_payload["evidence"]["filesystem_isolated"] is True
+    assert successful_payload["evidence"]["sandbox_cleaned"] is True
+    assert successful_payload["evidence"]["stdout"] == "VE_VALIDATION_PROFILE_PASS\n"
+    assert successful_payload["evidence"]["fixed_argv"][-1] == ("<system-owned-fixture-validator>")
+
+    failed_run = create_validation("validation-failure")
+    assignment, identity = claim_start(
+        client,
+        runner,
+        token,
+        failed_run["runner_job_id"],
+    )
+    permit = acquire_side_effect_permit(client, token, assignment, identity)
+    failed = client.post(
+        f"/api/v1/runner-protocol/v1/jobs/{failed_run['runner_job_id']}/complete",
+        headers=runner_headers(token),
+        json={
+            **identity,
+            "result": {
+                "kind": "validation_execute_v1",
+                "validation_run_id": failed_run["id"],
+                "workspace_id": workspace_id,
+                "checkpoint_id": str(persisted_checkpoint.id),
+                "checkpoint_fingerprint": checkpoint_fingerprint,
+                "profile_id": "fixture-python-stdlib-v1",
+                "profile_version": 1,
+                "fixed_argv": [
+                    "python",
+                    "-I",
+                    "-S",
+                    "<system-owned-fixture-validator>",
+                ],
+                "started_at": "2026-07-29T01:01:00Z",
+                "completed_at": "2026-07-29T01:01:01Z",
+                "duration_ms": 60,
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": "VE_VALIDATION_PROFILE_CONTRACT_MISMATCH\n",
+                "stdout_truncated": False,
+                "stderr_truncated": False,
+                "redaction_count": 0,
+                "timed_out": False,
+                "cancelled": False,
+                "network_isolated": True,
+                "filesystem_isolated": True,
+                "sandbox_cleaned": True,
+                "artifact_count": 0,
+                "artifact_bytes": 0,
+                "side_effect_permit_id": permit["id"],
+            },
+        },
+    )
+    assert failed.status_code == 200, failed.text
+    assert failed.json()["state"] == "failed"
+    failure_evidence = client.get(f"/api/v1/validation-runs/{failed_run['id']}")
+    assert failure_evidence.status_code == 200, failure_evidence.text
+    assert failure_evidence.json()["state"] == "failed"
+    assert failure_evidence.json()["error_code"] == "validation_command_failed"
+    assert failure_evidence.json()["evidence"]["exit_code"] == 1
+
+    cancelled_run = create_validation("validation-cancel")
+    cancelled = client.post(
+        f"/api/v1/validation-runs/{cancelled_run['id']}/cancel",
+        headers={"X-Request-ID": str(uuid.uuid4())},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["state"] == "cancelled"
+    assert cancelled.json()["completed_at"] is not None
+    assert cancelled.json()["evidence"] is None
+    cancelled_read = client.get(f"/api/v1/validation-runs/{cancelled_run['id']}")
+    assert cancelled_read.status_code == 200, cancelled_read.text
+    assert cancelled_read.json()["state"] == "cancelled"
+
+    list_response = client.get(f"/api/v1/validation-runs?workspace_id={workspace_id}")
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 3
+    still_sealed = client.get(f"/api/v1/workspaces/{workspace_id}")
+    assert still_sealed.status_code == 200
+    assert still_sealed.json()["state"] == "sealed"
+    assert still_sealed.json()["current_tree_hash"] == checkpoint_fingerprint

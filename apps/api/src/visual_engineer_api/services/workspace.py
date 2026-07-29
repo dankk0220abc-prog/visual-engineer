@@ -16,6 +16,7 @@ from visual_engineer_api.models.workspace import (
     Workspace,
     WorkspaceEvent,
 )
+from visual_engineer_api.repositories.validation import ValidationRepository
 from visual_engineer_api.repositories.workspace import WorkspaceRepository
 from visual_engineer_api.schemas.workspace import (
     EligibleExecutionContextResponse,
@@ -50,6 +51,7 @@ from visual_engineer_runner_protocol import (
     WorkspaceWriteTextJobSpec,
     compute_execution_grant_policy_hash,
     execution_grant_policy_hash_matches,
+    validation_profile,
 )
 
 PHASE4_ALLOWED_OPERATIONS = [
@@ -114,6 +116,7 @@ class WorkspaceService:
     def __init__(self, session: Session) -> None:
         self._session = session
         self._repositories = WorkspaceRepository(session)
+        self._validation = ValidationRepository(session)
         self._settings = get_settings()
 
     def register_repository(
@@ -215,6 +218,8 @@ class WorkspaceService:
         *,
         request_id: str,
     ) -> ExecutionGrantResponse:
+        if payload.validation_checkpoint_id is not None:
+            return self._create_validation_grant(payload, request_id=request_id)
         del request_id
         existing = self._repositories.latest_grant_for_context(
             payload.plan_id, payload.repository_handle_id
@@ -290,6 +295,18 @@ class WorkspaceService:
             "shell_access": False,
             "git_delivery_access": False,
             "source_repository_write_access": False,
+            "validation_workspace_id": None,
+            "validation_checkpoint_id": None,
+            "allowed_validation_profiles": [],
+            "max_validation_runs": 0,
+            "validation_timeout_seconds": 0,
+            "validation_cpu_seconds": 0,
+            "validation_memory_bytes": 0,
+            "validation_pid_limit": 0,
+            "validation_fd_limit": 0,
+            "validation_output_bytes": 0,
+            "validation_artifact_bytes": 0,
+            "validation_artifact_count": 0,
             "expires_at": expires_at,
             "policy_hash": "0" * 64,
         }
@@ -317,6 +334,178 @@ class WorkspaceService:
             shell_access=policy.shell_access,
             git_delivery_access=policy.git_delivery_access,
             source_repository_write_access=policy.source_repository_write_access,
+            validation_workspace_id=policy.validation_workspace_id,
+            validation_checkpoint_id=policy.validation_checkpoint_id,
+            allowed_validation_profiles=policy.allowed_validation_profiles,
+            max_validation_runs=policy.max_validation_runs,
+            validation_timeout_seconds=policy.validation_timeout_seconds,
+            validation_cpu_seconds=policy.validation_cpu_seconds,
+            validation_memory_bytes=policy.validation_memory_bytes,
+            validation_pid_limit=policy.validation_pid_limit,
+            validation_fd_limit=policy.validation_fd_limit,
+            validation_output_bytes=policy.validation_output_bytes,
+            validation_artifact_bytes=policy.validation_artifact_bytes,
+            validation_artifact_count=policy.validation_artifact_count,
+            status="pending",
+            policy_hash=policy.policy_hash,
+            requested_at=now,
+            expires_at=expires_at,
+        )
+        self._repositories.add(grant)
+        self._session.commit()
+        self._session.refresh(grant)
+        return self._grant_response(grant)
+
+    def _create_validation_grant(
+        self,
+        payload: ExecutionGrantCreate,
+        *,
+        request_id: str,
+    ) -> ExecutionGrantResponse:
+        del request_id
+        checkpoint_id = payload.validation_checkpoint_id
+        profile_id = payload.validation_profile_id
+        if checkpoint_id is None or profile_id is None:
+            raise WorkspaceServiceError(
+                "validation_scope_invalid",
+                "Validation Grant requires an exact Checkpoint and Profile",
+                category="validation",
+            )
+        profile = validation_profile(profile_id)
+        if profile is None:
+            raise WorkspaceServiceError(
+                "validation_profile_denied",
+                "Validation Profile is not in the system-owned catalog",
+                category="policy",
+            )
+        existing = self._validation.latest_validation_grant_for_checkpoint(
+            payload.plan_id, checkpoint_id
+        )
+        if existing is not None:
+            if self._expire_grant(existing):
+                self._session.commit()
+            if existing.status in {"pending", "approved"}:
+                return self._grant_response(existing)
+
+        checkpoint_context = self._validation.checkpoint_context(checkpoint_id, lock=True)
+        if checkpoint_context is None:
+            self._not_found(
+                "validation_checkpoint_not_found",
+                "Validation Checkpoint was not found",
+            )
+        checkpoint, workspace, implementation_grant, handle = checkpoint_context
+        context = self._repositories.execution_context(
+            payload.plan_id,
+            payload.repository_handle_id,
+            lock=True,
+        )
+        if context is None:
+            self._not_found(
+                "execution_context_not_found",
+                "Approved Plan and Repository context was not found",
+            )
+        plan, run, task, snapshot, context_handle = context
+        if (
+            plan.status != "approved"
+            or run.status != "approved"
+            or implementation_grant.status != "approved"
+            or implementation_grant.expires_at <= utc_now()
+            or implementation_grant.plan_id != plan.id
+            or implementation_grant.run_id != run.id
+            or workspace.grant_id != implementation_grant.id
+            or workspace.repository_handle_id != handle.id
+            or handle.id != context_handle.id
+            or handle.current_revision != snapshot.source_revision
+            or workspace.source_revision != snapshot.source_revision
+            or checkpoint.source_revision != snapshot.source_revision
+            or workspace.current_tree_hash != checkpoint.tree_fingerprint
+            or workspace.state not in {"ready", "active", "sealed", "rolled_back"}
+            or workspace.expires_at <= utc_now()
+        ):
+            self._conflict(
+                "stale_validation_baseline",
+                "Workspace Checkpoint no longer matches the approved exact baseline",
+            )
+
+        now = utc_now()
+        grant_id = uuid.uuid4()
+        expires_at = min(
+            now + timedelta(seconds=PHASE4_GRANT_TTL_SECONDS),
+            implementation_grant.expires_at,
+        )
+        values = {
+            "id": grant_id,
+            "grant_version": 1,
+            "task_id": task.id,
+            "run_id": run.id,
+            "plan_id": plan.id,
+            "repository_handle_id": handle.id,
+            "repository_opaque_handle": handle.opaque_handle,
+            "source_revision": checkpoint.source_revision,
+            "snapshot_fingerprint": snapshot.fingerprint,
+            "allowed_operations": [WorkspaceOperation.VALIDATE],
+            "allowed_paths": ["sandbox/**"],
+            "denied_paths": PHASE4_DENIED_PATHS,
+            "max_files_changed": 1,
+            "max_total_write_bytes": 4096,
+            "max_single_file_bytes": 4096,
+            "max_diff_bytes": 1,
+            "workspace_ttl_seconds": PHASE4_WORKSPACE_TTL_SECONDS,
+            "network_policy": "none",
+            "shell_access": False,
+            "git_delivery_access": False,
+            "source_repository_write_access": False,
+            "validation_workspace_id": workspace.id,
+            "validation_checkpoint_id": checkpoint.id,
+            "allowed_validation_profiles": [profile.reference],
+            "max_validation_runs": 3,
+            "validation_timeout_seconds": profile.timeout_seconds,
+            "validation_cpu_seconds": profile.cpu_seconds,
+            "validation_memory_bytes": profile.memory_bytes,
+            "validation_pid_limit": profile.pid_limit,
+            "validation_fd_limit": profile.fd_limit,
+            "validation_output_bytes": profile.max_output_bytes,
+            "validation_artifact_bytes": profile.max_artifact_bytes,
+            "validation_artifact_count": profile.max_artifact_count,
+            "expires_at": expires_at,
+            "policy_hash": "0" * 64,
+        }
+        draft = ExecutionGrantPolicy.model_validate(values)
+        values["policy_hash"] = compute_execution_grant_policy_hash(draft)
+        policy = ExecutionGrantPolicy.model_validate(values)
+        grant = ExecutionGrant(
+            id=grant_id,
+            grant_version=1,
+            task_id=task.id,
+            run_id=run.id,
+            plan_id=plan.id,
+            repository_handle_id=handle.id,
+            source_revision=policy.source_revision,
+            snapshot_fingerprint=policy.snapshot_fingerprint,
+            allowed_operations=[item.value for item in policy.allowed_operations],
+            allowed_paths=policy.allowed_paths,
+            denied_paths=policy.denied_paths,
+            max_files_changed=policy.max_files_changed,
+            max_total_write_bytes=policy.max_total_write_bytes,
+            max_single_file_bytes=policy.max_single_file_bytes,
+            max_diff_bytes=policy.max_diff_bytes,
+            workspace_ttl_seconds=policy.workspace_ttl_seconds,
+            network_policy=policy.network_policy,
+            shell_access=policy.shell_access,
+            git_delivery_access=policy.git_delivery_access,
+            source_repository_write_access=policy.source_repository_write_access,
+            validation_workspace_id=policy.validation_workspace_id,
+            validation_checkpoint_id=policy.validation_checkpoint_id,
+            allowed_validation_profiles=policy.allowed_validation_profiles,
+            max_validation_runs=policy.max_validation_runs,
+            validation_timeout_seconds=policy.validation_timeout_seconds,
+            validation_cpu_seconds=policy.validation_cpu_seconds,
+            validation_memory_bytes=policy.validation_memory_bytes,
+            validation_pid_limit=policy.validation_pid_limit,
+            validation_fd_limit=policy.validation_fd_limit,
+            validation_output_bytes=policy.validation_output_bytes,
+            validation_artifact_bytes=policy.validation_artifact_bytes,
+            validation_artifact_count=policy.validation_artifact_count,
             status="pending",
             policy_hash=policy.policy_hash,
             requested_at=now,
@@ -865,6 +1054,18 @@ class WorkspaceService:
                     "shell_access": grant.shell_access,
                     "git_delivery_access": grant.git_delivery_access,
                     "source_repository_write_access": grant.source_repository_write_access,
+                    "validation_workspace_id": grant.validation_workspace_id,
+                    "validation_checkpoint_id": grant.validation_checkpoint_id,
+                    "allowed_validation_profiles": grant.allowed_validation_profiles,
+                    "max_validation_runs": grant.max_validation_runs,
+                    "validation_timeout_seconds": grant.validation_timeout_seconds,
+                    "validation_cpu_seconds": grant.validation_cpu_seconds,
+                    "validation_memory_bytes": grant.validation_memory_bytes,
+                    "validation_pid_limit": grant.validation_pid_limit,
+                    "validation_fd_limit": grant.validation_fd_limit,
+                    "validation_output_bytes": grant.validation_output_bytes,
+                    "validation_artifact_bytes": grant.validation_artifact_bytes,
+                    "validation_artifact_count": grant.validation_artifact_count,
                     "expires_at": grant.expires_at,
                     "policy_hash": grant.policy_hash,
                 }
@@ -1035,6 +1236,18 @@ class WorkspaceService:
             shell_access=False,
             git_delivery_access=False,
             source_repository_write_access=False,
+            validation_workspace_id=grant.validation_workspace_id,
+            validation_checkpoint_id=grant.validation_checkpoint_id,
+            allowed_validation_profiles=grant.allowed_validation_profiles,
+            max_validation_runs=grant.max_validation_runs,
+            validation_timeout_seconds=grant.validation_timeout_seconds,
+            validation_cpu_seconds=grant.validation_cpu_seconds,
+            validation_memory_bytes=grant.validation_memory_bytes,
+            validation_pid_limit=grant.validation_pid_limit,
+            validation_fd_limit=grant.validation_fd_limit,
+            validation_output_bytes=grant.validation_output_bytes,
+            validation_artifact_bytes=grant.validation_artifact_bytes,
+            validation_artifact_count=grant.validation_artifact_count,
             status=grant.status,
             policy_hash=grant.policy_hash,
             requested_at=grant.requested_at,

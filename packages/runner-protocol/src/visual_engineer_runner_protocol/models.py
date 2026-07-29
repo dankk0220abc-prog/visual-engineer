@@ -62,6 +62,7 @@ class Capability(StrEnum):
     WORKSPACE_DIFF_V1 = "workspace_diff_v1"
     WORKSPACE_ROLLBACK_V1 = "workspace_rollback_v1"
     WORKSPACE_DISCARD_V1 = "workspace_discard_v1"
+    VALIDATION_EXECUTE_V1 = "validation_execute_v1"
 
 
 class JobKind(StrEnum):
@@ -75,6 +76,7 @@ class JobKind(StrEnum):
     WORKSPACE_DIFF_V1 = "workspace_diff_v1"
     WORKSPACE_ROLLBACK_V1 = "workspace_rollback_v1"
     WORKSPACE_DISCARD_V1 = "workspace_discard_v1"
+    VALIDATION_EXECUTE_V1 = "validation_execute_v1"
 
 
 class JobState(StrEnum):
@@ -165,6 +167,16 @@ class FailureCode(StrEnum):
     WORKSPACE_QUARANTINED = "workspace_quarantined"
     GIT_OUTPUT_LIMIT_EXCEEDED = "git_output_limit_exceeded"
     MIRROR_BUDGET_EXCEEDED = "mirror_budget_exceeded"
+    VALIDATION_PROFILE_DENIED = "validation_profile_denied"
+    VALIDATION_CHECKPOINT_MISMATCH = "validation_checkpoint_mismatch"
+    VALIDATION_SANDBOX_UNAVAILABLE = "validation_sandbox_unavailable"
+    VALIDATION_SANDBOX_DENIED = "validation_sandbox_denied"
+    VALIDATION_COMMAND_FAILED = "validation_command_failed"
+    VALIDATION_TIMED_OUT = "validation_timed_out"
+    VALIDATION_OUTPUT_LIMIT_EXCEEDED = "validation_output_limit_exceeded"
+    VALIDATION_ARTIFACT_LIMIT_EXCEEDED = "validation_artifact_limit_exceeded"
+    VALIDATION_CLEANUP_FAILED = "validation_cleanup_failed"
+    VALIDATION_PROCESS_REMAINED = "validation_process_remained"
 
 
 class WorkspaceOperation(StrEnum):
@@ -176,6 +188,7 @@ class WorkspaceOperation(StrEnum):
     DIFF = "diff"
     ROLLBACK = "rollback"
     DISCARD = "discard"
+    VALIDATE = "validate"
 
 
 class WorkspaceWriteMode(StrEnum):
@@ -266,7 +279,7 @@ class ExecutionGrantPolicy(StrictModel):
     ]
     source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
     snapshot_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
-    allowed_operations: list[WorkspaceOperation] = Field(min_length=1, max_length=8)
+    allowed_operations: list[WorkspaceOperation] = Field(min_length=1, max_length=9)
     allowed_paths: list[str] = Field(min_length=1, max_length=20)
     denied_paths: list[str] = Field(min_length=1, max_length=50)
     max_files_changed: int = Field(ge=1, le=100)
@@ -278,6 +291,23 @@ class ExecutionGrantPolicy(StrictModel):
     shell_access: Literal[False] = False
     git_delivery_access: Literal[False] = False
     source_repository_write_access: Literal[False] = False
+    validation_workspace_id: uuid.UUID | None = None
+    validation_checkpoint_id: uuid.UUID | None = None
+    allowed_validation_profiles: list[
+        Annotated[
+            str,
+            StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{2,63}:v[1-9][0-9]{0,2}$"),
+        ]
+    ] = Field(default_factory=list, max_length=4)
+    max_validation_runs: int = Field(default=0, ge=0, le=10)
+    validation_timeout_seconds: int = Field(default=0, ge=0, le=120)
+    validation_cpu_seconds: int = Field(default=0, ge=0, le=120)
+    validation_memory_bytes: int = Field(default=0, ge=0, le=1024 * 1024 * 1024)
+    validation_pid_limit: int = Field(default=0, ge=0, le=64)
+    validation_fd_limit: int = Field(default=0, ge=0, le=256)
+    validation_output_bytes: int = Field(default=0, ge=0, le=64 * 1024)
+    validation_artifact_bytes: int = Field(default=0, ge=0, le=1024 * 1024)
+    validation_artifact_count: int = Field(default=0, ge=0, le=20)
     expires_at: datetime
     policy_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
@@ -311,6 +341,39 @@ class ExecutionGrantPolicy(StrictModel):
             raise ValueError("single-file budget cannot exceed total-write budget")
         if self.allowed_paths == ["**"] or "**" in self.allowed_paths:
             raise ValueError("an unbounded repository-wide path is prohibited")
+        validation_values = (
+            self.validation_workspace_id,
+            self.validation_checkpoint_id,
+            self.allowed_validation_profiles,
+            self.max_validation_runs,
+            self.validation_timeout_seconds,
+            self.validation_cpu_seconds,
+            self.validation_memory_bytes,
+            self.validation_pid_limit,
+            self.validation_fd_limit,
+            self.validation_output_bytes,
+        )
+        validation_enabled = any(
+            (
+                *validation_values,
+                self.validation_artifact_bytes,
+                self.validation_artifact_count,
+            )
+        )
+        if validation_enabled:
+            if (
+                self.validation_workspace_id is None
+                or self.validation_checkpoint_id is None
+                or not self.allowed_validation_profiles
+                or any(not value for value in validation_values[3:])
+            ):
+                raise ValueError(
+                    "validation authority requires exact bindings and positive budgets"
+                )
+            if self.allowed_operations != [WorkspaceOperation.VALIDATE]:
+                raise ValueError(
+                    "validation authority cannot include Workspace mutation operations"
+                )
         return self
 
 
@@ -392,6 +455,36 @@ class WorkspaceDiscardJobSpec(WorkspaceBoundJobSpec):
     kind: Literal[JobKind.WORKSPACE_DISCARD_V1] = JobKind.WORKSPACE_DISCARD_V1
 
 
+class ValidationExecuteJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.VALIDATION_EXECUTE_V1] = JobKind.VALIDATION_EXECUTE_V1
+    validation_run_id: uuid.UUID
+    profile_id: Literal["fixture-python-stdlib-v1"] = "fixture-python-stdlib-v1"
+    profile_version: Literal[1] = 1
+    checkpoint_id: uuid.UUID
+    checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    timeout_seconds: int = Field(ge=1, le=120)
+    max_output_bytes: int = Field(ge=256, le=64 * 1024)
+    max_artifact_bytes: int = Field(ge=0, le=1024 * 1024)
+    max_artifact_count: int = Field(ge=0, le=20)
+
+    @model_validator(mode="after")
+    def validate_profile_authority(self) -> "ValidationExecuteJobSpec":
+        grant = self.execution_grant
+        profile_ref = f"{self.profile_id}:v{self.profile_version}"
+        if (
+            WorkspaceOperation.VALIDATE not in grant.allowed_operations
+            or grant.validation_workspace_id != self.workspace_id
+            or grant.validation_checkpoint_id != self.checkpoint_id
+            or profile_ref not in grant.allowed_validation_profiles
+            or self.timeout_seconds > grant.validation_timeout_seconds
+            or self.max_output_bytes > grant.validation_output_bytes
+            or self.max_artifact_bytes > grant.validation_artifact_bytes
+            or self.max_artifact_count > grant.validation_artifact_count
+        ):
+            raise ValueError("validation Job exceeds its exact Execution Grant")
+        return self
+
+
 WorkspaceJobSpec = (
     WorkspacePrepareJobSpec
     | WorkspaceListJobSpec
@@ -401,6 +494,7 @@ WorkspaceJobSpec = (
     | WorkspaceDiffJobSpec
     | WorkspaceRollbackJobSpec
     | WorkspaceDiscardJobSpec
+    | ValidationExecuteJobSpec
 )
 
 
@@ -431,6 +525,16 @@ def side_effect_job_binding(spec: WorkspaceJobSpec) -> dict[str, str | None]:
         relative_path = None
         expected_current = None
         proposed_digest = hashlib.sha256(b"discard:workspace").hexdigest()
+    elif isinstance(spec, ValidationExecuteJobSpec):
+        operation = WorkspaceOperation.VALIDATE
+        relative_path = None
+        expected_current = spec.checkpoint_fingerprint
+        proposed_digest = hashlib.sha256(
+            (
+                f"{spec.profile_id}:v{spec.profile_version}:"
+                f"{spec.checkpoint_id}:{spec.checkpoint_fingerprint}"
+            ).encode("ascii")
+        ).hexdigest()
     else:
         raise ValueError("Job does not require a side-effect permit")
     return {
@@ -454,7 +558,7 @@ class PermissionEnvelope(StrictModel):
     authorization_source: Literal["local_user_job_dispatch", "execution_grant"] = (
         "local_user_job_dispatch"
     )
-    allowed_capabilities: list[Capability] = Field(min_length=1, max_length=10)
+    allowed_capabilities: list[Capability] = Field(min_length=1, max_length=12)
     repository_access: RepositoryAccess = RepositoryAccess.NONE
     shell_access: Literal[False] = False
     network_policy: Literal[NetworkPolicy.CONTROL_PLANE_ONLY] = NetworkPolicy.CONTROL_PLANE_ONLY
@@ -486,7 +590,7 @@ class RegisterRequest(StrictModel):
     display_name: DisplayName
     protocol_version: Literal[1] = RUNNER_PROTOCOL_VERSION
     software_version: VersionText
-    capabilities: list[Capability] = Field(min_length=1, max_length=10)
+    capabilities: list[Capability] = Field(min_length=1, max_length=12)
 
     @field_validator("capabilities")
     @classmethod
@@ -518,8 +622,8 @@ class HeartbeatRequest(StrictModel):
     def normalize_capabilities(cls, value: list[Capability] | None) -> list[Capability] | None:
         if value is None:
             return None
-        if not 1 <= len(value) <= 10:
-            raise ValueError("capabilities must contain between 1 and 10 items")
+        if not 1 <= len(value) <= 12:
+            raise ValueError("capabilities must contain between 1 and 12 items")
         unique = sorted(set(value), key=str)
         if len(unique) != len(value):
             raise ValueError("capabilities must be unique")
@@ -686,7 +790,7 @@ class ProgressEventRequest(LeaseIdentity):
     event_type: Literal["progress"] = "progress"
     sequence: int = Field(ge=1, le=10_000)
     progress_percent: int = Field(ge=0, le=100)
-    message_code: Literal["waiting"] = "waiting"
+    message_code: Literal["waiting", "validating"] = "waiting"
 
 
 class DiagnosticResult(StrictModel):
@@ -704,7 +808,7 @@ class DiagnosticResult(StrictModel):
             pattern=r"^[A-Za-z0-9._-]+$",
         ),
     ]
-    capability_list: list[Capability] = Field(min_length=1, max_length=10)
+    capability_list: list[Capability] = Field(min_length=1, max_length=12)
     started_at: datetime
     completed_at: datetime
     duration_ms: float = Field(ge=0, le=60_000)
@@ -918,6 +1022,53 @@ class WorkspaceDiscardResult(StrictModel):
     side_effect_permit_id: uuid.UUID
 
 
+class ValidationExecutionResult(StrictModel):
+    kind: Literal[JobKind.VALIDATION_EXECUTE_V1] = JobKind.VALIDATION_EXECUTE_V1
+    validation_run_id: uuid.UUID
+    workspace_id: uuid.UUID
+    checkpoint_id: uuid.UUID
+    checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    profile_id: Literal["fixture-python-stdlib-v1"] = "fixture-python-stdlib-v1"
+    profile_version: Literal[1] = 1
+    fixed_argv: list[
+        Literal[
+            "python",
+            "-I",
+            "-S",
+            "<system-owned-fixture-validator>",
+        ]
+    ] = Field(min_length=4, max_length=4)
+    started_at: datetime
+    completed_at: datetime
+    duration_ms: float = Field(ge=0, le=120_000)
+    exit_code: int = Field(ge=0, le=255)
+    stdout: Annotated[str, StringConstraints(strip_whitespace=False, max_length=32 * 1024)]
+    stderr: Annotated[str, StringConstraints(strip_whitespace=False, max_length=32 * 1024)]
+    stdout_truncated: bool
+    stderr_truncated: bool
+    redaction_count: int = Field(ge=0, le=10_000)
+    timed_out: bool
+    cancelled: bool
+    network_isolated: Literal[True] = True
+    filesystem_isolated: Literal[True] = True
+    sandbox_cleaned: Literal[True] = True
+    artifact_count: int = Field(ge=0, le=20)
+    artifact_bytes: int = Field(ge=0, le=1024 * 1024)
+    side_effect_permit_id: uuid.UUID
+
+    @model_validator(mode="after")
+    def validate_timing_and_outcome(self) -> "ValidationExecutionResult":
+        if self.started_at.tzinfo is None or self.completed_at.tzinfo is None:
+            raise ValueError("validation timestamps must be timezone-aware")
+        if self.completed_at < self.started_at:
+            raise ValueError("validation completion must not precede start")
+        if self.timed_out and self.cancelled:
+            raise ValueError("validation cannot be both timed out and cancelled")
+        if (self.timed_out or self.cancelled) and self.exit_code == 0:
+            raise ValueError("interrupted validation must not report a zero exit")
+        return self
+
+
 ResultPayload = Annotated[
     DiagnosticResult
     | ControlledWaitResult
@@ -928,7 +1079,8 @@ ResultPayload = Annotated[
     | WorkspaceStatusResult
     | WorkspaceDiffResult
     | WorkspaceRollbackResult
-    | WorkspaceDiscardResult,
+    | WorkspaceDiscardResult
+    | ValidationExecutionResult,
     Field(discriminator="kind"),
 ]
 

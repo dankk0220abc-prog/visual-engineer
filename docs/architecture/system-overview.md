@@ -1,8 +1,9 @@
 # System Overview
 
-VisualEngineer Phase 4 is a local, single-user governed planning and
-fixture-only isolated execution foundation. Solid nodes below are implemented.
-Dashed nodes are future V1 boundaries.
+VisualEngineer through the first Phase 5 slice is a local, single-user governed
+planning, fixture-only isolated editing, and fixed-Profile validation
+foundation. Solid nodes below are implemented. Dashed nodes are future V1
+boundaries.
 
 ```mermaid
 flowchart TB
@@ -20,6 +21,8 @@ flowchart TB
     SRC["Exact read-only synthetic source"]
     M["Runner-owned bare mirror"]
     IW["Detached isolated Workspace"]
+    VS["Disposable validation sandbox"]
+    VE["Bounded ValidationEvidence"]
     O["OpenAPI and generated TypeScript"]
 
     H -->|"create Task and Run; revise or decide Plan"| W
@@ -37,6 +40,10 @@ flowchart TB
     LR --> M
     M --> IW
     E --> IW
+    IW -->|"exact Checkpoint copy"| VS
+    E -->|"fixed Profile only"| VS
+    VS --> VE
+    VE -->|"typed terminal result"| Q
     A -->|"source contract"| O
     O -->|"typed client input"| W
 
@@ -63,6 +70,12 @@ Job/Attempt state, progress, cancellation, results, and RunnerJobEvent
 Timeline. It owns no database, filesystem, Git, Docker, shell, Runner
 credential, or target-repository access.
 
+The `/validations` surface lists the one fixed Profile, derives a pending
+validation-only Grant from an exact eligible Workspace Checkpoint, preserves a
+separate human approve/reject decision, creates/cancels a Validation Run, and
+renders bounded structured evidence. It has no command, argv, environment,
+package, URL, or free-form tool input.
+
 ### API
 
 The API validates requests, preserves request IDs, applies stable error codes,
@@ -87,6 +100,14 @@ read-only synthetic fixture, owns a bare mirror/detached worktree/registry, and
 executes descriptor-safe UTF-8 file tools plus fixed Git status/diff/restore/
 discard. It has no shell, arbitrary command, target command, Docker socket,
 inbound port, database/Web network, or public network.
+
+For Phase 5, Runner also owns a separate dedicated validation volume. It
+verifies the exact canonical Workspace/Checkpoint, copies bounded fixture input
+into a UUID-addressed root, and invokes one fixed Python-standard-library
+Profile under Landlock filesystem confinement, seccomp network denial,
+resource limits, monotonic timeout/cancel, bounded output, process-group
+cleanup, and exact sandbox removal. It never runs a user command or mutates the
+canonical Workspace.
 
 ### Repository Scanner
 
@@ -118,9 +139,11 @@ still requires typed tool schemas and an independent runtime policy layer.
 PostgreSQL stores Task, Run, RepositorySnapshot, Plan, ApprovalDecision,
 AuditEvent, Runner, PermissionEnvelope, RunnerJob, RunnerJobAttempt,
 RunnerJobEvent, RepositoryHandle, ExecutionGrant/Decision, Workspace/Event,
-and Checkpoint. Alembic owns schema history. Row locks and uniqueness serialize
-decisions, claims, and workspace actions. Database triggers reject Snapshot,
-PermissionEnvelope, Execution Grant policy, and Checkpoint mutation.
+Checkpoint, ValidationRun, ValidationStepRun, and ValidationEvidence. Alembic
+owns schema history. Row locks and uniqueness serialize decisions, claims,
+workspace actions, validation dispatch, and terminal evidence. Database
+triggers reject Snapshot, PermissionEnvelope, Execution Grant policy,
+Checkpoint, and validation evidence mutation.
 
 ### Contract
 
@@ -219,6 +242,33 @@ sequenceDiagram
 The source, mirror, workspace, and registry mounts exist only in Runner. See
 [`isolated-workspaces.md`](isolated-workspaces.md) for budgets and platform
 limits.
+
+## Phase 5 validation sequence
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web
+    participant API
+    participant DB as PostgreSQL
+    participant Runner
+    participant Workspace as Canonical fixture Workspace
+    participant Sandbox as Disposable validation root
+
+    User->>Web: Select fixed Profile + exact Checkpoint
+    Web->>API: Create pending validation-only Grant
+    User->>Web: Separately approve exact Grant
+    API->>DB: Immutable scope, budgets, and decision
+    User->>Web: Create Validation Run
+    API->>DB: Bound Run + Job + immutable Envelope
+    Runner->>API: Fenced claim and start
+    Runner->>Workspace: Verify exact tree and bounded regular input
+    Runner->>Sandbox: Copy input; apply Landlock + seccomp + limits
+    Runner->>Sandbox: Run fixed system-owned Profile
+    Runner->>API: Bounded result + cleanup proof
+    API->>DB: Terminal state + immutable evidence
+    Note over Workspace: State and bytes remain unchanged
+```
 
 ## Deployment posture
 

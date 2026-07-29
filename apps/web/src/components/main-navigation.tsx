@@ -9,6 +9,7 @@ const links = [
   { href: "/repositories", label: "Repositories" },
   { href: "/execution-grants", label: "Grants" },
   { href: "/workspaces", label: "Workspaces" },
+  { href: "/validations", label: "Validations" },
 ];
 
 export function MainNavigation() {

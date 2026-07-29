@@ -93,6 +93,37 @@ class ExecutionGrant(Base):
             name="ck_grants_source_write_false",
         ),
         CheckConstraint(
+            "("
+            "validation_checkpoint_id IS NOT NULL "
+            "AND validation_workspace_id IS NOT NULL "
+            "AND allowed_operations = '[\"validate\"]'::jsonb "
+            "AND jsonb_array_length(allowed_validation_profiles) BETWEEN 1 AND 4 "
+            "AND max_validation_runs BETWEEN 1 AND 10 "
+            "AND validation_timeout_seconds BETWEEN 1 AND 120 "
+            "AND validation_cpu_seconds BETWEEN 1 AND 120 "
+            "AND validation_memory_bytes BETWEEN 1048576 AND 1073741824 "
+            "AND validation_pid_limit BETWEEN 1 AND 64 "
+            "AND validation_fd_limit BETWEEN 1 AND 256 "
+            "AND validation_output_bytes BETWEEN 256 AND 65536 "
+            "AND validation_artifact_bytes BETWEEN 0 AND 1048576 "
+            "AND validation_artifact_count BETWEEN 0 AND 20"
+            ") OR ("
+            "validation_checkpoint_id IS NULL "
+            "AND validation_workspace_id IS NULL "
+            "AND allowed_validation_profiles = '[]'::jsonb "
+            "AND max_validation_runs = 0 "
+            "AND validation_timeout_seconds = 0 "
+            "AND validation_cpu_seconds = 0 "
+            "AND validation_memory_bytes = 0 "
+            "AND validation_pid_limit = 0 "
+            "AND validation_fd_limit = 0 "
+            "AND validation_output_bytes = 0 "
+            "AND validation_artifact_bytes = 0 "
+            "AND validation_artifact_count = 0"
+            ")",
+            name="ck_grants_validation_scope",
+        ),
+        CheckConstraint(
             "policy_hash ~ '^[0-9a-f]{64}$'",
             name="ck_grants_policy_hash",
         ),
@@ -149,6 +180,24 @@ class ExecutionGrant(Base):
     shell_access: Mapped[bool] = mapped_column(nullable=False, default=False)
     git_delivery_access: Mapped[bool] = mapped_column(nullable=False, default=False)
     source_repository_write_access: Mapped[bool] = mapped_column(nullable=False, default=False)
+    validation_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="RESTRICT")
+    )
+    validation_checkpoint_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspace_checkpoints.id", ondelete="RESTRICT")
+    )
+    allowed_validation_profiles: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    max_validation_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_cpu_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_memory_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_pid_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_fd_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_output_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_artifact_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_artifact_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     policy_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -368,7 +417,7 @@ class SideEffectPermit(Base):
         UniqueConstraint("operation_digest", name="uq_side_effect_permits_operation_digest"),
         CheckConstraint("sequence >= 1", name="ck_side_effect_permits_sequence"),
         CheckConstraint(
-            "operation IN ('prepare', 'write_text', 'rollback', 'discard')",
+            "operation IN ('prepare', 'write_text', 'rollback', 'discard', 'validate')",
             name="ck_side_effect_permits_operation",
         ),
         CheckConstraint(

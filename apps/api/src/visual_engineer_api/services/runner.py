@@ -51,6 +51,7 @@ from visual_engineer_runner_protocol import (
     EventType,
     ExecutionGrantPolicy,
     FailRequest,
+    FailureCode,
     HeartbeatRequest,
     HeartbeatResponse,
     JobAssignment,
@@ -69,6 +70,8 @@ from visual_engineer_runner_protocol import (
     SideEffectPermitState,
     StartRequest,
     SystemDiagnosticJobSpec,
+    ValidationExecuteJobSpec,
+    ValidationExecutionResult,
     WorkspaceBoundJobSpec,
     WorkspaceCheckpointPayload,
     WorkspaceDiffResult,
@@ -76,6 +79,7 @@ from visual_engineer_runner_protocol import (
     WorkspaceDiscardResult,
     WorkspaceJobSpec,
     WorkspaceListResult,
+    WorkspaceOperation,
     WorkspacePrepareJobSpec,
     WorkspacePrepareResult,
     WorkspaceReadTextResult,
@@ -323,7 +327,11 @@ class RunnerService:
                 "Execution Grant is expired",
                 category="conflict",
             )
-        expected_operation = spec.kind.value.removeprefix("workspace_").removesuffix("_v1")
+        expected_operation = (
+            WorkspaceOperation.VALIDATE.value
+            if isinstance(spec, ValidationExecuteJobSpec)
+            else spec.kind.value.removeprefix("workspace_").removesuffix("_v1")
+        )
         if expected_operation not in {item.value for item in grant.allowed_operations}:
             raise RunnerServiceError(
                 "operation_not_granted",
@@ -349,6 +357,8 @@ class RunnerService:
             JobKind.WORKSPACE_DISCARD_V1,
         }:
             max_runtime = 60
+        elif isinstance(spec, ValidationExecuteJobSpec):
+            max_runtime = min(120, spec.timeout_seconds + 10)
         else:
             max_runtime = 30
         envelope_expiry = now + timedelta(seconds=self._settings.runner_envelope_ttl_seconds)
@@ -505,12 +515,13 @@ class RunnerService:
                     job_id=job.id,
                     metadata={"error_code": exc.code},
                 )
-                self._workspace_job_failed(
-                    job,
-                    error_code=exc.code,
-                    error_message=exc.message,
-                    request_id=request_id,
-                )
+                if job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
+                    self._workspace_job_failed(
+                        job,
+                        error_code=exc.code,
+                        error_message=exc.message,
+                        request_id=request_id,
+                    )
                 self._session.commit()
                 return ClaimResponse(assignment=None, server_time=now)
         envelope = self._required_envelope(job)
@@ -533,7 +544,7 @@ class RunnerService:
                 job_id=job.id,
                 metadata={"error_code": "envelope_expired"},
             )
-            if job.workspace_id is not None:
+            if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
                 self._workspace_job_failed(
                     job,
                     error_code="envelope_expired",
@@ -601,7 +612,7 @@ class RunnerService:
         attempt.started_at = now
         attempt.last_heartbeat_at = now
         attempt.leased_until = now + timedelta(seconds=envelope.lease_seconds)
-        if job.workspace_id is not None:
+        if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
             self._workspace_job_started(job, attempt, request_id=request_id)
         self._event(
             EventType.JOB_STARTED,
@@ -651,7 +662,10 @@ class RunnerService:
             or grant.status != "approved"
             or grant.revocation_requested_at is not None
             or grant.expires_at <= now
-            or workspace.active_attempt_id != attempt.id
+            or (
+                job.kind != JobKind.VALIDATION_EXECUTE_V1.value
+                and workspace.active_attempt_id != attempt.id
+            )
         ):
             self._permit_denied_event(
                 job,
@@ -680,6 +694,7 @@ class RunnerService:
                 WorkspaceWriteTextJobSpec,
                 WorkspaceRollbackJobSpec,
                 WorkspaceDiscardJobSpec,
+                ValidationExecuteJobSpec,
             ),
         ):
             raise RunnerServiceError(
@@ -917,7 +932,14 @@ class RunnerService:
         request_id: str,
     ) -> LeaseMutationResponse:
         existing = self._runners.get_job(job_id, lock=True)
-        if existing is not None and existing.state == "succeeded":
+        if existing is not None and (
+            existing.state == "succeeded"
+            or (
+                existing.state == "failed"
+                and existing.kind == JobKind.VALIDATION_EXECUTE_V1.value
+                and existing.result is not None
+            )
+        ):
             attempt = self._idempotent_terminal_attempt(authenticated, existing, payload)
             submitted = payload.result.model_dump(mode="json")
             if existing.result != submitted:
@@ -965,13 +987,47 @@ class RunnerService:
             request_id=request_id,
             now=now,
         )
+        if isinstance(payload.result, ValidationExecutionResult) and (
+            payload.result.exit_code != 0 or payload.result.timed_out or payload.result.cancelled
+        ):
+            error_code = (
+                FailureCode.VALIDATION_TIMED_OUT
+                if payload.result.timed_out
+                else FailureCode.VALIDATION_COMMAND_FAILED
+            )
+            transition_attempt(attempt, "failed")
+            transition_job(job, "failed")
+            attempt.error_code = error_code.value
+            attempt.completed_at = now
+            job.error_code = error_code.value
+            job.error_message = "Validation Profile returned a governed failure"
+            job.result = payload.result.model_dump(mode="json")
+            job.completed_at = now
+            job.active_attempt_id = None
+            self._event(
+                EventType.JOB_FAILED,
+                request_id=request_id,
+                runner_id=authenticated.id,
+                job_id=job.id,
+                attempt_id=attempt.id,
+                metadata={"error_code": error_code.value, "kind": job.kind},
+            )
+            self._session.commit()
+            self._log_event(
+                "job_failed",
+                runner_id=authenticated.id,
+                job_id=job.id,
+                attempt_id=attempt.id,
+                lease_id=attempt.lease_id,
+            )
+            return self._lease_response(job, attempt)
         transition_attempt(attempt, "succeeded")
         transition_job(job, "succeeded")
         attempt.completed_at = now
         job.result = payload.result.model_dump(mode="json")
         job.completed_at = now
         job.active_attempt_id = None
-        if job.workspace_id is not None:
+        if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
             self._workspace_job_completed(
                 job,
                 payload.result,
@@ -1049,7 +1105,7 @@ class RunnerService:
         job.error_message = safe_message or "Runner reported a typed failure"
         job.completed_at = now
         job.active_attempt_id = None
-        if job.workspace_id is not None:
+        if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
             self._workspace_job_failed(
                 job,
                 error_code=payload.error_code.value,
@@ -1171,7 +1227,7 @@ class RunnerService:
         attempt.completed_at = now
         job.completed_at = now
         job.active_attempt_id = None
-        if job.workspace_id is not None:
+        if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
             self._workspace_job_cancelled(job, request_id=request_id)
         self._event(
             EventType.CANCEL_ACKNOWLEDGED,
@@ -1208,7 +1264,7 @@ class RunnerService:
         if job.state == "queued":
             transition_job(job, "cancelled")
             job.completed_at = now
-            if job.workspace_id is not None:
+            if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
                 self._workspace_job_cancelled(job, request_id=request_id)
         else:
             transition_job(job, "cancel_requested")
@@ -1297,7 +1353,7 @@ class RunnerService:
             attempt.error_code = "lease_expired"
             attempt.error_message = "Runner lease expired"
             job.active_attempt_id = None
-            if job.workspace_id is not None:
+            if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
                 workspace = self._workspaces.get_workspace(job.workspace_id, lock=True)
                 if workspace is not None:
                     workspace.active_attempt_id = None
@@ -1316,7 +1372,7 @@ class RunnerService:
             if job.state == "cancel_requested":
                 transition_job(job, "cancelled")
                 job.completed_at = now
-                if job.workspace_id is not None:
+                if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
                     self._workspace_job_cancelled(job, request_id=request_id)
                 continue
             if job.attempt_count < job.max_attempts:
@@ -1336,7 +1392,7 @@ class RunnerService:
                 job.error_message = "Runner Job retry budget was exhausted"
                 job.completed_at = now
                 failed_count += 1
-                if job.workspace_id is not None:
+                if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
                     self._workspace_job_failed(
                         job,
                         error_code="retry_exhausted",
@@ -1502,6 +1558,18 @@ class RunnerService:
             "shell_access": grant.shell_access,
             "git_delivery_access": grant.git_delivery_access,
             "source_repository_write_access": grant.source_repository_write_access,
+            "validation_workspace_id": grant.validation_workspace_id,
+            "validation_checkpoint_id": grant.validation_checkpoint_id,
+            "allowed_validation_profiles": grant.allowed_validation_profiles,
+            "max_validation_runs": grant.max_validation_runs,
+            "validation_timeout_seconds": grant.validation_timeout_seconds,
+            "validation_cpu_seconds": grant.validation_cpu_seconds,
+            "validation_memory_bytes": grant.validation_memory_bytes,
+            "validation_pid_limit": grant.validation_pid_limit,
+            "validation_fd_limit": grant.validation_fd_limit,
+            "validation_output_bytes": grant.validation_output_bytes,
+            "validation_artifact_bytes": grant.validation_artifact_bytes,
+            "validation_artifact_count": grant.validation_artifact_count,
             "expires_at": grant.expires_at,
             "policy_hash": grant.policy_hash,
         }
@@ -1519,6 +1587,15 @@ class RunnerService:
             or not isinstance(stored_spec, WorkspaceBoundJobSpec)
             or stored_spec.workspace_id != workspace.id
             or stored_spec.execution_grant.model_dump(mode="json") != policy.model_dump(mode="json")
+            or (
+                isinstance(stored_spec, ValidationExecuteJobSpec)
+                and (
+                    grant.validation_workspace_id != workspace.id
+                    or grant.validation_checkpoint_id != stored_spec.checkpoint_id
+                    or workspace.current_tree_hash != stored_spec.checkpoint_fingerprint
+                    or workspace.state not in {"ready", "active", "sealed", "rolled_back"}
+                )
+            )
         ):
             raise RunnerServiceError(
                 "execution_grant_hash_mismatch",
@@ -1587,6 +1664,7 @@ class RunnerService:
                 WorkspaceWriteTextResult,
                 WorkspaceRollbackResult,
                 WorkspaceDiscardResult,
+                ValidationExecutionResult,
             ),
         ):
             return None
@@ -1615,7 +1693,7 @@ class RunnerService:
             permit.state = "expired"
             permit.terminal_at = now
             workspace = self._workspaces.get_workspace(permit.workspace_id, lock=True)
-            if workspace is not None:
+            if workspace is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
                 workspace.state = "quarantined"
                 workspace.error_code = "side_effect_permit_expired"
                 workspace.error_message = "Side-effect result arrived outside the fencing window"

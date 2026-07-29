@@ -5,8 +5,9 @@
 Runner Protocol v1 is the versioned contract between the VisualEngineer
 Control Plane and a Local Runner. It supports registration, liveness,
 dispatch, fenced attempts, progress, cancellation, typed terminal results, and
-Phase 4's closed fixture Workspace jobs. It never carries a host repository
-path, shell command, arbitrary subprocess, LLM message, or Agent trace.
+Phase 4's closed fixture Workspace jobs plus Phase 5's one fixed fixture
+validation Profile. It never carries a host repository path, user command,
+arbitrary subprocess, LLM message, or Agent trace.
 
 The canonical Python contract lives in `packages/runner-protocol/`. That package
 contains only Pydantic schemas, enums, constants, canonical serialization,
@@ -163,6 +164,21 @@ Unknown fields, control characters, absolute paths, unbounded globs, invalid
 UTF-8/binary content, absolute-path-like or secret-like result strings, and
 kind mismatches are rejected.
 
+Phase 5 adds `validation_execute_v1`. Its strict spec carries only Validation
+Run, Workspace, Checkpoint and fingerprint, exact source revision and Grant
+bindings, literal `fixture-python-stdlib-v1:v1`, and bounded timeout/output/
+artifact values. There is no field for command, argv, cwd, environment,
+package, URL, or user-supplied tool input.
+
+The corresponding result repeats the exact identities and literal Profile,
+uses only the fixed safe argv display
+`python -I -S <system-owned-fixture-validator>`, and records bounded
+stdout/stderr, exit/timing/interruption state, redaction/truncation counts,
+artifact totals, filesystem/network isolation, and successful sandbox cleanup.
+It never returns a host path or environment. The Runner executes a
+system-owned argv in a separate disposable validation root; the canonical
+Workspace is only the verified source of a bounded copy.
+
 ## Idempotency and terminal behavior
 
 An identical repeated start, renewal, completion, failure, or cancellation
@@ -189,6 +205,11 @@ atomic write, diff, cancellation, ownership/recovery/quarantine, and
 Permit-required/invalid/expired errors. Arbitrary exception text never becomes
 a public error.
 
+Validation failures add closed codes for Profile denial, Checkpoint mismatch,
+sandbox unavailable/denied, fixed-command non-zero result, timeout, output or
+artifact overflow, sandbox cleanup failure, and a remaining process group.
+Cleanup uncertainty cannot be converted to success.
+
 Messages do not include tokens, authorization headers, host paths, database
 details, arbitrary exception text, or customer content.
 
@@ -203,10 +224,11 @@ revision; strict validation fails closed on either mixed direction. Any
 post-merge breaking change requires a new URL and protocol version. OpenAPI is
 exported from FastAPI and generated TypeScript is checked for drift.
 
-Agent Trace is a future, separate concept. `RunnerJobEvent` and
-`WorkspaceEvent` record current typed execution facts only. Adding a shell,
-target command, Git delivery, or new authority field requires a separately
-reviewed protocol version/ADR; it is not an additive Phase 4 change.
+Agent Trace is a future, separate concept. `RunnerJobEvent`, `WorkspaceEvent`,
+and fixed-Profile ValidationEvidence record current typed execution facts only.
+Adding a shell, arbitrary target command, Git delivery, or new authority field
+requires a separately reviewed protocol version/ADR.
 
-The independent audit remains Security Gate FAIL. This coordinated protocol
-repair is not approved until Phase 4 Independent Security Re-Audit.
+Phase 4 is complete in local `main`. The Phase 5 protocol extension remains an
+implementation checkpoint pending independent focused read-only review; it is
+not a Phase 5 Security Gate approval.

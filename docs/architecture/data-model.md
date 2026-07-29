@@ -141,6 +141,14 @@ An approved Grant may transition through `revoke_requested` to effectively
 new Permits; `revoked_at` is present only after consumed Permits are terminal
 or expired.
 
+Phase 5 reuses this human-decision boundary with a mutually exclusive
+validation scope. A validation Grant is bound to one existing Workspace and
+immutable Checkpoint, the exact source revision, and a closed set containing
+only `fixture-python-stdlib-v1:v1`. It fixes run count, timeout, CPU, memory,
+PID, file-descriptor, output, artifact, and validity budgets. It cannot carry
+Phase 4 file operations or authorize shell, network, source/canonical
+Workspace writes, Git delivery, or deployment.
+
 ## SideEffectPermit
 
 SideEffectPermit persists one consumed mutation authority. It binds Permit,
@@ -175,6 +183,23 @@ paths, count/size, and bounded textual diff evidence. Workspace states also
 include visible `recovery_required` and `quarantined` terminal-like operator
 conditions.
 
+## ValidationRun, ValidationStepRun, and ValidationEvidence
+
+ValidationRun binds one approved validation Grant to the exact Run, Plan,
+revision, Workspace, Checkpoint, Profile/version, policy digest, Runner Job,
+and idempotency key. Runner, Attempt, and Lease bindings are added only by the
+fenced execution path. Its closed lifecycle distinguishes requested, queued,
+claimed, running, cancel-requested, successful, failed, timed-out, cancelled,
+and recovery-required outcomes.
+
+ValidationStepRun records the single fixed step selected by the immutable
+Profile. ValidationEvidence is one immutable bounded terminal record
+containing safe fixed-argv display, timing/exit classification, bounded
+redacted output, truncation/redaction counts, resource and artifact summary,
+and process/sandbox cleanup proof. Neither table accepts raw environment, user
+command, cwd, host path, or credentials. Unique bindings prevent replay from
+creating a second step or evidence row.
+
 ## Relationships
 
 ```mermaid
@@ -201,6 +226,12 @@ erDiagram
     WORKSPACE ||--o{ WORKSPACE_EVENT : "typed timeline"
     WORKSPACE ||--o{ WORKSPACE_CHECKPOINT : "immutable evidence"
     RUNNER_JOB }o--o| WORKSPACE : "bound operation"
+    EXECUTION_GRANT ||--o{ VALIDATION_RUN : "fixed validation authority"
+    WORKSPACE ||--o{ VALIDATION_RUN : "canonical source"
+    WORKSPACE_CHECKPOINT ||--o{ VALIDATION_RUN : "exact baseline"
+    RUNNER_JOB ||--o| VALIDATION_RUN : "fenced execution"
+    VALIDATION_RUN ||--|| VALIDATION_STEP_RUN : "fixed profile step"
+    VALIDATION_RUN ||--o| VALIDATION_EVIDENCE : "terminal proof"
 ```
 
 ## Database guarantees and service guarantees
@@ -226,13 +257,16 @@ fields, policy validation, idempotent replay, and redacted failure handling.
 Both layers are tested against real PostgreSQL; SQLite is not acceptance
 evidence.
 
-The repair adds only Alembic revision
-`20260728_0005_close_phase4_security_findings`; prior migrations are not
-rewritten. It must pass real-PostgreSQL upgrade/downgrade/upgrade before the
-repair candidate is ready for independent re-audit.
+Phase 4 ended with Alembic revision
+`20260728_0005_close_phase4_security_findings`. Phase 5 adds only
+`20260729_0006_add_governed_validation_execution`; prior migrations are not
+rewritten. The complete base-to-head, downgrade-to-base, and upgrade-to-head
+roundtrip must pass on real PostgreSQL before the implementation checkpoint.
 
 ## Future entities
 
-Agent Trace, general Artifact, controlled command result, final-delivery
-decision, and EvalResult tables remain future work. They should be added only
-with a real workflow, retention policy, constraints, and evidence.
+Agent Trace, general Artifact, arbitrary controlled-command result,
+final-delivery decision, and EvalResult tables remain future work. Phase 5
+ValidationEvidence is deliberately fixture/Profile-specific and does not
+establish any general command or artifact authority. Future entities require a
+real workflow, retention policy, constraints, and evidence.

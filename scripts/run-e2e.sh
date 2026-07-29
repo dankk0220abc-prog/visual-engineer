@@ -9,6 +9,11 @@ RUNNER_BOOTSTRAP_TOKEN=$(uv run python -c 'import secrets; print(secrets.token_u
 FIXTURE_DIRECTORY=$(mktemp -d /tmp/visualengineer-e2e-fixture-XXXXXX)
 FIXTURE_REPOSITORY="$FIXTURE_DIRECTORY/repository"
 WORKSPACE_FIXTURE_REPOSITORY="$PWD/.runtime/workspace-fixture"
+if [ "${E2E_SKIP_BUILD:-0}" = "1" ]; then
+  BUILD_FLAG=--no-build
+else
+  BUILD_FLAG=--build
+fi
 cleanup() {
   E2E_REPOSITORY_PATH="$FIXTURE_REPOSITORY" \
   WORKSPACE_FIXTURE_REPOSITORY_PATH="$WORKSPACE_FIXTURE_REPOSITORY" \
@@ -34,7 +39,7 @@ WEB_ORIGIN="http://127.0.0.1:$E2E_WEB_PORT,http://localhost:$E2E_WEB_PORT" \
 NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:$E2E_API_PORT" \
 RUNNER_BOOTSTRAP_TOKEN="$RUNNER_BOOTSTRAP_TOKEN" \
   docker compose -p "$PROJECT_NAME" -f compose.yaml -f infra/compose.workspace.yaml -f infra/compose.e2e.yaml \
-    up -d --build --wait db api web runner
+    up -d "$BUILD_FLAG" --wait db api web runner
 WORKSPACE_API_BASE_URL="http://127.0.0.1:$E2E_API_PORT" \
 WORKSPACE_DATABASE_URL="postgresql+psycopg://visualengineer:visualengineer-local@127.0.0.1:$E2E_DB_PORT/visualengineer" \
   uv run python scripts/seed_workspace_e2e.py
