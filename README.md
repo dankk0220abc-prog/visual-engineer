@@ -29,12 +29,14 @@ commands and delivery integrations remain future capabilities.
 
 The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
 read-only repository intelligence, Phase 3 browser-orchestrated Local Runner,
-and a Phase 4 Round 2 security-remediation candidate for Runner-owned isolated
-workspaces against the synthetic adversarial fixture. The original audit and
-independent re-audit both recorded **Security Gate: FAIL**; those historical
-verdicts remain preserved. Round 2 may become ready for a new independent
-focused reviewer after all local gates pass, but it is not an approval and
-Phase 4 is not in `main`.
+and a locally sealed Phase 4 candidate for Runner-owned isolated workspaces
+against the synthetic adversarial fixture. The original audit and later
+independent focused audits recorded **Security Gate: FAIL** for the revisions
+they inspected; those historical verdicts remain preserved. Four focused
+remediation rounds and their independent closure checkpoints are present in
+the candidate ancestry. The complete local Final Integration Gate now passes,
+but Phase 4 remains outside `main` and requires explicit user authorization
+before integration.
 
 A local user can independently approve a narrow Execution Grant, prepare an
 exact detached workspace, use closed UTF-8 file tools, inspect bounded
@@ -172,6 +174,7 @@ make workspace-security-repair-check
 make security-check
 make eval
 make e2e
+make runner-smoke
 make workspace-smoke
 make workspace-chaos-check
 make verify
@@ -179,9 +182,9 @@ make verify
 
 Backend integration and migration tests must use PostgreSQL. Playwright must
 exercise the real web/API/database stack rather than a mocked API. Contract
-generation must be repeatable and leave no diff. See the current repair
-evidence before treating any check as passed:
-[`docs/evidence/phase-4-security-repair-verification.md`](docs/evidence/phase-4-security-repair-verification.md).
+generation must be repeatable and leave no diff. See the current final local
+gate evidence before treating any check as passed:
+[`docs/evidence/phase-4-final-integration-gate-verification.md`](docs/evidence/phase-4-final-integration-gate-verification.md).
 
 To run the internal Customer 0 case after all synthetic gates pass:
 
@@ -260,6 +263,8 @@ production identity scheme. Never add real secrets. Read
 - [Phase 4 independent security re-audit](docs/security/audits/phase-4-security-reaudit.md)
 - [Phase 4 Security Remediation Round 2 ExecPlan](docs/exec-plans/phase-4-security-remediation-2.md)
 - [Phase 4 Security Remediation Round 2 evidence](docs/evidence/phase-4-security-remediation-2-verification.md)
+- [Phase 4 Final Integration Gate ExecPlan](docs/exec-plans/phase-4-final-integration-gate.md)
+- [Phase 4 Final Integration Gate evidence](docs/evidence/phase-4-final-integration-gate-verification.md)
 - [Local development runbook](docs/runbooks/local-development.md)
 - [Local Runner runbook](docs/runbooks/local-runner.md)
 - [Runner recovery runbook](docs/runbooks/runner-recovery.md)

@@ -3,11 +3,14 @@
 ## Current security posture
 
 VisualEngineer is currently a Phase 4 local, single-user development project.
-The original audit, independent re-audit, and focused re-audit remain
-**Security Gate: FAIL**. Round 4 is an expanded-manifest-budget remediation
-candidate only; local green checks cannot replace a new independent decision.
-Phase 4 is not in `main` and must undergo a separate Phase 4 Independent
-Budget Re-Audit.
+The original audit, independent re-audit, focused re-audit, and
+single-finding re-audit remain **Security Gate: FAIL** for the revisions they
+inspected. Those historical decisions are preserved. Four focused remediation
+rounds and their independent closure checkpoints now culminate in a complete
+local Phase 4 Final Integration Gate PASS. That local result does not claim
+remote CI, customer, hostile multi-tenant, or production validation. Phase 4
+is not in `main` and still requires explicit user authorization before
+integration.
 
 The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose

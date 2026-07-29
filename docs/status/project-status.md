@@ -1,11 +1,14 @@
 # Project Status
 
-- Phase: Phase 4 — Independent Budget Re-Audit
+- Phase: Phase 4 — Final Integration Gate
 - Overall status:
-  `BUDGET RE-AUDIT COMPLETE — FINDING CLOSED — READY FOR FINAL PHASE 4 INTEGRATION GATE`
-- Governance qualifier: SECURITY GATE FAIL PENDING FINAL INTEGRATION GATE; NOT
-  IN MAIN
+  `PHASE 4 FINAL INTEGRATION GATE PASS — READY FOR USER-AUTHORIZED MAIN INTEGRATION`
+- Governance qualifier: LOCAL FINAL GATE PASS; NOT IN MAIN; USER
+  AUTHORIZATION REQUIRED
 - Last updated: 2026-07-29
+- Final integration branch: `integration/phase-4-final-gate`
+- Final integration baseline:
+  `38afe4b0c8eefa4c34b58e0b9d30cb74ca931501`
 - Budget re-audit branch: `audit/phase-4-manifest-budget-reaudit-max`
 - Independently audited Round 4 candidate:
   `03f774827afbafd7f0eb991f5abf2c6fee66cd17`
@@ -36,6 +39,50 @@
 - Main: `7590f9dcecbf06371936ac0265cecb9f7a4438ca`
 - Remote: none
 - Remote CI: not run
+
+## Final Integration Gate decision
+
+The complete local Phase 4 Final Integration Gate is **PASS**.
+
+**CONFIRMED**:
+
+- the exact independently audited candidate and its ten-commit linear Phase 4
+  ancestry were reconciled from unchanged `main`;
+- all historical Critical, High, and blocking Medium Findings have later
+  remediation plus independent closure evidence in the candidate ancestry;
+- one final `make verify` exited `0`;
+- Python passed `161/161` at 81.79% coverage and Web passed `41/41`;
+- contracts, format, lint, typecheck, Next.js production build, all Compose
+  rendering, real PostgreSQL migration roundtrip, 14 real Playwright cases,
+  Workspace Chaos, security, and Eval passed;
+- the named Runner and Workspace smoke targets both exited `0` against an
+  isolated fresh Compose project; the Workspace rolled back and discarded,
+  four policy-denial classes held, and source remained exact;
+- the separate Runner offline/requeue Chaos target exited `0`;
+- a live disposable runtime proved non-root Runner identity, read-only root
+  and source, dropped capabilities, no-new-privileges, resource limits,
+  internal API-only networking, blocked external TCP, narrow mounts, and
+  mode-0600 ownership key;
+- strict source invariance passed with 119 entries, 10 Git objects, two status
+  records, and zero extension markers;
+- the 72-file frozen production boundary is byte-for-byte equal to the
+  independently audited candidate; and
+- all exact gate-owned disposable container, network, and volume inventories
+  returned zero after cleanup.
+
+The original audit, independent re-audit, focused re-audit, and
+single-finding re-audit FAIL decisions remain unchanged and correct for their
+inspected revisions. This current PASS records later closure plus complete
+local integration evidence; it is not a retroactive rewrite.
+
+Remote CI, production deployment, hostile multi-tenant use, Customer 0, LLM
+or Agents SDK behavior, and Git delivery/PR are **NOT VERIFIED** or explicitly
+outside the Phase 4 implementation. No merge, fast-forward, push, pull
+request, tag, Customer 0, CreativeDeploy, Phase 5, or production action is
+authorized by this status.
+
+Detailed evidence is in
+[`docs/evidence/phase-4-final-integration-gate-verification.md`](../evidence/phase-4-final-integration-gate-verification.md).
 
 ## Independent budget re-audit decision
 

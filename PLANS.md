@@ -52,16 +52,12 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The active plan is
-[`docs/exec-plans/phase-4-security-remediation-3.md`](docs/exec-plans/phase-4-security-remediation-3.md).
-It begins from the focused re-audit's preserved Security Gate FAIL and tracks
-only `VE-P4-FREAUD-001`: Runner mirror replacement metadata, fixed Git
-replacement disabling, and independent Workspace-to-authorized-tree semantic
-proof. It must preserve exact source/`.git` invariance, authorized reachable
-object closure, no source Git execution, current Permit authority, signed
-discard recovery, complete process-group deadlines, resource limits, and
-normal lifecycle behavior without giving the repair implementer authority to
-approve the Gate.
+The completed active plan is
+[`docs/exec-plans/phase-4-final-integration-gate.md`](docs/exec-plans/phase-4-final-integration-gate.md).
+It preserves the historical audit FAIL decisions, verifies the complete
+independently closed Phase 4 candidate, records the single final local
+aggregate and supplemental runtime gates, and permits only one local sealing
+checkpoint. Its PASS does not authorize integration into `main`.
 
 The implementation plan remains at
 [`docs/exec-plans/phase-4-isolated-workspace-tools.md`](docs/exec-plans/phase-4-isolated-workspace-tools.md),
@@ -75,9 +71,11 @@ The Round 2 repair and focused re-audit plans remain at
 [`docs/exec-plans/phase-4-security-remediation-2.md`](docs/exec-plans/phase-4-security-remediation-2.md)
 and
 [`docs/exec-plans/phase-4-security-focused-reaudit-max.md`](docs/exec-plans/phase-4-security-focused-reaudit-max.md).
-None is rewritten as if the findings never occurred. The only permitted next
-milestone after a locally verified Round 3 candidate is a Phase 4 Independent
-Single-Finding Focused Security Re-Audit.
+The Round 3, single-finding re-audit, Round 4, and independent budget re-audit
+plans also remain in `docs/exec-plans/`. None is rewritten as if the findings
+never occurred. The only permitted next milestone after the local Final
+Integration Gate PASS is a separate explicit user decision on integration
+into `main`.
 The completed Phase 3 record remains at
 [`docs/exec-plans/phase-3-browser-orchestrated-local-runner.md`](docs/exec-plans/phase-3-browser-orchestrated-local-runner.md).
 The completed Phase 2 record remains at
