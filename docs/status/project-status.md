@@ -1,10 +1,13 @@
 # Project Status
 
-- Phase: Phase 4 — Independent Single-Finding Security Re-Audit
+- Phase: Phase 4 — Security Remediation Round 4
 - Overall status:
-  `SINGLE-FINDING RE-AUDIT COMPLETE — VE-P4-FREAUD-001 FAIL — REMEDIATION REQUIRED`
+  `REMEDIATION ROUND 4 COMPLETE — READY FOR INDEPENDENT BUDGET RE-AUDIT`
 - Governance qualifier: SECURITY GATE FAIL; NOT IN MAIN
 - Last updated: 2026-07-29
+- Round 4 branch: `fix/phase-4-security-remediation-4`
+- Round 4 base / single-finding audit:
+  `2656733aad60d9824db4334b9ef6ba7eb1d677b8`
 - Single-finding audit branch:
   `audit/phase-4-replacement-single-finding-max`
 - Audited Round 3 candidate:
@@ -29,6 +32,56 @@
 - Main: `7590f9dcecbf06371936ac0265cecb9f7a4438ca`
 - Remote: none
 - Remote CI: not run
+
+## Round 4 remediation candidate
+
+**CONFIRMED** in the current Round 4 worktree:
+
+- source-less checkout-manifest construction now shares one expanded-entry
+  count across recursive paths;
+- each regular file, symlink, or inert gitlink atomically charges itself and
+  every pending ancestor directory before content processing or construction;
+  empty Git trees retain their existing omission semantics;
+- equality with `mirror_max_tree_entries` is accepted, while the next entry
+  raises typed `mirror_budget_exceeded`;
+- shared trees are charged again for every distinct path, without first
+  constructing an unbounded complete manifest;
+- raw path bytes, entry type, Git mode, size, digest, symlink, inert gitlink,
+  replacement metadata, exact closure, semantic proof, quarantine, source
+  invariance, process-group timeout, discard, and Permit production logic are
+  unchanged.
+
+The permanent five-entry shared-tree reproduction failed twice before the
+repair with `8 <= 5`, then passed unchanged after the repair. Five additive
+budget regressions pass: the sixth entry is rejected before its blob is reread,
+the exact four-entry semantic boundary succeeds and registers a Workspace,
+and deep, wide, and repeated-subtree over-limit cases create no Workspace,
+registry, or ownership record while preserving the mirror, source, and
+sibling.
+
+Current focused evidence passes:
+
+- permanent shared-tree reproduction: `1/1`;
+- additive budget regressions: `5/5`;
+- complete blocking reproduction file: `12/12`;
+- manifest/object-closure focus: `24/24`;
+- source invariance: 119 entries, 10 Git objects, 2 status records, and 0
+  extension markers;
+- Workspace security: `63/63` plus static isolation;
+- complete Runner/Protocol: `82/82`;
+- repository format, lint, and typecheck;
+- complete backend/Runner/Protocol tests: `160/160`, 81.79% coverage; and
+- Web unit tests: `41/41`.
+
+The first format check found only the new test file's Ruff layout. After that
+scoped correction, the next format check found only the new ExecPlan's
+Prettier layout. A later post-tightening check found only the updated evidence
+document's Prettier layout. All three are preserved as non-behavioral first
+failures; the final complete format check passes.
+
+This is implementer evidence only. The historical Security Gate remains FAIL,
+and Round 4 does not authorize `main` merge, Customer 0, CreativeDeploy,
+Phase 5, remote, push, pull request, tag, delivery, or deployment.
 
 ## Independent single-finding re-audit decision
 

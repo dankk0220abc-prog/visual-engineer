@@ -56,6 +56,11 @@ class CheckoutManifestEntry:
     sha256: str | None
 
 
+@dataclass
+class _PendingManifestDirectory:
+    charged: bool = False
+
+
 @dataclass(frozen=True)
 class _FileSnapshot:
     device: int
@@ -210,11 +215,14 @@ class SourceObjectClosure:
         if object_type != "commit":
             self._source_error()
         tree_id, _parents = self._parse_commit(content)
+        entry_count = [0]
         entries = self._walk_checkout_manifest(
             tree_id,
             prefix=b"",
             depth=0,
             active=set(),
+            entry_count=entry_count,
+            pending_directories=(),
             require_fresh=require_fresh,
         )
         self.validate_source_unchanged()
@@ -809,6 +817,8 @@ class SourceObjectClosure:
         prefix: bytes,
         depth: int,
         active: set[str],
+        entry_count: list[int],
+        pending_directories: tuple[_PendingManifestDirectory, ...],
         require_fresh: Callable[[], None],
     ) -> list[CheckoutManifestEntry]:
         if depth > self._limits.max_tree_depth:
@@ -827,14 +837,19 @@ class SourceObjectClosure:
             require_fresh()
             relative_path = name if not prefix else prefix + b"/" + name
             if entry_type == "tree":
+                directory_charge = _PendingManifestDirectory()
                 children = self._walk_checkout_manifest(
                     child_id,
                     prefix=relative_path,
                     depth=depth + 1,
                     active=active,
+                    entry_count=entry_count,
+                    pending_directories=(*pending_directories, directory_charge),
                     require_fresh=require_fresh,
                 )
                 if children:
+                    if not directory_charge.charged:
+                        self._source_error()
                     entries.append(
                         CheckoutManifestEntry(
                             relative_path=relative_path,
@@ -847,6 +862,7 @@ class SourceObjectClosure:
                     entries.extend(children)
                 continue
             if entry_type == "gitlink":
+                self._charge_manifest_leaf(entry_count, pending_directories)
                 entries.append(
                     CheckoutManifestEntry(
                         relative_path=relative_path,
@@ -857,6 +873,7 @@ class SourceObjectClosure:
                     )
                 )
                 continue
+            self._charge_manifest_leaf(entry_count, pending_directories)
             child_type, child_content = self._read_object(
                 child_id,
                 require_fresh=require_fresh,
@@ -874,6 +891,21 @@ class SourceObjectClosure:
             )
         active.remove(object_id)
         return entries
+
+    def _charge_manifest_leaf(
+        self,
+        entry_count: list[int],
+        pending_directories: tuple[_PendingManifestDirectory, ...],
+    ) -> None:
+        uncharged_directories = tuple(
+            directory for directory in pending_directories if not directory.charged
+        )
+        new_count = entry_count[0] + len(uncharged_directories) + 1
+        if new_count > self._limits.max_tree_entries:
+            self._budget_error()
+        entry_count[0] = new_count
+        for directory in uncharged_directories:
+            directory.charged = True
 
     def _record(self, object_id: str, object_type: str, content: bytes) -> None:
         existing = self._records.get(object_id)

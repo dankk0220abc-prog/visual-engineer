@@ -84,7 +84,9 @@ The Runner:
 3. copies the exact committed object closure into a Runner-owned bare mirror
    without alternates or shared inodes;
 4. verifies the exact approved commit exists and derives its source-less
-   path/type/Git-mode/size/SHA-256 checkout manifest;
+   path/type/Git-mode/size/SHA-256 checkout manifest while charging every
+   expanded path, including repeated paths through a shared tree, before an
+   over-limit entry or its blob digest is created;
 5. creates one unpredictable detached worktree below the workspace volume;
 6. independently derives a descriptor-rooted no-follow Workspace manifest and
    requires exact equality, isolating any mismatch without recursive deletion;
@@ -195,12 +197,14 @@ A monotonic deadline remains live until leader, pipe, and process-group
 evidence are all terminal; timeout/overflow applies bounded group-wide TERM,
 KILL, absence verification, reap, and pipe closure. Mirror import has explicit
 pack, delta, tree, graph, reference, object-count, single-object,
-decompressed-byte, pack-byte, and aggregate destination ceilings. Compose
-also bounds Runner CPU, memory, PIDs, and open files. These are local fixture
+decompressed-byte, pack-byte, expanded checkout-manifest path, and aggregate
+destination ceilings. The manifest bound is inclusive and is enforced during
+recursive construction rather than after a complete list exists. Compose also
+bounds Runner CPU, memory, PIDs, and open files. These are local fixture
 controls, not production quotas or hostile multi-tenant isolation.
 Case-collision coverage is conditional on the source filesystem.
 
-The original audit and independent re-audit remain **Security Gate: FAIL**.
-Round 2 is an implementer remediation candidate that requires a new Phase 4
-Independent Focused Security Re-Audit before merge, CreativeDeploy, Customer
-0, or Phase 5.
+The original audit and all preserved independent FAIL decisions remain
+**Security Gate: FAIL**. Round 4 is an implementer budget-remediation
+candidate that requires a new Phase 4 Independent Budget Re-Audit before
+merge, CreativeDeploy, Customer 0, or Phase 5.

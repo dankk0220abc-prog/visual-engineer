@@ -20,6 +20,11 @@ import pytest
 
 from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
 from visual_engineer_runner.evidence import PermissionEnvelopeDeniedError, validate_assignment
+from visual_engineer_runner.git_object_store import (
+    ObjectLimits,
+    SourceObjectClosure,
+    SourceObjectError,
+)
 from visual_engineer_runner.git_ops import GitOperationError, GitOperations
 from visual_engineer_runner.safe_fs import (
     SafeFilesystemError,
@@ -75,6 +80,49 @@ def git(repository: Path, *arguments: str) -> str:
         text=True,
     )
     return completed.stdout.strip()
+
+
+def write_git_blob(repository: Path, payload: bytes) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repository), "hash-object", "-w", "--stdin"],
+        input=payload,
+        check=True,
+        capture_output=True,
+    )
+    return completed.stdout.decode("ascii").strip()
+
+
+def write_git_tree(
+    repository: Path,
+    entries: list[tuple[str, str, str, bytes]],
+) -> str:
+    payload = b"".join(
+        mode.encode("ascii")
+        + b" "
+        + entry_type.encode("ascii")
+        + b" "
+        + object_id.encode("ascii")
+        + b"\t"
+        + name
+        + b"\n"
+        for mode, entry_type, object_id, name in entries
+    )
+    completed = subprocess.run(
+        ["git", "-C", str(repository), "mktree"],
+        input=payload,
+        check=True,
+        capture_output=True,
+    )
+    return completed.stdout.decode("ascii").strip()
+
+
+def write_git_commit(repository: Path, tree_id: str, message: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repository), "commit-tree", tree_id, "-m", message],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def repository_fixture(tmp_path: Path) -> tuple[Path, str]:
@@ -1263,6 +1311,195 @@ def test_git_output_and_mirror_object_budgets_fail_closed(tmp_path: Path) -> Non
         )
     assert pack_limit.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
     assert _filesystem_snapshot(source) == source_before_pack_budget
+
+
+def test_expanded_manifest_budget_rejects_before_sixth_entry_content_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, _ = repository_fixture(tmp_path)
+    blobs = {
+        name: write_git_blob(source, f"{name}\n".encode()) for name in ("a.txt", "b.txt", "c.txt")
+    }
+    shared_tree = write_git_tree(
+        source,
+        [("100644", "blob", blobs[name], name.encode()) for name in ("a.txt", "b.txt", "c.txt")],
+    )
+    root_tree = write_git_tree(
+        source,
+        [
+            ("040000", "tree", shared_tree, b"left"),
+            ("040000", "tree", shared_tree, b"right"),
+        ],
+    )
+    revision = write_git_commit(source, root_tree, "expanded manifest read budget")
+    git(source, "update-ref", "refs/heads/main", revision)
+    settings = runner_settings(tmp_path, source).model_copy(update={"mirror_max_tree_entries": 5})
+    reader = SourceObjectClosure(
+        source / ".git",
+        object_id_hex_length=len(revision),
+        limits=ObjectLimits(
+            max_objects=settings.mirror_max_object_files,
+            max_bytes=settings.mirror_max_object_bytes,
+            max_single_object_bytes=settings.mirror_max_single_object_bytes,
+            max_pack_files=settings.mirror_max_pack_files,
+            max_delta_depth=settings.mirror_max_delta_depth,
+            max_tree_depth=settings.mirror_max_tree_depth,
+            max_tree_entries=settings.mirror_max_tree_entries,
+            max_references=settings.mirror_max_object_references,
+            max_graph_depth=settings.mirror_max_graph_depth,
+        ),
+    )
+    reader.collect(revision, require_fresh=lambda: None)
+    source_before = _filesystem_snapshot(source)
+    original_read_object = reader._read_object
+    manifest_reads: list[str] = []
+
+    def track_manifest_read(object_id: str, **kwargs: Any) -> tuple[str, bytes]:
+        manifest_reads.append(object_id)
+        return original_read_object(object_id, **kwargs)
+
+    monkeypatch.setattr(reader, "_read_object", track_manifest_read)
+
+    with pytest.raises(SourceObjectError) as error:
+        reader.checkout_manifest(revision, require_fresh=lambda: None)
+
+    assert error.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert manifest_reads.count(blobs["a.txt"]) == 1
+    assert manifest_reads.count(blobs["b.txt"]) == 1
+    assert manifest_reads.count(blobs["c.txt"]) == 1
+    assert _filesystem_snapshot(source) == source_before
+
+
+def test_expanded_manifest_budget_exact_limit_preserves_semantic_proof(
+    tmp_path: Path,
+) -> None:
+    source, gitlink_target = repository_fixture(tmp_path)
+    regular_content = b"regular content\n"
+    symlink_target = b"regular.txt"
+    regular_blob = write_git_blob(source, regular_content)
+    symlink_blob = write_git_blob(source, symlink_target)
+    sandbox_tree = write_git_tree(
+        source,
+        [
+            ("160000", "commit", gitlink_target, b"inert-module"),
+            ("100644", "blob", regular_blob, b"regular.txt"),
+            ("120000", "blob", symlink_blob, b"tracked-link"),
+        ],
+    )
+    root_tree = write_git_tree(
+        source,
+        [("040000", "tree", sandbox_tree, b"sandbox")],
+    )
+    revision = write_git_commit(source, root_tree, "exact expanded manifest budget")
+    git(source, "update-ref", "refs/heads/main", revision)
+    source_before = _filesystem_snapshot(source)
+    settings = runner_settings(tmp_path, source).model_copy(update={"mirror_max_tree_entries": 4})
+    manager = WorkspaceManager(settings)
+    workspace_id = uuid.uuid4()
+
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=workspace_id,
+            execution_grant=execution_grant(revision),
+        ),
+    )
+    prepared = manager._git.prepare_mirror(
+        HANDLE,
+        settings.repository_handles[HANDLE],
+        revision,
+        permit_expires_at=datetime.now(UTC) + timedelta(minutes=1),
+    )
+
+    assert len(prepared.checkout_manifest) == settings.mirror_max_tree_entries
+    manifest = {entry.relative_path: entry for entry in prepared.checkout_manifest}
+    assert manifest[b"sandbox"].entry_type == "directory"
+    assert manifest[b"sandbox/regular.txt"].entry_type == "regular"
+    assert manifest[b"sandbox/regular.txt"].size == len(regular_content)
+    assert manifest[b"sandbox/regular.txt"].sha256 == hashlib.sha256(regular_content).hexdigest()
+    assert manifest[b"sandbox/tracked-link"].entry_type == "symlink"
+    assert manifest[b"sandbox/tracked-link"].mode == 0o120000
+    assert manifest[b"sandbox/tracked-link"].sha256 == hashlib.sha256(symlink_target).hexdigest()
+    assert manifest[b"sandbox/inert-module"].entry_type == "gitlink"
+    assert manifest[b"sandbox/inert-module"].mode == 0o160000
+    assert manager._load_registry(workspace_id) is not None
+    workspace = manager._git.workspace_path(workspace_id)
+    assert (workspace / "sandbox" / "regular.txt").read_bytes() == regular_content
+    assert (workspace / "sandbox" / "tracked-link").readlink() == Path("regular.txt")
+    assert (workspace / "sandbox" / "inert-module").is_dir()
+    assert not any((workspace / "sandbox" / "inert-module").iterdir())
+    assert _filesystem_snapshot(source) == source_before
+
+
+@pytest.mark.parametrize("shape", ["deep", "wide", "repeated"])
+def test_expanded_manifest_budget_shapes_fail_without_workspace_or_registry(
+    tmp_path: Path,
+    shape: str,
+) -> None:
+    source, _ = repository_fixture(tmp_path)
+    if shape == "deep":
+        blob = write_git_blob(source, b"deep\n")
+        root_tree = write_git_tree(
+            source,
+            [("100644", "blob", blob, b"leaf.txt")],
+        )
+        for depth in range(4):
+            root_tree = write_git_tree(
+                source,
+                [("040000", "tree", root_tree, f"level-{depth}".encode())],
+            )
+        limit = 4
+    elif shape == "wide":
+        wide_entries = []
+        for index in range(6):
+            blob = write_git_blob(source, f"wide-{index}\n".encode())
+            wide_entries.append(("100644", "blob", blob, f"file-{index}.txt".encode()))
+        root_tree = write_git_tree(source, wide_entries)
+        limit = 5
+    else:
+        shared_entries = []
+        for name in ("a.txt", "b.txt", "c.txt"):
+            blob = write_git_blob(source, f"{name}\n".encode())
+            shared_entries.append(("100644", "blob", blob, name.encode()))
+        shared_tree = write_git_tree(source, shared_entries)
+        root_tree = write_git_tree(
+            source,
+            [
+                ("040000", "tree", shared_tree, b"left"),
+                ("040000", "tree", shared_tree, b"right"),
+            ],
+        )
+        limit = 5
+    revision = write_git_commit(source, root_tree, f"{shape} manifest budget")
+    git(source, "update-ref", "refs/heads/main", revision)
+    source_before = _filesystem_snapshot(source)
+    settings = runner_settings(tmp_path, source).model_copy(
+        update={"mirror_max_tree_entries": limit}
+    )
+    manager = WorkspaceManager(settings)
+    sibling = settings.workspace_root / f"workspace-{uuid.uuid4().hex}"
+    sibling.mkdir()
+    sibling_marker = sibling / "must-survive"
+    sibling_marker.write_text("preserved\n", encoding="utf-8")
+    workspace_id = uuid.uuid4()
+
+    with pytest.raises(WorkspaceExecutionError) as error:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=workspace_id,
+                execution_grant=execution_grant(revision),
+            ),
+        )
+
+    assert error.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert not manager._git.workspace_path(workspace_id).exists()
+    assert manager._load_registry(workspace_id) is None
+    assert not manager._ownership.path(workspace_id).exists()
+    assert manager._git.mirror_path(HANDLE).is_dir()
+    assert sibling_marker.read_text(encoding="utf-8") == "preserved\n"
+    assert _filesystem_snapshot(source) == source_before
 
 
 def test_reachable_packed_delta_closure_is_materialized_without_unreachable_object(

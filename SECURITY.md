@@ -4,10 +4,10 @@
 
 VisualEngineer is currently a Phase 4 local, single-user development project.
 The original audit, independent re-audit, and focused re-audit remain
-**Security Gate: FAIL**. This Round 3 branch is a single-finding remediation
+**Security Gate: FAIL**. Round 4 is an expanded-manifest-budget remediation
 candidate only; local green checks cannot replace a new independent decision.
 Phase 4 is not in `main` and must undergo a separate Phase 4 Independent
-Single-Finding Focused Security Re-Audit.
+Budget Re-Audit.
 
 The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
@@ -32,8 +32,10 @@ unprovable pre-existing metadata. Every Runner-owned Git process disables
 replacement objects in both its command and fixed environment. After
 checkout, a descriptor-rooted no-follow Workspace manifest must exactly match
 the source-less parser's authorized path/type/mode/size/content-digest
-manifest before ownership or registry evidence is created. Runner has no
-shell, arbitrary command, Docker socket,
+manifest before ownership or registry evidence is created. The source-less
+walk charges every actually expanded path, including every path through a
+shared tree, before an over-limit entry or its blob digest is created. Runner
+has no shell, arbitrary command, Docker socket,
 inbound port, database/Web network, or public network, and has explicit CPU,
 memory, PID, FD, subprocess-output, process-group deadline, and mirror
 object/byte/graph bounds.

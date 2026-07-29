@@ -35,7 +35,7 @@ data. It does not claim hostile-user, hostile-kernel, or production isolation.
 | Partial write/crash                    | Same-directory temp, fsync, atomic link/rename, deterministic retry cleanup/reconciliation                                                                                           | Host/filesystem durability semantics remain trusted                                              |
 | FIFO/socket/device blocking            | Nonblocking no-follow open plus `fstat` regular-file requirement                                                                                                                     | Device-node creation is prevented by non-root/capability policy, not exhaustively created in E2E |
 | Secret exfiltration                    | Sensitive path and secret-like content denial, bounded/redacted results/events/log checks                                                                                            | Heuristics do not replace secret classification                                                  |
-| Budget exhaustion                      | File/write/list/diff/result/timeout/attempt/TTL plus CPU/memory/PID/FD, streaming output, pack/delta/tree/graph/reference/object/decompressed-byte and destination limits            | Host/fleet quota remains future                                                                  |
+| Budget exhaustion                      | File/write/list/diff/result/timeout/attempt/TTL plus CPU/memory/PID/FD, streaming output, pack/delta/tree/graph/reference/object/byte/expanded-path/destination limits               | Host/fleet quota remains future                                                                  |
 | Stale Runner side effect               | Attempt/Lease fencing plus exact short-lived single-use Permit immediately before mutation                                                                                           | Distributed identity/signing remains future work                                                 |
 | Rollback over-delete                   | Baseline-only restore and exact created-file ledger/hash                                                                                                                             | No arbitrary checkpoint restore                                                                  |
 | Registry or proof loss/replay          | Authenticated registry, signed ownership manifest, and domain-separated signed pending/completed discard proof; absence enters recovery and state/binding rollback enters quarantine | Controlled operator recovery is manual                                                           |
@@ -77,6 +77,12 @@ injection failure, committed-disk retry, and exact Permit lineage. Real
 E2E/chaos and the dedicated source harness fingerprint the full source tree
 and `.git` before and after.
 
+Round 4 adds exact-limit success and pre-sixth-entry rejection, shared-tree
+per-path charging, deep and wide tree rejection, repeated-subtree rejection,
+regular/symlink/gitlink entry charging, no Workspace/registry/ownership
+creation on rejection, mirror/sibling preservation, and exact source
+invariance.
+
 All secret canaries are synthetic. CreativeDeploy is not mounted or accessed.
 
 ## Required pre-Phase-5 review
@@ -85,8 +91,8 @@ Before adding target commands or any non-fixture repository, independently
 re-audit Linux syscall semantics (`openat2`/`renameat2` or a smaller native
 helper), registry/signature design, mirror object ownership, safe garbage
 collection, filesystem quotas, container egress enforcement, credential
-lifecycle, and hostile concurrency. The original independent audit remains
-Security Gate FAIL, as does the focused re-audit. Round 3 is a local
-single-finding remediation candidate only. The only next milestone is a new
-Phase 4 Independent Single-Finding Focused Security Re-Audit; the preserved
-FAIL must continue to block merge, CreativeDeploy, Customer 0, and Phase 5.
+lifecycle, and hostile concurrency. The original independent audit and later
+focused/single-finding reviews remain Security Gate FAIL. Round 4 is a local
+budget-remediation candidate only. The only next milestone is a new Phase 4
+Independent Budget Re-Audit; the preserved FAIL must continue to block merge,
+CreativeDeploy, Customer 0, and Phase 5.
