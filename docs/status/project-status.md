@@ -2,10 +2,14 @@
 
 - Phase: Phase 5 — Governed Validation Execution
 - Overall status:
-  `PHASE 5 FIRST VERTICAL SLICE COMPLETE — READY FOR INDEPENDENT FOCUSED REVIEW`
-- Governance qualifier: PHASE 4 COMPLETE IN LOCAL MAIN; PHASE 5 FIXTURE-ONLY;
-  INDEPENDENT FOCUSED REVIEW REQUIRED
+  `PHASE 5 FOCUSED SECURITY REVIEW FAIL — REMEDIATION REQUIRED`
+- Governance qualifier: PHASE 4 COMPLETE IN LOCAL MAIN; PHASE 5 FIRST SLICE
+  BLOCKED BY TWO INDEPENDENT BLOCKING MEDIUM FINDINGS
 - Last updated: 2026-07-29
+- Phase 5 focused-review branch:
+  `audit/phase-5-governed-validation-focused-max`
+- Phase 5 reviewed candidate:
+  `1b6481156337c9f615240bf10dcca3f1e6833400`
 - Final integration branch: `integration/phase-4-final-gate`
 - Final integration baseline:
   `38afe4b0c8eefa4c34b58e0b9d30cb74ca931501`
@@ -39,6 +43,48 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 independent focused security review decision
+
+The Phase 5 Governed Validation Execution first-slice candidate is **not
+approved** for main integration, PASS sealing, Customer 0, a later Phase 5
+slice, or Phase 6.
+
+**CONFIRMED**:
+
+- the independent review started from exact candidate
+  `1b6481156337c9f615240bf10dcca3f1e6833400`, whose exact parent is unchanged
+  main `928a89d2055d172bbd7c6670b42f668d103dcb03`;
+- four strict Protocol negative-input cases pass;
+- two new production-path secure-expectation tests fail on their first run and
+  on two focused reruns (`3/3` stable each);
+- both Findings are classified blocking Medium:
+  `VE-P5-FSR-001` and `VE-P5-FSR-002`;
+- the tests retain their original assertions and complete audit-owned cleanup;
+- the independent reviewer changed no production code; and
+- no CreativeDeploy content access, Docker command, remote, push, merge, pull
+  request, tag, Customer 0, or later-phase action occurred.
+
+The third candidate boundary—Runner result budget, Attempt, Lease, Grant,
+Permit, fixed-argv, and inner-identity binding—is **NOT VERIFIED**. The user
+explicitly stopped expansion after the Gate was conclusively FAIL. No Finding
+or PASS is inferred from its drafted but unexecuted audit tests.
+
+Final `make verify`, E2E, accessibility, PostgreSQL/migration execution, broad
+Docker runtime verification, Chaos, Security, Eval, necessary Phase 4
+regressions, and PASS sealing are **NOT RUN**. The Phase 5 implementation
+report's earlier results remain historical implementer evidence only.
+
+The next authorized milestone is a narrowly scoped production remediation of
+the two blocking Medium Findings, followed by a fresh independent focused
+review that also dynamically completes the stopped third boundary. No main
+movement or integration is authorized.
+
+Detailed independent artifacts:
+
+- [`docs/exec-plans/phase-5-governed-validation-focused-review.md`](../exec-plans/phase-5-governed-validation-focused-review.md)
+- [`docs/security/audits/phase-5-governed-validation-focused-review.md`](../security/audits/phase-5-governed-validation-focused-review.md)
+- [`docs/evidence/phase-5-governed-validation-focused-review-verification.md`](../evidence/phase-5-governed-validation-focused-review-verification.md)
 
 ## Phase 5 implementation checkpoint
 
