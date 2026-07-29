@@ -19,6 +19,7 @@ import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import SecretStr
@@ -26,6 +27,11 @@ from pydantic import SecretStr
 from visual_engineer_runner.client import ControlPlaneClient, ControlPlaneError
 from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
 from visual_engineer_runner.credentials import CredentialStore, RunnerCredential
+from visual_engineer_runner.git_object_store import (
+    ObjectLimits,
+    SourceObjectClosure,
+    SourceObjectError,
+)
 from visual_engineer_runner.git_ops import GitOperationError, GitOperations, PreparedMirror
 from visual_engineer_runner.lifecycle import RunnerLifecycle
 from visual_engineer_runner.workspace_manager import WorkspaceExecutionError, WorkspaceManager
@@ -610,6 +616,150 @@ def test_single_finding_checkout_manifest_enforces_expanded_entry_budget(
         assert _git(source, "rev-parse", "HEAD") == revision
         assert _git(source, "status", "--porcelain=v1") == source_status
         assert len(prepared.checkout_manifest) <= settings.mirror_max_tree_entries
+
+
+def test_budget_reaudit_three_parent_shared_tree_charges_each_expanded_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round 4: a third shared-tree path is charged before its blob read."""
+
+    source, _ = _source_repository(tmp_path)
+    blob = subprocess.run(
+        ["git", "-C", os.fspath(source), "hash-object", "-w", "--stdin"],
+        input="shared leaf\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    shared_tree = subprocess.run(
+        ["git", "-C", os.fspath(source), "mktree"],
+        input=f"100644 blob {blob}\tleaf.txt\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    exact_root_tree = subprocess.run(
+        ["git", "-C", os.fspath(source), "mktree"],
+        input=(
+            f"040000 tree {shared_tree}\tfirst\n"
+            f"040000 tree {shared_tree}\tsecond\n"
+            f"100644 blob {blob}\ttail.txt\n"
+        ),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    exact_revision = subprocess.run(
+        [
+            "git",
+            "-C",
+            os.fspath(source),
+            "commit-tree",
+            exact_root_tree,
+            "-m",
+            "exact five-entry shared subtree budget",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    root_tree = subprocess.run(
+        ["git", "-C", os.fspath(source), "mktree"],
+        input="".join(
+            f"040000 tree {shared_tree}\t{name}\n" for name in ("first", "second", "third")
+        ),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    revision = subprocess.run(
+        [
+            "git",
+            "-C",
+            os.fspath(source),
+            "commit-tree",
+            root_tree,
+            "-m",
+            "three-parent shared subtree budget",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    _git(source, "update-ref", "refs/heads/main", revision)
+    source_head = _git(source, "rev-parse", "HEAD")
+    source_status = _git(source, "status", "--porcelain=v1")
+    settings = _settings(tmp_path, source).model_copy(update={"mirror_max_tree_entries": 5})
+    limits = ObjectLimits(
+        max_objects=settings.mirror_max_object_files,
+        max_bytes=settings.mirror_max_object_bytes,
+        max_single_object_bytes=settings.mirror_max_single_object_bytes,
+        max_pack_files=settings.mirror_max_pack_files,
+        max_delta_depth=settings.mirror_max_delta_depth,
+        max_tree_depth=settings.mirror_max_tree_depth,
+        max_tree_entries=settings.mirror_max_tree_entries,
+        max_references=settings.mirror_max_object_references,
+        max_graph_depth=settings.mirror_max_graph_depth,
+    )
+    reader = SourceObjectClosure(
+        source / ".git",
+        object_id_hex_length=len(revision),
+        limits=limits,
+    )
+    reader.collect(revision, require_fresh=lambda: None)
+    original_read_object = reader._read_object
+    manifest_blob_reads = 0
+
+    def track_manifest_read(object_id: str, **kwargs: Any) -> tuple[str, bytes]:
+        nonlocal manifest_blob_reads
+        if object_id == blob:
+            manifest_blob_reads += 1
+        return original_read_object(object_id, **kwargs)
+
+    monkeypatch.setattr(reader, "_read_object", track_manifest_read)
+    with pytest.raises(SourceObjectError) as direct_error:
+        reader.checkout_manifest(revision, require_fresh=lambda: None)
+
+    assert direct_error.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert manifest_blob_reads == 2
+
+    exact_reader = SourceObjectClosure(
+        source / ".git",
+        object_id_hex_length=len(exact_revision),
+        limits=limits,
+    )
+    exact_reader.collect(exact_revision, require_fresh=lambda: None)
+    exact_manifest = exact_reader.checkout_manifest(
+        exact_revision,
+        require_fresh=lambda: None,
+    )
+    assert len(exact_manifest) == settings.mirror_max_tree_entries
+    assert {entry.relative_path for entry in exact_manifest} == {
+        b"first",
+        b"first/leaf.txt",
+        b"second",
+        b"second/leaf.txt",
+        b"tail.txt",
+    }
+
+    manager = WorkspaceManager(settings)
+    sibling = settings.workspace_root / f"workspace-{uuid.uuid4().hex}"
+    sibling.mkdir()
+    sibling_marker = sibling / "must-survive"
+    sibling_marker.write_text("preserved\n", encoding="utf-8")
+    workspace_id = uuid.uuid4()
+    with pytest.raises(WorkspaceExecutionError) as manager_error:
+        _execute_prepare(manager, workspace_id, _grant(revision))
+
+    assert manager_error.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert not manager._git.workspace_path(workspace_id).exists()
+    assert manager._load_registry(workspace_id) is None
+    assert not manager._ownership.path(workspace_id).exists()
+    assert manager._git.mirror_path(HANDLE).is_dir()
+    assert sibling_marker.read_text(encoding="utf-8") == "preserved\n"
+    assert _git(source, "rev-parse", "HEAD") == source_head
+    assert _git(source, "status", "--porcelain=v1") == source_status
 
 
 def test_reaudit_registry_loss_and_absent_root_requires_signed_recovery_proof(

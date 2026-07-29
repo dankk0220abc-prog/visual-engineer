@@ -1,10 +1,14 @@
 # Project Status
 
-- Phase: Phase 4 — Security Remediation Round 4
+- Phase: Phase 4 — Independent Budget Re-Audit
 - Overall status:
-  `REMEDIATION ROUND 4 COMPLETE — READY FOR INDEPENDENT BUDGET RE-AUDIT`
-- Governance qualifier: SECURITY GATE FAIL; NOT IN MAIN
+  `BUDGET RE-AUDIT COMPLETE — FINDING CLOSED — READY FOR FINAL PHASE 4 INTEGRATION GATE`
+- Governance qualifier: SECURITY GATE FAIL PENDING FINAL INTEGRATION GATE; NOT
+  IN MAIN
 - Last updated: 2026-07-29
+- Budget re-audit branch: `audit/phase-4-manifest-budget-reaudit-max`
+- Independently audited Round 4 candidate:
+  `03f774827afbafd7f0eb991f5abf2c6fee66cd17`
 - Round 4 branch: `fix/phase-4-security-remediation-4`
 - Round 4 base / single-finding audit:
   `2656733aad60d9824db4334b9ef6ba7eb1d677b8`
@@ -32,6 +36,40 @@
 - Main: `7590f9dcecbf06371936ac0265cecb9f7a4438ca`
 - Remote: none
 - Remote CI: not run
+
+## Independent budget re-audit decision
+
+The Round 4 Blocking Medium finding **Expanded checkout manifest bypasses
+configured entry budget** is **CLOSED**.
+
+**CONFIRMED** by the independent current-worktree review:
+
+- the unchanged permanent shared-tree reproduction passes `1/1`;
+- a distinct single-file subtree referenced by three parent directories is
+  charged once per expanded path;
+- with limit `5`, a five-entry manifest succeeds exactly;
+- the possible sixth entry returns typed `mirror_budget_exceeded` before the
+  third shared blob read or digest;
+- the recursive walk does not first construct an over-budget complete list;
+- actual manager rejection creates no Workspace, registry, or ownership
+  record, consumes no additional Permit, and preserves the mirror, source,
+  and a sibling marker;
+- the complete blocking file passes `13/13`;
+- manifest/object closure focus passes `24/24`;
+- source invariance passes with 119 entries, 10 Git objects, 2 status records,
+  and 0 extension markers;
+- Workspace security passes `63/63` plus static isolation;
+- Runner/Protocol passes `83/83`; and
+- final format, lint, and type checks pass.
+
+The independent reviewer changed no production code. No new Critical, High,
+or blocking Medium finding was discovered. Historical FAIL reports remain
+unchanged.
+
+This is not a Phase 4 Security Gate PASS. Aggregate `make verify`, Web E2E,
+full Chaos, full Docker Gate, Customer 0, remote CI, integration, merge,
+CreativeDeploy, and Phase 5 remain unexecuted and unauthorized. The only next
+milestone is the single final Phase 4 integration gate.
 
 ## Round 4 remediation candidate
 
