@@ -2,10 +2,14 @@
 
 - Phase: Phase 5 — Governed Validation Execution
 - Overall status:
-  `PHASE 5 FINAL TARGETED REMEDIATION COMPLETE — READY FOR INDEPENDENT SINGLE-FINDING RE-AUDIT`
-- Governance qualifier: IMPLEMENTER CANDIDATE ONLY; HISTORICAL FOCUSED
-  RE-AUDIT FAIL PRESERVED; SECURITY GATE NOT DECIDED
+  `PHASE 5 SINGLE-FINDING RE-AUDIT FAIL — REMEDIATION REQUIRED`
+- Governance qualifier: SINGLE-FINDING AND MYPY GOVERNANCE PASS; FINAL
+  AGGREGATE FAILED ON LOCAL E2E PORT COLLISION; PASS SEALING NOT CREATED
 - Last updated: 2026-07-30
+- Phase 5 single-finding re-audit branch:
+  `audit/phase-5-cancel-permit-single-finding-max`
+- Phase 5 single-finding re-audit candidate:
+  `c9e5268f1287f49ac0ba5c5d26045395b8e72dc0`
 - Phase 5 final targeted remediation 2 branch:
   `fix/phase-5-validation-cancel-permit-remediation-2`
 - Phase 5 final targeted remediation 2 base:
@@ -58,6 +62,64 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 independent single-finding re-audit decision
+
+The narrow independent decisions are:
+
+- `VE-P5-FREAUD-001`: **PASS**;
+- strict mypy governance: **PASS**;
+- new Critical/High/blocking Medium Findings: **0**; and
+- final first-slice aggregate/sealing Gate: **FAIL**.
+
+Real PostgreSQL proves normal active cancellation now atomically terminalizes
+Job, Attempt, Validation Run, step, and the exact Permit as `cancelled`, with
+the Permit terminal timestamp set. No succeeded Result, Validation Evidence,
+`job_succeeded`, or `side_effect_permit_completed` exists, and the canonical
+Workspace is unchanged.
+
+The one additive independent test retains the terminal Attempt/Lease, replays
+cancellation, attempts a stale Lease replay and late completion, and confirms
+that the Permit timestamp, Validation Run version, total event count, Result,
+Evidence, and Workspace remain unchanged. The complete Phase 5 Control Plane
+focused selection passes `49/49`; Runner/Protocol passes `21/21`; relevant
+Runner/Workspace API passes `23/23`. Cleanup failure passes `2/2` and remains
+failed/`recovery_required`.
+
+Configured verbose mypy discovers all historical focused-review, re-audit,
+remediation, cancel-Permit remediation, and current audit files as distinct
+modules. Strict mypy passes 91 source files. No targeted exclusion,
+`ignore_errors`, new blanket ignore, or strictness reduction exists.
+
+The one authorized final `make verify` passes contracts, format, lint,
+typecheck, Python/API/Runner/Protocol `227/227` at 82.95% coverage, Web
+`44/44`, build, Docker config, migration, Phase 4 permanent Finding controls,
+Runner security audit `22/22`, source invariance, and the Phase 4 workspace
+security repair target. It then stops with exit `2` before Playwright because
+fixed host port `127.0.0.1:18000` is already in use.
+
+The port owner was not inspected or stopped, and a second aggregate was not
+run. E2E, Chaos, the remaining Security targets, Eval, and a complete exit-0
+aggregate are therefore not independently verified. The exact audit-owned
+PostgreSQL and E2E Compose projects have zero container/network/volume
+residue. Four current-repository platform services reporting 8–31 hours
+uptime predate the review and remain untouched.
+
+No production code changed. Main remains unchanged. No CreativeDeploy or
+sibling repository content was accessed; no remote, push, merge, pull request,
+tag, Customer 0, later Phase 5 slice, or Phase 6 action occurred.
+
+The reserved PASS subject
+`chore: seal phase 5 governed validation first slice` is not used. The next
+action is to make port `18000` available or explicitly authorize a fresh
+aggregate on isolated alternate ports. No production remediation is supported
+by the current focused evidence.
+
+Detailed independent artifacts:
+
+- [`docs/exec-plans/phase-5-cancel-permit-single-finding-reaudit.md`](../exec-plans/phase-5-cancel-permit-single-finding-reaudit.md)
+- [`docs/security/audits/phase-5-cancel-permit-single-finding-reaudit.md`](../security/audits/phase-5-cancel-permit-single-finding-reaudit.md)
+- [`docs/evidence/phase-5-cancel-permit-single-finding-reaudit-verification.md`](../evidence/phase-5-cancel-permit-single-finding-reaudit-verification.md)
 
 ## Phase 5 final targeted remediation 2
 
