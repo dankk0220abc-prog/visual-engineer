@@ -458,12 +458,15 @@ class WorkspaceDiscardJobSpec(WorkspaceBoundJobSpec):
 class ValidationExecuteJobSpec(WorkspaceBoundJobSpec):
     kind: Literal[JobKind.VALIDATION_EXECUTE_V1] = JobKind.VALIDATION_EXECUTE_V1
     validation_run_id: uuid.UUID
-    validation_step_id: Literal["fixture-contract"] = "fixture-contract"
+    validation_step_id: Literal["fixture-contract", "fixture-manifest"] = "fixture-contract"
     validation_policy_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] = (
         "0" * 64
     )
     result_schema_version: Literal[1] = 1
-    profile_id: Literal["fixture-python-stdlib-v1"] = "fixture-python-stdlib-v1"
+    profile_id: Literal[
+        "fixture-python-stdlib-v1",
+        "fixture-python-manifest-v1",
+    ] = "fixture-python-stdlib-v1"
     profile_version: Literal[1] = 1
     checkpoint_id: uuid.UUID
     checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
@@ -1064,8 +1067,9 @@ class ValidationExecutionResult(StrictModel):
             "-I",
             "-S",
             "<system-owned-fixture-validator>",
+            "<system-owned-profile-mode>",
         ]
-    ] = Field(min_length=4, max_length=4)
+    ] = Field(min_length=4, max_length=5)
     fixed_argv_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
     fixed_cwd: (
         Annotated[str, StringConstraints(strip_whitespace=False, min_length=1, max_length=128)]

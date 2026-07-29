@@ -119,6 +119,7 @@ const grant: ExecutionGrant = {
   validation_workspace_id: null,
   validation_checkpoint_id: null,
   allowed_validation_profiles: [],
+  allowed_validation_suites: [],
   max_validation_runs: 0,
   validation_timeout_seconds: 0,
   validation_cpu_seconds: 0,

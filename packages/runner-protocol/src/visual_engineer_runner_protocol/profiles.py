@@ -55,8 +55,37 @@ FIXTURE_PYTHON_STDLIB_V1 = ValidationProfile(
     fd_limit=64,
 )
 
+FIXTURE_PYTHON_MANIFEST_V1 = ValidationProfile(
+    profile_id="fixture-python-manifest-v1",
+    version=1,
+    display_name="Trusted fixture manifest integrity",
+    description=(
+        "Runs one system-owned Python standard-library manifest and content-digest "
+        "check against a disposable exact-Checkpoint fixture copy."
+    ),
+    step_id="fixture-manifest",
+    safe_argv=(
+        "python",
+        "-I",
+        "-S",
+        "<system-owned-fixture-validator>",
+        "<system-owned-profile-mode>",
+    ),
+    fixed_cwd="<validation-input-root>",
+    fixed_environment=FIXTURE_PYTHON_STDLIB_V1.fixed_environment,
+    timeout_seconds=10,
+    max_output_bytes=4096,
+    max_artifact_bytes=0,
+    max_artifact_count=0,
+    cpu_seconds=5,
+    memory_bytes=128 * 1024 * 1024,
+    pid_limit=8,
+    fd_limit=64,
+)
+
 VALIDATION_PROFILE_CATALOG = {
     FIXTURE_PYTHON_STDLIB_V1.profile_id: FIXTURE_PYTHON_STDLIB_V1,
+    FIXTURE_PYTHON_MANIFEST_V1.profile_id: FIXTURE_PYTHON_MANIFEST_V1,
 }
 
 

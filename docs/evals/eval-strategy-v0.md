@@ -30,6 +30,9 @@ current eval expectations are deterministic.
 10. **Isolated Workspace:** Grant separation, exact revision, source
     isolation, descriptor paths, atomic text writes, budgets, checkpoints,
     rollback, disposal, and interruption recovery.
+11. **Validation Suites:** immutable catalog/order, step injection denial,
+    serial child fencing, cancellation/timeout/retry races, exact aggregate
+    budgets, Evidence reuse/aggregation, cleanup, and invariance.
 
 ## Versioned datasets
 
@@ -69,6 +72,13 @@ compare-and-swap conflict, atomic interruption, cancellation, file/byte/diff
 budgets, source isolation, Checkpoint/diff, rollback, disposal, stale Lease,
 and stable failure classification. Every case maps to executable tests; no
 model score or inferred outcome is stored.
+
+`evals/datasets/validation-suites-v0.1.jsonl` maps deterministic cases for
+catalog/step injection, serial success, create replay/conflict, revoked Grant,
+partial failure and fresh-Grant retry, successful-Evidence reuse without
+recharge, cancellation and completion race, Suite timeout cleanup, child
+timeout/recovery fail-fast, and exact/+1 combined output. The dataset stores
+expected behavior only and every case maps to a current executable test.
 
 ## Failure taxonomy
 
@@ -139,6 +149,13 @@ Phase 4 passes only when:
 - current verification evidence records exact commands and limitations.
 
 Remote GitHub Actions are not considered passed unless actually run.
+
+The Phase 5 second-slice implementation candidate additionally requires the
+fixed Suite browser flow, real PostgreSQL Suite state/race/budget matrix,
+Runner Docker isolation for both fixed Profiles, aggregate Evidence and
+canonical/source invariance, project-filtered zero residue, and a final
+`make verify`. Passing implementer checks does not declare the independent
+focused Security Gate.
 
 ## Future model evaluation
 

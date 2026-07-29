@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-repair_database_url="${TEST_DATABASE_URL:-postgresql+psycopg://visualengineer:visualengineer-test-local@localhost:55433/visualengineer_test}"
+test_db_port=${TEST_POSTGRES_PUBLISHED_PORT:-55433}
+repair_database_url="${TEST_DATABASE_URL:-postgresql+psycopg://visualengineer:visualengineer-test-local@127.0.0.1:$test_db_port/visualengineer_test}"
 repair_started_test_db=false
 
 cleanup() {

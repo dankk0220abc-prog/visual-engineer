@@ -8,6 +8,9 @@ from visual_engineer_api.models.validation import (
     ValidationEvidence,
     ValidationRun,
     ValidationStepRun,
+    ValidationSuiteResult,
+    ValidationSuiteRun,
+    ValidationSuiteStepRun,
 )
 from visual_engineer_api.models.workspace import (
     ExecutionGrant,
@@ -21,7 +24,17 @@ class ValidationRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def add(self, value: ValidationRun | ValidationStepRun | ValidationEvidence) -> None:
+    def add(
+        self,
+        value: (
+            ValidationRun
+            | ValidationStepRun
+            | ValidationEvidence
+            | ValidationSuiteRun
+            | ValidationSuiteStepRun
+            | ValidationSuiteResult
+        ),
+    ) -> None:
         self._session.add(value)
 
     def get_run(self, validation_run_id: uuid.UUID, *, lock: bool = False) -> ValidationRun | None:
@@ -64,6 +77,80 @@ class ValidationRepository:
         return self._session.scalar(
             select(ValidationEvidence).where(
                 ValidationEvidence.validation_run_id == validation_run_id
+            )
+        )
+
+    def evidence_by_id(self, evidence_id: uuid.UUID) -> ValidationEvidence | None:
+        return self._session.get(ValidationEvidence, evidence_id)
+
+    def get_suite_run(
+        self,
+        suite_run_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> ValidationSuiteRun | None:
+        statement = select(ValidationSuiteRun).where(ValidationSuiteRun.id == suite_run_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def get_suite_by_idempotency(
+        self,
+        key: str,
+        *,
+        lock: bool = False,
+    ) -> ValidationSuiteRun | None:
+        statement = select(ValidationSuiteRun).where(ValidationSuiteRun.idempotency_key == key)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def list_suite_runs(
+        self,
+        *,
+        workspace_id: uuid.UUID | None = None,
+    ) -> list[ValidationSuiteRun]:
+        statement = select(ValidationSuiteRun)
+        if workspace_id is not None:
+            statement = statement.where(ValidationSuiteRun.workspace_id == workspace_id)
+        return list(
+            self._session.scalars(
+                statement.order_by(
+                    ValidationSuiteRun.created_at.desc(),
+                    ValidationSuiteRun.id.desc(),
+                )
+            )
+        )
+
+    def suite_steps(
+        self,
+        suite_run_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> list[ValidationSuiteStepRun]:
+        statement = (
+            select(ValidationSuiteStepRun)
+            .where(ValidationSuiteStepRun.suite_run_id == suite_run_id)
+            .order_by(ValidationSuiteStepRun.sequence)
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return list(self._session.scalars(statement))
+
+    def suite_result(self, suite_run_id: uuid.UUID) -> ValidationSuiteResult | None:
+        return self._session.scalar(
+            select(ValidationSuiteResult).where(ValidationSuiteResult.suite_run_id == suite_run_id)
+        )
+
+    def suite_retry(
+        self,
+        root_suite_run_id: uuid.UUID,
+        attempt_number: int,
+    ) -> ValidationSuiteRun | None:
+        return self._session.scalar(
+            select(ValidationSuiteRun).where(
+                ValidationSuiteRun.retry_of_suite_run_id == root_suite_run_id,
+                ValidationSuiteRun.attempt_number == attempt_number,
             )
         )
 
@@ -121,13 +208,20 @@ class ValidationRepository:
         )
 
     def latest_validation_grant_for_checkpoint(
-        self, plan_id: uuid.UUID, checkpoint_id: uuid.UUID
+        self,
+        plan_id: uuid.UUID,
+        checkpoint_id: uuid.UUID,
+        *,
+        allowed_profiles: list[str],
+        allowed_suites: list[str],
     ) -> ExecutionGrant | None:
         return self._session.scalar(
             select(ExecutionGrant)
             .where(
                 ExecutionGrant.plan_id == plan_id,
                 ExecutionGrant.validation_checkpoint_id == checkpoint_id,
+                ExecutionGrant.allowed_validation_profiles == allowed_profiles,
+                ExecutionGrant.allowed_validation_suites == allowed_suites,
                 ExecutionGrant.status.in_(("pending", "approved")),
             )
             .order_by(ExecutionGrant.created_at.desc(), ExecutionGrant.id.desc())

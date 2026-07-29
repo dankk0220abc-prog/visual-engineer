@@ -22,7 +22,12 @@ EXPECTED_BOUNDARY_STDOUT = (
 )
 
 
-def _docker_command(input_root: Path) -> list[str]:
+def _docker_command(
+    input_root: Path,
+    *,
+    profile_id: str,
+    output_budget: int,
+) -> list[str]:
     return [
         "docker",
         "run",
@@ -61,6 +66,7 @@ def _docker_command(input_root: Path) -> list[str]:
         "-I",
         "-S",
         "/app/apps/runner/src/visual_engineer_runner/validation_worker.py",
+        profile_id,
         "/validation/input",
         "/validation/scratch",
         "/validation/output",
@@ -71,13 +77,22 @@ def _docker_command(input_root: Path) -> list[str]:
         str(128 * 1024 * 1024),
         "8",
         "64",
-        "8192",
+        str(output_budget),
     ]
 
 
-def _run(input_root: Path) -> subprocess.CompletedProcess[str]:
+def _run(
+    input_root: Path,
+    *,
+    profile_id: str,
+    output_budget: int,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        _docker_command(input_root),
+        _docker_command(
+            input_root,
+            profile_id=profile_id,
+            output_budget=output_budget,
+        ),
         check=False,
         capture_output=True,
         text=True,
@@ -147,24 +162,49 @@ def main() -> int:
         timeout=10,
     )
 
-    passing = _run(PASSING_INPUT)
-    expected_success = EXPECTED_BOUNDARY_STDOUT + "VE_VALIDATION_PROFILE_PASS\n"
-    if passing.returncode != 0 or passing.stdout != expected_success or passing.stderr:
-        raise RuntimeError(
-            "Validation sandbox success proof failed: "
-            f"exit={passing.returncode} stdout={passing.stdout!r} stderr={passing.stderr!r}"
+    profiles = (
+        (
+            "fixture-python-stdlib-v1",
+            8192,
+            "VE_VALIDATION_PROFILE_PASS\n",
+            "VE_VALIDATION_PROFILE_CONTRACT_MISMATCH\n",
+        ),
+        (
+            "fixture-python-manifest-v1",
+            4096,
+            "VE_VALIDATION_PROFILE_MANIFEST_PASS\n",
+            "VE_VALIDATION_PROFILE_MANIFEST_MISMATCH\n",
+        ),
+    )
+    for profile_id, output_budget, success_marker, failure_marker in profiles:
+        passing = _run(
+            PASSING_INPUT,
+            profile_id=profile_id,
+            output_budget=output_budget,
         )
+        expected_success = EXPECTED_BOUNDARY_STDOUT + success_marker
+        if passing.returncode != 0 or passing.stdout != expected_success or passing.stderr:
+            raise RuntimeError(
+                f"Validation sandbox {profile_id} success proof failed: "
+                f"exit={passing.returncode} stdout={passing.stdout!r} "
+                f"stderr={passing.stderr!r}"
+            )
 
-    failing = _run(FAILING_INPUT)
-    if (
-        failing.returncode != 1
-        or failing.stdout != EXPECTED_BOUNDARY_STDOUT
-        or failing.stderr != "VE_VALIDATION_PROFILE_CONTRACT_MISMATCH\n"
-    ):
-        raise RuntimeError(
-            "Validation sandbox failure proof failed: "
-            f"exit={failing.returncode} stdout={failing.stdout!r} stderr={failing.stderr!r}"
+        failing = _run(
+            FAILING_INPUT,
+            profile_id=profile_id,
+            output_budget=output_budget,
         )
+        if (
+            failing.returncode != 1
+            or failing.stdout != EXPECTED_BOUNDARY_STDOUT
+            or failing.stderr != failure_marker
+        ):
+            raise RuntimeError(
+                f"Validation sandbox {profile_id} failure proof failed: "
+                f"exit={failing.returncode} stdout={failing.stdout!r} "
+                f"stderr={failing.stderr!r}"
+            )
 
     executor_probe = _run_executor_probe()
     expected_probe = (
@@ -184,7 +224,7 @@ def main() -> int:
 
     print(
         "validation sandbox check passed: Landlock filesystem denial, "
-        "seccomp network denial, fixed Profile pass/fail, bounded exit codes"
+        "seccomp network denial, two fixed Profiles pass/fail, bounded exit codes"
     )
     return 0
 

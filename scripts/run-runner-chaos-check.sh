@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-PROJECT_NAME=visualengineer-runner-chaos
+PROJECT_NAME=${RUNNER_CHAOS_COMPOSE_PROJECT_NAME:-visualengineer-runner-chaos}
 CHAOS_DB_PORT=${CHAOS_DB_PORT:-15435}
 CHAOS_API_PORT=${CHAOS_API_PORT:-18002}
 RUNNER_BOOTSTRAP_TOKEN=$(uv run python -c 'import secrets; print(secrets.token_urlsafe(48))')

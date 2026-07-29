@@ -28,7 +28,9 @@ def test_competing_idempotent_creates_converge_on_one_postgresql_row(
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE TABLE validation_evidence, validation_step_runs, validation_runs, "
+                "TRUNCATE TABLE validation_suite_results, validation_suite_step_runs, "
+                "validation_suite_runs, validation_evidence, validation_step_runs, "
+                "validation_runs, "
                 "side_effect_permits, workspace_checkpoints, workspace_events, "
                 "runner_job_events, runner_job_attempts, runner_jobs, workspaces, "
                 "execution_grant_decisions, execution_grants, repository_handles, "

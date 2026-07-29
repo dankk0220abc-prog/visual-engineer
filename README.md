@@ -23,23 +23,21 @@ deterministic-plan, approval, and audit boundaries. A Deployment Pack supplies
 a repository profile, customer constraints, allowed future validation,
 design-system context, acceptance criteria, test strategy, and project
 playbook. Phase 4 implements one fixture-only isolated-workspace path. Phase 5
-adds only system-owned fixed validation Profiles against that trusted
-synthetic fixture; arbitrary target commands and delivery integrations remain
-future capabilities.
+adds only system-owned fixed validation Profiles and immutable multi-step
+Suites against that trusted synthetic fixture; arbitrary target commands and
+delivery integrations remain future capabilities.
 
 ## Current state
 
 The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
 read-only repository intelligence, Phase 3 browser-orchestrated Local Runner,
 a completed Phase 4 Runner-owned isolated Workspace against the synthetic
-adversarial fixture, and the implemented first Phase 5 Governed Validation
-Execution slice pending independent focused review. The original audit and later
-independent focused audits recorded **Security Gate: FAIL** for the revisions
-they inspected; those historical verdicts remain preserved. Four focused
-remediation rounds and their independent closure checkpoints are present in
-the candidate ancestry. The complete local Final Integration Gate passed and
-Phase 4 was explicitly fast-forwarded into `main` at
-`928a89d2055d172bbd7c6670b42f668d103dcb03`.
+adversarial fixture, and a sealed first Phase 5 Governed Validation Execution
+slice in local `main` at
+`f547091307c52df8f20fc69bac4b4826cbbc74ad`. The second Phase 5 slice adds an
+implementer candidate for governed multi-step Validation Suites; it requires a
+fresh independent focused review and is not a Security Gate PASS. Historical
+audit FAIL verdicts remain preserved.
 
 A local user can independently approve a narrow Execution Grant, prepare an
 exact detached workspace, use closed UTF-8 file tools, inspect bounded
@@ -76,8 +74,9 @@ The implemented target is:
   and fail-closed recovery/quarantine rather than unproven deletion;
 - descriptor-rooted list/read/create/compare-and-swap replace, fixed Git
   status/diff, immutable checkpoints, baseline rollback, and exact discard;
-- one immutable `fixture-python-stdlib-v1:v1` Validation Profile with no
-  user-supplied command, argv, cwd, environment, package, or URL;
+- two immutable fixture Validation Profiles and one
+  `fixture-integrity-suite-v1:v1` Suite with no user-supplied step, command,
+  argv, cwd, environment, package, or URL;
 - separately approved validation-only Grants bound to an exact Workspace
   Checkpoint/revision and fixed run, timeout, CPU, memory, PID, file-descriptor,
   output, artifact, and expiry budgets;
@@ -86,6 +85,9 @@ The implemented target is:
   timeout/cancel, process-group cleanup, and exact sandbox removal;
 - immutable bounded Validation Run/step/evidence records that preserve the
   canonical Workspace for passing, failing, timed-out, and cancelled runs;
+- immutable Suite Run/ordered-step/aggregate-result records with serial
+  dispatch, fail-fast, per-step and combined budgets, cancellation, and a
+  fresh-Grant retry that reuses successful Evidence without redispatch;
 - browser Runner registry, dispatch, Job detail, progress, result, cancellation,
   offline/retry evidence, and Timeline;
 - generated OpenAPI-to-TypeScript contract artifacts;

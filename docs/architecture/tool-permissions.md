@@ -8,8 +8,8 @@ objective, a Deployment Pack, or Plan approval cannot grant a capability.
 
 Phase 2 implements Level 0 repository intelligence. Phase 3 additionally
 implements repository-free execution-plane capabilities. Phase 4 implements
-Level 1 only for the synthetic fixture. Phase 5 implements one fixture-only
-Level 2 Profile and still has no generic tool executor.
+Level 1 only for the synthetic fixture. Phase 5 implements fixture-only Level
+2 Profiles and one immutable Suite and still has no generic tool executor.
 
 ## Levels
 
@@ -17,7 +17,7 @@ Level 2 Profile and still has no generic tool executor.
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | 0: Read only             | Fixed metadata and selected committed-object reads inside one exact allowlisted Git root. No target command or write. | **Implemented**  |
 | 1: Isolated write        | Edit exact approved UTF-8 paths in a Runner-owned isolated fixture worktree.                                          | **Fixture only** |
-| 2: Controlled validation | Run one system-owned, versioned fixture validation Profile in a disposable sandbox.                                   | **Fixture only** |
+| 2: Controlled validation | Run a system-owned, versioned fixture Profile or immutable Suite of those Profiles in disposable sandboxes.           | **Fixture only** |
 | 3: Branch and commit     | Create a scoped branch and local commit after gates.                                                                  | Not implemented  |
 | 4: Pull request          | Push the approved branch and create/update a PR.                                                                      | Not implemented  |
 
@@ -69,11 +69,11 @@ There is no delete/rename/binary tool or target command.
 
 ## Implemented fixture-only Level 2
 
-Phase 5 adds exactly one immutable Profile,
-`fixture-python-stdlib-v1:v1`. A separate validation-scoped Grant binds one
-existing canonical Workspace and Checkpoint, the exact revision, one Profile,
-one run, a ten-second timeout, 8-KiB aggregate output, zero artifacts, five CPU
-seconds, 128 MiB memory, eight PIDs, and 64 file descriptors.
+Phase 5 has two immutable Profiles, `fixture-python-stdlib-v1:v1` and
+`fixture-python-manifest-v1:v1`. A separate validation-scoped Grant binds one
+existing canonical Workspace and Checkpoint, the exact revision, fixed Profile
+or Suite references, and their timeout/output/CPU/memory/PID/FD/zero-artifact
+budgets.
 
 The API and Web accept only the Profile ID and approved Grant; no command,
 argv, cwd, environment, package, URL, or shell fragment exists in the request
@@ -84,6 +84,14 @@ canonical Workspace and other Runner paths, while seccomp denies network
 syscalls. A monotonic timeout/cancel path terminates, kills where necessary,
 reaps, and proves process-group absence. Exact sandbox cleanup is required for
 success. Validation never mutates or advances canonical Workspace state.
+
+The immutable `fixture-integrity-suite-v1:v1` composes the two Profiles in
+fixed order with fail-fast, a 30-second total timeout, 10,000 retained output
+bytes, zero artifacts, and two Suite attempts. Only the Control Plane can
+materialize steps. It queues one child at a time, independently validates each
+result, cancels an active child before Suite cancellation/timeout, and requires
+a fresh Suite Grant for retry. Reused successful Evidence is not redispatched
+or charged again.
 
 ## Implemented Level 0 controls
 
@@ -127,7 +135,8 @@ current exact Permit can authorize a mutation. A revoked, expired, stale,
 cancelled, mismatched, or replayed identity cannot do so. The Grant cannot
 authorize source Git changes, GitHub, or deployment. A Phase 4 implementation
 Grant cannot validate. A Phase 5 validation Grant can select only its fixed
-Profile against its exact Checkpoint and cannot authorize Phase 4 file tools.
+Profile or Suite against its exact Checkpoint and cannot authorize Phase 4
+file tools.
 
 ## Always prohibited
 

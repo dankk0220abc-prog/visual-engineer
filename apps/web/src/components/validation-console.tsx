@@ -5,18 +5,25 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  cancelValidationSuiteRun,
   cancelValidationRun,
   createExecutionGrant,
+  createValidationSuiteRun,
   createValidationRun,
   decideExecutionGrant,
   listExecutionGrants,
   listValidationProfiles,
   listValidationRuns,
+  listValidationSuiteRuns,
+  listValidationSuites,
   listWorkspaceCheckpoints,
   listWorkspaces,
+  retryValidationSuiteRun,
   type ExecutionGrant,
   type ValidationProfile,
   type ValidationRun,
+  type ValidationSuite,
+  type ValidationSuiteRun,
   type Workspace,
   type WorkspaceCheckpoint,
 } from "@/lib/api";
@@ -37,6 +44,12 @@ const activeStates = new Set([
   "running",
   "cancel_requested",
 ]);
+const activeSuiteStates = new Set([
+  "requested",
+  "queued",
+  "running",
+  "cancel_requested",
+]);
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -48,7 +61,7 @@ function errorMessage(error: unknown): string {
 }
 
 function runTone(
-  state: ValidationRun["state"],
+  state: string,
 ): "neutral" | "positive" | "negative" | "pending" {
   if (state === "succeeded") return "positive";
   if (
@@ -58,7 +71,8 @@ function runTone(
   ) {
     return "negative";
   }
-  if (activeStates.has(state)) return "pending";
+  if (activeStates.has(state as ValidationRun["state"])) return "pending";
+  if (state === "pending") return "pending";
   return "neutral";
 }
 
@@ -74,6 +88,8 @@ function grantTone(
 export function ValidationConsole() {
   const [profiles, setProfiles] = useState<ValidationProfile[]>([]);
   const [runs, setRuns] = useState<ValidationRun[]>([]);
+  const [suites, setSuites] = useState<ValidationSuite[]>([]);
+  const [suiteRuns, setSuiteRuns] = useState<ValidationSuiteRun[]>([]);
   const [grants, setGrants] = useState<ExecutionGrant[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCheckpoint, setSelectedCheckpoint] = useState("");
@@ -87,13 +103,21 @@ export function ValidationConsole() {
   const refresh = useCallback(async () => {
     setError("");
     try {
-      const [nextProfiles, nextRuns, nextGrants, workspaces] =
-        await Promise.all([
-          listValidationProfiles(),
-          listValidationRuns(),
-          listExecutionGrants(),
-          listWorkspaces(),
-        ]);
+      const [
+        nextProfiles,
+        nextRuns,
+        nextSuites,
+        nextSuiteRuns,
+        nextGrants,
+        workspaces,
+      ] = await Promise.all([
+        listValidationProfiles(),
+        listValidationRuns(),
+        listValidationSuites(),
+        listValidationSuiteRuns(),
+        listExecutionGrants(),
+        listWorkspaces(),
+      ]);
       const eligibleWorkspaces = workspaces.filter(
         (workspace) =>
           workspace.current_tree_hash &&
@@ -126,6 +150,8 @@ export function ValidationConsole() {
       );
       setProfiles(nextProfiles);
       setRuns(nextRuns);
+      setSuites(nextSuites);
+      setSuiteRuns(nextSuiteRuns);
       setGrants(nextGrants);
       setCandidates(nextCandidates);
       setSelectedCheckpoint((current) =>
@@ -146,10 +172,14 @@ export function ValidationConsole() {
   }, [refresh]);
 
   useEffect(() => {
-    if (!runs.some((run) => activeStates.has(run.state))) return;
+    if (
+      !runs.some((run) => activeStates.has(run.state)) &&
+      !suiteRuns.some((run) => activeSuiteStates.has(run.state))
+    )
+      return;
     const timer = window.setInterval(() => void refresh(), 2000);
     return () => window.clearInterval(timer);
-  }, [refresh, runs]);
+  }, [refresh, runs, suiteRuns]);
 
   const selectedCandidate = useMemo(
     () =>
@@ -163,9 +193,10 @@ export function ValidationConsole() {
     [grants],
   );
   const profile = profiles[0] ?? null;
+  const suite = suites[0] ?? null;
 
   async function requestGrant() {
-    if (!selectedCandidate || !profile) return;
+    if (!selectedCandidate || !suite) return;
     setBusy("create-grant");
     setError("");
     try {
@@ -174,8 +205,60 @@ export function ValidationConsole() {
         repository_handle_id:
           selectedCandidate.implementationGrant.repository_handle_id,
         validation_checkpoint_id: selectedCandidate.checkpoint.id,
-        validation_profile_id: profile.profile_id,
+        validation_suite_id: suite.suite_id,
+        validation_suite_version: suite.suite_version,
       });
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function startSuite(grant: ExecutionGrant) {
+    if (!suite) return;
+    setBusy(`suite-${grant.id}`);
+    setError("");
+    try {
+      await createValidationSuiteRun(
+        {
+          execution_grant_id: grant.id,
+          suite_id: suite.suite_id,
+          suite_version: suite.suite_version,
+        },
+        `validation-suite-${grant.id}-${crypto.randomUUID()}`,
+      );
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function cancelSuite(run: ValidationSuiteRun) {
+    setBusy(`cancel-suite-${run.id}`);
+    setError("");
+    try {
+      await cancelValidationSuiteRun(run.id);
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function retrySuite(run: ValidationSuiteRun, grant: ExecutionGrant) {
+    setBusy(`retry-suite-${run.id}`);
+    setError("");
+    try {
+      await retryValidationSuiteRun(
+        run.id,
+        { execution_grant_id: grant.id },
+        `validation-suite-retry-${run.id}-${crypto.randomUUID()}`,
+      );
       await refresh();
     } catch (reason) {
       setError(errorMessage(reason));
@@ -195,7 +278,9 @@ export function ValidationConsole() {
         decision,
         reason:
           decision === "approve"
-            ? "Reviewed exact Checkpoint, fixed Profile, and validation-only budgets."
+            ? grant.allowed_validation_suites.length
+              ? "Reviewed exact Checkpoint, fixed Suite, and validation-only budgets."
+              : "Reviewed exact Checkpoint, fixed Profile, and validation-only budgets."
             : rejectReasons[grant.id],
       });
       await refresh();
@@ -249,8 +334,9 @@ export function ValidationConsole() {
           Validation Runs
         </h1>
         <p className="mt-3 max-w-4xl text-base leading-7 font-semibold text-slate-800">
-          对精确 Workspace Checkpoint 运行一个系统所有、不可参数化的验证
-          Profile；每次执行仍需独立的 validation-only Execution Grant。
+          对精确 Workspace Checkpoint 串行运行系统所有、不可参数化的多步骤
+          Validation Suite；每个实际步骤都有独立 Runner Attempt、Lease 和
+          Evidence。
         </p>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
           本页不接受命令、argv、cwd、环境变量、依赖安装或 Provider 配置。网络与
@@ -325,13 +411,13 @@ export function ValidationConsole() {
                     type="button"
                     className="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white outline-none hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2 disabled:opacity-50"
                     disabled={
-                      !selectedCandidate || !profile || busy === "create-grant"
+                      !selectedCandidate || !suite || busy === "create-grant"
                     }
                     onClick={() => void requestGrant()}
                   >
                     {busy === "create-grant"
                       ? "创建中…"
-                      : "创建 pending Validation Grant"}
+                      : "创建 pending Suite Grant"}
                   </button>
                 </div>
               )}
@@ -339,36 +425,37 @@ export function ValidationConsole() {
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
               <h2 className="text-xl font-semibold text-slate-950">
-                固定 Profile 与上限
+                固定 Suite、步骤与上限
               </h2>
-              {profile ? (
+              {suite ? (
                 <>
                   <p className="mt-3 font-semibold text-slate-900">
-                    {profile.display_name}
+                    {suite.name}
                   </p>
                   <p className="mt-1 text-sm leading-6 text-slate-600">
-                    {profile.description}
+                    {suite.purpose}
                   </p>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="font-semibold text-slate-500">Profile</dt>
+                      <dt className="font-semibold text-slate-500">Suite</dt>
                       <dd className="font-mono text-xs">
-                        {profile.profile_id}:v{profile.version}
+                        {suite.suite_id}:v{suite.suite_version}
                       </dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Fixed argv
+                        Ordered steps
                       </dt>
-                      <dd className="font-mono text-xs break-all">
-                        {profile.safe_argv.join(" ")}
+                      <dd>
+                        {suite.steps.length} · {suite.failure_policy}
                       </dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">Budgets</dt>
                       <dd>
-                        {profile.timeout_seconds}s · {profile.max_output_bytes}{" "}
-                        output bytes · {profile.max_artifact_count} artifacts
+                        {suite.total_timeout_seconds}s total ·{" "}
+                        {suite.total_output_bytes} output bytes ·{" "}
+                        {suite.max_attempts} attempts
                       </dd>
                     </div>
                     <div>
@@ -376,16 +463,34 @@ export function ValidationConsole() {
                         Explicit denials
                       </dt>
                       <dd>
-                        network {profile.network_policy} · Shell{" "}
-                        {String(profile.shell_access)} · user command{" "}
-                        {String(profile.user_command_input)}
+                        network {suite.network_policy} · Shell{" "}
+                        {String(suite.shell_access)} · user command{" "}
+                        {String(suite.user_command_input)} · artifacts{" "}
+                        {String(suite.artifact_content_transfer)}
                       </dd>
                     </div>
                   </dl>
+                  <ol className="mt-4 space-y-2">
+                    {suite.steps.map((step) => (
+                      <li
+                        key={step.step_id}
+                        className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"
+                      >
+                        <span className="font-semibold">
+                          {step.sequence}. {step.step_id}
+                        </span>
+                        <span className="mt-1 block font-mono text-xs text-slate-600">
+                          {step.profile_id}:v{step.profile_version} ·{" "}
+                          {step.timeout_seconds}s · {step.max_output_bytes}{" "}
+                          bytes
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
                 </>
               ) : (
                 <p className="mt-3 text-sm text-slate-600">
-                  没有可用的系统 Profile。
+                  没有可用的系统 Suite。
                 </p>
               )}
             </div>
@@ -412,7 +517,9 @@ export function ValidationConsole() {
                           {grant.id}
                         </p>
                         <p className="mt-2 text-sm font-semibold text-slate-900">
-                          {grant.allowed_validation_profiles.join(", ")}
+                          {grant.allowed_validation_suites.length
+                            ? grant.allowed_validation_suites.join(", ")
+                            : grant.allowed_validation_profiles.join(", ")}
                         </p>
                       </div>
                       <StatusPill tone={grantTone(grant.status)}>
@@ -479,16 +586,29 @@ export function ValidationConsole() {
                       </div>
                     ) : null}
                     {grant.status === "approved" ? (
-                      <button
-                        type="button"
-                        className="mt-5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:opacity-50"
-                        disabled={Boolean(busy)}
-                        onClick={() => void startValidation(grant)}
-                      >
-                        {busy === `run-${grant.id}`
-                          ? "排队中…"
-                          : "Run fixed Profile"}
-                      </button>
+                      grant.allowed_validation_suites.length ? (
+                        <button
+                          type="button"
+                          className="mt-5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:opacity-50"
+                          disabled={Boolean(busy)}
+                          onClick={() => void startSuite(grant)}
+                        >
+                          {busy === `suite-${grant.id}`
+                            ? "排队中…"
+                            : "Run fixed Suite"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="mt-5 rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:opacity-50"
+                          disabled={Boolean(busy)}
+                          onClick={() => void startValidation(grant)}
+                        >
+                          {busy === `run-${grant.id}`
+                            ? "排队中…"
+                            : "Run sealed first-slice Profile"}
+                        </button>
+                      )
                     ) : null}
                   </li>
                 ))}
@@ -498,7 +618,216 @@ export function ValidationConsole() {
 
           <section className="mt-10">
             <h2 className="text-2xl font-semibold text-slate-950">
-              3. 状态与结构化证据
+              3. Suite 时间线与聚合结果
+            </h2>
+            {suiteRuns.length === 0 ? (
+              <p className="mt-4 rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-600">
+                尚无 Validation Suite Run。
+              </p>
+            ) : (
+              <ul className="mt-5 space-y-5">
+                {suiteRuns.map((run) => {
+                  const retryGrant = validationGrants.find(
+                    (grant) =>
+                      grant.id !== run.execution_grant_id &&
+                      grant.status === "approved" &&
+                      grant.validation_checkpoint_id === run.checkpoint_id &&
+                      grant.allowed_validation_suites.includes(
+                        `${run.suite_id}:v${run.suite_version}`,
+                      ),
+                  );
+                  const retryable = [
+                    "failed",
+                    "timed_out",
+                    "cancelled",
+                    "recovery_required",
+                  ].includes(run.state);
+                  return (
+                    <li
+                      key={run.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold tracking-widest text-blue-700 uppercase">
+                            {run.suite_id}:v{run.suite_version} · attempt{" "}
+                            {run.attempt_number}/{run.max_attempts}
+                          </p>
+                          <h3 className="mt-1 font-mono text-sm break-all text-slate-950">
+                            {run.id}
+                          </h3>
+                        </div>
+                        <StatusPill tone={runTone(run.state)}>
+                          {run.state}
+                        </StatusPill>
+                      </div>
+                      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                        <div>
+                          <dt className="font-semibold text-slate-500">
+                            Authority
+                          </dt>
+                          <dd className="mt-1 font-mono text-xs break-all">
+                            {run.checkpoint_fingerprint}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold text-slate-500">
+                            Aggregate budget
+                          </dt>
+                          <dd className="mt-1">
+                            {run.combined_output_bytes}/{run.total_output_bytes}{" "}
+                            bytes · {run.total_timeout_seconds}s
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold text-slate-500">
+                            Progress
+                          </dt>
+                          <dd className="mt-1">
+                            {run.completed_step_count}/{run.step_count} terminal
+                            steps
+                          </dd>
+                        </div>
+                      </dl>
+                      {run.error_code ? (
+                        <p
+                          className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900"
+                          role="status"
+                        >
+                          {run.error_code}: {run.error_message}
+                        </p>
+                      ) : null}
+                      <ol
+                        className="mt-5 space-y-3"
+                        aria-label="Validation Suite step timeline"
+                      >
+                        {run.steps.map((step) => (
+                          <li
+                            key={step.id}
+                            className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <p className="font-semibold text-slate-900">
+                                  {step.sequence}. {step.step_id}
+                                </p>
+                                <p className="mt-1 font-mono text-xs text-slate-600">
+                                  {step.profile_id}:v{step.profile_version}
+                                  {step.reused_from_step_run_id
+                                    ? " · reused successful Evidence"
+                                    : ""}
+                                </p>
+                              </div>
+                              <StatusPill tone={runTone(step.state)}>
+                                {step.state}
+                              </StatusPill>
+                            </div>
+                            <p className="mt-2 text-sm text-slate-700">
+                              duration {step.duration_ms ?? "—"}ms · exit{" "}
+                              {step.exit_code ?? "—"} · output{" "}
+                              {step.output_bytes}/{step.max_output_bytes} ·
+                              cleaned {String(step.cleanup_succeeded ?? "—")}
+                            </p>
+                            {step.evidence ? (
+                              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                                <div>
+                                  <h4 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
+                                    stdout
+                                  </h4>
+                                  <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-slate-950 p-3 text-xs whitespace-pre-wrap text-slate-100">
+                                    {step.evidence.stdout || "(empty)"}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <h4 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
+                                    stderr
+                                  </h4>
+                                  <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-slate-950 p-3 text-xs whitespace-pre-wrap text-slate-100">
+                                    {step.evidence.stderr || "(empty)"}
+                                  </pre>
+                                </div>
+                              </div>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ol>
+                      {run.result ? (
+                        <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+                          <h4 className="font-semibold text-slate-950">
+                            Aggregate Result: {run.result.verdict}
+                          </h4>
+                          <p className="mt-2 text-slate-700">
+                            Evidence {run.result.evidence_references.length} ·
+                            redactions {run.result.redaction_count} · artifacts{" "}
+                            {run.result.artifact_count} · cleanup{" "}
+                            {String(run.result.cleanup_succeeded)} · source
+                            invariant {String(run.result.source_invariant)} ·
+                            canonical Workspace invariant{" "}
+                            {String(run.result.canonical_workspace_invariant)}
+                          </p>
+                          <p className="mt-2 font-mono text-xs break-all text-slate-600">
+                            {run.result.aggregate_digest}
+                          </p>
+                        </div>
+                      ) : null}
+                      <div className="mt-5 flex flex-wrap items-center gap-3">
+                        {activeSuiteStates.has(run.state) &&
+                        run.state !== "cancel_requested" ? (
+                          <button
+                            type="button"
+                            className="rounded-lg px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-300 disabled:opacity-50"
+                            disabled={Boolean(busy)}
+                            onClick={() => void cancelSuite(run)}
+                          >
+                            {busy === `cancel-suite-${run.id}`
+                              ? "取消中…"
+                              : "Cancel Suite"}
+                          </button>
+                        ) : null}
+                        {retryable ? (
+                          <>
+                            <button
+                              type="button"
+                              className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 ring-1 ring-blue-300 disabled:opacity-50"
+                              disabled={
+                                Boolean(busy) ||
+                                !retryGrant ||
+                                run.attempt_number >= run.max_attempts
+                              }
+                              onClick={() =>
+                                retryGrant
+                                  ? void retrySuite(run, retryGrant)
+                                  : undefined
+                              }
+                            >
+                              {busy === `retry-suite-${run.id}`
+                                ? "重试中…"
+                                : "Retry failed steps"}
+                            </button>
+                            {!retryGrant ? (
+                              <span className="text-xs text-slate-600">
+                                Retry disabled: 需要同一 Checkpoint 的新批准
+                                Suite Grant。
+                              </span>
+                            ) : null}
+                            {run.attempt_number >= run.max_attempts ? (
+                              <span className="text-xs text-slate-600">
+                                Retry disabled: attempt budget exhausted。
+                              </span>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="mt-10">
+            <h2 className="text-2xl font-semibold text-slate-950">
+              4. First-slice 单步记录
             </h2>
             {runs.length === 0 ? (
               <p className="mt-4 rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-600">

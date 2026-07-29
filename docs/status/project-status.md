@@ -1,11 +1,15 @@
 # Project Status
 
-- Phase: Phase 5 — Governed Validation Execution
+- Phase: Phase 5 — Governed Multi-Step Validation Suites
 - Overall status:
-  `PHASE 5 SINGLE-FINDING RE-AUDIT PASS — FIRST VERTICAL SLICE SEALED — READY FOR USER-AUTHORIZED MAIN INTEGRATION`
-- Governance qualifier: SINGLE-FINDING, MYPY GOVERNANCE, AND FINAL AGGREGATE
-  PASS; MAIN REMAINS UNCHANGED
+  `IMPLEMENTED_PENDING_INDEPENDENT_FOCUSED_REVIEW`
+- Governance qualifier: SECOND-SLICE IMPLEMENTER CANDIDATE ONLY; SECURITY GATE
+  NOT DECLARED
 - Last updated: 2026-07-30
+- Current main / second-slice baseline:
+  `f547091307c52df8f20fc69bac4b4826cbbc74ad`
+- Current implementation branch:
+  `feat/phase-5-governed-validation-suites`
 - Phase 5 single-finding re-audit branch:
   `audit/phase-5-cancel-permit-single-finding-max`
 - Phase 5 single-finding re-audit candidate:
@@ -64,6 +68,43 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 governed multi-step Validation Suites candidate
+
+The second-slice implementation candidate adds one source-owned immutable
+Suite, `fixture-integrity-suite-v1:v1`, over the two fixed fixture Profiles.
+The Control Plane materializes the two ordered steps and serially dispatches
+the sealed first-slice Validation Run unit. Every executed step retains an
+independent Runner Job, Attempt, Lease, Permit, result, Evidence, disposable
+sandbox, zero-artifact boundary, cleanup proof, and canonical-Workspace
+invariance.
+
+The additive `20260730_0008` migration introduces Suite Run, ordered step, and
+aggregate result entities plus Suite-scoped Grant references, closed checks,
+foreign keys, uniqueness/indexes, and immutable/transition triggers. The API
+adds catalog and Suite create/list/detail/timeline/result/cancel/retry routes.
+The browser renders Suite definition/limits, Grant approval, serial state,
+bounded per-step Evidence, aggregate result, cancellation, fresh-Grant retry,
+disabled reasons, and recovery state without a command or step editor.
+
+The Suite is fail-fast with a 30-second total timeout, 10,000-byte combined
+retained-output cap, zero artifacts, and two attempts. Exact output limit is
+allowed; limit plus one cannot create a successful aggregate. Cancellation
+and Suite timeout cancel an active child before terminalizing and never
+dispatch a pending child. Retry requires a new approved Suite Grant, reuses
+successful immutable Evidence without redispatch or recharge, and creates
+fresh execution identities for remaining work.
+
+Focused real-PostgreSQL Suite tests pass `10/10`. Final aggregate `make verify`
+exits `0`: Python/API/Runner/Protocol `239/239` at 83.35% coverage, Web
+`47/47` above every configured coverage threshold, desktop/390 px E2E
+`16/16`, Migration, Chaos, Docker isolation, Security `111/111`, Eval 67, and
+invariance pass. These are implementer results. Only the local checkpoint and
+clean-tree reconciliation remain administrative steps. The implementer does
+not declare Security Gate PASS.
+The only eligible next review covers Suite immutability, injection prevention,
+Suite/step state consistency, cancellation/retry races, aggregate budgets,
+result/Evidence aggregation, cleanup, and source/canonical invariance.
 
 ## Phase 5 independent single-finding re-audit decision
 

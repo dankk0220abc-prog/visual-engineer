@@ -1,9 +1,9 @@
 # System Overview
 
-VisualEngineer through the first Phase 5 slice is a local, single-user governed
-planning, fixture-only isolated editing, and fixed-Profile validation
-foundation. Solid nodes below are implemented. Dashed nodes are future V1
-boundaries.
+VisualEngineer through the second Phase 5 implementation slice is a local,
+single-user governed planning, fixture-only isolated editing, fixed-Profile
+validation, and system-owned multi-step Suite foundation. Solid nodes below
+are implemented. Dashed nodes are future V1 boundaries.
 
 ```mermaid
 flowchart TB
@@ -70,10 +70,11 @@ Job/Attempt state, progress, cancellation, results, and RunnerJobEvent
 Timeline. It owns no database, filesystem, Git, Docker, shell, Runner
 credential, or target-repository access.
 
-The `/validations` surface lists the one fixed Profile, derives a pending
-validation-only Grant from an exact eligible Workspace Checkpoint, preserves a
-separate human approve/reject decision, creates/cancels a Validation Run, and
-renders bounded structured evidence. It has no command, argv, environment,
+The `/validations` surface lists the fixed Profiles and one immutable Suite,
+derives a pending validation-only Grant from an exact eligible Workspace
+Checkpoint, preserves a separate human approve/reject decision, creates/
+cancels a Validation Run or Suite Run, and renders ordered child timelines and
+bounded aggregate Evidence. It has no step editor, command, argv, environment,
 package, URL, or free-form tool input.
 
 ### API
@@ -109,6 +110,11 @@ resource limits, monotonic timeout/cancel, bounded output, process-group
 cleanup, and exact sandbox removal. It never runs a user command or mutates the
 canonical Workspace.
 
+The Control Plane, not Runner, owns Suite orchestration. It selects immutable
+catalog steps and queues only one existing fixed-Profile child at a time. Each
+child retains an independent Job, Attempt, Lease, Permit, result, Evidence, and
+sandbox. Runner receives no Suite definition or caller-provided step.
+
 ### Repository Scanner
 
 The scanner:
@@ -139,11 +145,13 @@ still requires typed tool schemas and an independent runtime policy layer.
 PostgreSQL stores Task, Run, RepositorySnapshot, Plan, ApprovalDecision,
 AuditEvent, Runner, PermissionEnvelope, RunnerJob, RunnerJobAttempt,
 RunnerJobEvent, RepositoryHandle, ExecutionGrant/Decision, Workspace/Event,
-Checkpoint, ValidationRun, ValidationStepRun, and ValidationEvidence. Alembic
+Checkpoint, ValidationRun, ValidationStepRun, ValidationEvidence,
+ValidationSuiteRun, ValidationSuiteStepRun, and ValidationSuiteResult. Alembic
 owns schema history. Row locks and uniqueness serialize decisions, claims,
-workspace actions, validation dispatch, and terminal evidence. Database
+workspace actions, validation/Suite dispatch, and terminal evidence. Database
 triggers reject Snapshot, PermissionEnvelope, Execution Grant policy,
-Checkpoint, and validation evidence mutation.
+Checkpoint, validation evidence, Suite authority, and terminal aggregate
+mutation.
 
 ### Contract
 

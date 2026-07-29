@@ -203,6 +203,25 @@ and evidence digest. Neither table accepts raw environment, user command,
 host cwd/path, or credentials. Unique bindings prevent replay from creating a
 second step or evidence row.
 
+## ValidationSuiteRun, ValidationSuiteStepRun, and ValidationSuiteResult
+
+ValidationSuiteRun binds a source-owned Suite ID/version and policy digest to
+the exact Run, Plan, approved revision, sealed Workspace Checkpoint,
+Suite-scoped Execution Grant, idempotency key, total timeout/output budgets,
+and attempt/retry lineage. ValidationSuiteStepRun materializes only the
+catalogued order and fixed Profile references. Each dispatched step points to
+an independent ValidationRun and therefore to its own Runner Job, Attempt,
+Lease, Permit, result, and immutable Evidence. A reused successful step points
+to its original immutable Evidence and consumes zero retry output.
+
+ValidationSuiteResult is the single immutable aggregate verdict. It records
+ordered Evidence references, timing, output/redaction/truncation consumption,
+zero-artifact summary, cleanup and source/canonical-Workspace invariance, and
+Audit/Runner event references. Database checks and triggers close state values,
+enforce unique order/idempotency/attempts, protect immutable authority and
+terminal rows, and prevent a successful aggregate whose steps or budget are
+inconsistent.
+
 ## Relationships
 
 ```mermaid
@@ -235,6 +254,11 @@ erDiagram
     RUNNER_JOB ||--o| VALIDATION_RUN : "fenced execution"
     VALIDATION_RUN ||--|| VALIDATION_STEP_RUN : "fixed profile step"
     VALIDATION_RUN ||--o| VALIDATION_EVIDENCE : "terminal proof"
+    EXECUTION_GRANT ||--o{ VALIDATION_SUITE_RUN : "fixed suite authority"
+    WORKSPACE_CHECKPOINT ||--o{ VALIDATION_SUITE_RUN : "exact baseline"
+    VALIDATION_SUITE_RUN ||--|{ VALIDATION_SUITE_STEP_RUN : "catalog order"
+    VALIDATION_SUITE_STEP_RUN }o--o| VALIDATION_RUN : "independent child"
+    VALIDATION_SUITE_RUN ||--o| VALIDATION_SUITE_RESULT : "aggregate proof"
 ```
 
 ## Database guarantees and service guarantees
@@ -265,8 +289,10 @@ Phase 4 ended with Alembic revision
 `20260729_0006_add_governed_validation_execution` and the additive evidence
 binding revision
 `20260729_0007_bind_validation_result_evidence`; prior migrations are not
-rewritten. The complete base-to-head, downgrade-to-base, and upgrade-to-head
-roundtrip must pass on real PostgreSQL before the implementation checkpoint.
+rewritten. The second slice adds
+`20260730_0008_add_governed_validation_suites`. The complete base-to-head,
+downgrade-to-base, and upgrade-to-head roundtrip must pass on real PostgreSQL
+before the implementation checkpoint.
 
 ## Future entities
 

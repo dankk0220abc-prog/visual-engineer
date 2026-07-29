@@ -1872,7 +1872,7 @@ class RunnerService:
             and validation_run.max_output_bytes
             == stored_spec.max_output_bytes
             == profile.max_output_bytes
-            == grant.validation_output_bytes
+            and profile.max_output_bytes <= grant.validation_output_bytes
             and validation_run.max_artifact_bytes
             == stored_spec.max_artifact_bytes
             == profile.max_artifact_bytes

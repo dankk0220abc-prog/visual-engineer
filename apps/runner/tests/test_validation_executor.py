@@ -14,6 +14,7 @@ from visual_engineer_runner.validation_executor import (
     ValidationExecutionError,
     ValidationExecutor,
 )
+from visual_engineer_runner.validation_worker import _run_profile
 from visual_engineer_runner_protocol import FailureCode
 
 
@@ -111,3 +112,47 @@ def test_cleanup_rejects_a_symlink_root_without_following_it(tmp_path: Path) -> 
 
     assert raised.value.code == FailureCode.VALIDATION_CLEANUP_FAILED
     assert marker.read_text(encoding="utf-8") == "preserve\n"
+
+
+def test_fixed_profiles_select_only_system_owned_contract_and_manifest_modes(
+    tmp_path: Path,
+) -> None:
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
+    fixture = sandbox / "original.txt"
+    fixture.write_bytes(b"Original fixture text.\n")
+    fixture_descriptor = os.open(fixture, os.O_RDONLY | os.O_NOFOLLOW)
+    sandbox_descriptor = os.open(
+        sandbox,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+    )
+    try:
+        assert (
+            _run_profile(
+                "fixture-python-stdlib-v1",
+                fixture_descriptor,
+                sandbox_descriptor,
+            )
+            == 0
+        )
+        assert (
+            _run_profile(
+                "fixture-python-manifest-v1",
+                fixture_descriptor,
+                sandbox_descriptor,
+            )
+            == 0
+        )
+        assert _run_profile("unknown-profile", fixture_descriptor, sandbox_descriptor) == 70
+        (sandbox / "injected.txt").write_text("forbidden\n", encoding="utf-8")
+        assert (
+            _run_profile(
+                "fixture-python-manifest-v1",
+                fixture_descriptor,
+                sandbox_descriptor,
+            )
+            == 1
+        )
+    finally:
+        os.close(fixture_descriptor)
+        os.close(sandbox_descriptor)

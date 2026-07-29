@@ -52,6 +52,7 @@ from visual_engineer_runner_protocol import (
     compute_execution_grant_policy_hash,
     execution_grant_policy_hash_matches,
     validation_profile,
+    validation_suite,
 )
 
 PHASE4_ALLOWED_OPERATIONS = [
@@ -337,6 +338,7 @@ class WorkspaceService:
             validation_workspace_id=policy.validation_workspace_id,
             validation_checkpoint_id=policy.validation_checkpoint_id,
             allowed_validation_profiles=policy.allowed_validation_profiles,
+            allowed_validation_suites=[],
             max_validation_runs=policy.max_validation_runs,
             validation_timeout_seconds=policy.validation_timeout_seconds,
             validation_cpu_seconds=policy.validation_cpu_seconds,
@@ -365,21 +367,60 @@ class WorkspaceService:
         del request_id
         checkpoint_id = payload.validation_checkpoint_id
         profile_id = payload.validation_profile_id
-        if checkpoint_id is None or profile_id is None:
+        suite_id = payload.validation_suite_id
+        if checkpoint_id is None or (profile_id is None) == (suite_id is None):
             raise WorkspaceServiceError(
                 "validation_scope_invalid",
-                "Validation Grant requires an exact Checkpoint and Profile",
+                "Validation Grant requires an exact Checkpoint and one fixed Profile or Suite",
                 category="validation",
             )
-        profile = validation_profile(profile_id)
-        if profile is None:
+        profile = validation_profile(profile_id) if profile_id is not None else None
+        suite = validation_suite(suite_id) if suite_id is not None else None
+        if profile_id is not None and profile is None:
             raise WorkspaceServiceError(
                 "validation_profile_denied",
                 "Validation Profile is not in the system-owned catalog",
                 category="policy",
             )
+        if suite_id is not None and (
+            suite is None
+            or payload.validation_suite_version is None
+            or suite.version != payload.validation_suite_version
+        ):
+            raise WorkspaceServiceError(
+                "validation_suite_denied",
+                "Validation Suite ID/version is not in the system-owned catalog",
+                category="policy",
+            )
+        if profile is not None:
+            profiles = [profile]
+            allowed_suites: list[str] = []
+            max_validation_runs = 3
+        else:
+            if suite is None:
+                raise WorkspaceServiceError(
+                    "validation_suite_denied",
+                    "Validation Suite is not in the system-owned catalog",
+                    category="policy",
+                )
+            profiles = []
+            for step in suite.steps:
+                step_profile = validation_profile(step.profile_id)
+                if step_profile is None or step_profile.version != step.profile_version:
+                    raise WorkspaceServiceError(
+                        "validation_suite_profile_denied",
+                        "Validation Suite references an unavailable Profile",
+                        category="policy",
+                    )
+                profiles.append(step_profile)
+            allowed_suites = [suite.reference]
+            max_validation_runs = suite.max_attempts * len(suite.steps)
+        allowed_profiles = [item.reference for item in profiles]
         existing = self._validation.latest_validation_grant_for_checkpoint(
-            payload.plan_id, checkpoint_id
+            payload.plan_id,
+            checkpoint_id,
+            allowed_profiles=allowed_profiles,
+            allowed_suites=allowed_suites,
         )
         if existing is not None:
             if self._expire_grant(existing):
@@ -457,16 +498,16 @@ class WorkspaceService:
             "source_repository_write_access": False,
             "validation_workspace_id": workspace.id,
             "validation_checkpoint_id": checkpoint.id,
-            "allowed_validation_profiles": [profile.reference],
-            "max_validation_runs": 3,
-            "validation_timeout_seconds": profile.timeout_seconds,
-            "validation_cpu_seconds": profile.cpu_seconds,
-            "validation_memory_bytes": profile.memory_bytes,
-            "validation_pid_limit": profile.pid_limit,
-            "validation_fd_limit": profile.fd_limit,
-            "validation_output_bytes": profile.max_output_bytes,
-            "validation_artifact_bytes": profile.max_artifact_bytes,
-            "validation_artifact_count": profile.max_artifact_count,
+            "allowed_validation_profiles": allowed_profiles,
+            "max_validation_runs": max_validation_runs,
+            "validation_timeout_seconds": max(item.timeout_seconds for item in profiles),
+            "validation_cpu_seconds": max(item.cpu_seconds for item in profiles),
+            "validation_memory_bytes": max(item.memory_bytes for item in profiles),
+            "validation_pid_limit": max(item.pid_limit for item in profiles),
+            "validation_fd_limit": max(item.fd_limit for item in profiles),
+            "validation_output_bytes": max(item.max_output_bytes for item in profiles),
+            "validation_artifact_bytes": max(item.max_artifact_bytes for item in profiles),
+            "validation_artifact_count": max(item.max_artifact_count for item in profiles),
             "expires_at": expires_at,
             "policy_hash": "0" * 64,
         }
@@ -497,6 +538,7 @@ class WorkspaceService:
             validation_workspace_id=policy.validation_workspace_id,
             validation_checkpoint_id=policy.validation_checkpoint_id,
             allowed_validation_profiles=policy.allowed_validation_profiles,
+            allowed_validation_suites=allowed_suites,
             max_validation_runs=policy.max_validation_runs,
             validation_timeout_seconds=policy.validation_timeout_seconds,
             validation_cpu_seconds=policy.validation_cpu_seconds,
@@ -1239,6 +1281,7 @@ class WorkspaceService:
             validation_workspace_id=grant.validation_workspace_id,
             validation_checkpoint_id=grant.validation_checkpoint_id,
             allowed_validation_profiles=grant.allowed_validation_profiles,
+            allowed_validation_suites=grant.allowed_validation_suites,
             max_validation_runs=grant.max_validation_runs,
             validation_timeout_seconds=grant.validation_timeout_seconds,
             validation_cpu_seconds=grant.validation_cpu_seconds,

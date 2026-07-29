@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import hashlib
 import os
 import platform
 import resource
@@ -11,6 +12,7 @@ import sys
 from pathlib import Path
 
 _EXPECTED_FIXTURE = b"Original fixture text.\n"
+_EXPECTED_FIXTURE_SHA256 = hashlib.sha256(_EXPECTED_FIXTURE).hexdigest()
 _LANDLOCK_CREATE_RULESET = 444
 _LANDLOCK_ADD_RULE = 445
 _LANDLOCK_RESTRICT_SELF = 446
@@ -318,11 +320,12 @@ def _require_denied_boundaries(canonical_workspace: Path) -> None:
         probe.close()
 
 
-def _open_fixture(input_root: Path) -> int:
+def _open_fixture(input_root: Path) -> tuple[int, int]:
     root_descriptor = os.open(
         input_root,
         os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
     )
+    sandbox_descriptor: int | None = None
     try:
         sandbox_descriptor = os.open(
             "sandbox",
@@ -335,31 +338,51 @@ def _open_fixture(input_root: Path) -> int:
                 os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
                 dir_fd=sandbox_descriptor,
             )
-        finally:
+        except Exception:
             os.close(sandbox_descriptor)
+            raise
     finally:
         os.close(root_descriptor)
     metadata = os.fstat(fixture_descriptor)
     if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or metadata.st_size > 4096:
         os.close(fixture_descriptor)
+        os.close(sandbox_descriptor)
         raise OSError(errno.EPERM, "validation input identity is invalid")
-    return fixture_descriptor
+    return fixture_descriptor, sandbox_descriptor
 
 
-def _run_profile(fixture_descriptor: int) -> int:
+def _run_profile(
+    profile_id: str,
+    fixture_descriptor: int,
+    sandbox_descriptor: int,
+) -> int:
     os.lseek(fixture_descriptor, 0, os.SEEK_SET)
     value = os.read(fixture_descriptor, 4097)
-    if value != _EXPECTED_FIXTURE:
+    if profile_id == "fixture-python-stdlib-v1":
+        if value != _EXPECTED_FIXTURE:
+            print("VE_VALIDATION_PROFILE_CONTRACT_MISMATCH", file=sys.stderr, flush=True)
+            return 1
+        print("VE_VALIDATION_PROFILE_PASS", flush=True)
+        return 0
+    if profile_id == "fixture-python-manifest-v1":
+        entries = sorted(entry.name for entry in os.scandir(sandbox_descriptor))
+        if entries != ["original.txt"] or hashlib.sha256(value).hexdigest() != (
+            _EXPECTED_FIXTURE_SHA256
+        ):
+            print("VE_VALIDATION_PROFILE_MANIFEST_MISMATCH", file=sys.stderr, flush=True)
+            return 1
+        print("VE_VALIDATION_PROFILE_MANIFEST_PASS", flush=True)
+        return 0
+    else:
         print("VE_VALIDATION_PROFILE_CONTRACT_MISMATCH", file=sys.stderr, flush=True)
-        return 1
-    print("VE_VALIDATION_PROFILE_PASS", flush=True)
-    return 0
+        return 70
 
 
 def main() -> int:
-    if len(sys.argv) != 12:
+    if len(sys.argv) != 13:
         return 70
     (
+        profile_id,
         input_value,
         scratch_value,
         output_value,
@@ -379,8 +402,9 @@ def main() -> int:
     canonical_workspace = Path(canonical_value)
     stage = "input"
     fixture_descriptor: int | None = None
+    sandbox_descriptor: int | None = None
     try:
-        fixture_descriptor = _open_fixture(input_root)
+        fixture_descriptor, sandbox_descriptor = _open_fixture(input_root)
         stage = "limits"
         _apply_limits(
             cpu_seconds=int(cpu_value),
@@ -398,7 +422,7 @@ def main() -> int:
         _require_denied_boundaries(canonical_workspace)
         stage = "profile"
         os.chdir(input_root)
-        return _run_profile(fixture_descriptor)
+        return _run_profile(profile_id, fixture_descriptor, sandbox_descriptor)
     except (OSError, RuntimeError, ValueError) as exc:
         error_number = exc.errno if isinstance(exc, OSError) else 0
         print(
@@ -410,6 +434,8 @@ def main() -> int:
     finally:
         if fixture_descriptor is not None:
             os.close(fixture_descriptor)
+        if sandbox_descriptor is not None:
+            os.close(sandbox_descriptor)
 
 
 if __name__ == "__main__":

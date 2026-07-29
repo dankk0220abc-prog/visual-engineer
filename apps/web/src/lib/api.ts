@@ -139,6 +139,30 @@ type ValidationRunCancelOperation = OperationAt<
   "/api/v1/validation-runs/{validation_run_id}/cancel",
   "post"
 >;
+type ValidationSuiteListOperation = OperationAt<
+  "/api/v1/validation-suites",
+  "get"
+>;
+type ValidationSuiteRunListOperation = OperationAt<
+  "/api/v1/validation-suite-runs",
+  "get"
+>;
+type ValidationSuiteRunCreateOperation = OperationAt<
+  "/api/v1/validation-suite-runs",
+  "post"
+>;
+type ValidationSuiteRunDetailOperation = OperationAt<
+  "/api/v1/validation-suite-runs/{suite_run_id}",
+  "get"
+>;
+type ValidationSuiteRunCancelOperation = OperationAt<
+  "/api/v1/validation-suite-runs/{suite_run_id}/cancel",
+  "post"
+>;
+type ValidationSuiteRunRetryOperation = OperationAt<
+  "/api/v1/validation-suite-runs/{suite_run_id}/retry",
+  "post"
+>;
 
 export type Task = JsonResponse<TaskDetailOperation, 200>;
 export type CreateTaskInput = JsonRequest<TaskCreateOperation>;
@@ -218,6 +242,23 @@ type ValidationRunListPayload = JsonResponse<ValidationRunListOperation, 200>;
 export type ValidationRun = JsonResponse<ValidationRunDetailOperation, 200>;
 export type CreateValidationRunInput =
   JsonRequest<ValidationRunCreateOperation>;
+type ValidationSuiteListPayload = JsonResponse<
+  ValidationSuiteListOperation,
+  200
+>;
+export type ValidationSuite = ValidationSuiteListPayload["items"][number];
+type ValidationSuiteRunListPayload = JsonResponse<
+  ValidationSuiteRunListOperation,
+  200
+>;
+export type ValidationSuiteRun = JsonResponse<
+  ValidationSuiteRunDetailOperation,
+  200
+>;
+export type CreateValidationSuiteRunInput =
+  JsonRequest<ValidationSuiteRunCreateOperation>;
+export type RetryValidationSuiteRunInput =
+  JsonRequest<ValidationSuiteRunRetryOperation>;
 
 export type HealthCheck = "live" | "ready";
 export type RepositoryKind = CreateTaskInput extends {
@@ -861,6 +902,76 @@ export async function cancelValidationRun(
   >(`/api/v1/validation-runs/${encodeURIComponent(validationRunId)}/cancel`, {
     method: "POST",
     headers: { "X-Request-ID": crypto.randomUUID() },
+  });
+  return data;
+}
+
+export async function listValidationSuites(): Promise<ValidationSuite[]> {
+  const { data } = await request<ValidationSuiteListPayload>(
+    "/api/v1/validation-suites",
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function listValidationSuiteRuns(
+  workspaceId?: string,
+): Promise<ValidationSuiteRun[]> {
+  const query = workspaceId
+    ? `?workspace_id=${encodeURIComponent(workspaceId)}`
+    : "";
+  const { data } = await request<ValidationSuiteRunListPayload>(
+    `/api/v1/validation-suite-runs${query}`,
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function createValidationSuiteRun(
+  input: CreateValidationSuiteRunInput,
+  idempotencyKey: string,
+): Promise<ValidationSuiteRun> {
+  const { data } = await request<
+    JsonResponse<ValidationSuiteRunCreateOperation, 201>
+  >("/api/v1/validation-suite-runs", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function cancelValidationSuiteRun(
+  suiteRunId: string,
+): Promise<ValidationSuiteRun> {
+  const { data } = await request<
+    JsonResponse<ValidationSuiteRunCancelOperation, 200>
+  >(`/api/v1/validation-suite-runs/${encodeURIComponent(suiteRunId)}/cancel`, {
+    method: "POST",
+    headers: { "X-Request-ID": crypto.randomUUID() },
+  });
+  return data;
+}
+
+export async function retryValidationSuiteRun(
+  suiteRunId: string,
+  input: RetryValidationSuiteRunInput,
+  idempotencyKey: string,
+): Promise<ValidationSuiteRun> {
+  const { data } = await request<
+    JsonResponse<ValidationSuiteRunRetryOperation, 201>
+  >(`/api/v1/validation-suite-runs/${encodeURIComponent(suiteRunId)}/retry`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify(input),
   });
   return data;
 }

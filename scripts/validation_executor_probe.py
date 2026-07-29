@@ -71,8 +71,11 @@ def _grant(workspace_id: uuid.UUID, checkpoint_id: uuid.UUID) -> ExecutionGrantP
         "workspace_ttl_seconds": 1200,
         "validation_workspace_id": workspace_id,
         "validation_checkpoint_id": checkpoint_id,
-        "allowed_validation_profiles": ["fixture-python-stdlib-v1:v1"],
-        "max_validation_runs": 3,
+        "allowed_validation_profiles": [
+            "fixture-python-stdlib-v1:v1",
+            "fixture-python-manifest-v1:v1",
+        ],
+        "max_validation_runs": 4,
         "validation_timeout_seconds": 10,
         "validation_cpu_seconds": 5,
         "validation_memory_bytes": 128 * 1024 * 1024,
@@ -94,15 +97,19 @@ def _spec(
     workspace_id: uuid.UUID,
     checkpoint_id: uuid.UUID,
     validation_run_id: uuid.UUID,
+    profile_id: str,
 ) -> ValidationExecuteJobSpec:
+    manifest = profile_id == "fixture-python-manifest-v1"
     return ValidationExecuteJobSpec(
         validation_run_id=validation_run_id,
+        validation_step_id="fixture-manifest" if manifest else "fixture-contract",
         workspace_id=workspace_id,
         execution_grant=grant,
+        profile_id=profile_id,
         checkpoint_id=checkpoint_id,
         checkpoint_fingerprint=CHECKPOINT_FINGERPRINT,
         timeout_seconds=10,
-        max_output_bytes=8192,
+        max_output_bytes=4096 if manifest else 8192,
         max_artifact_bytes=0,
         max_artifact_count=0,
     )
@@ -152,12 +159,20 @@ def main() -> int:
     checkpoint_id = uuid.uuid4()
     grant = _grant(workspace_id, checkpoint_id)
     expected_outcomes = (
-        ("Original fixture text.\n", 0),
-        ("Changed fixture text.\n", 1),
+        ("fixture-python-stdlib-v1", "Original fixture text.\n", 0),
+        ("fixture-python-stdlib-v1", "Changed fixture text.\n", 1),
+        ("fixture-python-manifest-v1", "Original fixture text.\n", 0),
+        ("fixture-python-manifest-v1", "Changed fixture text.\n", 1),
     )
-    for content, expected_exit in expected_outcomes:
+    for profile_id, content, expected_exit in expected_outcomes:
         validation_run_id = uuid.uuid4()
-        spec = _spec(grant, workspace_id, checkpoint_id, validation_run_id)
+        spec = _spec(
+            grant,
+            workspace_id,
+            checkpoint_id,
+            validation_run_id,
+            profile_id,
+        )
         result = executor.execute(
             spec,
             cancel_event=threading.Event(),

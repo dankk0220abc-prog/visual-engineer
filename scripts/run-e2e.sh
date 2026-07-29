@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-PROJECT_NAME=visualengineer-e2e
+PROJECT_NAME=${E2E_COMPOSE_PROJECT_NAME:-visualengineer-e2e}
 E2E_DB_PORT=${E2E_DB_PORT:-15432}
 E2E_API_PORT=${E2E_API_PORT:-18000}
 E2E_WEB_PORT=${E2E_WEB_PORT:-13000}

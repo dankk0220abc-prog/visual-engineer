@@ -190,6 +190,14 @@ Profile/version, policy digest, run budget, and resource limits. Immediately
 before dispatch, the Control Plane and Runner revalidate those bindings and the
 Runner derives the exact current Workspace fingerprint.
 
+A Suite-scoped Grant binds the same exact baseline to one immutable Suite and
+its fixed Profile references. The Control Plane creates one disposable child
+sandbox at a time; there is no shared Suite sandbox. Cancel, timeout, failure,
+or cleanup uncertainty prevents the next sandbox from being created. Retry
+requires a fresh Grant and creates new sandboxes only for incomplete steps;
+successful immutable Evidence is reused without touching the canonical
+Workspace.
+
 Runner creates a UUID-addressed root below the dedicated validation volume and
 copies only the fixed Profile's bounded, descriptor-opened, no-follow regular
 inputs. Scratch and output directories exist only inside that root. The

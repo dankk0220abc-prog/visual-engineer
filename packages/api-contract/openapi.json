@@ -636,6 +636,30 @@
               }
             ],
             "title": "Validation Profile Id"
+          },
+          "validation_suite_id": {
+            "anyOf": [
+              {
+                "const": "fixture-integrity-suite-v1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Suite Id"
+          },
+          "validation_suite_version": {
+            "anyOf": [
+              {
+                "const": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Suite Version"
           }
         },
         "required": ["plan_id", "repository_handle_id"],
@@ -1037,6 +1061,13 @@
             "title": "Allowed Validation Profiles",
             "type": "array"
           },
+          "allowed_validation_suites": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Validation Suites",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1304,6 +1335,7 @@
           "validation_workspace_id",
           "validation_checkpoint_id",
           "allowed_validation_profiles",
+          "allowed_validation_suites",
           "max_validation_runs",
           "validation_timeout_seconds",
           "validation_cpu_seconds",
@@ -4399,8 +4431,8 @@
             "type": "integer"
           },
           "profile_id": {
-            "const": "fixture-python-stdlib-v1",
             "default": "fixture-python-stdlib-v1",
+            "enum": ["fixture-python-stdlib-v1", "fixture-python-manifest-v1"],
             "title": "Profile Id",
             "type": "string"
           },
@@ -4434,8 +4466,8 @@
             "type": "string"
           },
           "validation_step_id": {
-            "const": "fixture-contract",
             "default": "fixture-contract",
+            "enum": ["fixture-contract", "fixture-manifest"],
             "title": "Validation Step Id",
             "type": "string"
           },
@@ -4580,11 +4612,12 @@
                 "python",
                 "-I",
                 "-S",
-                "<system-owned-fixture-validator>"
+                "<system-owned-fixture-validator>",
+                "<system-owned-profile-mode>"
               ],
               "type": "string"
             },
-            "maxItems": 4,
+            "maxItems": 5,
             "minItems": 4,
             "title": "Fixed Argv",
             "type": "array"
@@ -4861,7 +4894,7 @@
             "type": "string"
           },
           "profile_id": {
-            "const": "fixture-python-stdlib-v1",
+            "enum": ["fixture-python-stdlib-v1", "fixture-python-manifest-v1"],
             "title": "Profile Id",
             "type": "string"
           },
@@ -4879,7 +4912,7 @@
             "type": "boolean"
           },
           "step_id": {
-            "const": "fixture-contract",
+            "enum": ["fixture-contract", "fixture-manifest"],
             "title": "Step Id",
             "type": "string"
           },
@@ -4923,7 +4956,7 @@
             "type": "string"
           },
           "profile_id": {
-            "const": "fixture-python-stdlib-v1",
+            "enum": ["fixture-python-stdlib-v1", "fixture-python-manifest-v1"],
             "title": "Profile Id",
             "type": "string"
           }
@@ -5101,7 +5134,7 @@
             "type": "string"
           },
           "profile_id": {
-            "const": "fixture-python-stdlib-v1",
+            "enum": ["fixture-python-stdlib-v1", "fixture-python-manifest-v1"],
             "title": "Profile Id",
             "type": "string"
           },
@@ -5313,7 +5346,7 @@
             "type": "string"
           },
           "step_id": {
-            "const": "fixture-contract",
+            "enum": ["fixture-contract", "fixture-manifest"],
             "title": "Step Id",
             "type": "string"
           }
@@ -5330,6 +5363,924 @@
           "failure_code"
         ],
         "title": "ValidationStepResponse",
+        "type": "object"
+      },
+      "ValidationSuiteAggregateResponse": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationSuiteResultResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ValidationSuiteRunState"
+          },
+          "suite_run_id": {
+            "format": "uuid",
+            "title": "Suite Run Id",
+            "type": "string"
+          }
+        },
+        "required": ["suite_run_id", "state", "result"],
+        "title": "ValidationSuiteAggregateResponse",
+        "type": "object"
+      },
+      "ValidationSuiteCatalogStepResponse": {
+        "properties": {
+          "max_artifact_bytes": {
+            "const": 0,
+            "default": 0,
+            "title": "Max Artifact Bytes",
+            "type": "integer"
+          },
+          "max_artifact_count": {
+            "const": 0,
+            "default": 0,
+            "title": "Max Artifact Count",
+            "type": "integer"
+          },
+          "max_output_bytes": {
+            "title": "Max Output Bytes",
+            "type": "integer"
+          },
+          "profile_id": {
+            "enum": ["fixture-python-stdlib-v1", "fixture-python-manifest-v1"],
+            "title": "Profile Id",
+            "type": "string"
+          },
+          "profile_version": {
+            "const": 1,
+            "title": "Profile Version",
+            "type": "integer"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "step_id": {
+            "enum": ["fixture-contract", "fixture-manifest"],
+            "title": "Step Id",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "title": "Timeout Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "step_id",
+          "profile_id",
+          "profile_version",
+          "timeout_seconds",
+          "max_output_bytes"
+        ],
+        "title": "ValidationSuiteCatalogStepResponse",
+        "type": "object"
+      },
+      "ValidationSuiteListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationSuiteResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "ValidationSuiteListResponse",
+        "type": "object"
+      },
+      "ValidationSuiteResponse": {
+        "properties": {
+          "artifact_content_transfer": {
+            "const": false,
+            "default": false,
+            "title": "Artifact Content Transfer",
+            "type": "boolean"
+          },
+          "failure_policy": {
+            "const": "fail_fast",
+            "title": "Failure Policy",
+            "type": "string"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "network_policy": {
+            "const": "none",
+            "default": "none",
+            "title": "Network Policy",
+            "type": "string"
+          },
+          "policy_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Digest",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "shell_access": {
+            "const": false,
+            "default": false,
+            "title": "Shell Access",
+            "type": "boolean"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationSuiteCatalogStepResponse"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "suite_id": {
+            "const": "fixture-integrity-suite-v1",
+            "title": "Suite Id",
+            "type": "string"
+          },
+          "suite_version": {
+            "const": 1,
+            "title": "Suite Version",
+            "type": "integer"
+          },
+          "total_output_bytes": {
+            "title": "Total Output Bytes",
+            "type": "integer"
+          },
+          "total_timeout_seconds": {
+            "title": "Total Timeout Seconds",
+            "type": "integer"
+          },
+          "user_command_input": {
+            "const": false,
+            "default": false,
+            "title": "User Command Input",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "suite_id",
+          "suite_version",
+          "name",
+          "purpose",
+          "steps",
+          "failure_policy",
+          "total_timeout_seconds",
+          "total_output_bytes",
+          "max_attempts",
+          "policy_digest"
+        ],
+        "title": "ValidationSuiteResponse",
+        "type": "object"
+      },
+      "ValidationSuiteResultResponse": {
+        "properties": {
+          "aggregate_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Aggregate Digest",
+            "type": "string"
+          },
+          "artifact_bytes": {
+            "const": 0,
+            "title": "Artifact Bytes",
+            "type": "integer"
+          },
+          "artifact_count": {
+            "const": 0,
+            "title": "Artifact Count",
+            "type": "integer"
+          },
+          "audit_event_references": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Audit Event References",
+            "type": "array"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "canonical_workspace_invariant": {
+            "title": "Canonical Workspace Invariant",
+            "type": "boolean"
+          },
+          "cleanup_succeeded": {
+            "title": "Cleanup Succeeded",
+            "type": "boolean"
+          },
+          "combined_output_bytes": {
+            "title": "Combined Output Bytes",
+            "type": "integer"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "evidence_references": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Evidence References",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "output_truncated": {
+            "title": "Output Truncated",
+            "type": "boolean"
+          },
+          "profile_references": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Profile References",
+            "type": "array"
+          },
+          "recovery_required": {
+            "title": "Recovery Required",
+            "type": "boolean"
+          },
+          "redaction_count": {
+            "title": "Redaction Count",
+            "type": "integer"
+          },
+          "source_invariant": {
+            "title": "Source Invariant",
+            "type": "boolean"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "timed_out": {
+            "title": "Timed Out",
+            "type": "boolean"
+          },
+          "verdict": {
+            "enum": [
+              "succeeded",
+              "failed",
+              "timed_out",
+              "cancelled",
+              "recovery_required"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "verdict",
+          "profile_references",
+          "evidence_references",
+          "audit_event_references",
+          "started_at",
+          "completed_at",
+          "duration_ms",
+          "combined_output_bytes",
+          "redaction_count",
+          "output_truncated",
+          "timed_out",
+          "cancelled",
+          "recovery_required",
+          "cleanup_succeeded",
+          "source_invariant",
+          "canonical_workspace_invariant",
+          "artifact_count",
+          "artifact_bytes",
+          "aggregate_digest",
+          "created_at"
+        ],
+        "title": "ValidationSuiteResultResponse",
+        "type": "object"
+      },
+      "ValidationSuiteRetryCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_grant_id": {
+            "format": "uuid",
+            "title": "Execution Grant Id",
+            "type": "string"
+          }
+        },
+        "required": ["execution_grant_id"],
+        "title": "ValidationSuiteRetryCreate",
+        "type": "object"
+      },
+      "ValidationSuiteRunCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_grant_id": {
+            "format": "uuid",
+            "title": "Execution Grant Id",
+            "type": "string"
+          },
+          "suite_id": {
+            "const": "fixture-integrity-suite-v1",
+            "title": "Suite Id",
+            "type": "string"
+          },
+          "suite_version": {
+            "const": 1,
+            "title": "Suite Version",
+            "type": "integer"
+          }
+        },
+        "required": ["execution_grant_id", "suite_id", "suite_version"],
+        "title": "ValidationSuiteRunCreate",
+        "type": "object"
+      },
+      "ValidationSuiteRunListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationSuiteRunResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "ValidationSuiteRunListResponse",
+        "type": "object"
+      },
+      "ValidationSuiteRunResponse": {
+        "properties": {
+          "attempt_number": {
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "cancel_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Requested At"
+          },
+          "checkpoint_fingerprint": {
+            "title": "Checkpoint Fingerprint",
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "format": "uuid",
+            "title": "Checkpoint Id",
+            "type": "string"
+          },
+          "combined_output_bytes": {
+            "title": "Combined Output Bytes",
+            "type": "integer"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "completed_step_count": {
+            "title": "Completed Step Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "execution_grant_id": {
+            "format": "uuid",
+            "title": "Execution Grant Id",
+            "type": "string"
+          },
+          "failure_policy": {
+            "const": "fail_fast",
+            "title": "Failure Policy",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "policy_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Digest",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationSuiteResultResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retry_of_suite_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of Suite Run Id"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ValidationSuiteRunState"
+          },
+          "step_count": {
+            "title": "Step Count",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationSuiteStepRunResponse"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "suite_id": {
+            "const": "fixture-integrity-suite-v1",
+            "title": "Suite Id",
+            "type": "string"
+          },
+          "suite_version": {
+            "const": 1,
+            "title": "Suite Version",
+            "type": "integer"
+          },
+          "total_output_bytes": {
+            "title": "Total Output Bytes",
+            "type": "integer"
+          },
+          "total_timeout_seconds": {
+            "title": "Total Timeout Seconds",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "plan_id",
+          "source_revision",
+          "workspace_id",
+          "checkpoint_id",
+          "checkpoint_fingerprint",
+          "execution_grant_id",
+          "suite_id",
+          "suite_version",
+          "policy_digest",
+          "failure_policy",
+          "state",
+          "step_count",
+          "completed_step_count",
+          "total_timeout_seconds",
+          "total_output_bytes",
+          "combined_output_bytes",
+          "max_attempts",
+          "attempt_number",
+          "retry_of_suite_run_id",
+          "requested_at",
+          "started_at",
+          "deadline_at",
+          "cancel_requested_at",
+          "completed_at",
+          "error_code",
+          "error_message",
+          "version",
+          "created_at",
+          "updated_at",
+          "steps",
+          "result"
+        ],
+        "title": "ValidationSuiteRunResponse",
+        "type": "object"
+      },
+      "ValidationSuiteRunState": {
+        "enum": [
+          "requested",
+          "queued",
+          "running",
+          "cancel_requested",
+          "succeeded",
+          "failed",
+          "timed_out",
+          "cancelled",
+          "recovery_required"
+        ],
+        "title": "ValidationSuiteRunState",
+        "type": "string"
+      },
+      "ValidationSuiteStepRunResponse": {
+        "properties": {
+          "attempt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt Id"
+          },
+          "cleanup_succeeded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleanup Succeeded"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationEvidenceResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Code"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lease_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Id"
+          },
+          "max_output_bytes": {
+            "title": "Max Output Bytes",
+            "type": "integer"
+          },
+          "output_bytes": {
+            "title": "Output Bytes",
+            "type": "integer"
+          },
+          "output_truncated": {
+            "title": "Output Truncated",
+            "type": "boolean"
+          },
+          "profile_id": {
+            "enum": ["fixture-python-stdlib-v1", "fixture-python-manifest-v1"],
+            "title": "Profile Id",
+            "type": "string"
+          },
+          "profile_version": {
+            "const": 1,
+            "title": "Profile Version",
+            "type": "integer"
+          },
+          "redaction_count": {
+            "title": "Redaction Count",
+            "type": "integer"
+          },
+          "reused_from_step_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused From Step Run Id"
+          },
+          "runner_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Id"
+          },
+          "runner_job_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Job Id"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ValidationSuiteStepState"
+          },
+          "step_id": {
+            "enum": ["fixture-contract", "fixture-manifest"],
+            "title": "Step Id",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "title": "Timeout Seconds",
+            "type": "integer"
+          },
+          "validation_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Run Id"
+          }
+        },
+        "required": [
+          "id",
+          "sequence",
+          "step_id",
+          "profile_id",
+          "profile_version",
+          "timeout_seconds",
+          "max_output_bytes",
+          "state",
+          "validation_run_id",
+          "runner_job_id",
+          "runner_id",
+          "attempt_id",
+          "lease_id",
+          "evidence_id",
+          "reused_from_step_run_id",
+          "started_at",
+          "completed_at",
+          "duration_ms",
+          "exit_code",
+          "output_bytes",
+          "redaction_count",
+          "output_truncated",
+          "cleanup_succeeded",
+          "failure_code",
+          "evidence"
+        ],
+        "title": "ValidationSuiteStepRunResponse",
+        "type": "object"
+      },
+      "ValidationSuiteStepState": {
+        "enum": [
+          "pending",
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "timed_out",
+          "cancelled",
+          "skipped",
+          "recovery_required"
+        ],
+        "title": "ValidationSuiteStepState",
+        "type": "string"
+      },
+      "ValidationSuiteTimelineResponse": {
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/ValidationSuiteRunState"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationSuiteStepRunResponse"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "suite_run_id": {
+            "format": "uuid",
+            "title": "Suite Run Id",
+            "type": "string"
+          }
+        },
+        "required": ["suite_run_id", "state", "steps"],
+        "title": "ValidationSuiteTimelineResponse",
         "type": "object"
       },
       "WorkspaceActionResponse": {
@@ -10393,6 +11344,489 @@
           }
         },
         "summary": "Request cancellation through the fenced Runner Job",
+        "tags": ["governed validation"]
+      }
+    },
+    "/api/v1/validation-suite-runs": {
+      "get": {
+        "operationId": "list_validation_suite_runs_api_v1_validation_suite_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationSuiteRunListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation state or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation policy denied the request"
+          }
+        },
+        "summary": "List governed Validation Suite Runs",
+        "tags": ["governed validation"]
+      },
+      "post": {
+        "operationId": "create_validation_suite_run_api_v1_validation_suite_runs_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationSuiteRunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationSuiteRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation state or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation policy denied the request"
+          }
+        },
+        "summary": "Queue one exact-Checkpoint fixed Validation Suite Run",
+        "tags": ["governed validation"]
+      }
+    },
+    "/api/v1/validation-suite-runs/{suite_run_id}": {
+      "get": {
+        "operationId": "get_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suite_run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Suite Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationSuiteRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation state or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation policy denied the request"
+          }
+        },
+        "summary": "Get Validation Suite status, timeline, and bounded Evidence",
+        "tags": ["governed validation"]
+      }
+    },
+    "/api/v1/validation-suite-runs/{suite_run_id}/cancel": {
+      "post": {
+        "operationId": "cancel_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suite_run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Suite Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationSuiteRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation state or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation policy denied the request"
+          }
+        },
+        "summary": "Request cancellation of an active Validation Suite",
+        "tags": ["governed validation"]
+      }
+    },
+    "/api/v1/validation-suite-runs/{suite_run_id}/result": {
+      "get": {
+        "operationId": "get_validation_suite_result_api_v1_validation_suite_runs__suite_run_id__result_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suite_run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Suite Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationSuiteAggregateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation state or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation policy denied the request"
+          }
+        },
+        "summary": "Get the aggregate Validation Suite Result and Evidence summary",
+        "tags": ["governed validation"]
+      }
+    },
+    "/api/v1/validation-suite-runs/{suite_run_id}/retry": {
+      "post": {
+        "operationId": "retry_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suite_run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Suite Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationSuiteRetryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationSuiteRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation state or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation policy denied the request"
+          }
+        },
+        "summary": "Retry failed Suite steps under a new exact Grant",
+        "tags": ["governed validation"]
+      }
+    },
+    "/api/v1/validation-suite-runs/{suite_run_id}/timeline": {
+      "get": {
+        "operationId": "get_validation_suite_timeline_api_v1_validation_suite_runs__suite_run_id__timeline_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suite_run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Suite Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationSuiteTimelineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation state or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation policy denied the request"
+          }
+        },
+        "summary": "Get the ordered Validation Suite step timeline",
+        "tags": ["governed validation"]
+      }
+    },
+    "/api/v1/validation-suites": {
+      "get": {
+        "operationId": "list_validation_suites_api_v1_validation_suites_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationSuiteListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List immutable system-owned Validation Suites",
         "tags": ["governed validation"]
       }
     },

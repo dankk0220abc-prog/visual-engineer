@@ -156,24 +156,94 @@ async function expectAccessibleAndContained(page: Page) {
   ).toBe(false);
 }
 
-test("Phase 5 fixed Profile runs from browser approval to isolated evidence", async ({
+test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate evidence", async ({
   page,
   request,
 }) => {
   const { checkpointId, implementationGrantId, workspaceId } =
     await exactValidationCheckpoint(request);
 
+  let profileGrant = await apiJson(
+    request,
+    "post",
+    "/api/v1/execution-grants",
+    {
+      plan_id: requireString(
+        (
+          await apiJson(
+            request,
+            "get",
+            `/api/v1/execution-grants/${implementationGrantId}`,
+          )
+        ).plan_id,
+        "Plan ID",
+      ),
+      repository_handle_id: requireString(
+        (
+          await apiJson(
+            request,
+            "get",
+            `/api/v1/execution-grants/${implementationGrantId}`,
+          )
+        ).repository_handle_id,
+        "Repository Handle ID",
+      ),
+      validation_checkpoint_id: checkpointId,
+      validation_profile_id: "fixture-python-stdlib-v1",
+    },
+  );
+  if (profileGrant.status === "pending") {
+    profileGrant = await apiJson(
+      request,
+      "post",
+      `/api/v1/execution-grants/${requireString(profileGrant.id, "Profile Grant ID")}/decisions`,
+      {
+        decision: "approve",
+        reason: "Sealed first-slice compatibility approval.",
+      },
+    );
+  }
+  const profileGrantId = requireString(profileGrant.id, "Profile Grant ID");
+
   await page.goto("/validations");
   await expect(
     page.getByRole("heading", { name: "Validation Runs" }),
   ).toBeVisible();
-  await expect(page.getByText("Trusted fixture Python contract")).toBeVisible({
+  await expect(page.getByText("Trusted fixture integrity suite")).toBeVisible({
     timeout: 30_000,
   });
-  await expect(
-    page.getByText("python -I -S <system-owned-fixture-validator>").first(),
-  ).toBeVisible();
   await expect(page.getByText(/network none · Shell false/)).toBeVisible();
+
+  const profileGrantCard = page
+    .getByRole("listitem")
+    .filter({ hasText: profileGrantId });
+  const [profileRunResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/api/v1/validation-runs") &&
+        response.ok(),
+    ),
+    profileGrantCard
+      .getByRole("button", { name: "Run sealed first-slice Profile" })
+      .click(),
+  ]);
+  const profileRunBody: unknown = await profileRunResponse.json();
+  if (typeof profileRunBody !== "object" || profileRunBody === null) {
+    throw new Error("First-slice Validation Run response is invalid");
+  }
+  const validationRunId = requireString(
+    (profileRunBody as JsonObject).id,
+    "Validation Run ID",
+  );
+  const runCard = page
+    .getByRole("listitem")
+    .filter({ hasText: validationRunId });
+  await expect(runCard.getByText("succeeded", { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(runCard.getByText("VE_VALIDATION_PROFILE_PASS")).toBeVisible();
+
   await page
     .getByLabel("Exact Workspace Checkpoint")
     .selectOption(checkpointId);
@@ -184,20 +254,20 @@ test("Phase 5 fixed Profile runs from browser approval to isolated evidence", as
         response.url().endsWith("/api/v1/execution-grants") &&
         response.ok(),
     ),
-    page.getByRole("button", { name: "创建 pending Validation Grant" }).click(),
+    page.getByRole("button", { name: "创建 pending Suite Grant" }).click(),
   ]);
   const createdGrant: unknown = await grantResponse.json();
   if (typeof createdGrant !== "object" || createdGrant === null) {
     throw new Error("Validation Grant response is invalid");
   }
-  const validationGrantId = requireString(
+  const suiteGrantId = requireString(
     (createdGrant as JsonObject).id,
-    "Validation Grant ID",
+    "Suite Grant ID",
   );
 
   const grantCard = page
     .getByRole("listitem")
-    .filter({ hasText: checkpointId });
+    .filter({ hasText: suiteGrantId });
   await expect(grantCard.getByText("pending", { exact: true })).toBeVisible({
     timeout: 30_000,
   });
@@ -212,54 +282,66 @@ test("Phase 5 fixed Profile runs from browser approval to isolated evidence", as
     page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
-        response.url().endsWith("/api/v1/validation-runs") &&
+        response.url().endsWith("/api/v1/validation-suite-runs") &&
         response.ok(),
     ),
-    grantCard.getByRole("button", { name: "Run fixed Profile" }).click(),
+    grantCard.getByRole("button", { name: "Run fixed Suite" }).click(),
   ]);
   const created: unknown = await createdResponse.json();
   if (typeof created !== "object" || created === null) {
-    throw new Error("Validation Run response is invalid");
+    throw new Error("Validation Suite Run response is invalid");
   }
-  const validationRunId = requireString(
+  const suiteRunId = requireString(
     (created as JsonObject).id,
-    "Validation Run ID",
+    "Validation Suite Run ID",
   );
-  const runCard = page
+  const suiteRunCard = page
     .getByRole("listitem")
-    .filter({ hasText: validationRunId });
-  await expect(runCard.getByText("succeeded", { exact: true })).toBeVisible({
+    .filter({ hasText: suiteRunId });
+  await expect(
+    suiteRunCard.getByText("succeeded", { exact: true }).first(),
+  ).toBeVisible({
     timeout: 60_000,
   });
-  await expect(runCard.getByText("VE_VALIDATION_PROFILE_PASS")).toBeVisible();
   await expect(
-    runCard.getByText(/network true · filesystem true · cleaned true/),
+    suiteRunCard.getByText("VE_VALIDATION_PROFILE_PASS"),
   ).toBeVisible();
   await expect(
-    runCard.getByText(/fixture-contract · succeeded · exit 0/),
+    suiteRunCard.getByText("VE_VALIDATION_PROFILE_MANIFEST_PASS"),
   ).toBeVisible();
   await expect(
-    runCard.getByRole("link", { name: "Workspace" }),
-  ).toHaveAttribute("href", `/workspaces/${workspaceId}`);
+    suiteRunCard.getByText("Aggregate Result: succeeded"),
+  ).toBeVisible();
+  await expect(
+    suiteRunCard.getByText(/Evidence 2 · redactions 0 · artifacts 0/),
+  ).toBeVisible();
+  await expect(suiteRunCard.getByText(/1\. fixture-contract/)).toBeVisible();
+  await expect(suiteRunCard.getByText(/2\. fixture-manifest/)).toBeVisible();
   await expectAccessibleAndContained(page);
 
   await page.reload();
-  const persistedRun = page
+  const persistedSuite = page
     .getByRole("listitem")
-    .filter({ hasText: validationRunId });
+    .filter({ hasText: suiteRunId });
   await expect(
-    persistedRun.getByText("succeeded", { exact: true }),
+    persistedSuite.getByText("Aggregate Result: succeeded"),
   ).toBeVisible({ timeout: 30_000 });
   await expect(
-    persistedRun.getByText("VE_VALIDATION_PROFILE_PASS"),
+    persistedSuite.getByText("VE_VALIDATION_PROFILE_MANIFEST_PASS"),
   ).toBeVisible();
 
-  const revokedValidation = await apiJson(
+  const revokedSuite = await apiJson(
     request,
     "post",
-    `/api/v1/execution-grants/${validationGrantId}/revoke`,
+    `/api/v1/execution-grants/${suiteGrantId}/revoke`,
   );
-  expect(revokedValidation.status).toBe("revoked");
+  expect(revokedSuite.status).toBe("revoked");
+  const revokedProfile = await apiJson(
+    request,
+    "post",
+    `/api/v1/execution-grants/${profileGrantId}/revoke`,
+  );
+  expect(revokedProfile.status).toBe("revoked");
   const discarded = await apiJson(
     request,
     "post",

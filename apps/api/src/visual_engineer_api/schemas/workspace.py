@@ -89,11 +89,24 @@ class ExecutionGrantCreate(BaseModel):
     repository_handle_id: uuid.UUID
     validation_checkpoint_id: uuid.UUID | None = None
     validation_profile_id: Literal["fixture-python-stdlib-v1"] | None = None
+    validation_suite_id: Literal["fixture-integrity-suite-v1"] | None = None
+    validation_suite_version: Literal[1] | None = None
 
     @model_validator(mode="after")
     def validate_optional_validation_scope(self) -> "ExecutionGrantCreate":
-        if (self.validation_checkpoint_id is None) != (self.validation_profile_id is None):
-            raise ValueError("validation checkpoint and Profile must be supplied together")
+        profile_selected = self.validation_profile_id is not None
+        suite_selected = self.validation_suite_id is not None
+        if profile_selected and suite_selected:
+            raise ValueError("choose one fixed Validation Profile or Suite")
+        if self.validation_suite_version is not None and not suite_selected:
+            raise ValueError("Suite version requires a fixed Validation Suite")
+        if suite_selected and self.validation_suite_version is None:
+            raise ValueError("Validation Suite ID and version must be supplied together")
+        validation_selected = profile_selected or suite_selected
+        if (self.validation_checkpoint_id is not None) != validation_selected:
+            raise ValueError(
+                "validation checkpoint and fixed Profile or Suite must be supplied together"
+            )
         return self
 
 
@@ -150,6 +163,7 @@ class ExecutionGrantResponse(BaseModel):
     validation_workspace_id: uuid.UUID | None
     validation_checkpoint_id: uuid.UUID | None
     allowed_validation_profiles: list[str]
+    allowed_validation_suites: list[str]
     max_validation_runs: int
     validation_timeout_seconds: int
     validation_cpu_seconds: int

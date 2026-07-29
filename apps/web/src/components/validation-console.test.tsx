@@ -2,17 +2,24 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  cancelValidationSuiteRun,
   createExecutionGrant,
+  createValidationSuiteRun,
   createValidationRun,
   decideExecutionGrant,
   listExecutionGrants,
   listValidationProfiles,
   listValidationRuns,
+  listValidationSuiteRuns,
+  listValidationSuites,
   listWorkspaceCheckpoints,
   listWorkspaces,
+  retryValidationSuiteRun,
   type ExecutionGrant,
   type ValidationProfile,
   type ValidationRun,
+  type ValidationSuite,
+  type ValidationSuiteRun,
   type Workspace,
   type WorkspaceCheckpoint,
 } from "@/lib/api";
@@ -24,14 +31,19 @@ vi.mock("@/lib/api", async () => {
   return {
     ...actual,
     cancelValidationRun: vi.fn(),
+    cancelValidationSuiteRun: vi.fn(),
     createExecutionGrant: vi.fn(),
+    createValidationSuiteRun: vi.fn(),
     createValidationRun: vi.fn(),
     decideExecutionGrant: vi.fn(),
     listExecutionGrants: vi.fn(),
     listValidationProfiles: vi.fn(),
     listValidationRuns: vi.fn(),
+    listValidationSuiteRuns: vi.fn(),
+    listValidationSuites: vi.fn(),
     listWorkspaceCheckpoints: vi.fn(),
     listWorkspaces: vi.fn(),
+    retryValidationSuiteRun: vi.fn(),
   };
 });
 
@@ -49,6 +61,44 @@ const profile: ValidationProfile = {
   network_policy: "none",
   shell_access: false,
   user_command_input: false,
+};
+
+const suite: ValidationSuite = {
+  suite_id: "fixture-integrity-suite-v1",
+  suite_version: 1,
+  name: "Trusted fixture integrity suite",
+  purpose: "Runs two fixed Profiles in deterministic order.",
+  steps: [
+    {
+      sequence: 1,
+      step_id: "fixture-contract",
+      profile_id: "fixture-python-stdlib-v1",
+      profile_version: 1,
+      timeout_seconds: 10,
+      max_output_bytes: 8192,
+      max_artifact_bytes: 0,
+      max_artifact_count: 0,
+    },
+    {
+      sequence: 2,
+      step_id: "fixture-manifest",
+      profile_id: "fixture-python-manifest-v1",
+      profile_version: 1,
+      timeout_seconds: 10,
+      max_output_bytes: 4096,
+      max_artifact_bytes: 0,
+      max_artifact_count: 0,
+    },
+  ],
+  failure_policy: "fail_fast",
+  total_timeout_seconds: 30,
+  total_output_bytes: 10000,
+  max_attempts: 2,
+  policy_digest: "a".repeat(64),
+  network_policy: "none",
+  shell_access: false,
+  user_command_input: false,
+  artifact_content_transfer: false,
 };
 
 const implementationGrant: ExecutionGrant = {
@@ -86,6 +136,7 @@ const implementationGrant: ExecutionGrant = {
   validation_workspace_id: null,
   validation_checkpoint_id: null,
   allowed_validation_profiles: [],
+  allowed_validation_suites: [],
   max_validation_runs: 0,
   validation_timeout_seconds: 0,
   validation_cpu_seconds: 0,
@@ -165,6 +216,7 @@ const validationGrant: ExecutionGrant = {
   validation_workspace_id: workspace.id,
   validation_checkpoint_id: checkpoint.id,
   allowed_validation_profiles: ["fixture-python-stdlib-v1:v1"],
+  allowed_validation_suites: [],
   max_validation_runs: 3,
   validation_timeout_seconds: 10,
   validation_cpu_seconds: 5,
@@ -260,10 +312,181 @@ const validationRun: ValidationRun = {
   job: null,
 };
 
+const suiteGrant: ExecutionGrant = {
+  ...validationGrant,
+  id: "40000000-0000-4000-8000-000000000002",
+  allowed_validation_profiles: [
+    "fixture-python-stdlib-v1:v1",
+    "fixture-python-manifest-v1:v1",
+  ],
+  allowed_validation_suites: ["fixture-integrity-suite-v1:v1"],
+  max_validation_runs: 4,
+  validation_timeout_seconds: 30,
+  validation_output_bytes: 10000,
+  status: "approved",
+  decided_at: "2026-07-29T01:02:00Z",
+};
+
+const suiteRun: ValidationSuiteRun = {
+  id: "51000000-0000-4000-8000-000000000001",
+  run_id: implementationGrant.run_id!,
+  plan_id: implementationGrant.plan_id,
+  source_revision: workspace.source_revision,
+  workspace_id: workspace.id,
+  checkpoint_id: checkpoint.id,
+  checkpoint_fingerprint: checkpoint.tree_fingerprint,
+  execution_grant_id: suiteGrant.id,
+  suite_id: "fixture-integrity-suite-v1",
+  suite_version: 1,
+  policy_digest: "a".repeat(64),
+  failure_policy: "fail_fast",
+  state: "queued",
+  step_count: 2,
+  completed_step_count: 0,
+  total_timeout_seconds: 30,
+  total_output_bytes: 10000,
+  combined_output_bytes: 0,
+  max_attempts: 2,
+  attempt_number: 1,
+  retry_of_suite_run_id: null,
+  requested_at: "2026-07-29T01:03:00Z",
+  started_at: "2026-07-29T01:03:00Z",
+  deadline_at: "2026-07-29T01:03:30Z",
+  cancel_requested_at: null,
+  completed_at: null,
+  error_code: null,
+  error_message: null,
+  version: 2,
+  created_at: "2026-07-29T01:03:00Z",
+  updated_at: "2026-07-29T01:03:00Z",
+  steps: [
+    {
+      id: "71000000-0000-4000-8000-000000000001",
+      sequence: 1,
+      step_id: "fixture-contract",
+      profile_id: "fixture-python-stdlib-v1",
+      profile_version: 1,
+      timeout_seconds: 10,
+      max_output_bytes: 8192,
+      state: "queued",
+      validation_run_id: validationRun.id,
+      runner_job_id: validationRun.runner_job_id,
+      runner_id: null,
+      attempt_id: null,
+      lease_id: null,
+      evidence_id: null,
+      reused_from_step_run_id: null,
+      started_at: null,
+      completed_at: null,
+      duration_ms: null,
+      exit_code: null,
+      output_bytes: 0,
+      redaction_count: 0,
+      output_truncated: false,
+      cleanup_succeeded: null,
+      failure_code: null,
+      evidence: null,
+    },
+    {
+      id: "71000000-0000-4000-8000-000000000002",
+      sequence: 2,
+      step_id: "fixture-manifest",
+      profile_id: "fixture-python-manifest-v1",
+      profile_version: 1,
+      timeout_seconds: 10,
+      max_output_bytes: 4096,
+      state: "pending",
+      validation_run_id: null,
+      runner_job_id: null,
+      runner_id: null,
+      attempt_id: null,
+      lease_id: null,
+      evidence_id: null,
+      reused_from_step_run_id: null,
+      started_at: null,
+      completed_at: null,
+      duration_ms: null,
+      exit_code: null,
+      output_bytes: 0,
+      redaction_count: 0,
+      output_truncated: false,
+      cleanup_succeeded: null,
+      failure_code: null,
+      evidence: null,
+    },
+  ],
+  result: null,
+};
+
+const failedSuiteRun: ValidationSuiteRun = {
+  ...suiteRun,
+  state: "failed",
+  completed_step_count: 2,
+  combined_output_bytes: 64,
+  completed_at: "2026-07-29T01:03:05Z",
+  error_code: "validation_profile_failed",
+  error_message: "Validation Suite stopped at step 2",
+  steps: [
+    {
+      ...suiteRun.steps[0],
+      state: "succeeded",
+      evidence_id: validationRun.evidence!.id,
+      evidence: validationRun.evidence,
+      started_at: validationRun.started_at,
+      completed_at: validationRun.completed_at,
+      duration_ms: 50,
+      exit_code: 0,
+      output_bytes: 32,
+      cleanup_succeeded: true,
+    },
+    {
+      ...suiteRun.steps[1],
+      state: "failed",
+      validation_run_id: "51000000-0000-4000-8000-000000000002",
+      runner_job_id: "61000000-0000-4000-8000-000000000002",
+      started_at: "2026-07-29T01:03:04Z",
+      completed_at: "2026-07-29T01:03:05Z",
+      duration_ms: 50,
+      exit_code: 1,
+      output_bytes: 32,
+      cleanup_succeeded: true,
+      failure_code: "validation_profile_failed",
+    },
+  ],
+  result: {
+    id: "81000000-0000-4000-8000-000000000001",
+    verdict: "failed",
+    profile_references: [
+      "fixture-python-stdlib-v1:v1",
+      "fixture-python-manifest-v1:v1",
+    ],
+    started_at: "2026-07-29T01:03:00Z",
+    completed_at: "2026-07-29T01:03:05Z",
+    duration_ms: 5000,
+    combined_output_bytes: 64,
+    redaction_count: 0,
+    output_truncated: false,
+    artifact_count: 0,
+    artifact_bytes: 0,
+    cancelled: false,
+    timed_out: false,
+    recovery_required: false,
+    cleanup_succeeded: true,
+    source_invariant: true,
+    canonical_workspace_invariant: true,
+    evidence_references: [{ sequence: 1 }],
+    audit_event_references: ["82000000-0000-4000-8000-000000000001"],
+    aggregate_digest: "b".repeat(64),
+    created_at: "2026-07-29T01:03:05Z",
+  },
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(listValidationProfiles).mockResolvedValue([profile]);
   vi.mocked(listValidationRuns).mockResolvedValue([]);
+  vi.mocked(listValidationSuites).mockResolvedValue([suite]);
+  vi.mocked(listValidationSuiteRuns).mockResolvedValue([]);
   vi.mocked(listExecutionGrants).mockResolvedValue([implementationGrant]);
   vi.mocked(listWorkspaces).mockResolvedValue([workspace]);
   vi.mocked(listWorkspaceCheckpoints).mockResolvedValue([checkpoint]);
@@ -273,22 +496,30 @@ beforeEach(() => {
     status: "approved",
   });
   vi.mocked(createValidationRun).mockResolvedValue(validationRun);
+  vi.mocked(createValidationSuiteRun).mockResolvedValue(suiteRun);
+  vi.mocked(cancelValidationSuiteRun).mockResolvedValue({
+    ...suiteRun,
+    state: "cancelled",
+  });
+  vi.mocked(retryValidationSuiteRun).mockResolvedValue({
+    ...suiteRun,
+    attempt_number: 2,
+    retry_of_suite_run_id: suiteRun.id,
+  });
 });
 
 describe("ValidationConsole", () => {
-  it("shows the closed Profile and requests an exact Checkpoint Grant", async () => {
+  it("shows the closed Suite and requests an exact Checkpoint Suite Grant", async () => {
     render(<ValidationConsole />);
 
     expect(
-      await screen.findByText("Trusted fixture Python contract"),
+      await screen.findByText("Trusted fixture integrity suite"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/python -I -S <system-owned-fixture-validator>/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/fixture-manifest/)).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "创建 pending Validation Grant",
+        name: "创建 pending Suite Grant",
       }),
     );
 
@@ -297,7 +528,8 @@ describe("ValidationConsole", () => {
         plan_id: implementationGrant.plan_id,
         repository_handle_id: implementationGrant.repository_handle_id,
         validation_checkpoint_id: checkpoint.id,
-        validation_profile_id: profile.profile_id,
+        validation_suite_id: suite.suite_id,
+        validation_suite_version: suite.suite_version,
       }),
     );
   });
@@ -337,7 +569,9 @@ describe("ValidationConsole", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/network true/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Run fixed Profile" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Run sealed first-slice Profile" }),
+    );
     await waitFor(() => expect(createValidationRun).toHaveBeenCalledTimes(1));
     expect(createValidationRun).toHaveBeenCalledWith(
       {
@@ -345,6 +579,87 @@ describe("ValidationConsole", () => {
         profile_id: profile.profile_id,
       },
       expect.stringMatching(`^validation-${validationGrant.id}-`),
+    );
+  });
+
+  it("approves and starts only the fixed Suite from a Suite Grant", async () => {
+    vi.mocked(listExecutionGrants)
+      .mockResolvedValueOnce([
+        implementationGrant,
+        { ...suiteGrant, status: "pending", decided_at: null },
+      ])
+      .mockResolvedValue([implementationGrant, suiteGrant]);
+    render(<ValidationConsole />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Approve exact Validation Grant",
+      }),
+    );
+    await waitFor(() =>
+      expect(decideExecutionGrant).toHaveBeenCalledWith(suiteGrant.id, {
+        decision: "approve",
+        reason:
+          "Reviewed exact Checkpoint, fixed Suite, and validation-only budgets.",
+      }),
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Run fixed Suite" }),
+    );
+    await waitFor(() => expect(createValidationSuiteRun).toHaveBeenCalled());
+    expect(createValidationSuiteRun).toHaveBeenCalledWith(
+      {
+        execution_grant_id: suiteGrant.id,
+        suite_id: suite.suite_id,
+        suite_version: suite.suite_version,
+      },
+      expect.stringMatching(`^validation-suite-${suiteGrant.id}-`),
+    );
+  });
+
+  it("cancels an active Suite and never exposes retry as a normal start", async () => {
+    vi.mocked(listValidationSuiteRuns).mockResolvedValue([suiteRun]);
+    vi.mocked(listExecutionGrants).mockResolvedValue([
+      implementationGrant,
+      suiteGrant,
+    ]);
+    render(<ValidationConsole />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Cancel Suite" }),
+    );
+    await waitFor(() =>
+      expect(cancelValidationSuiteRun).toHaveBeenCalledWith(suiteRun.id),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Retry failed steps" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders aggregate failure and retries only with a fresh approved Grant", async () => {
+    const retryGrant = {
+      ...suiteGrant,
+      id: "40000000-0000-4000-8000-000000000003",
+    };
+    vi.mocked(listValidationSuiteRuns).mockResolvedValue([failedSuiteRun]);
+    vi.mocked(listExecutionGrants).mockResolvedValue([
+      implementationGrant,
+      suiteGrant,
+      retryGrant,
+    ]);
+    render(<ValidationConsole />);
+
+    expect(
+      await screen.findByText("Aggregate Result: failed"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/validation_profile_failed/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry failed steps" }));
+    await waitFor(() => expect(retryValidationSuiteRun).toHaveBeenCalled());
+    expect(retryValidationSuiteRun).toHaveBeenCalledWith(
+      failedSuiteRun.id,
+      { execution_grant_id: retryGrant.id },
+      expect.stringMatching(`^validation-suite-retry-${failedSuiteRun.id}-`),
     );
   });
 });

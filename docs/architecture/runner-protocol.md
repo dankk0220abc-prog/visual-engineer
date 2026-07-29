@@ -170,6 +170,15 @@ bindings, literal `fixture-python-stdlib-v1:v1`, and bounded timeout/output/
 artifact values. There is no field for command, argv, cwd, environment,
 package, URL, or user-supplied tool input.
 
+The second slice does not add a general Suite job to Runner Protocol. The
+Control Plane reads the immutable Suite catalog and serially creates existing
+`validation_execute_v1` child jobs. Protocol literals add only the second
+system-owned `fixture-python-manifest-v1:v1` Profile and
+`fixture-manifest` step. Its fifth safe-argv display token is a fixed symbolic
+Profile mode; it is never caller input. This keeps every step independently
+Attempt/Lease/Permit fenced and avoids a command-bearing orchestration
+envelope.
+
 The corresponding result repeats the exact identities and literal Profile,
 uses only the fixed safe argv display
 `python -I -S <system-owned-fixture-validator>`, and carries a versioned
@@ -243,6 +252,7 @@ and fixed-Profile ValidationEvidence record current typed execution facts only.
 Adding a shell, arbitrary target command, Git delivery, or new authority field
 requires a separately reviewed protocol version/ADR.
 
-Phase 4 is complete in local `main`. The Phase 5 protocol extension remains an
-implementation checkpoint pending independent focused read-only review; it is
-not a Phase 5 Security Gate approval.
+Phase 4 and the sealed first Phase 5 slice are complete in local `main`. The
+second-slice protocol/catalog extension remains an implementation checkpoint
+pending independent focused read-only review; it is not a Phase 5 Security
+Gate approval.

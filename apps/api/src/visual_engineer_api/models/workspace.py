@@ -189,6 +189,9 @@ class ExecutionGrant(Base):
     allowed_validation_profiles: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list
     )
+    allowed_validation_suites: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     max_validation_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     validation_timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     validation_cpu_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

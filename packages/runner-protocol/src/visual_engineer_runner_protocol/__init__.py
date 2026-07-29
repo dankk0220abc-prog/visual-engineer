@@ -91,16 +91,26 @@ from visual_engineer_runner_protocol.models import (
     validate_safe_error_message,
 )
 from visual_engineer_runner_protocol.profiles import (
+    FIXTURE_PYTHON_MANIFEST_V1,
     FIXTURE_PYTHON_STDLIB_V1,
     VALIDATION_PROFILE_CATALOG,
     ValidationProfile,
     validation_profile,
+)
+from visual_engineer_runner_protocol.suites import (
+    FIXTURE_INTEGRITY_SUITE_V1,
+    VALIDATION_SUITE_CATALOG,
+    ValidationSuite,
+    ValidationSuiteStep,
+    validation_suite,
 )
 from visual_engineer_runner_protocol.validation_evidence import validation_result_binding
 
 __version__ = "1.0.0"
 
 __all__ = [
+    "FIXTURE_INTEGRITY_SUITE_V1",
+    "FIXTURE_PYTHON_MANIFEST_V1",
     "FIXTURE_PYTHON_STDLIB_V1",
     "MAX_PROTOCOL_PAYLOAD_BYTES",
     "MAX_WORKSPACE_DIFF_BYTES",
@@ -108,6 +118,7 @@ __all__ = [
     "RUNNER_PROTOCOL_PREFIX",
     "RUNNER_PROTOCOL_VERSION",
     "VALIDATION_PROFILE_CATALOG",
+    "VALIDATION_SUITE_CATALOG",
     "AttemptState",
     "CancelledRequest",
     "Capability",
@@ -149,6 +160,8 @@ __all__ = [
     "ValidationExecuteJobSpec",
     "ValidationExecutionResult",
     "ValidationProfile",
+    "ValidationSuite",
+    "ValidationSuiteStep",
     "WorkspaceBoundJobSpec",
     "WorkspaceCheckpointPayload",
     "WorkspaceDiffJobSpec",
@@ -194,4 +207,5 @@ __all__ = [
     "validate_safe_error_message",
     "validation_profile",
     "validation_result_binding",
+    "validation_suite",
 ]

@@ -53,13 +53,18 @@ Every plan under `docs/exec-plans/` contains:
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
 The active plan is
-[`docs/exec-plans/phase-5-governed-validation-execution.md`](docs/exec-plans/phase-5-governed-validation-execution.md).
-Phase 5 is **Governed Validation Execution**: a Browser-first, fixed-profile,
-fixture-only validation path from an independently approved Execution Grant
-and exact Workspace Checkpoint to a disposable Runner sandbox and structured
-evidence. It excludes LLMs, Agents SDK, external providers, credentials,
-Customer 0, arbitrary commands, package installation, Git delivery, and
-deployment.
+[`docs/exec-plans/phase-5-governed-validation-suites.md`](docs/exec-plans/phase-5-governed-validation-suites.md).
+This second Phase 5 slice composes the sealed fixed-Profile execution unit into
+one system-owned, immutable, fixture-only multi-step Suite with deterministic
+serial dispatch, aggregate budgets/evidence, cancellation, and one bounded
+retry. It does not weaken the first-slice command, sandbox, Grant, Permit,
+Attempt, Lease, cleanup, or invariance boundaries. It excludes LLMs, Agents
+SDK, external providers, credentials, Customer 0, arbitrary commands, package
+installation, Git delivery, and deployment.
+
+The sealed first-slice plan remains at
+[`docs/exec-plans/phase-5-governed-validation-execution.md`](docs/exec-plans/phase-5-governed-validation-execution.md);
+its historical review, remediation, and re-audit records are unchanged.
 
 The completed Phase 4 Final Integration Gate plan remains at
 [`docs/exec-plans/phase-4-final-integration-gate.md`](docs/exec-plans/phase-4-final-integration-gate.md).

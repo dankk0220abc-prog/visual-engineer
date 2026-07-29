@@ -17,6 +17,9 @@ from visual_engineer_api.models.validation import (
     ValidationEvidence,
     ValidationRun,
     ValidationStepRun,
+    ValidationSuiteResult,
+    ValidationSuiteRun,
+    ValidationSuiteStepRun,
 )
 from visual_engineer_api.models.workspace import (
     ExecutionGrant,
@@ -47,6 +50,9 @@ __all__ = [
     "ValidationEvidence",
     "ValidationRun",
     "ValidationStepRun",
+    "ValidationSuiteResult",
+    "ValidationSuiteRun",
+    "ValidationSuiteStepRun",
     "Workspace",
     "WorkspaceCheckpoint",
     "WorkspaceEvent",

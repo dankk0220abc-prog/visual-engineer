@@ -2,7 +2,8 @@
 
 ## Current security posture
 
-VisualEngineer is currently a Phase 4 local, single-user development project.
+VisualEngineer is currently a local, single-user development project through
+the second Phase 5 implementation slice.
 The original audit, independent re-audit, focused re-audit, and
 single-finding re-audit remain **Security Gate: FAIL** for the revisions they
 inspected. Those historical decisions are preserved. Four focused remediation
@@ -10,9 +11,12 @@ rounds and their independent closure checkpoints now culminate in a complete
 local Phase 4 Final Integration Gate PASS. That local result does not claim
 remote CI, customer, hostile multi-tenant, or production validation. Phase 4
 was explicitly integrated into local `main` at
-`928a89d2055d172bbd7c6670b42f668d103dcb03`. Phase 5 is limited to governed
-fixed-profile validation of the trusted synthetic fixture and remains pending
-independent focused review.
+`928a89d2055d172bbd7c6670b42f668d103dcb03`; the independently sealed first
+Phase 5 slice is integrated in local `main` at
+`f547091307c52df8f20fc69bac4b4826cbbc74ad`. The second slice is limited to a
+system-owned Suite of fixed-Profile validations of the trusted synthetic
+fixture. Its implementation evidence does not declare Security Gate PASS and
+requires an independent focused review.
 
 The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
@@ -53,6 +57,15 @@ sensitive-path denials, strict budgets, network `none`, and false
 shell/source-write/Git-delivery fields. `revoke_requested` blocks new permits;
 `revoked` becomes effective only when every consumed permit is terminal or
 expired.
+
+A Suite request can select only a source-owned Suite ID/version. It cannot
+provide steps, Profile definitions, command, argv, cwd, environment, shell, or
+artifact content. The Control Plane dispatches one pre-existing fixed-Profile
+Validation Run at a time, revalidates every child result, enforces the combined
+timeout/output/attempt budgets, and writes one immutable aggregate result.
+Cancel and total timeout cancel any active child before terminalizing and
+never dispatch a pending child. Retry requires a fresh approved Suite Grant;
+successful child Evidence is referenced without redispatch or output recharge.
 
 File access is descriptor-rooted and no-follow; status/diff/rollback/discard
 use fixed operations. Workspace registry, ownership, and pending/completed

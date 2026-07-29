@@ -112,6 +112,7 @@ class ValidationExecutor:
                     "-I",
                     "-S",
                     str(Path(__file__).with_name("validation_worker.py")),
+                    profile.profile_id,
                     str(roots["input"]),
                     str(roots["scratch"]),
                     str(roots["output"]),

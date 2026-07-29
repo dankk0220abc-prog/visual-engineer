@@ -708,6 +708,126 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/validation-suite-runs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List governed Validation Suite Runs */
+    get: operations["list_validation_suite_runs_api_v1_validation_suite_runs_get"];
+    put?: never;
+    /** Queue one exact-Checkpoint fixed Validation Suite Run */
+    post: operations["create_validation_suite_run_api_v1_validation_suite_runs_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-suite-runs/{suite_run_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Validation Suite status, timeline, and bounded Evidence */
+    get: operations["get_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-suite-runs/{suite_run_id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Request cancellation of an active Validation Suite */
+    post: operations["cancel_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__cancel_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-suite-runs/{suite_run_id}/result": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the aggregate Validation Suite Result and Evidence summary */
+    get: operations["get_validation_suite_result_api_v1_validation_suite_runs__suite_run_id__result_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-suite-runs/{suite_run_id}/retry": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Retry failed Suite steps under a new exact Grant */
+    post: operations["retry_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__retry_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-suite-runs/{suite_run_id}/timeline": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the ordered Validation Suite step timeline */
+    get: operations["get_validation_suite_timeline_api_v1_validation_suite_runs__suite_run_id__timeline_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/validation-suites": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List immutable system-owned Validation Suites */
+    get: operations["list_validation_suites_api_v1_validation_suites_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/workspaces": {
     parameters: {
       query?: never;
@@ -1280,6 +1400,10 @@ export interface components {
       validation_checkpoint_id?: string | null;
       /** Validation Profile Id */
       validation_profile_id?: "fixture-python-stdlib-v1" | null;
+      /** Validation Suite Id */
+      validation_suite_id?: "fixture-integrity-suite-v1" | null;
+      /** Validation Suite Version */
+      validation_suite_version?: 1 | null;
     };
     /** ExecutionGrantDecisionCreate */
     ExecutionGrantDecisionCreate: {
@@ -1470,6 +1594,8 @@ export interface components {
       allowed_paths: string[];
       /** Allowed Validation Profiles */
       allowed_validation_profiles: string[];
+      /** Allowed Validation Suites */
+      allowed_validation_suites: string[];
       /**
        * Created At
        * Format: date-time
@@ -2993,9 +3119,9 @@ export interface components {
       /**
        * Profile Id
        * @default fixture-python-stdlib-v1
-       * @constant
+       * @enum {string}
        */
-      profile_id: "fixture-python-stdlib-v1";
+      profile_id: "fixture-python-stdlib-v1" | "fixture-python-manifest-v1";
       /**
        * Profile Version
        * @default 1
@@ -3023,9 +3149,9 @@ export interface components {
       /**
        * Validation Step Id
        * @default fixture-contract
-       * @constant
+       * @enum {string}
        */
-      validation_step_id: "fixture-contract";
+      validation_step_id: "fixture-contract" | "fixture-manifest";
       /**
        * Workspace Id
        * Format: uuid
@@ -3074,7 +3200,11 @@ export interface components {
       filesystem_isolated: true;
       /** Fixed Argv */
       fixed_argv: (
-        "python" | "-I" | "-S" | "<system-owned-fixture-validator>"
+        | "python"
+        | "-I"
+        | "-S"
+        | "<system-owned-fixture-validator>"
+        | "<system-owned-profile-mode>"
       )[];
       /** Fixed Argv Digest */
       fixed_argv_digest?: string | null;
@@ -3182,9 +3312,9 @@ export interface components {
       network_policy: "none";
       /**
        * Profile Id
-       * @constant
+       * @enum {string}
        */
-      profile_id: "fixture-python-stdlib-v1";
+      profile_id: "fixture-python-stdlib-v1" | "fixture-python-manifest-v1";
       /** Safe Argv */
       safe_argv: string[];
       /**
@@ -3195,9 +3325,9 @@ export interface components {
       shell_access: false;
       /**
        * Step Id
-       * @constant
+       * @enum {string}
        */
-      step_id: "fixture-contract";
+      step_id: "fixture-contract" | "fixture-manifest";
       /** Timeout Seconds */
       timeout_seconds: number;
       /**
@@ -3221,9 +3351,9 @@ export interface components {
       execution_grant_id: string;
       /**
        * Profile Id
-       * @constant
+       * @enum {string}
        */
-      profile_id: "fixture-python-stdlib-v1";
+      profile_id: "fixture-python-stdlib-v1" | "fixture-python-manifest-v1";
     };
     /** ValidationRunListResponse */
     ValidationRunListResponse: {
@@ -3287,9 +3417,9 @@ export interface components {
       policy_digest: string;
       /**
        * Profile Id
-       * @constant
+       * @enum {string}
        */
-      profile_id: "fixture-python-stdlib-v1";
+      profile_id: "fixture-python-stdlib-v1" | "fixture-python-manifest-v1";
       /**
        * Profile Version
        * @constant
@@ -3371,9 +3501,429 @@ export interface components {
       state: string;
       /**
        * Step Id
+       * @enum {string}
+       */
+      step_id: "fixture-contract" | "fixture-manifest";
+    };
+    /** ValidationSuiteAggregateResponse */
+    ValidationSuiteAggregateResponse: {
+      result: components["schemas"]["ValidationSuiteResultResponse"] | null;
+      state: components["schemas"]["ValidationSuiteRunState"];
+      /**
+       * Suite Run Id
+       * Format: uuid
+       */
+      suite_run_id: string;
+    };
+    /** ValidationSuiteCatalogStepResponse */
+    ValidationSuiteCatalogStepResponse: {
+      /**
+       * Max Artifact Bytes
+       * @default 0
        * @constant
        */
-      step_id: "fixture-contract";
+      max_artifact_bytes: 0;
+      /**
+       * Max Artifact Count
+       * @default 0
+       * @constant
+       */
+      max_artifact_count: 0;
+      /** Max Output Bytes */
+      max_output_bytes: number;
+      /**
+       * Profile Id
+       * @enum {string}
+       */
+      profile_id: "fixture-python-stdlib-v1" | "fixture-python-manifest-v1";
+      /**
+       * Profile Version
+       * @constant
+       */
+      profile_version: 1;
+      /** Sequence */
+      sequence: number;
+      /**
+       * Step Id
+       * @enum {string}
+       */
+      step_id: "fixture-contract" | "fixture-manifest";
+      /** Timeout Seconds */
+      timeout_seconds: number;
+    };
+    /** ValidationSuiteListResponse */
+    ValidationSuiteListResponse: {
+      /** Items */
+      items: components["schemas"]["ValidationSuiteResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** ValidationSuiteResponse */
+    ValidationSuiteResponse: {
+      /**
+       * Artifact Content Transfer
+       * @default false
+       * @constant
+       */
+      artifact_content_transfer: false;
+      /**
+       * Failure Policy
+       * @constant
+       */
+      failure_policy: "fail_fast";
+      /** Max Attempts */
+      max_attempts: number;
+      /** Name */
+      name: string;
+      /**
+       * Network Policy
+       * @default none
+       * @constant
+       */
+      network_policy: "none";
+      /** Policy Digest */
+      policy_digest: string;
+      /** Purpose */
+      purpose: string;
+      /**
+       * Shell Access
+       * @default false
+       * @constant
+       */
+      shell_access: false;
+      /** Steps */
+      steps: components["schemas"]["ValidationSuiteCatalogStepResponse"][];
+      /**
+       * Suite Id
+       * @constant
+       */
+      suite_id: "fixture-integrity-suite-v1";
+      /**
+       * Suite Version
+       * @constant
+       */
+      suite_version: 1;
+      /** Total Output Bytes */
+      total_output_bytes: number;
+      /** Total Timeout Seconds */
+      total_timeout_seconds: number;
+      /**
+       * User Command Input
+       * @default false
+       * @constant
+       */
+      user_command_input: false;
+    };
+    /** ValidationSuiteResultResponse */
+    ValidationSuiteResultResponse: {
+      /** Aggregate Digest */
+      aggregate_digest: string;
+      /**
+       * Artifact Bytes
+       * @constant
+       */
+      artifact_bytes: 0;
+      /**
+       * Artifact Count
+       * @constant
+       */
+      artifact_count: 0;
+      /** Audit Event References */
+      audit_event_references: string[];
+      /** Cancelled */
+      cancelled: boolean;
+      /** Canonical Workspace Invariant */
+      canonical_workspace_invariant: boolean;
+      /** Cleanup Succeeded */
+      cleanup_succeeded: boolean;
+      /** Combined Output Bytes */
+      combined_output_bytes: number;
+      /**
+       * Completed At
+       * Format: date-time
+       */
+      completed_at: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Duration Ms */
+      duration_ms: number;
+      /** Evidence References */
+      evidence_references: {
+        [key: string]: unknown;
+      }[];
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Output Truncated */
+      output_truncated: boolean;
+      /** Profile References */
+      profile_references: string[];
+      /** Recovery Required */
+      recovery_required: boolean;
+      /** Redaction Count */
+      redaction_count: number;
+      /** Source Invariant */
+      source_invariant: boolean;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+      /** Timed Out */
+      timed_out: boolean;
+      /**
+       * Verdict
+       * @enum {string}
+       */
+      verdict:
+        | "succeeded"
+        | "failed"
+        | "timed_out"
+        | "cancelled"
+        | "recovery_required";
+    };
+    /** ValidationSuiteRetryCreate */
+    ValidationSuiteRetryCreate: {
+      /**
+       * Execution Grant Id
+       * Format: uuid
+       */
+      execution_grant_id: string;
+    };
+    /** ValidationSuiteRunCreate */
+    ValidationSuiteRunCreate: {
+      /**
+       * Execution Grant Id
+       * Format: uuid
+       */
+      execution_grant_id: string;
+      /**
+       * Suite Id
+       * @constant
+       */
+      suite_id: "fixture-integrity-suite-v1";
+      /**
+       * Suite Version
+       * @constant
+       */
+      suite_version: 1;
+    };
+    /** ValidationSuiteRunListResponse */
+    ValidationSuiteRunListResponse: {
+      /** Items */
+      items: components["schemas"]["ValidationSuiteRunResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** ValidationSuiteRunResponse */
+    ValidationSuiteRunResponse: {
+      /** Attempt Number */
+      attempt_number: number;
+      /** Cancel Requested At */
+      cancel_requested_at: string | null;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /** Combined Output Bytes */
+      combined_output_bytes: number;
+      /** Completed At */
+      completed_at: string | null;
+      /** Completed Step Count */
+      completed_step_count: number;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Deadline At */
+      deadline_at: string | null;
+      /** Error Code */
+      error_code: string | null;
+      /** Error Message */
+      error_message: string | null;
+      /**
+       * Execution Grant Id
+       * Format: uuid
+       */
+      execution_grant_id: string;
+      /**
+       * Failure Policy
+       * @constant
+       */
+      failure_policy: "fail_fast";
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Max Attempts */
+      max_attempts: number;
+      /**
+       * Plan Id
+       * Format: uuid
+       */
+      plan_id: string;
+      /** Policy Digest */
+      policy_digest: string;
+      /**
+       * Requested At
+       * Format: date-time
+       */
+      requested_at: string;
+      result: components["schemas"]["ValidationSuiteResultResponse"] | null;
+      /** Retry Of Suite Run Id */
+      retry_of_suite_run_id: string | null;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+      /** Source Revision */
+      source_revision: string;
+      /** Started At */
+      started_at: string | null;
+      state: components["schemas"]["ValidationSuiteRunState"];
+      /** Step Count */
+      step_count: number;
+      /** Steps */
+      steps: components["schemas"]["ValidationSuiteStepRunResponse"][];
+      /**
+       * Suite Id
+       * @constant
+       */
+      suite_id: "fixture-integrity-suite-v1";
+      /**
+       * Suite Version
+       * @constant
+       */
+      suite_version: 1;
+      /** Total Output Bytes */
+      total_output_bytes: number;
+      /** Total Timeout Seconds */
+      total_timeout_seconds: number;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Version */
+      version: number;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /**
+     * ValidationSuiteRunState
+     * @enum {string}
+     */
+    ValidationSuiteRunState:
+      | "requested"
+      | "queued"
+      | "running"
+      | "cancel_requested"
+      | "succeeded"
+      | "failed"
+      | "timed_out"
+      | "cancelled"
+      | "recovery_required";
+    /** ValidationSuiteStepRunResponse */
+    ValidationSuiteStepRunResponse: {
+      /** Attempt Id */
+      attempt_id: string | null;
+      /** Cleanup Succeeded */
+      cleanup_succeeded: boolean | null;
+      /** Completed At */
+      completed_at: string | null;
+      /** Duration Ms */
+      duration_ms: number | null;
+      evidence: components["schemas"]["ValidationEvidenceResponse"] | null;
+      /** Evidence Id */
+      evidence_id: string | null;
+      /** Exit Code */
+      exit_code: number | null;
+      /** Failure Code */
+      failure_code: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Lease Id */
+      lease_id: string | null;
+      /** Max Output Bytes */
+      max_output_bytes: number;
+      /** Output Bytes */
+      output_bytes: number;
+      /** Output Truncated */
+      output_truncated: boolean;
+      /**
+       * Profile Id
+       * @enum {string}
+       */
+      profile_id: "fixture-python-stdlib-v1" | "fixture-python-manifest-v1";
+      /**
+       * Profile Version
+       * @constant
+       */
+      profile_version: 1;
+      /** Redaction Count */
+      redaction_count: number;
+      /** Reused From Step Run Id */
+      reused_from_step_run_id: string | null;
+      /** Runner Id */
+      runner_id: string | null;
+      /** Runner Job Id */
+      runner_job_id: string | null;
+      /** Sequence */
+      sequence: number;
+      /** Started At */
+      started_at: string | null;
+      state: components["schemas"]["ValidationSuiteStepState"];
+      /**
+       * Step Id
+       * @enum {string}
+       */
+      step_id: "fixture-contract" | "fixture-manifest";
+      /** Timeout Seconds */
+      timeout_seconds: number;
+      /** Validation Run Id */
+      validation_run_id: string | null;
+    };
+    /**
+     * ValidationSuiteStepState
+     * @enum {string}
+     */
+    ValidationSuiteStepState:
+      | "pending"
+      | "queued"
+      | "running"
+      | "succeeded"
+      | "failed"
+      | "timed_out"
+      | "cancelled"
+      | "skipped"
+      | "recovery_required";
+    /** ValidationSuiteTimelineResponse */
+    ValidationSuiteTimelineResponse: {
+      state: components["schemas"]["ValidationSuiteRunState"];
+      /** Steps */
+      steps: components["schemas"]["ValidationSuiteStepRunResponse"][];
+      /**
+       * Suite Run Id
+       * Format: uuid
+       */
+      suite_run_id: string;
     };
     /** WorkspaceActionResponse */
     WorkspaceActionResponse: {
@@ -6826,6 +7376,379 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_validation_suite_runs_api_v1_validation_suite_runs_get: {
+    parameters: {
+      query?: {
+        workspace_id?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationSuiteRunListResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_validation_suite_run_api_v1_validation_suite_runs_post: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ValidationSuiteRunCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationSuiteRunResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suite_run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationSuiteRunResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  cancel_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__cancel_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suite_run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationSuiteRunResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_validation_suite_result_api_v1_validation_suite_runs__suite_run_id__result_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suite_run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationSuiteAggregateResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  retry_validation_suite_run_api_v1_validation_suite_runs__suite_run_id__retry_post: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        suite_run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ValidationSuiteRetryCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationSuiteRunResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_validation_suite_timeline_api_v1_validation_suite_runs__suite_run_id__timeline_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suite_run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationSuiteTimelineResponse"];
+        };
+      };
+      /** @description Validation resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation state or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_validation_suites_api_v1_validation_suites_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationSuiteListResponse"];
         };
       };
     };

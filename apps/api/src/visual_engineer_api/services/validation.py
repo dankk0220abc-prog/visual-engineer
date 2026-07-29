@@ -89,6 +89,7 @@ class ValidationService:
         *,
         idempotency_key: str,
         request_id: str,
+        suite_dispatch_ref: str | None = None,
     ) -> ValidationRunResponse:
         request_hash = hashlib.sha256(
             json.dumps(
@@ -113,6 +114,19 @@ class ValidationService:
                 "Validation-scoped Execution Grant was not found",
             )
         grant, checkpoint, workspace, handle = context
+        if grant.allowed_validation_suites:
+            if suite_dispatch_ref not in grant.allowed_validation_suites:
+                raise ValidationServiceError(
+                    "validation_suite_dispatch_required",
+                    "Suite-scoped authority can dispatch Profiles only through its fixed Suite",
+                    category="policy",
+                )
+        elif suite_dispatch_ref is not None:
+            raise ValidationServiceError(
+                "validation_suite_grant_required",
+                "Suite dispatch requires Suite-scoped validation authority",
+                category="policy",
+            )
         profile = validation_profile(payload.profile_id)
         if profile is None or profile.reference not in grant.allowed_validation_profiles:
             raise ValidationServiceError(
@@ -328,7 +342,7 @@ class ValidationService:
             )
             step.failure_code = job.error_code
             if (
-                mapped in {"succeeded", "failed", "timed_out"}
+                mapped in {"succeeded", "failed", "timed_out", "cancelled"}
                 and attempt is not None
                 and job.result is not None
                 and self._validation.evidence(validation_run.id) is None

@@ -273,3 +273,39 @@ terminal cancellation.
 Phase 4 is complete in local `main`. This Phase 5 implementation checkpoint
 requires an independent focused read-only review; it is not a Phase 5 Security
 Gate approval.
+
+## Phase 5 Validation Suite lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> requested
+    requested --> queued: first fixed child dispatched
+    queued --> running: active child starts
+    queued --> cancel_requested: cancel or total-timeout cleanup
+    running --> cancel_requested: cancel or total-timeout cleanup
+    queued --> succeeded: all fixed steps succeed
+    running --> succeeded: all fixed steps succeed
+    queued --> failed: child failure or aggregate overflow
+    running --> failed: child failure or aggregate overflow
+    queued --> timed_out: deadline with no active child
+    running --> timed_out: child timeout
+    cancel_requested --> timed_out: timeout child cleanup proved
+    cancel_requested --> cancelled: user-cancel child cleanup proved
+    queued --> recovery_required: dispatch or cleanup proof fails
+    running --> recovery_required: dispatch or cleanup proof fails
+    cancel_requested --> recovery_required: cleanup proof fails
+```
+
+Step states are `pending`, `queued`, `running`, `succeeded`, `failed`,
+`timed_out`, `cancelled`, `skipped`, and `recovery_required`. Only one step may
+be active. Fail-fast turns undispatched pending steps into `skipped`.
+Cancellation or total timeout first fences and cancels the active child, then
+terminalizes the Suite; no pending step is dispatched afterward. Suite success
+requires every step to be successful and the Control Plane to revalidate
+cleanup, source/canonical invariance, and exact aggregate budgets.
+
+Retry is a new Suite attempt with a new approved Suite Grant. Previously
+successful Evidence is reused without a new job or budget charge; every
+remaining step gets a new Validation Run, Attempt, Lease, and Permit. Terminal
+Suite rows/results are immutable. This implementer state remains pending the
+second-slice independent focused review.

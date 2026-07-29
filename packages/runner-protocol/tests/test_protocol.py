@@ -1,10 +1,13 @@
 import uuid
+from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
 
 from visual_engineer_runner_protocol import (
+    VALIDATION_PROFILE_CATALOG,
+    VALIDATION_SUITE_CATALOG,
     Capability,
     ControlledWaitJobSpec,
     DiagnosticResult,
@@ -18,6 +21,7 @@ from visual_engineer_runner_protocol import (
     side_effect_permit_digest_matches,
     validate_result_payload,
     validate_safe_error_message,
+    validation_suite,
 )
 
 
@@ -118,6 +122,32 @@ def test_error_message_rejects_secrets_and_absolute_paths() -> None:
         validate_safe_error_message("failed at /Users/example/private/file.py")
     with pytest.raises(ValueError):
         validate_safe_error_message("token=dynamic-secret-value")
+
+
+def test_validation_suite_catalog_is_closed_ordered_and_immutable() -> None:
+    assert sorted(VALIDATION_PROFILE_CATALOG) == [
+        "fixture-python-manifest-v1",
+        "fixture-python-stdlib-v1",
+    ]
+    assert list(VALIDATION_SUITE_CATALOG) == ["fixture-integrity-suite-v1"]
+    suite = validation_suite("fixture-integrity-suite-v1")
+    assert suite is not None
+    assert suite.reference == "fixture-integrity-suite-v1:v1"
+    assert [step.sequence for step in suite.steps] == [1, 2]
+    assert [step.step_id for step in suite.steps] == [
+        "fixture-contract",
+        "fixture-manifest",
+    ]
+    assert [step.profile_reference for step in suite.steps] == [
+        "fixture-python-stdlib-v1:v1",
+        "fixture-python-manifest-v1:v1",
+    ]
+    assert suite.failure_policy == "fail_fast"
+    assert suite.total_output_bytes == 10_000
+    assert len(suite.policy_digest) == 64
+    assert validation_suite("unknown-suite") is None
+    with pytest.raises(FrozenInstanceError):
+        suite.version = 2  # type: ignore[misc]
 
 
 def test_side_effect_permit_canonical_digest_is_stable_and_tamper_evident() -> None:

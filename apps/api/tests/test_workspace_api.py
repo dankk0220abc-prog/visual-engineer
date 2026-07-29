@@ -1894,9 +1894,34 @@ def test_validation_grant_run_success_failure_and_evidence_are_governed(
                 "network_policy": "none",
                 "shell_access": False,
                 "user_command_input": False,
-            }
+            },
+            {
+                "profile_id": "fixture-python-manifest-v1",
+                "version": 1,
+                "display_name": "Trusted fixture manifest integrity",
+                "description": (
+                    "Runs one system-owned Python standard-library manifest and "
+                    "content-digest check against a disposable exact-Checkpoint "
+                    "fixture copy."
+                ),
+                "step_id": "fixture-manifest",
+                "safe_argv": [
+                    "python",
+                    "-I",
+                    "-S",
+                    "<system-owned-fixture-validator>",
+                    "<system-owned-profile-mode>",
+                ],
+                "timeout_seconds": 10,
+                "max_output_bytes": 4096,
+                "max_artifact_bytes": 0,
+                "max_artifact_count": 0,
+                "network_policy": "none",
+                "shell_access": False,
+                "user_command_input": False,
+            },
         ],
-        "total": 1,
+        "total": 2,
     }
     arbitrary_command = client.post(
         "/api/v1/validation-runs",
@@ -1925,6 +1950,7 @@ def test_validation_grant_run_success_failure_and_evidence_are_governed(
     assert validation_grant["validation_workspace_id"] == workspace_id
     assert validation_grant["validation_checkpoint_id"] == str(persisted_checkpoint.id)
     assert validation_grant["allowed_validation_profiles"] == ["fixture-python-stdlib-v1:v1"]
+    assert validation_grant["allowed_validation_suites"] == []
     assert validation_grant["shell_access"] is False
     assert validation_grant["network_policy"] == "none"
 
