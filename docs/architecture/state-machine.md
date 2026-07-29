@@ -263,6 +263,12 @@ or exact sandbox cleanup cannot be proven. A typed cleanup failure reported
 after `cancel_requested` atomically persists Job/Permit failure and
 ValidationRun/step `recovery_required`; replay returns that one terminal
 failure without a cancellation acknowledgement or duplicate Evidence.
+When cleanup is proven, the active Runner/Attempt/Lease transaction locks the
+persisted Validation Run and step, terminalizes the exact consumed
+Job/Attempt/digest-bound Permit, cancels Job, Attempt, Run, and step, emits one
+acknowledgement, and commits once. A stale identity or mismatched persisted Run
+binding aborts before any Permit terminal mutation; replay returns the existing
+terminal cancellation.
 
 Phase 4 is complete in local `main`. This Phase 5 implementation checkpoint
 requires an independent focused read-only review; it is not a Phase 5 Security

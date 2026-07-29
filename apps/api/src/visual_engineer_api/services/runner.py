@@ -1265,6 +1265,8 @@ class RunnerService:
                 "Stored Runner Job specification is invalid",
                 category="internal",
             ) from exc
+        validation_run = None
+        validation_step = None
         if isinstance(
             stored_spec,
             (
@@ -1272,8 +1274,54 @@ class RunnerService:
                 WorkspaceWriteTextJobSpec,
                 WorkspaceRollbackJobSpec,
                 WorkspaceDiscardJobSpec,
+                ValidationExecuteJobSpec,
             ),
         ):
+            if isinstance(stored_spec, ValidationExecuteJobSpec):
+                validation_run = self._validation.get_by_job(job.id, lock=True)
+                if (
+                    validation_run is None
+                    or validation_run.id != stored_spec.validation_run_id
+                    or validation_run.runner_job_id != job.id
+                    or validation_run.workspace_id != stored_spec.workspace_id
+                    or validation_run.workspace_id != job.workspace_id
+                    or validation_run.execution_grant_id != job.execution_grant_id
+                    or validation_run.execution_grant_id != stored_spec.execution_grant.id
+                    or validation_run.run_id != stored_spec.execution_grant.run_id
+                    or validation_run.plan_id != stored_spec.execution_grant.plan_id
+                    or validation_run.source_revision != stored_spec.execution_grant.source_revision
+                    or validation_run.checkpoint_id != stored_spec.checkpoint_id
+                    or validation_run.checkpoint_fingerprint != stored_spec.checkpoint_fingerprint
+                    or validation_run.profile_id != stored_spec.profile_id
+                    or validation_run.profile_version != stored_spec.profile_version
+                    or validation_run.policy_digest != stored_spec.validation_policy_digest
+                    or validation_run.timeout_seconds != stored_spec.timeout_seconds
+                    or validation_run.max_output_bytes != stored_spec.max_output_bytes
+                    or validation_run.max_artifact_bytes != stored_spec.max_artifact_bytes
+                    or validation_run.max_artifact_count != stored_spec.max_artifact_count
+                    or validation_run.state
+                    in {
+                        "succeeded",
+                        "failed",
+                        "timed_out",
+                        "cancelled",
+                        "recovery_required",
+                    }
+                ):
+                    self._conflict(
+                        "validation_result_binding_mismatch",
+                        "Validation cancellation does not match the trusted Run binding",
+                    )
+                validation_step = self._validation.step(validation_run.id, lock=True)
+                if (
+                    validation_step is None
+                    or validation_step.validation_run_id != validation_run.id
+                    or validation_step.step_id != stored_spec.validation_step_id
+                ):
+                    self._conflict(
+                        "validation_result_binding_missing",
+                        "Trusted Validation step binding is missing",
+                    )
             existing_permit = self._workspaces.side_effect_permit_for_attempt(
                 job.id,
                 attempt.id,
@@ -1292,6 +1340,28 @@ class RunnerService:
         attempt.completed_at = now
         job.completed_at = now
         job.active_attempt_id = None
+        if (
+            isinstance(stored_spec, ValidationExecuteJobSpec)
+            and validation_run is not None
+            and validation_step is not None
+        ):
+            validation_run.runner_id = authenticated.id
+            validation_run.attempt_id = attempt.id
+            validation_run.lease_id = attempt.lease_id
+            validation_run.claimed_at = validation_run.claimed_at or attempt.created_at
+            validation_run.started_at = validation_run.started_at or attempt.started_at
+            validation_run.cancel_requested_at = validation_run.cancel_requested_at or now
+            validation_run.state = "cancelled"
+            validation_run.completed_at = now
+            validation_run.error_code = None
+            validation_run.error_message = None
+            validation_run.version += 1
+            validation_step.state = "cancelled"
+            validation_step.started_at = (
+                validation_step.started_at or validation_run.started_at or validation_run.claimed_at
+            )
+            validation_step.completed_at = now
+            validation_step.failure_code = None
         if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
             self._workspace_job_cancelled(job, request_id=request_id)
         self._event(

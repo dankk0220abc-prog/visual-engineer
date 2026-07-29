@@ -45,6 +45,7 @@ quote-style = "double"
 [tool.mypy]
 python_version = "3.12"
 strict = true
+explicit_package_bases = true
 files = [
   "apps/api/src",
   "apps/api/tests",
@@ -53,19 +54,12 @@ files = [
   "packages/runner-protocol/src",
 ]
 mypy_path = [
+  "apps/api/tests",
   "apps/api/src",
   "apps/runner/src",
   "packages/runner-protocol/src",
 ]
 plugins = ["pydantic.mypy"]
-exclude = [
-  "apps/api/tests/test_phase5_focused_security_review.py",
-  "apps/runner/tests/security_audit/test_phase5_focused_security_review.py",
-]
-
-[[tool.mypy.overrides]]
-module = "test_phase5_focused_security_review"
-ignore_errors = true
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers --import-mode=importlib --cov=visual_engineer_api --cov-report=term-missing --cov-report=html --cov-fail-under=80"

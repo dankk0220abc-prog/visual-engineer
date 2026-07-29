@@ -2,11 +2,14 @@
 
 - Phase: Phase 5 — Governed Validation Execution
 - Overall status:
-  `PHASE 5 FOCUSED RE-AUDIT FAIL — REMEDIATION REQUIRED`
-- Governance qualifier: ONE BLOCKING MEDIUM VALIDATION-CANCEL PERMIT FINDING
-  AND ONE BLOCKING AUDIT-STATIC-ANALYSIS PREFLIGHT NONCONFORMANCE; FINAL
-  AGGREGATE AND PASS SEALING NOT RUN
-- Last updated: 2026-07-29
+  `PHASE 5 FINAL TARGETED REMEDIATION COMPLETE — READY FOR INDEPENDENT SINGLE-FINDING RE-AUDIT`
+- Governance qualifier: IMPLEMENTER CANDIDATE ONLY; HISTORICAL FOCUSED
+  RE-AUDIT FAIL PRESERVED; SECURITY GATE NOT DECIDED
+- Last updated: 2026-07-30
+- Phase 5 final targeted remediation 2 branch:
+  `fix/phase-5-validation-cancel-permit-remediation-2`
+- Phase 5 final targeted remediation 2 base:
+  `4ce5a1a8e63ec530517f17ae82fc3aeb7747c4de`
 - Phase 5 focused re-audit branch:
   `audit/phase-5-validation-remediation-focused-max`
 - Phase 5 focused re-audit candidate:
@@ -55,6 +58,48 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 final targeted remediation 2
+
+The narrow implementer candidate for `VE-P5-FREAUD-001` and the focused-audit
+mypy governance nonconformance is implemented and locally verified.
+
+**CONFIRMED**:
+
+- the original real-PostgreSQL Finding remains unchanged and failed `5/5`
+  before the repair with Permit `consumed` and no terminal timestamp;
+- successful active Validation cancellation now locks and validates the exact
+  persisted Run/step binding, terminalizes the exact consumed Permit, and
+  cancels Job, Attempt, Run, and step in one commit;
+- cleanup failure remains failed/`recovery_required`;
+- stale Attempt/Lease, cross-Runner identity, and mismatched Validation Run
+  cannot close the target or an unrelated Permit;
+- cancellation replay is idempotent, late completion is rejected, no Result,
+  Evidence, success event, duplicate billing effect, or canonical Workspace
+  mutation occurs;
+- historical API focused, permanent remediation, independent re-audit, and new
+  cancellation regressions pass `48/48`;
+- focused Runner/Protocol passes `21/21`; relevant Runner/Workspace API files
+  pass `23/23`; and
+- both targeted mypy exclusions and the shared-module ignore override are
+  removed. Strict mypy now discovers the historical focused, re-audit, and
+  remediation files as distinct modules and passes 90 source files;
+- empty-PostgreSQL base/head/base/head migration, format, lint, typecheck,
+  build, contracts drift, and source invariance pass;
+- aggregate `make test` passes Python/API/Runner/Protocol `226/226` at 82.92%
+  coverage and Web `44/44`; and
+- all exact remediation-owned Compose container/network/volume inventories
+  are zero after cleanup.
+
+This is implementer evidence only. The single local checkpoint is prepared;
+its hash and final clean state are reported administratively after commit.
+Final `make verify` is deliberately reserved for a fresh independent
+single-finding re-audit. This implementer does not declare Security Gate PASS.
+
+Detailed in-progress artifacts:
+
+- [`docs/exec-plans/phase-5-validation-cancel-permit-remediation-2.md`](../exec-plans/phase-5-validation-cancel-permit-remediation-2.md)
+- [`docs/evidence/phase-5-validation-cancel-permit-remediation-2-verification.md`](../evidence/phase-5-validation-cancel-permit-remediation-2-verification.md)
 
 ## Phase 5 independent focused re-audit decision
 

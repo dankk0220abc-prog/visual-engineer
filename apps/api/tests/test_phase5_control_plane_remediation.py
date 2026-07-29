@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from test_phase5_focused_security_review import (  # type: ignore[attr-defined]
+from test_phase5_focused_security_review import (
     _post_completion,
     _prepare_validation_job,
     _valid_result,

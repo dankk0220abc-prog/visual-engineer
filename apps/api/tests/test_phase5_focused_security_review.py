@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 from sqlalchemy.orm import Session
 
 from test_workspace_api import (
@@ -217,14 +219,17 @@ def _post_completion(
     *,
     identity: dict[str, str] | None = None,
     result: dict[str, Any] | None = None,
-):
-    return client.post(
-        f"/api/v1/runner-protocol/v1/jobs/{context.job_id}/complete",
-        headers=runner_headers(context.token),
-        json={
-            **(identity or context.identity),
-            "result": result or _valid_result(context),
-        },
+) -> Response:
+    return cast(
+        Response,
+        client.post(
+            f"/api/v1/runner-protocol/v1/jobs/{context.job_id}/complete",
+            headers=runner_headers(context.token),
+            json={
+                **(identity or context.identity),
+                "result": result or _valid_result(context),
+            },
+        ),
     )
 
 
@@ -271,7 +276,7 @@ def test_phase5_aud_005_result_identity_matches_assigned_job(
     db_session: Session,
     runner_bootstrap_token: str,
     field: str,
-    value,
+    value: Callable[[], str | list[str]],
 ) -> None:
     """P5-AUD-005: inner result identity must exactly match the assigned Job."""
 
