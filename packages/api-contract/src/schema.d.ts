@@ -2851,12 +2851,29 @@ export interface components {
      * @enum {string}
      */
     TaskStatus: "draft";
+    /** ValidationArtifactEvidence */
+    ValidationArtifactEvidence: {
+      /**
+       * File Type
+       * @default regular_file
+       * @constant
+       */
+      file_type: "regular_file";
+      /** Relative Path */
+      relative_path: string;
+      /** Sha256 */
+      sha256: string;
+      /** Size Bytes */
+      size_bytes: number;
+    };
     /** ValidationEvidenceResponse */
     ValidationEvidenceResponse: {
       /** Artifact Bytes */
       artifact_bytes: number;
       /** Artifact Count */
       artifact_count: number;
+      /** Artifact Manifest Digest */
+      artifact_manifest_digest: string | null;
       /** Artifact Summary */
       artifact_summary: {
         [key: string]: unknown;
@@ -2880,12 +2897,24 @@ export interface components {
       created_at: string;
       /** Duration Ms */
       duration_ms: number;
+      /** Evidence Digest */
+      evidence_digest: string | null;
+      /** Execution Envelope Digest */
+      execution_envelope_digest: string | null;
       /** Exit Code */
       exit_code: number;
+      /** Fencing Token */
+      fencing_token: string | null;
       /** Filesystem Isolated */
       filesystem_isolated: boolean;
       /** Fixed Argv */
       fixed_argv: string[];
+      /** Fixed Argv Digest */
+      fixed_argv_digest: string | null;
+      /** Fixed Cwd */
+      fixed_cwd: string | null;
+      /** Fixed Environment Digest */
+      fixed_environment_digest: string | null;
       /**
        * Id
        * Format: uuid
@@ -2898,8 +2927,12 @@ export interface components {
       lease_id: string;
       /** Network Isolated */
       network_isolated: boolean;
+      /** Policy Digest */
+      policy_digest: string | null;
       /** Redaction Count */
       redaction_count: number;
+      /** Result Schema Version */
+      result_schema_version: number | null;
       /**
        * Runner Id
        * Format: uuid
@@ -2907,11 +2940,17 @@ export interface components {
       runner_id: string;
       /** Sandbox Cleaned */
       sandbox_cleaned: boolean;
+      /** Side Effect Permit Digest */
+      side_effect_permit_digest: string | null;
       /**
        * Side Effect Permit Id
        * Format: uuid
        */
       side_effect_permit_id: string;
+      /** Side Effect Permit Sequence */
+      side_effect_permit_sequence: number | null;
+      /** Source Revision */
+      source_revision: string | null;
       /**
        * Started At
        * Format: date-time
@@ -2927,6 +2966,8 @@ export interface components {
       stdout_truncated: boolean;
       /** Timed Out */
       timed_out: boolean;
+      /** Validation Step Id */
+      validation_step_id: string | null;
     };
     /** ValidationExecuteJobSpec */
     ValidationExecuteJobSpec: {
@@ -2961,13 +3002,30 @@ export interface components {
        * @constant
        */
       profile_version: 1;
+      /**
+       * Result Schema Version
+       * @default 1
+       * @constant
+       */
+      result_schema_version: 1;
       /** Timeout Seconds */
       timeout_seconds: number;
+      /**
+       * Validation Policy Digest
+       * @default 0000000000000000000000000000000000000000000000000000000000000000
+       */
+      validation_policy_digest: string;
       /**
        * Validation Run Id
        * Format: uuid
        */
       validation_run_id: string;
+      /**
+       * Validation Step Id
+       * @default fixture-contract
+       * @constant
+       */
+      validation_step_id: "fixture-contract";
       /**
        * Workspace Id
        * Format: uuid
@@ -2980,6 +3038,10 @@ export interface components {
       artifact_bytes: number;
       /** Artifact Count */
       artifact_count: number;
+      /** Artifact Manifest Digest */
+      artifact_manifest_digest?: string | null;
+      /** Artifacts */
+      artifacts?: components["schemas"]["ValidationArtifactEvidence"][] | null;
       /** Cancelled */
       cancelled: boolean;
       /** Checkpoint Fingerprint */
@@ -2996,8 +3058,14 @@ export interface components {
       completed_at: string;
       /** Duration Ms */
       duration_ms: number;
+      /** Evidence Digest */
+      evidence_digest?: string | null;
+      /** Execution Envelope Digest */
+      execution_envelope_digest?: string | null;
       /** Exit Code */
       exit_code: number;
+      /** Fencing Token */
+      fencing_token?: string | null;
       /**
        * Filesystem Isolated
        * @default true
@@ -3008,6 +3076,13 @@ export interface components {
       fixed_argv: (
         "python" | "-I" | "-S" | "<system-owned-fixture-validator>"
       )[];
+      /** Fixed Argv Digest */
+      fixed_argv_digest?: string | null;
+      /** Fixed Cwd */
+      fixed_cwd?: string | null;
+      /** Fixed Environment Digest */
+      fixed_environment_digest?: string | null;
+      fixed_operation?: components["schemas"]["WorkspaceOperation"] | null;
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -3019,31 +3094,39 @@ export interface components {
        * @constant
        */
       network_isolated: true;
+      /** Policy Digest */
+      policy_digest?: string | null;
       /**
        * Profile Id
        * @default fixture-python-stdlib-v1
-       * @constant
        */
-      profile_id: "fixture-python-stdlib-v1";
+      profile_id: string;
       /**
        * Profile Version
        * @default 1
-       * @constant
        */
-      profile_version: 1;
+      profile_version: number;
       /** Redaction Count */
       redaction_count: number;
+      /** Result Schema Version */
+      result_schema_version?: number | null;
       /**
        * Sandbox Cleaned
        * @default true
        * @constant
        */
       sandbox_cleaned: true;
+      /** Side Effect Permit Digest */
+      side_effect_permit_digest?: string | null;
       /**
        * Side Effect Permit Id
        * Format: uuid
        */
       side_effect_permit_id: string;
+      /** Side Effect Permit Sequence */
+      side_effect_permit_sequence?: number | null;
+      /** Source Revision */
+      source_revision?: string | null;
       /**
        * Started At
        * Format: date-time
@@ -3064,6 +3147,8 @@ export interface components {
        * Format: uuid
        */
       validation_run_id: string;
+      /** Validation Step Id */
+      validation_step_id?: string | null;
       /**
        * Workspace Id
        * Format: uuid

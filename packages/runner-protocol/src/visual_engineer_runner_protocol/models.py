@@ -458,6 +458,11 @@ class WorkspaceDiscardJobSpec(WorkspaceBoundJobSpec):
 class ValidationExecuteJobSpec(WorkspaceBoundJobSpec):
     kind: Literal[JobKind.VALIDATION_EXECUTE_V1] = JobKind.VALIDATION_EXECUTE_V1
     validation_run_id: uuid.UUID
+    validation_step_id: Literal["fixture-contract"] = "fixture-contract"
+    validation_policy_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] = (
+        "0" * 64
+    )
+    result_schema_version: Literal[1] = 1
     profile_id: Literal["fixture-python-stdlib-v1"] = "fixture-python-stdlib-v1"
     profile_version: Literal[1] = 1
     checkpoint_id: uuid.UUID
@@ -1022,14 +1027,37 @@ class WorkspaceDiscardResult(StrictModel):
     side_effect_permit_id: uuid.UUID
 
 
+class ValidationArtifactEvidence(StrictModel):
+    relative_path: Annotated[
+        str,
+        StringConstraints(strip_whitespace=False, min_length=1, max_length=512),
+    ]
+    file_type: Literal["regular_file"] = "regular_file"
+    size_bytes: int = Field(ge=0, le=1024 * 1024)
+    sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_relative_path(cls, value: str) -> str:
+        return _validate_relative_policy_value(value, allow_glob=False)
+
+
 class ValidationExecutionResult(StrictModel):
     kind: Literal[JobKind.VALIDATION_EXECUTE_V1] = JobKind.VALIDATION_EXECUTE_V1
+    result_schema_version: int | None = Field(default=None, ge=1, le=100)
     validation_run_id: uuid.UUID
+    validation_step_id: str | None = Field(default=None, min_length=1, max_length=64)
     workspace_id: uuid.UUID
+    source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")] | None = None
     checkpoint_id: uuid.UUID
     checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
-    profile_id: Literal["fixture-python-stdlib-v1"] = "fixture-python-stdlib-v1"
-    profile_version: Literal[1] = 1
+    profile_id: Annotated[
+        str,
+        StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{2,63}$"),
+    ] = "fixture-python-stdlib-v1"
+    profile_version: int = Field(default=1, ge=1, le=999)
+    policy_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
+    fixed_operation: WorkspaceOperation | None = None
     fixed_argv: list[
         Literal[
             "python",
@@ -1038,6 +1066,14 @@ class ValidationExecutionResult(StrictModel):
             "<system-owned-fixture-validator>",
         ]
     ] = Field(min_length=4, max_length=4)
+    fixed_argv_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
+    fixed_cwd: (
+        Annotated[str, StringConstraints(strip_whitespace=False, min_length=1, max_length=128)]
+        | None
+    ) = None
+    fixed_environment_digest: (
+        Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None
+    ) = None
     started_at: datetime
     completed_at: datetime
     duration_ms: float = Field(ge=0, le=120_000)
@@ -1054,7 +1090,23 @@ class ValidationExecutionResult(StrictModel):
     sandbox_cleaned: Literal[True] = True
     artifact_count: int = Field(ge=0, le=20)
     artifact_bytes: int = Field(ge=0, le=1024 * 1024)
+    artifacts: list[ValidationArtifactEvidence] | None = Field(
+        default=None,
+        max_length=20,
+    )
+    artifact_manifest_digest: (
+        Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None
+    ) = None
     side_effect_permit_id: uuid.UUID
+    side_effect_permit_sequence: int | None = Field(default=None, ge=1)
+    side_effect_permit_digest: (
+        Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None
+    ) = None
+    fencing_token: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
+    execution_envelope_digest: (
+        Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None
+    ) = None
+    evidence_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
 
     @model_validator(mode="after")
     def validate_timing_and_outcome(self) -> "ValidationExecutionResult":

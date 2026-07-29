@@ -196,9 +196,12 @@ ValidationStepRun records the single fixed step selected by the immutable
 Profile. ValidationEvidence is one immutable bounded terminal record
 containing safe fixed-argv display, timing/exit classification, bounded
 redacted output, truncation/redaction counts, resource and artifact summary,
-and process/sandbox cleanup proof. Neither table accepts raw environment, user
-command, cwd, host path, or credentials. Unique bindings prevent replay from
-creating a second step or evidence row.
+and process/sandbox cleanup proof. It also retains result-schema/step/revision/
+policy identity, fixed argv/cwd/environment digests, Permit sequence/digest
+and fencing token, artifact-manifest digest, full execution-envelope digest,
+and evidence digest. Neither table accepts raw environment, user command,
+host cwd/path, or credentials. Unique bindings prevent replay from creating a
+second step or evidence row.
 
 ## Relationships
 
@@ -258,8 +261,10 @@ Both layers are tested against real PostgreSQL; SQLite is not acceptance
 evidence.
 
 Phase 4 ended with Alembic revision
-`20260728_0005_close_phase4_security_findings`. Phase 5 adds only
-`20260729_0006_add_governed_validation_execution`; prior migrations are not
+`20260728_0005_close_phase4_security_findings`. Phase 5 adds
+`20260729_0006_add_governed_validation_execution` and the additive evidence
+binding revision
+`20260729_0007_bind_validation_result_evidence`; prior migrations are not
 rewritten. The complete base-to-head, downgrade-to-base, and upgrade-to-head
 roundtrip must pass on real PostgreSQL before the implementation checkpoint.
 

@@ -4,7 +4,7 @@ JOB_TRANSITIONS: dict[str, frozenset[str]] = {
     "queued": frozenset({"leased", "cancelled", "failed"}),
     "leased": frozenset({"running", "cancel_requested", "queued", "failed"}),
     "running": frozenset({"cancel_requested", "succeeded", "failed", "queued"}),
-    "cancel_requested": frozenset({"cancelled"}),
+    "cancel_requested": frozenset({"cancelled", "failed"}),
     "succeeded": frozenset(),
     "cancelled": frozenset(),
     "failed": frozenset(),

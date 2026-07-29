@@ -35,12 +35,17 @@ from visual_engineer_runner.workspace_manager import WorkspaceManager
 from visual_engineer_runner_protocol import (
     JobAssignment,
     SideEffectPermitAcquireRequest,
+    ValidationExecuteJobSpec,
+    ValidationExecutionResult,
     WorkspacePrepareJobSpec,
     WorkspacePrepareResult,
     WorkspaceWriteTextJobSpec,
     WorkspaceWriteTextResult,
     compute_side_effect_job_digest,
+    compute_validation_artifact_manifest_digest,
+    compute_validation_evidence_digest,
     side_effect_permit_digest_matches,
+    validation_result_binding,
 )
 from visual_engineer_runner_protocol import (
     SideEffectPermit as ProtocolSideEffectPermit,
@@ -297,6 +302,26 @@ def acquire_side_effect_permit(
     )
     assert response.status_code == 200, response.text
     return cast(dict[str, Any], response.json())
+
+
+def governed_validation_result(
+    assignment: dict[str, Any],
+    permit: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    typed_assignment = JobAssignment.model_validate(assignment)
+    assert isinstance(typed_assignment.job, ValidationExecuteJobSpec)
+    typed_permit = ProtocolSideEffectPermit.model_validate(permit)
+    governed = ValidationExecutionResult.model_validate(
+        {
+            **result,
+            **validation_result_binding(typed_assignment.job, typed_permit),
+            "artifacts": [],
+            "artifact_manifest_digest": compute_validation_artifact_manifest_digest([]),
+        }
+    )
+    governed.evidence_digest = compute_validation_evidence_digest(governed)
+    return governed.model_dump(mode="json")
 
 
 def checkpoint(
@@ -1952,38 +1977,42 @@ def test_validation_grant_run_success_failure_and_evidence_are_governed(
         headers=runner_headers(token),
         json={
             **identity,
-            "result": {
-                "kind": "validation_execute_v1",
-                "validation_run_id": successful_run["id"],
-                "workspace_id": workspace_id,
-                "checkpoint_id": str(persisted_checkpoint.id),
-                "checkpoint_fingerprint": checkpoint_fingerprint,
-                "profile_id": "fixture-python-stdlib-v1",
-                "profile_version": 1,
-                "fixed_argv": [
-                    "python",
-                    "-I",
-                    "-S",
-                    "<system-owned-fixture-validator>",
-                ],
-                "started_at": "2026-07-29T01:00:00Z",
-                "completed_at": "2026-07-29T01:00:01Z",
-                "duration_ms": 50,
-                "exit_code": 0,
-                "stdout": "VE_VALIDATION_PROFILE_PASS\n",
-                "stderr": "",
-                "stdout_truncated": False,
-                "stderr_truncated": False,
-                "redaction_count": 0,
-                "timed_out": False,
-                "cancelled": False,
-                "network_isolated": True,
-                "filesystem_isolated": True,
-                "sandbox_cleaned": True,
-                "artifact_count": 0,
-                "artifact_bytes": 0,
-                "side_effect_permit_id": permit["id"],
-            },
+            "result": governed_validation_result(
+                assignment,
+                permit,
+                {
+                    "kind": "validation_execute_v1",
+                    "validation_run_id": successful_run["id"],
+                    "workspace_id": workspace_id,
+                    "checkpoint_id": str(persisted_checkpoint.id),
+                    "checkpoint_fingerprint": checkpoint_fingerprint,
+                    "profile_id": "fixture-python-stdlib-v1",
+                    "profile_version": 1,
+                    "fixed_argv": [
+                        "python",
+                        "-I",
+                        "-S",
+                        "<system-owned-fixture-validator>",
+                    ],
+                    "started_at": "2026-07-29T01:00:00Z",
+                    "completed_at": "2026-07-29T01:00:01Z",
+                    "duration_ms": 50,
+                    "exit_code": 0,
+                    "stdout": "VE_VALIDATION_PROFILE_PASS\n",
+                    "stderr": "",
+                    "stdout_truncated": False,
+                    "stderr_truncated": False,
+                    "redaction_count": 0,
+                    "timed_out": False,
+                    "cancelled": False,
+                    "network_isolated": True,
+                    "filesystem_isolated": True,
+                    "sandbox_cleaned": True,
+                    "artifact_count": 0,
+                    "artifact_bytes": 0,
+                    "side_effect_permit_id": permit["id"],
+                },
+            ),
         },
     )
     assert completed.status_code == 200, completed.text
@@ -2011,38 +2040,42 @@ def test_validation_grant_run_success_failure_and_evidence_are_governed(
         headers=runner_headers(token),
         json={
             **identity,
-            "result": {
-                "kind": "validation_execute_v1",
-                "validation_run_id": failed_run["id"],
-                "workspace_id": workspace_id,
-                "checkpoint_id": str(persisted_checkpoint.id),
-                "checkpoint_fingerprint": checkpoint_fingerprint,
-                "profile_id": "fixture-python-stdlib-v1",
-                "profile_version": 1,
-                "fixed_argv": [
-                    "python",
-                    "-I",
-                    "-S",
-                    "<system-owned-fixture-validator>",
-                ],
-                "started_at": "2026-07-29T01:01:00Z",
-                "completed_at": "2026-07-29T01:01:01Z",
-                "duration_ms": 60,
-                "exit_code": 1,
-                "stdout": "",
-                "stderr": "VE_VALIDATION_PROFILE_CONTRACT_MISMATCH\n",
-                "stdout_truncated": False,
-                "stderr_truncated": False,
-                "redaction_count": 0,
-                "timed_out": False,
-                "cancelled": False,
-                "network_isolated": True,
-                "filesystem_isolated": True,
-                "sandbox_cleaned": True,
-                "artifact_count": 0,
-                "artifact_bytes": 0,
-                "side_effect_permit_id": permit["id"],
-            },
+            "result": governed_validation_result(
+                assignment,
+                permit,
+                {
+                    "kind": "validation_execute_v1",
+                    "validation_run_id": failed_run["id"],
+                    "workspace_id": workspace_id,
+                    "checkpoint_id": str(persisted_checkpoint.id),
+                    "checkpoint_fingerprint": checkpoint_fingerprint,
+                    "profile_id": "fixture-python-stdlib-v1",
+                    "profile_version": 1,
+                    "fixed_argv": [
+                        "python",
+                        "-I",
+                        "-S",
+                        "<system-owned-fixture-validator>",
+                    ],
+                    "started_at": "2026-07-29T01:01:00Z",
+                    "completed_at": "2026-07-29T01:01:01Z",
+                    "duration_ms": 60,
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": "VE_VALIDATION_PROFILE_CONTRACT_MISMATCH\n",
+                    "stdout_truncated": False,
+                    "stderr_truncated": False,
+                    "redaction_count": 0,
+                    "timed_out": False,
+                    "cancelled": False,
+                    "network_isolated": True,
+                    "filesystem_isolated": True,
+                    "sandbox_cleaned": True,
+                    "artifact_count": 0,
+                    "artifact_bytes": 0,
+                    "side_effect_permit_id": permit["id"],
+                },
+            ),
         },
     )
     assert failed.status_code == 200, failed.text

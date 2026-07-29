@@ -172,11 +172,22 @@ package, URL, or user-supplied tool input.
 
 The corresponding result repeats the exact identities and literal Profile,
 uses only the fixed safe argv display
-`python -I -S <system-owned-fixture-validator>`, and records bounded
-stdout/stderr, exit/timing/interruption state, redaction/truncation counts,
-artifact totals, filesystem/network isolation, and successful sandbox cleanup.
-It never returns a host path or environment. The Runner executes a
-system-owned argv in a separate disposable validation root; the canonical
+`python -I -S <system-owned-fixture-validator>`, and carries a versioned
+execution-envelope digest. That digest binds the trusted Job, Validation
+Run/step, Runner, Attempt, Lease, Grant, revision, Checkpoint, policy digest,
+fixed operation, argv digest, symbolic fixed cwd, fixed environment-allowlist
+digest, budgets, and Permit ID/sequence/digest/expiry fence.
+
+The Control Plane reconstructs this envelope from locked persisted records
+before it can store a terminal result, complete the Permit, or emit a success
+event. It independently recomputes combined UTF-8 stdout/stderr bytes,
+truncation consistency, the regular-file-only relative artifact manifest and
+its count/individual/total bytes, manifest digest, and complete evidence
+digest. Missing or mismatched evidence and any budget overflow return `409`
+with no success side effect.
+
+The result never returns a host path or raw environment. The Runner executes
+a system-owned argv in a separate disposable validation root; the canonical
 Workspace is only the verified source of a bounded copy.
 
 ## Idempotency and terminal behavior
@@ -208,7 +219,10 @@ a public error.
 Validation failures add closed codes for Profile denial, Checkpoint mismatch,
 sandbox unavailable/denied, fixed-command non-zero result, timeout, output or
 artifact overflow, sandbox cleanup failure, and a remaining process group.
-Cleanup uncertainty cannot be converted to success.
+Cleanup uncertainty after `cancel_requested` is accepted only as a typed
+Validation recovery failure; it atomically fails the Job and Permit and
+persists the Validation Run/step as `recovery_required`, never as clean
+cancellation.
 
 Messages do not include tokens, authorization headers, host paths, database
 details, arbitrary exception text, or customer content.

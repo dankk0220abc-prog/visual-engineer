@@ -37,6 +37,8 @@ from visual_engineer_runner_protocol import (
     compute_side_effect_job_digest,
 )
 
+__all__ = ["FailureCode", "RunnerLifecycle"]
+
 LOGGER = logging.getLogger("visual_engineer_runner")
 CAPABILITIES = [
     Capability.CONTROLLED_WAIT_V1,
@@ -268,8 +270,22 @@ class RunnerLifecycle:
                     if isinstance(assignment.job, WorkspaceBoundJobSpec):
                         try:
                             await execution
-                        except WorkspaceExecutionError:
-                            pass
+                        except WorkspaceExecutionError as exc:
+                            await self._client.fail(
+                                assignment.job_id,
+                                FailRequest(
+                                    **identity,
+                                    error_code=exc.code,
+                                    error_message=None,
+                                    side_effect_permit_id=(
+                                        side_effect_permit.id
+                                        if side_effect_permit is not None
+                                        else None
+                                    ),
+                                ),
+                                credential.token,
+                            )
+                            return
                     else:
                         execution.cancel()
                         try:

@@ -251,11 +251,18 @@ Grant, Profile/version, canonical Workspace and Checkpoint, revision, policy
 digest, and run budget. Claim/start/renew/cancel/terminal mutation remains
 Runner/Attempt/Lease fenced. An idempotent replay returns the existing Run and
 cannot create a second evidence row or consume the Grant run budget twice.
+Before either terminal success transition, the Control Plane locks and
+reconstructs the complete persisted execution envelope and independently
+revalidates output/artifact evidence. Rejection leaves the Job non-successful,
+the Permit uncompleted, and terminal Evidence absent.
 
 Validation reads a bounded copy in a separate disposable sandbox. Success,
 failure, timeout, and cancellation do not transition or mutate the canonical
 Workspace. `recovery_required` is mandatory if complete process-group absence
-or exact sandbox cleanup cannot be proven.
+or exact sandbox cleanup cannot be proven. A typed cleanup failure reported
+after `cancel_requested` atomically persists Job/Permit failure and
+ValidationRun/step `recovery_required`; replay returns that one terminal
+failure without a cancellation acknowledgement or duplicate Evidence.
 
 Phase 4 is complete in local `main`. This Phase 5 implementation checkpoint
 requires an independent focused read-only review; it is not a Phase 5 Security

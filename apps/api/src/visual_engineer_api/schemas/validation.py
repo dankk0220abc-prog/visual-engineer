@@ -70,7 +70,14 @@ class ValidationEvidenceResponse(BaseModel):
     runner_id: uuid.UUID
     attempt_id: uuid.UUID
     lease_id: uuid.UUID
+    result_schema_version: int | None
+    validation_step_id: str | None
+    source_revision: str | None
+    policy_digest: str | None
     fixed_argv: list[str]
+    fixed_argv_digest: str | None
+    fixed_cwd: str | None
+    fixed_environment_digest: str | None
     started_at: datetime
     completed_at: datetime
     duration_ms: int
@@ -88,7 +95,13 @@ class ValidationEvidenceResponse(BaseModel):
     artifact_count: int
     artifact_bytes: int
     artifact_summary: dict[str, object]
+    artifact_manifest_digest: str | None
     side_effect_permit_id: uuid.UUID
+    side_effect_permit_sequence: int | None
+    side_effect_permit_digest: str | None
+    fencing_token: str | None
+    execution_envelope_digest: str | None
+    evidence_digest: str | None
     created_at: datetime
 
 

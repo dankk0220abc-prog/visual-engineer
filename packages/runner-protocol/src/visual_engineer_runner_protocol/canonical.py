@@ -54,3 +54,46 @@ def compute_side_effect_permit_digest(value: BaseModel | dict[str, Any]) -> str:
 
 def side_effect_permit_digest_matches(value: BaseModel | dict[str, Any], expected: str) -> bool:
     return hmac.compare_digest(compute_side_effect_permit_digest(value), expected)
+
+
+def _validation_digest(domain: str, value: BaseModel | dict[str, Any] | list[Any]) -> str:
+    payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+    return hashlib.sha256(
+        domain.encode("ascii") + b"\x00" + canonical_json_bytes({"value": payload})
+    ).hexdigest()
+
+
+def compute_validation_policy_digest(value: dict[str, Any]) -> str:
+    return _validation_digest("visual-engineer.validation-policy.v1", value)
+
+
+def compute_validation_fixed_argv_digest(value: list[str] | tuple[str, ...]) -> str:
+    return _validation_digest("visual-engineer.validation-argv.v1", list(value))
+
+
+def compute_validation_environment_digest(
+    value: dict[str, str] | tuple[tuple[str, str], ...],
+) -> str:
+    environment = dict(value)
+    return _validation_digest(
+        "visual-engineer.validation-environment.v1",
+        {"allowlist": sorted(environment), "values": environment},
+    )
+
+
+def compute_validation_artifact_manifest_digest(value: list[dict[str, Any]]) -> str:
+    return _validation_digest("visual-engineer.validation-artifacts.v1", value)
+
+
+def compute_validation_fencing_token(value: dict[str, Any]) -> str:
+    return _validation_digest("visual-engineer.validation-fencing.v1", value)
+
+
+def compute_validation_execution_envelope_digest(value: dict[str, Any]) -> str:
+    return _validation_digest("visual-engineer.validation-execution-envelope.v1", value)
+
+
+def compute_validation_evidence_digest(value: BaseModel | dict[str, Any]) -> str:
+    payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
+    payload.pop("evidence_digest", None)
+    return _validation_digest("visual-engineer.validation-evidence.v1", payload)

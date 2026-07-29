@@ -9,6 +9,8 @@ class ValidationProfile:
     description: str
     step_id: str
     safe_argv: tuple[str, ...]
+    fixed_cwd: str
+    fixed_environment: tuple[tuple[str, str], ...]
     timeout_seconds: int
     max_output_bytes: int
     max_artifact_bytes: int
@@ -33,6 +35,16 @@ FIXTURE_PYTHON_STDLIB_V1 = ValidationProfile(
     ),
     step_id="fixture-contract",
     safe_argv=("python", "-I", "-S", "<system-owned-fixture-validator>"),
+    fixed_cwd="<validation-input-root>",
+    fixed_environment=(
+        ("HOME", "<validation-home-root>"),
+        ("LANG", "C.UTF-8"),
+        ("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        ("PYTHONDONTWRITEBYTECODE", "1"),
+        ("PYTHONNOUSERSITE", "1"),
+        ("TMPDIR", "<validation-tmp-root>"),
+        ("XDG_CACHE_HOME", "<validation-home-root>/.cache"),
+    ),
     timeout_seconds=10,
     max_output_bytes=8192,
     max_artifact_bytes=0,

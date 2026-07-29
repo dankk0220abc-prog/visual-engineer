@@ -29,6 +29,7 @@ from visual_engineer_runner_protocol import (
     ExecutionGrantPolicy,
     ValidationExecuteJobSpec,
     ValidationExecutionResult,
+    compute_validation_policy_digest,
     execution_grant_policy_hash_matches,
     validation_profile,
 )
@@ -153,23 +154,19 @@ class ValidationService:
             )
 
         validation_run_id = uuid.uuid4()
-        policy_digest = hashlib.sha256(
-            json.dumps(
-                {
-                    "grant_policy_hash": grant.policy_hash,
-                    "workspace_id": str(workspace.id),
-                    "checkpoint_id": str(checkpoint.id),
-                    "checkpoint_fingerprint": checkpoint.tree_fingerprint,
-                    "profile": profile.reference,
-                    "timeout_seconds": profile.timeout_seconds,
-                    "max_output_bytes": profile.max_output_bytes,
-                    "max_artifact_bytes": profile.max_artifact_bytes,
-                    "max_artifact_count": profile.max_artifact_count,
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        policy_digest = compute_validation_policy_digest(
+            {
+                "grant_policy_hash": grant.policy_hash,
+                "workspace_id": str(workspace.id),
+                "checkpoint_id": str(checkpoint.id),
+                "checkpoint_fingerprint": checkpoint.tree_fingerprint,
+                "profile": profile.reference,
+                "timeout_seconds": profile.timeout_seconds,
+                "max_output_bytes": profile.max_output_bytes,
+                "max_artifact_bytes": profile.max_artifact_bytes,
+                "max_artifact_count": profile.max_artifact_count,
+            }
+        )
         validation_run = ValidationRun(
             id=validation_run_id,
             run_id=grant.run_id,
@@ -204,6 +201,8 @@ class ValidationService:
 
         spec = ValidationExecuteJobSpec(
             validation_run_id=validation_run.id,
+            validation_step_id=profile.step_id,
+            validation_policy_digest=validation_run.policy_digest,
             workspace_id=workspace.id,
             execution_grant=policy,
             profile_id=profile.profile_id,
@@ -347,7 +346,14 @@ class ValidationService:
                     runner_id=attempt.runner_id,
                     attempt_id=attempt.id,
                     lease_id=attempt.lease_id,
+                    result_schema_version=result.result_schema_version,
+                    validation_step_id=result.validation_step_id,
+                    source_revision=result.source_revision,
+                    policy_digest=result.policy_digest,
                     fixed_argv=result.fixed_argv,
+                    fixed_argv_digest=result.fixed_argv_digest,
+                    fixed_cwd=result.fixed_cwd,
+                    fixed_environment_digest=result.fixed_environment_digest,
                     started_at=result.started_at,
                     completed_at=result.completed_at,
                     duration_ms=round(result.duration_ms),
@@ -364,8 +370,19 @@ class ValidationService:
                     sandbox_cleaned=result.sandbox_cleaned,
                     artifact_count=result.artifact_count,
                     artifact_bytes=result.artifact_bytes,
-                    artifact_summary={"files": []},
+                    artifact_summary={
+                        "files": [
+                            artifact.model_dump(mode="json")
+                            for artifact in (result.artifacts or [])
+                        ]
+                    },
+                    artifact_manifest_digest=result.artifact_manifest_digest,
                     side_effect_permit_id=result.side_effect_permit_id,
+                    side_effect_permit_sequence=result.side_effect_permit_sequence,
+                    side_effect_permit_digest=result.side_effect_permit_digest,
+                    fencing_token=result.fencing_token,
+                    execution_envelope_digest=result.execution_envelope_digest,
+                    evidence_digest=result.evidence_digest,
                 )
                 self._validation.add(evidence)
                 step.exit_code = result.exit_code

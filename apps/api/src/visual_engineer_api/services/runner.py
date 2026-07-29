@@ -26,6 +26,7 @@ from visual_engineer_api.models.workspace import (
     WorkspaceEvent,
 )
 from visual_engineer_api.repositories.runner import RunnerRepository
+from visual_engineer_api.repositories.validation import ValidationRepository
 from visual_engineer_api.repositories.workspace import WorkspaceRepository
 from visual_engineer_api.schemas.runner import (
     ActiveJobSummary,
@@ -91,11 +92,16 @@ from visual_engineer_runner_protocol import (
     compute_permission_policy_hash,
     compute_side_effect_job_digest,
     compute_side_effect_permit_digest,
+    compute_validation_artifact_manifest_digest,
+    compute_validation_evidence_digest,
+    compute_validation_policy_digest,
     execution_grant_policy_hash_matches,
     side_effect_job_binding,
     side_effect_permit_digest_matches,
     validate_result_payload,
     validate_safe_error_message,
+    validation_profile,
+    validation_result_binding,
 )
 from visual_engineer_runner_protocol import (
     PermissionEnvelope as ProtocolPermissionEnvelope,
@@ -105,6 +111,11 @@ LOGGER = logging.getLogger("visual_engineer_api.runner")
 RESULT_ADAPTER: TypeAdapter[ResultPayload] = TypeAdapter(ResultPayload)
 JOB_SPEC_ADAPTER: TypeAdapter[JobSpec] = TypeAdapter(JobSpec)
 REAPER_ADVISORY_LOCK = 8_617_203_003
+VALIDATION_RECOVERY_FAILURES = {
+    FailureCode.VALIDATION_CLEANUP_FAILED,
+    FailureCode.VALIDATION_PROCESS_REMAINED,
+    FailureCode.VALIDATION_SANDBOX_UNAVAILABLE,
+}
 
 
 class RunnerServiceError(Exception):
@@ -139,6 +150,7 @@ class RunnerService:
     def __init__(self, session: Session, settings: Settings | None = None) -> None:
         self._session = session
         self._runners = RunnerRepository(session)
+        self._validation = ValidationRepository(session)
         self._workspaces = WorkspaceRepository(session)
         self._settings = settings or get_settings()
 
@@ -979,6 +991,14 @@ class RunnerService:
             ) from exc
 
         now = utc_now()
+        if isinstance(payload.result, ValidationExecutionResult):
+            self._validate_validation_result(
+                job,
+                attempt,
+                authenticated,
+                payload.result,
+                now=now,
+            )
         self._complete_side_effect_permit(
             job,
             attempt,
@@ -1075,10 +1095,21 @@ class RunnerService:
             return self._lease_response(existing, attempt, idempotent_replay=True)
         self._session.rollback()
 
+        allow_cancel_failure = payload.error_code in VALIDATION_RECOVERY_FAILURES
         job, attempt, _ = self._active_lease(
-            authenticated, job_id, payload, allow_cancel_requested=False
+            authenticated,
+            job_id,
+            payload,
+            allow_cancel_requested=allow_cancel_failure,
         )
-        if job.state not in {"leased", "running"}:
+        if job.state == "cancel_requested" and (
+            job.kind != JobKind.VALIDATION_EXECUTE_V1.value or not allow_cancel_failure
+        ):
+            self._conflict(
+                "invalid_cancel_failure",
+                "Only a typed Validation recovery failure may terminalize cancellation",
+            )
+        if job.state not in {"leased", "running", "cancel_requested"}:
             self._conflict("invalid_job_transition", "Job cannot fail from its current state")
         try:
             safe_message = validate_safe_error_message(payload.error_message)
@@ -1105,6 +1136,40 @@ class RunnerService:
         job.error_message = safe_message or "Runner reported a typed failure"
         job.completed_at = now
         job.active_attempt_id = None
+        if (
+            job.kind == JobKind.VALIDATION_EXECUTE_V1.value
+            and payload.error_code in VALIDATION_RECOVERY_FAILURES
+        ):
+            validation_run = self._validation.get_by_job(job.id, lock=True)
+            if validation_run is None:
+                raise RunnerServiceError(
+                    "validation_result_binding_missing",
+                    "Trusted Validation Run binding is missing",
+                    category="internal",
+                )
+            validation_step = self._validation.step(validation_run.id, lock=True)
+            if validation_step is None:
+                raise RunnerServiceError(
+                    "validation_result_binding_missing",
+                    "Trusted Validation step binding is missing",
+                    category="internal",
+                )
+            validation_run.runner_id = authenticated.id
+            validation_run.attempt_id = attempt.id
+            validation_run.lease_id = attempt.lease_id
+            validation_run.claimed_at = validation_run.claimed_at or attempt.created_at
+            validation_run.started_at = validation_run.started_at or attempt.started_at
+            validation_run.state = "recovery_required"
+            validation_run.completed_at = now
+            validation_run.error_code = payload.error_code.value
+            validation_run.error_message = job.error_message
+            validation_run.version += 1
+            validation_step.state = "recovery_required"
+            validation_step.started_at = (
+                validation_step.started_at or validation_run.started_at or validation_run.claimed_at
+            )
+            validation_step.completed_at = now
+            validation_step.failure_code = payload.error_code.value
         if job.workspace_id is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
             self._workspace_job_failed(
                 job,
@@ -1646,6 +1711,263 @@ class RunnerService:
                 category="policy",
             )
         return protocol
+
+    def _validate_validation_result(
+        self,
+        job: RunnerJob,
+        attempt: RunnerJobAttempt,
+        authenticated: Runner,
+        result: ValidationExecutionResult,
+        *,
+        now: datetime,
+    ) -> None:
+        try:
+            stored_spec = JOB_SPEC_ADAPTER.validate_python({"kind": job.kind, **job.parameters})
+        except ValidationError as exc:
+            raise RunnerServiceError(
+                "stored_job_spec_invalid",
+                "Stored Runner Job specification is invalid",
+                category="internal",
+            ) from exc
+        if not isinstance(stored_spec, ValidationExecuteJobSpec):
+            self._conflict(
+                "validation_result_binding_mismatch",
+                "Validation result does not match the stored execution envelope",
+            )
+
+        validation_run = self._validation.get_by_job(job.id, lock=True)
+        if validation_run is None:
+            self._conflict(
+                "validation_result_binding_missing",
+                "Trusted Validation Run binding is missing",
+            )
+        step = self._validation.step(validation_run.id, lock=True)
+        profile = validation_profile(validation_run.profile_id)
+        if step is None or profile is None:
+            self._conflict(
+                "validation_result_binding_missing",
+                "Trusted Validation step or Profile binding is missing",
+            )
+        if job.execution_grant_id is None:
+            self._conflict(
+                "validation_result_binding_missing",
+                "Trusted Validation Grant binding is missing",
+            )
+        grant = self._workspaces.get_grant(job.execution_grant_id, lock=True)
+        if grant is None:
+            self._conflict(
+                "validation_result_binding_missing",
+                "Trusted Validation Grant binding is missing",
+            )
+
+        expected_policy_digest = compute_validation_policy_digest(
+            {
+                "grant_policy_hash": grant.policy_hash,
+                "workspace_id": str(validation_run.workspace_id),
+                "checkpoint_id": str(validation_run.checkpoint_id),
+                "checkpoint_fingerprint": validation_run.checkpoint_fingerprint,
+                "profile": profile.reference,
+                "timeout_seconds": validation_run.timeout_seconds,
+                "max_output_bytes": validation_run.max_output_bytes,
+                "max_artifact_bytes": validation_run.max_artifact_bytes,
+                "max_artifact_count": validation_run.max_artifact_count,
+            }
+        )
+        trusted_binding_matches = (
+            validation_run.id == stored_spec.validation_run_id
+            and validation_run.runner_job_id == job.id
+            and validation_run.workspace_id == stored_spec.workspace_id == job.workspace_id
+            and validation_run.execution_grant_id
+            == stored_spec.execution_grant.id
+            == grant.id
+            == job.execution_grant_id
+            and validation_run.run_id == grant.run_id == stored_spec.execution_grant.run_id
+            and validation_run.plan_id == grant.plan_id == stored_spec.execution_grant.plan_id
+            and validation_run.profile_id == stored_spec.profile_id == profile.profile_id
+            and validation_run.profile_version == stored_spec.profile_version == profile.version
+            and validation_run.source_revision
+            == stored_spec.execution_grant.source_revision
+            == grant.source_revision
+            == job.source_revision
+            and validation_run.checkpoint_id
+            == stored_spec.checkpoint_id
+            == grant.validation_checkpoint_id
+            and validation_run.checkpoint_fingerprint == stored_spec.checkpoint_fingerprint
+            and validation_run.policy_digest
+            == stored_spec.validation_policy_digest
+            == expected_policy_digest
+            and validation_run.timeout_seconds
+            == stored_spec.timeout_seconds
+            == profile.timeout_seconds
+            and validation_run.max_output_bytes
+            == stored_spec.max_output_bytes
+            == profile.max_output_bytes
+            == grant.validation_output_bytes
+            and validation_run.max_artifact_bytes
+            == stored_spec.max_artifact_bytes
+            == profile.max_artifact_bytes
+            == grant.validation_artifact_bytes
+            and validation_run.max_artifact_count
+            == stored_spec.max_artifact_count
+            == profile.max_artifact_count
+            == grant.validation_artifact_count
+            and step.validation_run_id == validation_run.id
+            and step.sequence == 1
+            and step.step_id == stored_spec.validation_step_id == profile.step_id
+            and validation_run.completed_at is None
+            and validation_run.state
+            not in {
+                "succeeded",
+                "failed",
+                "timed_out",
+                "cancelled",
+                "recovery_required",
+            }
+        )
+        result_binding_matches = (
+            result.validation_run_id == validation_run.id
+            and result.workspace_id == validation_run.workspace_id
+            and result.checkpoint_id == validation_run.checkpoint_id
+            and hmac.compare_digest(
+                result.checkpoint_fingerprint,
+                validation_run.checkpoint_fingerprint,
+            )
+            and result.profile_id == validation_run.profile_id
+            and result.profile_version == validation_run.profile_version
+            and result.fixed_argv == list(profile.safe_argv)
+        )
+        if not trusted_binding_matches or not result_binding_matches:
+            self._conflict(
+                "validation_result_binding_mismatch",
+                "Validation result does not match the trusted execution envelope",
+            )
+
+        combined_output_bytes = len(result.stdout.encode("utf-8")) + len(
+            result.stderr.encode("utf-8")
+        )
+        truncated = result.stdout_truncated or result.stderr_truncated
+        if combined_output_bytes > validation_run.max_output_bytes or (
+            truncated and combined_output_bytes != validation_run.max_output_bytes
+        ):
+            self._conflict(
+                "validation_result_budget_exceeded",
+                "Validation output violates the trusted byte budget",
+            )
+        if (
+            result.artifact_count > validation_run.max_artifact_count
+            or result.artifact_bytes > validation_run.max_artifact_bytes
+        ):
+            self._conflict(
+                "validation_result_budget_exceeded",
+                "Validation artifacts violate the trusted count or byte budget",
+            )
+
+        required_evidence = (
+            result.result_schema_version,
+            result.validation_step_id,
+            result.source_revision,
+            result.policy_digest,
+            result.fixed_operation,
+            result.fixed_argv_digest,
+            result.fixed_cwd,
+            result.fixed_environment_digest,
+            result.artifacts,
+            result.artifact_manifest_digest,
+            result.side_effect_permit_sequence,
+            result.side_effect_permit_digest,
+            result.fencing_token,
+            result.execution_envelope_digest,
+            result.evidence_digest,
+        )
+        if any(value is None for value in required_evidence):
+            self._conflict(
+                "validation_result_evidence_missing",
+                "Validation result is missing required execution evidence",
+            )
+        assert result.artifacts is not None
+        artifact_payload = [artifact.model_dump(mode="json") for artifact in result.artifacts]
+        artifact_paths = [artifact.relative_path for artifact in result.artifacts]
+        computed_artifact_bytes = sum(artifact.size_bytes for artifact in result.artifacts)
+        if (
+            len(set(artifact_paths)) != len(artifact_paths)
+            or result.artifact_count != len(result.artifacts)
+            or result.artifact_bytes != computed_artifact_bytes
+            or any(
+                artifact.size_bytes > validation_run.max_artifact_bytes
+                for artifact in result.artifacts
+            )
+            or result.artifact_count > validation_run.max_artifact_count
+            or computed_artifact_bytes > validation_run.max_artifact_bytes
+            or not hmac.compare_digest(
+                result.artifact_manifest_digest or "",
+                compute_validation_artifact_manifest_digest(artifact_payload),
+            )
+        ):
+            self._conflict(
+                "validation_result_artifact_invalid",
+                "Validation artifact evidence is malformed or exceeds its trusted budget",
+            )
+
+        permit = self._workspaces.get_side_effect_permit(
+            result.side_effect_permit_id,
+            lock=True,
+        )
+        if permit is None:
+            self._conflict(
+                "side_effect_permit_invalid",
+                "Validation result Permit is unavailable",
+            )
+        protocol_permit = self._protocol_side_effect_permit(permit)
+        expected_binding = side_effect_job_binding(stored_spec)
+        if (
+            permit.job_id != job.id
+            or permit.attempt_id != attempt.id
+            or permit.runner_id != authenticated.id
+            or permit.lease_id != attempt.lease_id
+            or permit.grant_id != grant.id
+            or permit.workspace_id != validation_run.workspace_id
+            or permit.repository_handle_id != grant.repository_handle_id
+            or permit.operation != WorkspaceOperation.VALIDATE.value
+            or permit.expected_current != expected_binding["expected_current"]
+            or permit.proposed_digest != expected_binding["proposed_digest"]
+            or permit.job_digest != compute_side_effect_job_digest(stored_spec)
+            or permit.policy_hash != grant.policy_hash
+            or permit.source_revision != validation_run.source_revision
+            or result.side_effect_permit_sequence != permit.sequence
+            or not hmac.compare_digest(
+                result.side_effect_permit_digest or "",
+                permit.operation_digest,
+            )
+        ):
+            self._conflict(
+                "validation_result_fencing_mismatch",
+                "Validation result does not match the active Permit fence",
+            )
+        safety_deadline = permit.expires_at + timedelta(
+            seconds=self._settings.side_effect_permit_safety_seconds
+        )
+        if now > safety_deadline:
+            self._conflict(
+                "side_effect_permit_expired",
+                "Validation result arrived outside the Permit fencing window",
+            )
+
+        expected_result_binding = validation_result_binding(stored_spec, protocol_permit)
+        if (
+            any(
+                getattr(result, field) != expected
+                for field, expected in expected_result_binding.items()
+            )
+            or not hmac.compare_digest(
+                result.evidence_digest or "",
+                compute_validation_evidence_digest(result),
+            )
+            or protocol_permit.operation_digest != permit.operation_digest
+        ):
+            self._conflict(
+                "validation_result_evidence_invalid",
+                "Validation result evidence does not match the trusted execution envelope",
+            )
 
     def _complete_side_effect_permit(
         self,

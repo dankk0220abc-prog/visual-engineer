@@ -4031,6 +4031,37 @@
         "title": "TaskStatus",
         "type": "string"
       },
+      "ValidationArtifactEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "file_type": {
+            "const": "regular_file",
+            "default": "regular_file",
+            "title": "File Type",
+            "type": "string"
+          },
+          "relative_path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "maximum": 1048576.0,
+            "minimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": ["relative_path", "size_bytes", "sha256"],
+        "title": "ValidationArtifactEvidence",
+        "type": "object"
+      },
       "ValidationEvidenceResponse": {
         "properties": {
           "artifact_bytes": {
@@ -4040,6 +4071,17 @@
           "artifact_count": {
             "title": "Artifact Count",
             "type": "integer"
+          },
+          "artifact_manifest_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Manifest Digest"
           },
           "artifact_summary": {
             "additionalProperties": true,
@@ -4069,9 +4111,42 @@
             "title": "Duration Ms",
             "type": "integer"
           },
+          "evidence_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Digest"
+          },
+          "execution_envelope_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Envelope Digest"
+          },
           "exit_code": {
             "title": "Exit Code",
             "type": "integer"
+          },
+          "fencing_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fencing Token"
           },
           "filesystem_isolated": {
             "title": "Filesystem Isolated",
@@ -4083,6 +4158,39 @@
             },
             "title": "Fixed Argv",
             "type": "array"
+          },
+          "fixed_argv_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Argv Digest"
+          },
+          "fixed_cwd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Cwd"
+          },
+          "fixed_environment_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Environment Digest"
           },
           "id": {
             "format": "uuid",
@@ -4098,9 +4206,31 @@
             "title": "Network Isolated",
             "type": "boolean"
           },
+          "policy_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Digest"
+          },
           "redaction_count": {
             "title": "Redaction Count",
             "type": "integer"
+          },
+          "result_schema_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Schema Version"
           },
           "runner_id": {
             "format": "uuid",
@@ -4111,10 +4241,43 @@
             "title": "Sandbox Cleaned",
             "type": "boolean"
           },
+          "side_effect_permit_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side Effect Permit Digest"
+          },
           "side_effect_permit_id": {
             "format": "uuid",
             "title": "Side Effect Permit Id",
             "type": "string"
+          },
+          "side_effect_permit_sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side Effect Permit Sequence"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Revision"
           },
           "started_at": {
             "format": "date-time",
@@ -4140,6 +4303,17 @@
           "timed_out": {
             "title": "Timed Out",
             "type": "boolean"
+          },
+          "validation_step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Step Id"
           }
         },
         "required": [
@@ -4147,7 +4321,14 @@
           "runner_id",
           "attempt_id",
           "lease_id",
+          "result_schema_version",
+          "validation_step_id",
+          "source_revision",
+          "policy_digest",
           "fixed_argv",
+          "fixed_argv_digest",
+          "fixed_cwd",
+          "fixed_environment_digest",
           "started_at",
           "completed_at",
           "duration_ms",
@@ -4165,7 +4346,13 @@
           "artifact_count",
           "artifact_bytes",
           "artifact_summary",
+          "artifact_manifest_digest",
           "side_effect_permit_id",
+          "side_effect_permit_sequence",
+          "side_effect_permit_digest",
+          "fencing_token",
+          "execution_envelope_digest",
+          "evidence_digest",
           "created_at"
         ],
         "title": "ValidationEvidenceResponse",
@@ -4223,15 +4410,33 @@
             "title": "Profile Version",
             "type": "integer"
           },
+          "result_schema_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Result Schema Version",
+            "type": "integer"
+          },
           "timeout_seconds": {
             "maximum": 120.0,
             "minimum": 1.0,
             "title": "Timeout Seconds",
             "type": "integer"
           },
+          "validation_policy_digest": {
+            "default": "0000000000000000000000000000000000000000000000000000000000000000",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Validation Policy Digest",
+            "type": "string"
+          },
           "validation_run_id": {
             "format": "uuid",
             "title": "Validation Run Id",
+            "type": "string"
+          },
+          "validation_step_id": {
+            "const": "fixture-contract",
+            "default": "fixture-contract",
+            "title": "Validation Step Id",
             "type": "string"
           },
           "workspace_id": {
@@ -4269,6 +4474,33 @@
             "title": "Artifact Count",
             "type": "integer"
           },
+          "artifact_manifest_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Manifest Digest"
+          },
+          "artifacts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationArtifactEvidence"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
           "cancelled": {
             "title": "Cancelled",
             "type": "boolean"
@@ -4294,11 +4526,47 @@
             "title": "Duration Ms",
             "type": "number"
           },
+          "evidence_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Digest"
+          },
+          "execution_envelope_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Envelope Digest"
+          },
           "exit_code": {
             "maximum": 255.0,
             "minimum": 0.0,
             "title": "Exit Code",
             "type": "integer"
+          },
+          "fencing_token": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fencing Token"
           },
           "filesystem_isolated": {
             "const": true,
@@ -4321,6 +4589,53 @@
             "title": "Fixed Argv",
             "type": "array"
           },
+          "fixed_argv_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Argv Digest"
+          },
+          "fixed_cwd": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Cwd"
+          },
+          "fixed_environment_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Environment Digest"
+          },
+          "fixed_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceOperation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "kind": {
             "const": "validation_execute_v1",
             "default": "validation_execute_v1",
@@ -4333,15 +4648,28 @@
             "title": "Network Isolated",
             "type": "boolean"
           },
+          "policy_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Digest"
+          },
           "profile_id": {
-            "const": "fixture-python-stdlib-v1",
             "default": "fixture-python-stdlib-v1",
+            "pattern": "^[a-z0-9][a-z0-9-]{2,63}$",
             "title": "Profile Id",
             "type": "string"
           },
           "profile_version": {
-            "const": 1,
             "default": 1,
+            "maximum": 999.0,
+            "minimum": 1.0,
             "title": "Profile Version",
             "type": "integer"
           },
@@ -4351,16 +4679,65 @@
             "title": "Redaction Count",
             "type": "integer"
           },
+          "result_schema_version": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Schema Version"
+          },
           "sandbox_cleaned": {
             "const": true,
             "default": true,
             "title": "Sandbox Cleaned",
             "type": "boolean"
           },
+          "side_effect_permit_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side Effect Permit Digest"
+          },
           "side_effect_permit_id": {
             "format": "uuid",
             "title": "Side Effect Permit Id",
             "type": "string"
+          },
+          "side_effect_permit_sequence": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side Effect Permit Sequence"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{40,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Revision"
           },
           "started_at": {
             "format": "date-time",
@@ -4393,6 +4770,19 @@
             "format": "uuid",
             "title": "Validation Run Id",
             "type": "string"
+          },
+          "validation_step_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Step Id"
           },
           "workspace_id": {
             "format": "uuid",

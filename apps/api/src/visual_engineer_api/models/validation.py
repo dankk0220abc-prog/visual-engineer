@@ -195,7 +195,14 @@ class ValidationEvidence(Base):
         nullable=False,
     )
     lease_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    result_schema_version: Mapped[int | None] = mapped_column(Integer)
+    validation_step_id: Mapped[str | None] = mapped_column(String(64))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    policy_digest: Mapped[str | None] = mapped_column(String(64))
     fixed_argv: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    fixed_argv_digest: Mapped[str | None] = mapped_column(String(64))
+    fixed_cwd: Mapped[str | None] = mapped_column(String(128))
+    fixed_environment_digest: Mapped[str | None] = mapped_column(String(64))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -213,11 +220,17 @@ class ValidationEvidence(Base):
     artifact_count: Mapped[int] = mapped_column(Integer, nullable=False)
     artifact_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     artifact_summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    artifact_manifest_digest: Mapped[str | None] = mapped_column(String(64))
     side_effect_permit_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("side_effect_permits.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    side_effect_permit_sequence: Mapped[int | None] = mapped_column(Integer)
+    side_effect_permit_digest: Mapped[str | None] = mapped_column(String(64))
+    fencing_token: Mapped[str | None] = mapped_column(String(64))
+    execution_envelope_digest: Mapped[str | None] = mapped_column(String(64))
+    evidence_digest: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

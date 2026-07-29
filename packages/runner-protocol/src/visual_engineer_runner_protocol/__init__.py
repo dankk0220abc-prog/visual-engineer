@@ -4,6 +4,13 @@ from visual_engineer_runner_protocol.canonical import (
     compute_permission_policy_hash,
     compute_side_effect_job_digest,
     compute_side_effect_permit_digest,
+    compute_validation_artifact_manifest_digest,
+    compute_validation_environment_digest,
+    compute_validation_evidence_digest,
+    compute_validation_execution_envelope_digest,
+    compute_validation_fencing_token,
+    compute_validation_fixed_argv_digest,
+    compute_validation_policy_digest,
     execution_grant_policy_hash_matches,
     permission_policy_hash_matches,
     side_effect_permit_digest_matches,
@@ -51,6 +58,7 @@ from visual_engineer_runner_protocol.models import (
     SourceStatus,
     StartRequest,
     SystemDiagnosticJobSpec,
+    ValidationArtifactEvidence,
     ValidationExecuteJobSpec,
     ValidationExecutionResult,
     WorkspaceBoundJobSpec,
@@ -88,6 +96,7 @@ from visual_engineer_runner_protocol.profiles import (
     ValidationProfile,
     validation_profile,
 )
+from visual_engineer_runner_protocol.validation_evidence import validation_result_binding
 
 __version__ = "1.0.0"
 
@@ -136,6 +145,7 @@ __all__ = [
     "SourceStatus",
     "StartRequest",
     "SystemDiagnosticJobSpec",
+    "ValidationArtifactEvidence",
     "ValidationExecuteJobSpec",
     "ValidationExecutionResult",
     "ValidationProfile",
@@ -169,6 +179,13 @@ __all__ = [
     "compute_permission_policy_hash",
     "compute_side_effect_job_digest",
     "compute_side_effect_permit_digest",
+    "compute_validation_artifact_manifest_digest",
+    "compute_validation_environment_digest",
+    "compute_validation_evidence_digest",
+    "compute_validation_execution_envelope_digest",
+    "compute_validation_fencing_token",
+    "compute_validation_fixed_argv_digest",
+    "compute_validation_policy_digest",
     "execution_grant_policy_hash_matches",
     "permission_policy_hash_matches",
     "side_effect_job_binding",
@@ -176,4 +193,5 @@ __all__ = [
     "validate_result_payload",
     "validate_safe_error_message",
     "validation_profile",
+    "validation_result_binding",
 ]

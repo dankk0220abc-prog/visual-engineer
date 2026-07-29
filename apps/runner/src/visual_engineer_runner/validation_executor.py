@@ -21,7 +21,10 @@ from visual_engineer_runner_protocol import (
     SideEffectPermit,
     ValidationExecuteJobSpec,
     ValidationExecutionResult,
+    compute_validation_artifact_manifest_digest,
+    compute_validation_evidence_digest,
     validation_profile,
+    validation_result_binding,
 )
 
 _FIXTURE_PATH = "sandbox/original.txt"
@@ -76,6 +79,33 @@ class ValidationExecutor:
         process: subprocess.Popen[bytes] | None = None
         try:
             roots = self._materialize(root, filesystem)
+            environment = {
+                "HOME": str(roots["home"]),
+                "LANG": "C.UTF-8",
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONNOUSERSITE": "1",
+                "TMPDIR": str(roots["tmp"]),
+                "XDG_CACHE_HOME": str(roots["home"] / ".cache"),
+            }
+            if tuple(
+                sorted(
+                    (
+                        key,
+                        (
+                            "<validation-home-root>"
+                            if value == str(roots["home"])
+                            else "<validation-tmp-root>"
+                            if value == str(roots["tmp"])
+                            else "<validation-home-root>/.cache"
+                            if value == str(roots["home"] / ".cache")
+                            else value
+                        ),
+                    )
+                    for key, value in environment.items()
+                )
+            ) != tuple(sorted(profile.fixed_environment)):
+                raise ValidationExecutionError(FailureCode.VALIDATION_PROFILE_DENIED)
             process = subprocess.Popen(
                 [
                     sys.executable,
@@ -95,15 +125,7 @@ class ValidationExecutor:
                     str(profile.max_output_bytes),
                 ],
                 cwd=roots["input"],
-                env={
-                    "HOME": str(roots["home"]),
-                    "LANG": "C.UTF-8",
-                    "PATH": "/usr/local/bin:/usr/bin:/bin",
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                    "PYTHONNOUSERSITE": "1",
-                    "TMPDIR": str(roots["tmp"]),
-                    "XDG_CACHE_HOME": str(roots["home"] / ".cache"),
-                },
+                env=environment,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -152,7 +174,11 @@ class ValidationExecutor:
         finally:
             self._cleanup_sandbox(root)
 
-        return ValidationExecutionResult(
+        artifacts: list[dict[str, object]] = []
+        artifact_manifest_digest = compute_validation_artifact_manifest_digest(artifacts)
+        result_binding = validation_result_binding(spec, side_effect_permit)
+        result = ValidationExecutionResult(
+            **result_binding,
             validation_run_id=spec.validation_run_id,
             workspace_id=spec.workspace_id,
             checkpoint_id=spec.checkpoint_id,
@@ -176,8 +202,12 @@ class ValidationExecutor:
             sandbox_cleaned=True,
             artifact_count=0,
             artifact_bytes=0,
+            artifacts=[],
+            artifact_manifest_digest=artifact_manifest_digest,
             side_effect_permit_id=side_effect_permit.id,
         )
+        result.evidence_digest = compute_validation_evidence_digest(result)
+        return result
 
     def _create_sandbox(self, validation_run_id: uuid.UUID) -> Path:
         self._require_safe_validation_root()
@@ -239,65 +269,77 @@ class ValidationExecutor:
     def _collect(
         process: subprocess.Popen[bytes],
         *,
-        timeout_seconds: int,
+        timeout_seconds: float,
         output_limit: int,
         cancel_event: threading.Event,
     ) -> tuple[int, bytes, bytes, bool, bool, bool, bool]:
         if process.stdout is None or process.stderr is None:
             raise ValidationExecutionError(FailureCode.VALIDATION_SANDBOX_UNAVAILABLE)
         selector = selectors.DefaultSelector()
+        stdout_descriptor = process.stdout.fileno()
+        stderr_descriptor = process.stderr.fileno()
         streams = {
-            process.stdout.fileno(): ("stdout", bytearray()),
-            process.stderr.fileno(): ("stderr", bytearray()),
+            stdout_descriptor: ("stdout", bytearray()),
+            stderr_descriptor: ("stderr", bytearray()),
         }
         for descriptor in streams:
             os.set_blocking(descriptor, False)
             selector.register(descriptor, selectors.EVENT_READ)
         deadline = time.monotonic() + timeout_seconds
+        process_group_id = process.pid
         timed_out = False
         cancelled = False
         truncated = {"stdout": False, "stderr": False}
         terminated = False
-        while selector.get_map() or process.poll() is None:
-            if not terminated and cancel_event.is_set():
-                cancelled = True
-                terminated = True
-                ValidationExecutor._signal_process_group(process, signal.SIGTERM)
-            elif not terminated and time.monotonic() >= deadline:
-                timed_out = True
-                terminated = True
-                ValidationExecutor._signal_process_group(process, signal.SIGTERM)
-            events = selector.select(timeout=0.05)
-            for key, _ in events:
-                descriptor = int(key.fd)
-                try:
-                    chunk = os.read(descriptor, 4096)
-                except BlockingIOError:
-                    continue
-                if not chunk:
-                    selector.unregister(descriptor)
-                    continue
-                stream_name, buffer = streams[descriptor]
-                retained = sum(len(stream_buffer) for _, stream_buffer in streams.values())
-                remaining = output_limit - retained
-                if remaining > 0:
-                    buffer.extend(chunk[:remaining])
-                if len(chunk) > max(remaining, 0):
-                    truncated[stream_name] = True
-            if terminated and process.poll() is None:
-                ValidationExecutor._finish_termination(process)
-        exit_code = process.wait()
-        if process.poll() is None:
-            raise ValidationExecutionError(FailureCode.VALIDATION_PROCESS_REMAINED)
-        ValidationExecutor._ensure_process_group_absent(process.pid)
+        try:
+            while True:
+                return_code = process.poll()
+                group_alive = ValidationExecutor._process_group_alive(process_group_id)
+                if not selector.get_map() and return_code is not None and not group_alive:
+                    break
+                if not terminated and cancel_event.is_set():
+                    cancelled = True
+                    terminated = True
+                    ValidationExecutor._terminate_process_group(process)
+                elif not terminated and time.monotonic() >= deadline:
+                    timed_out = True
+                    terminated = True
+                    ValidationExecutor._terminate_process_group(process)
+                if selector.get_map():
+                    events = selector.select(timeout=0.05)
+                else:
+                    time.sleep(0.01)
+                    events = []
+                for key, _ in events:
+                    descriptor = int(key.fd)
+                    try:
+                        chunk = os.read(descriptor, 4096)
+                    except BlockingIOError:
+                        continue
+                    if not chunk:
+                        selector.unregister(descriptor)
+                        continue
+                    stream_name, buffer = streams[descriptor]
+                    retained = sum(len(stream_buffer) for _, stream_buffer in streams.values())
+                    remaining = output_limit - retained
+                    if remaining > 0:
+                        buffer.extend(chunk[:remaining])
+                    if len(chunk) > max(remaining, 0):
+                        truncated[stream_name] = True
+            exit_code = process.wait()
+            ValidationExecutor._ensure_process_group_absent(process_group_id)
+        finally:
+            selector.close()
+            process.stdout.close()
+            process.stderr.close()
         if timed_out:
             exit_code = _TIMEOUT_EXIT
         elif cancelled:
             exit_code = _CANCELLED_EXIT
         return (
             exit_code,
-            bytes(streams[process.stdout.fileno()][1]),
-            bytes(streams[process.stderr.fileno()][1]),
+            bytes(streams[stdout_descriptor][1]),
+            bytes(streams[stderr_descriptor][1]),
             truncated["stdout"],
             truncated["stderr"],
             timed_out,
@@ -314,45 +356,46 @@ class ValidationExecutor:
             raise ValidationExecutionError(FailureCode.VALIDATION_PROCESS_REMAINED) from exc
 
     @staticmethod
-    def _finish_termination(process: subprocess.Popen[bytes]) -> None:
-        try:
-            process.wait(timeout=_TERMINATION_GRACE_SECONDS)
-        except subprocess.TimeoutExpired:
-            ValidationExecutor._signal_process_group(process, signal.SIGKILL)
-            try:
-                process.wait(timeout=_TERMINATION_GRACE_SECONDS)
-            except subprocess.TimeoutExpired as exc:
-                raise ValidationExecutionError(FailureCode.VALIDATION_PROCESS_REMAINED) from exc
-        ValidationExecutor._ensure_process_group_absent(process.pid)
-
-    @staticmethod
     def _ensure_process_group_absent(process_group_id: int) -> None:
-        try:
-            os.killpg(process_group_id, 0)
-        except ProcessLookupError:
-            return
-        except PermissionError as exc:
-            raise ValidationExecutionError(FailureCode.VALIDATION_PROCESS_REMAINED) from exc
-        try:
-            os.killpg(process_group_id, signal.SIGKILL)
-        except ProcessLookupError:
-            return
-        deadline = time.monotonic() + _TERMINATION_GRACE_SECONDS
-        while time.monotonic() < deadline:
-            try:
-                os.killpg(process_group_id, 0)
-            except ProcessLookupError:
-                return
-            time.sleep(0.01)
-        raise ValidationExecutionError(FailureCode.VALIDATION_PROCESS_REMAINED)
+        if ValidationExecutor._process_group_alive(process_group_id):
+            raise ValidationExecutionError(FailureCode.VALIDATION_PROCESS_REMAINED)
 
     @staticmethod
     def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
-        if process.poll() is not None:
-            process.wait()
-            return
-        ValidationExecutor._signal_process_group(process, signal.SIGTERM)
-        ValidationExecutor._finish_termination(process)
+        process.poll()
+        if ValidationExecutor._process_group_alive(process.pid):
+            ValidationExecutor._signal_process_group(process, signal.SIGTERM)
+        grace_deadline = time.monotonic() + _TERMINATION_GRACE_SECONDS
+        while time.monotonic() < grace_deadline:
+            process.poll()
+            if not ValidationExecutor._process_group_alive(process.pid):
+                break
+            time.sleep(0.01)
+        if ValidationExecutor._process_group_alive(process.pid):
+            ValidationExecutor._signal_process_group(process, signal.SIGKILL)
+        kill_deadline = time.monotonic() + _TERMINATION_GRACE_SECONDS
+        while time.monotonic() < kill_deadline:
+            process.poll()
+            if not ValidationExecutor._process_group_alive(process.pid):
+                break
+            time.sleep(0.01)
+        ValidationExecutor._ensure_process_group_absent(process.pid)
+        try:
+            process.wait(timeout=_TERMINATION_GRACE_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            raise ValidationExecutionError(FailureCode.VALIDATION_PROCESS_REMAINED) from exc
+
+    @staticmethod
+    def _process_group_alive(process_group_id: int) -> bool:
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # Darwin can report EPERM for a just-reaped empty process group.
+            # A live same-UID descendant remains signalable and returns success.
+            return False
+        return True
 
     @staticmethod
     def _artifact_inventory(output_root: Path) -> tuple[int, int]:

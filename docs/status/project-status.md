@@ -2,10 +2,14 @@
 
 - Phase: Phase 5 — Governed Validation Execution
 - Overall status:
-  `PHASE 5 FOCUSED SECURITY REVIEW FAIL — REMEDIATION REQUIRED`
-- Governance qualifier: PHASE 4 COMPLETE IN LOCAL MAIN; PHASE 5 FIRST SLICE
-  BLOCKED BY TWO INDEPENDENT BLOCKING MEDIUM FINDINGS
+  `PHASE 5 TARGETED REMEDIATION COMPLETE — READY FOR INDEPENDENT FOCUSED RE-AUDIT`
+- Governance qualifier: FOUR REMEDIATION SCOPES PASS LOCAL FOCUSED AND RELATED
+  GATES; INDEPENDENT FOCUSED RE-AUDIT STILL REQUIRED
 - Last updated: 2026-07-29
+- Phase 5 remediation branch:
+  `fix/phase-5-governed-validation-remediation-1`
+- Phase 5 remediation base:
+  `cd980582e9d950cb0176eae46ffaedd528ce0afe`
 - Phase 5 focused-review branch:
   `audit/phase-5-governed-validation-focused-max`
 - Phase 5 reviewed candidate:
@@ -43,6 +47,59 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 targeted remediation 1 candidate
+
+The narrow Runner corrections for independent findings `VE-P5-FSR-001` and
+`VE-P5-FSR-002` are **locally implemented and focused verified**:
+
+- the validation collector now binds its monotonic deadline and bounded
+  TERM/grace/KILL sequence to the complete process group, independent of
+  leader exit;
+- the Runner lifecycle preserves a typed cleanup/process failure during
+  cancellation and does not acknowledge clean cancellation;
+- new permanent remediation regressions pass `2/2`; and
+- the unchanged independent Runner audit file passes `6/6`.
+
+This is implementer evidence only. The historical Findings are not
+independently closed by this run.
+
+The previously stopped third boundary's original real-PostgreSQL result is
+preserved as `1 passed, 7 failed`, stable `3/3` for both failing scopes. With
+the newly authorized Control Plane repair, the same unchanged audit file now
+produces `8 passed`:
+
+- `P5-AUD-004` outer Attempt/Lease/Permit fencing passed;
+- `P5-AUD-005` now reconstructs and matches the complete trusted execution
+  envelope before terminal persistence; and
+- `P5-AUD-006` now independently recomputes output/artifact/evidence budgets
+  and digests before terminal persistence.
+
+Permanent real-PostgreSQL regressions pass `31/31`. They prove two repeated
+rejections have no succeeded Result, completed Permit, success event or
+Evidence; exact output limit and legal replay persist once; and a typed
+cleanup failure after `cancel_requested` atomically stores Job/Permit failure
+plus Validation Run/step `recovery_required` without cancellation
+acknowledgement.
+
+Complete focused API passes `118/118`; complete focused Runner/Protocol passes
+`96/96`. The final aggregate collects and passes `214/214` backend/Runner/
+Protocol tests at 82.82% coverage plus `44/44` Web tests.
+
+Migration base/head/base/head, contracts, format/lint/typecheck, Web build,
+sandbox/source invariance, Phase 4 regressions, E2E `16/16`, Chaos, Security
+and Eval gates pass locally. Final `make verify` returns exit `0`; filtered
+remediation/E2E/Chaos container, network and volume inventories are all zero.
+The one authorized local checkpoint is created by this candidate.
+
+Main remains unchanged. No remote, push, merge, pull request, tag,
+CreativeDeploy, Customer 0, delivery, deployment, later Phase 5 slice, or
+Phase 6 action occurred.
+
+Detailed local implementer evidence:
+
+- [`docs/exec-plans/phase-5-governed-validation-remediation-1.md`](../exec-plans/phase-5-governed-validation-remediation-1.md)
+- [`docs/evidence/phase-5-governed-validation-remediation-1-verification.md`](../evidence/phase-5-governed-validation-remediation-1-verification.md)
 
 ## Phase 5 independent focused security review decision
 

@@ -52,12 +52,13 @@ class ValidationRepository:
             )
         )
 
-    def step(self, validation_run_id: uuid.UUID) -> ValidationStepRun | None:
-        return self._session.scalar(
-            select(ValidationStepRun).where(
-                ValidationStepRun.validation_run_id == validation_run_id
-            )
+    def step(self, validation_run_id: uuid.UUID, *, lock: bool = False) -> ValidationStepRun | None:
+        statement = select(ValidationStepRun).where(
+            ValidationStepRun.validation_run_id == validation_run_id
         )
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
 
     def evidence(self, validation_run_id: uuid.UUID) -> ValidationEvidence | None:
         return self._session.scalar(
