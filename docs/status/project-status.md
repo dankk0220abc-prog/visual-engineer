@@ -2,10 +2,18 @@
 
 - Phase: Phase 5 — Governed Validation Execution
 - Overall status:
-  `PHASE 5 TARGETED REMEDIATION COMPLETE — READY FOR INDEPENDENT FOCUSED RE-AUDIT`
-- Governance qualifier: FOUR REMEDIATION SCOPES PASS LOCAL FOCUSED AND RELATED
-  GATES; INDEPENDENT FOCUSED RE-AUDIT STILL REQUIRED
+  `PHASE 5 FOCUSED RE-AUDIT FAIL — REMEDIATION REQUIRED`
+- Governance qualifier: ONE BLOCKING MEDIUM VALIDATION-CANCEL PERMIT FINDING
+  AND ONE BLOCKING AUDIT-STATIC-ANALYSIS PREFLIGHT NONCONFORMANCE; FINAL
+  AGGREGATE AND PASS SEALING NOT RUN
 - Last updated: 2026-07-29
+- Phase 5 focused re-audit branch:
+  `audit/phase-5-validation-remediation-focused-max`
+- Phase 5 focused re-audit candidate:
+  `8ca5c9ef99ac2bfe6ce88916ca3b3b16671ce5f9`
+- Phase 5 focused re-audit Finding:
+  `VE-P5-FREAUD-001` — successful active Validation cancellation leaves the
+  consumed Permit open
 - Phase 5 remediation branch:
   `fix/phase-5-governed-validation-remediation-1`
 - Phase 5 remediation base:
@@ -47,6 +55,72 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 independent focused re-audit decision
+
+The targeted remediation candidate is **not approved** for PASS sealing, main
+integration, Customer 0, a later Phase 5 slice, or Phase 6.
+
+The independent focused matrix is:
+
+- `VE-P5-FSR-001`: **PASS** — unchanged historical Runner checks pass `6/6`;
+  an additive two-descendant/early-pipe-close reproduction plus a legal
+  control pass `3/3`; complete Runner security-audit selection passes `22/22`;
+- `VE-P5-FSR-002`: **FAIL** — typed cleanup failure correctly persists one
+  atomic `recovery_required` outcome, but successful active cancellation
+  leaves the exact consumed Validation Permit without a terminal state or
+  timestamp;
+- `P5-AUD-005`: **PASS** within the focused scope — an independently forged
+  envelope digest with recomputed evidence digest is rejected twice with zero
+  success side effects; and
+- `P5-AUD-006`: **PASS** within the focused scope — independent UTF-8 exact
+  limit/+1, artifact arithmetic, duplicate path, digest, rejection replay and
+  legal replay checks pass.
+
+New production Finding `VE-P5-FREAUD-001` is blocking Medium. A real
+PostgreSQL sequence proves HTTP `200` cancellation and correct cancelled
+Job/Attempt/Validation Run/step state, one cancellation acknowledgement, no
+Result/Evidence/success event, and an unchanged Workspace. The Side-effect
+Permit alone remains `consumed` with no `terminal_at`. The semantic secure
+expectation failed on the first full run and four focused reruns.
+
+Static review confirms the cancellation service terminalizes Permits for four
+Workspace job specifications but omits `ValidationExecuteJobSpec` before it
+commits the cancelled Job/Attempt and acknowledgement. The independent review
+changed no production code and attempted no repair.
+
+A separate blocking preflight governance nonconformance remains: both
+historical focused-review test files are byte-identical and runtime-passing
+(`8/8` API, `6/6` Runner), but the remediation candidate adds targeted mypy
+exclusions and an ignore-errors override for their shared module. The strict
+requirement that the original tests not be loosened is therefore not fully
+satisfied. This is not counted as a second production security Finding.
+
+Necessary current-review evidence includes real PostgreSQL, permanent Control
+Plane remediation `31/31`, permanent Runner remediation `2/2`, focused
+Protocol `5/5`, source invariance PASS with 119 source entries/10 Git
+objects/2 status records/0 extension markers, exact Runner PID/process-group
+cleanup, and filtered Compose container/network/volume residue of zero.
+
+Final `make verify`, aggregate coverage, full migration roundtrip,
+browser/E2E/accessibility, Web build, validation sandbox Docker probe, Chaos,
+broad Security, Eval, and PASS sealing are **NOT RUN**. Historical implementer
+results are not promoted to independent evidence.
+
+Main remains unchanged. No remote, push, merge, pull request, tag,
+CreativeDeploy content access, Customer 0, delivery, deployment, later Phase 5
+slice, or Phase 6 action occurred.
+
+The next authorized milestone is a narrow remediation that terminalizes the
+Validation Permit during successful cancellation and restores static-analysis
+coverage for both historical audit modules, followed by a fresh independent
+focused re-audit.
+
+Detailed independent artifacts:
+
+- [`docs/exec-plans/phase-5-governed-validation-focused-reaudit.md`](../exec-plans/phase-5-governed-validation-focused-reaudit.md)
+- [`docs/security/audits/phase-5-governed-validation-focused-reaudit.md`](../security/audits/phase-5-governed-validation-focused-reaudit.md)
+- [`docs/evidence/phase-5-governed-validation-focused-reaudit-verification.md`](../evidence/phase-5-governed-validation-focused-reaudit-verification.md)
 
 ## Phase 5 targeted remediation 1 candidate
 
