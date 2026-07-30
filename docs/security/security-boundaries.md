@@ -121,12 +121,18 @@ Phase 2 state and does not execute or authorize code. Phase 4 requires a new
 pending Grant and a second local-user approve/reject decision.
 
 The Phase 5 final Review Decision is a third, separate governance record bound
-to one immutable latest-success Evidence Package. Package freshness is derived
-from the exact source revision, Workspace tree, latest Checkpoint, latest
-successful Suite Result, and reconstructed Evidence digest chain. A mismatch
-creates or implies a stale fence before decision/readiness effect. PostgreSQL
-allows one immutable Review Decision and one immutable readiness snapshot, and
-independently forces Git/deployment authorization false.
+to one immutable latest-success Evidence Package generation. Package
+freshness is derived from the exact source revision, Workspace tree and diff,
+latest Checkpoint, Suite/Profile identity and version, policy digest, Grant
+lineage, aggregate Result, ordered Evidence, and trusted blocker inventory.
+Accepted changes to those facts advance a locked freshness scope and append an
+invalidation plus ordered AuditEvent in the same PostgreSQL transaction.
+Immutable source policy/Evidence rejects in-place replacement. Decision
+creation requires the observed generation and persists an independent
+idempotency key/request hash. PostgreSQL recomputes the package, Decision, and
+readiness digest chain; `ready` additionally requires Critical, High, and
+blocking-Medium counts all equal zero. Review events and records are
+append-only, and Git/deployment authorization is independently forced false.
 
 ## Runner identity and protocol boundary
 

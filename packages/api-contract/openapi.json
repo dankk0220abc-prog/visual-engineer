@@ -2574,10 +2574,23 @@
       },
       "ReleaseReadinessVerdictResponse": {
         "properties": {
+          "blocker_summary_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Blocker Summary Digest",
+            "type": "string"
+          },
+          "blocking_medium_count": {
+            "title": "Blocking Medium Count",
+            "type": "integer"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "critical_count": {
+            "title": "Critical Count",
+            "type": "integer"
           },
           "decision_digest": {
             "pattern": "^[0-9a-f]{64}$",
@@ -2599,10 +2612,18 @@
             "title": "Evidence Manifest Digest",
             "type": "string"
           },
+          "freshness_generation": {
+            "title": "Freshness Generation",
+            "type": "integer"
+          },
           "git_authorization": {
             "const": false,
             "title": "Git Authorization",
             "type": "boolean"
+          },
+          "high_count": {
+            "title": "High Count",
+            "type": "integer"
           },
           "id": {
             "format": "uuid",
@@ -2612,6 +2633,15 @@
           "package_digest": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Package Digest",
+            "type": "string"
+          },
+          "package_version": {
+            "title": "Package Version",
+            "type": "integer"
+          },
+          "policy_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Digest",
             "type": "string"
           },
           "reason_codes": {
@@ -2631,6 +2661,11 @@
             "title": "Review Package Id",
             "type": "string"
           },
+          "suite_result_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Suite Result Digest",
+            "type": "string"
+          },
           "verdict": {
             "enum": ["ready", "not_ready"],
             "title": "Verdict",
@@ -2646,9 +2681,17 @@
           "id",
           "review_package_id",
           "review_decision_id",
+          "package_version",
+          "freshness_generation",
           "package_digest",
           "decision_digest",
           "evidence_manifest_digest",
+          "suite_result_digest",
+          "policy_digest",
+          "blocker_summary_digest",
+          "critical_count",
+          "high_count",
+          "blocking_medium_count",
           "verdict",
           "effective_verdict",
           "reason_codes",
@@ -2992,6 +3035,18 @@
             "title": "Decision",
             "type": "string"
           },
+          "expected_generation": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Generation"
+          },
           "reason": {
             "anyOf": [
               {
@@ -3026,10 +3081,19 @@
             "title": "Decision",
             "type": "string"
           },
+          "decision_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Decision Digest",
+            "type": "string"
+          },
           "deployment_authorization": {
             "const": false,
             "title": "Deployment Authorization",
             "type": "boolean"
+          },
+          "expected_generation": {
+            "title": "Expected Generation",
+            "type": "integer"
           },
           "git_authorization": {
             "const": false,
@@ -3041,9 +3105,27 @@
             "title": "Id",
             "type": "string"
           },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "idempotency_request_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Idempotency Request Hash",
+            "type": "string"
+          },
           "package_digest": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Package Digest",
+            "type": "string"
+          },
+          "package_version": {
+            "title": "Package Version",
+            "type": "integer"
+          },
+          "policy_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Digest",
             "type": "string"
           },
           "reason": {
@@ -3070,11 +3152,17 @@
         "required": [
           "id",
           "review_package_id",
+          "package_version",
+          "expected_generation",
           "package_digest",
+          "policy_digest",
           "decision",
           "reason",
           "actor_type",
           "request_id",
+          "idempotency_key",
+          "idempotency_request_hash",
+          "decision_digest",
           "git_authorization",
           "deployment_authorization",
           "created_at"
@@ -3127,7 +3215,12 @@
               "checkpoint_superseded",
               "source_revision_changed",
               "suite_result_superseded",
-              "evidence_integrity_failed"
+              "evidence_integrity_failed",
+              "validation_facts_changed",
+              "policy_changed",
+              "grant_lineage_changed",
+              "blocker_summary_changed",
+              "remediation_generation_required"
             ],
             "title": "Reason Code",
             "type": "string"
@@ -3174,6 +3267,33 @@
       },
       "ReviewPackageResponse": {
         "properties": {
+          "blocker_source": {
+            "title": "Blocker Source",
+            "type": "string"
+          },
+          "blocker_source_version": {
+            "title": "Blocker Source Version",
+            "type": "integer"
+          },
+          "blocker_summary": {
+            "additionalProperties": true,
+            "title": "Blocker Summary",
+            "type": "object"
+          },
+          "blocker_summary_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Blocker Summary Digest",
+            "type": "string"
+          },
+          "blocking_medium_count": {
+            "title": "Blocking Medium Count",
+            "type": "integer"
+          },
+          "checkpoint_diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Diff Hash",
+            "type": "string"
+          },
           "checkpoint_fingerprint": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Checkpoint Fingerprint",
@@ -3188,6 +3308,14 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "critical_count": {
+            "title": "Critical Count",
+            "type": "integer"
+          },
+          "current_freshness_generation": {
+            "title": "Current Freshness Generation",
+            "type": "integer"
           },
           "decision": {
             "anyOf": [
@@ -3214,13 +3342,31 @@
             "title": "Evidence Manifest Digest",
             "type": "string"
           },
+          "execution_grant_id": {
+            "format": "uuid",
+            "title": "Execution Grant Id",
+            "type": "string"
+          },
           "freshness": {
             "$ref": "#/components/schemas/ReviewFreshness"
+          },
+          "freshness_generation": {
+            "title": "Freshness Generation",
+            "type": "integer"
+          },
+          "freshness_state_id": {
+            "format": "uuid",
+            "title": "Freshness State Id",
+            "type": "string"
           },
           "git_authorization": {
             "const": false,
             "title": "Git Authorization",
             "type": "boolean"
+          },
+          "high_count": {
+            "title": "High Count",
+            "type": "integer"
           },
           "id": {
             "format": "uuid",
@@ -3241,6 +3387,10 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Package Digest",
             "type": "string"
+          },
+          "package_version": {
+            "title": "Package Version",
+            "type": "integer"
           },
           "plan_id": {
             "format": "uuid",
@@ -3268,7 +3418,7 @@
             "type": "string"
           },
           "schema_version": {
-            "const": 1,
+            "enum": [1, 2],
             "title": "Schema Version",
             "type": "integer"
           },
@@ -3286,6 +3436,11 @@
               }
             ],
             "title": "Stale Reason Code"
+          },
+          "suite_policy_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Suite Policy Digest",
+            "type": "string"
           },
           "suite_result_digest": {
             "pattern": "^[0-9a-f]{64}$",
@@ -3311,6 +3466,10 @@
         "required": [
           "id",
           "schema_version",
+          "package_version",
+          "freshness_state_id",
+          "freshness_generation",
+          "current_freshness_generation",
           "run_id",
           "plan_id",
           "repository_handle_id",
@@ -3318,11 +3477,21 @@
           "workspace_id",
           "checkpoint_id",
           "checkpoint_fingerprint",
+          "checkpoint_diff_hash",
           "suite_run_id",
           "suite_result_id",
+          "execution_grant_id",
+          "suite_policy_digest",
           "suite_result_digest",
           "evidence_manifest",
           "evidence_manifest_digest",
+          "blocker_summary",
+          "blocker_summary_digest",
+          "blocker_source",
+          "blocker_source_version",
+          "critical_count",
+          "high_count",
+          "blocking_medium_count",
           "package_digest",
           "freshness",
           "stale_reason_code",
@@ -9062,6 +9231,24 @@
               "format": "uuid",
               "title": "Package Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
             }
           }
         ],

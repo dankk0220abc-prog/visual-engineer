@@ -30,6 +30,7 @@ def test_competing_idempotent_creates_converge_on_one_postgresql_row(
             text(
                 "TRUNCATE TABLE release_readiness_verdicts, review_decisions, "
                 "review_package_invalidations, review_packages, "
+                "review_blocker_findings, review_freshness_states, "
                 "validation_suite_results, validation_suite_step_runs, "
                 "validation_suite_runs, validation_evidence, validation_step_runs, "
                 "validation_runs, "

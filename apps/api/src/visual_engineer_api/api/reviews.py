@@ -137,12 +137,19 @@ def decide_review_package(
     payload: ReviewDecisionCreate,
     request: Request,
     db: DatabaseSession,
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=1, max_length=255),
+    ] = None,
 ) -> ReviewPackageResponse:
     try:
         return ReviewService(db).decide(
             package_id,
             payload,
             request_id=_request_id(request),
+            idempotency_key=(
+                _idempotency_key(idempotency_key) if idempotency_key is not None else None
+            ),
         )
     except ReviewServiceError as exc:
         _raise_service_error(exc)

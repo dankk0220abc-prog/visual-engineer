@@ -3,10 +3,10 @@
 - Phase: Phase 5 Third Vertical Slice — Governed Final Review & Release
   Readiness
 - Overall status:
-  `PHASE_5_THIRD_SLICE_FOCUSED_REVIEW_FAIL_REMEDIATION_REQUIRED`
-- Governance qualifier: THIRD SLICE INDEPENDENT FOCUSED REVIEW FAIL; FINAL
-  AGGREGATE NOT RUN; NO PASS SEALING, MAIN INTEGRATION, DELIVERY, OR PHASE 6
-  AUTHORIZATION
+  `PHASE_5_FINAL_REVIEW_TARGETED_REMEDIATION_COMPLETE_READY_FOR_INDEPENDENT_FOCUSED_RE_REVIEW`
+- Governance qualifier: IMPLEMENTER TARGETED REMEDIATION; HISTORICAL
+  INDEPENDENT FOCUSED REVIEW FAIL PRESERVED; NO GATE PASS, SEALING, MAIN
+  INTEGRATION, DELIVERY, OR PHASE 6 AUTHORIZATION
 - Last updated: 2026-07-30
 - Current main / Third Slice base:
   `50dcc05ce48d042882bcdf199ae1bee662a83af6`
@@ -16,8 +16,12 @@
   `c2054469c8d10441bcab8ade89c52de1f9aa893f`
 - Third Slice focused Findings:
   `VE-P5-REVIEW-FR-001` through `VE-P5-REVIEW-FR-005` — blocking Medium
+- Third Slice remediation branch:
+  `fix/phase-5-governed-final-review-remediation-1`
+- Third Slice remediation base:
+  `5371495b1dd27db2ff3bbca4ddc12eaee47e7982`
 - Active plan:
-  [`docs/exec-plans/phase-5-governed-final-review-focused-review.md`](../exec-plans/phase-5-governed-final-review-focused-review.md)
+  [`docs/exec-plans/phase-5-governed-final-review-remediation-1.md`](../exec-plans/phase-5-governed-final-review-remediation-1.md)
 - Phase 5 second-slice remediation branch:
   `fix/phase-5-validation-suites-remediation-1`
 - Phase 5 second-slice remediation candidate:
@@ -88,6 +92,41 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 Third Vertical Slice targeted remediation 1
+
+The implementer candidate addresses only the five blocking Medium Findings
+from the preserved independent focused-review FAIL. It adds a locked
+freshness generation and automatic fact-change invalidation, schema-v2
+canonical Package/Decision/readiness reconstruction in PostgreSQL, immutable
+package-local event sequences, expected-generation keyed Decision replay, and
+a frozen trusted blocker source/version/digest with
+Critical/High/blocking-Medium counts.
+
+Current verification:
+
+- unchanged focused audit plus candidate and permanent remediation:
+  `20/20`;
+- real PostgreSQL migration `base -> head -> base -> head`: pass;
+- complete API/Runner/Protocol: `272/272`, coverage `83.43%`;
+- Web: `50/50`; contracts/typecheck/build: pass;
+- real browser desktop + 390px with axe: `16/16`;
+- Security, `74` Eval cases, source/canonical Workspace invariance, and
+  Workspace chaos: pass; and
+- the single permitted final `make verify`: exit `0`, no rerun; and
+- exact remediation and aggregate project cleanup: zero
+  containers/networks/volumes.
+
+The targeted remediation is ready for a fresh independent focused re-review.
+This evidence is implementer evidence, not an independent focused re-review,
+Gate PASS, sealing, or integration decision. Historical focused-review FAIL
+records below remain unchanged.
+
+Detailed artifacts:
+
+- [`docs/exec-plans/phase-5-governed-final-review-remediation-1.md`](../exec-plans/phase-5-governed-final-review-remediation-1.md)
+- [`docs/evidence/phase-5-governed-final-review-remediation-1-verification.md`](../evidence/phase-5-governed-final-review-remediation-1-verification.md)
+- [`docs/runbooks/final-review-readiness.md`](../runbooks/final-review-readiness.md)
 
 ## Phase 5 Third Vertical Slice independent focused-review decision
 

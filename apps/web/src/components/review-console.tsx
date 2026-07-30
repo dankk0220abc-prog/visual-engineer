@@ -238,6 +238,29 @@ export function ReviewConsole() {
                       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                         <div>
                           <dt className="font-semibold text-slate-700">
+                            Freshness generation
+                          </dt>
+                          <dd className="mt-1 text-slate-700">
+                            Generation {reviewPackage.freshness_generation} /
+                            current {reviewPackage.current_freshness_generation}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold text-slate-700">
+                            Trusted blocker summary
+                          </dt>
+                          <dd className="mt-1 text-slate-700">
+                            Critical {reviewPackage.critical_count} · High{" "}
+                            {reviewPackage.high_count} · Blocking medium{" "}
+                            {reviewPackage.blocking_medium_count}
+                          </dd>
+                          <dd className="mt-1 font-mono text-xs break-all text-slate-500">
+                            {reviewPackage.blocker_source}:v
+                            {reviewPackage.blocker_source_version}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold text-slate-700">
                             Package digest
                           </dt>
                           <dd className="mt-1 font-mono text-xs break-all text-slate-600">
@@ -298,11 +321,17 @@ export function ReviewConsole() {
                             disabled={Boolean(busy)}
                             onClick={() =>
                               void perform(`approve-${reviewPackage.id}`, () =>
-                                decideReviewPackage(reviewPackage.id, {
-                                  decision: "approve",
-                                  reason:
-                                    "Reviewed exact immutable Evidence Manifest.",
-                                }),
+                                decideReviewPackage(
+                                  reviewPackage.id,
+                                  {
+                                    decision: "approve",
+                                    reason:
+                                      "Reviewed exact immutable Evidence Manifest.",
+                                    expected_generation:
+                                      reviewPackage.freshness_generation,
+                                  },
+                                  `review-decision-${reviewPackage.id}-g${reviewPackage.freshness_generation}-approve`,
+                                ),
                               )
                             }
                           >
@@ -332,10 +361,16 @@ export function ReviewConsole() {
                             disabled={Boolean(busy) || !rejectedReason.trim()}
                             onClick={() =>
                               void perform(`reject-${reviewPackage.id}`, () =>
-                                decideReviewPackage(reviewPackage.id, {
-                                  decision: "reject",
-                                  reason: rejectedReason,
-                                }),
+                                decideReviewPackage(
+                                  reviewPackage.id,
+                                  {
+                                    decision: "reject",
+                                    reason: rejectedReason,
+                                    expected_generation:
+                                      reviewPackage.freshness_generation,
+                                  },
+                                  `review-decision-${reviewPackage.id}-g${reviewPackage.freshness_generation}-reject`,
+                                ),
                               )
                             }
                           >

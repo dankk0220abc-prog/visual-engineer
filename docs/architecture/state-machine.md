@@ -324,19 +324,24 @@ records remain unchanged.
 ```mermaid
 stateDiagram-v2
     [*] --> fresh_package: latest successful trusted Suite Evidence
-    fresh_package --> approved: one local-user decision
+    fresh_package --> approved: keyed decision at expected generation
     fresh_package --> rejected: one reasoned local-user decision
-    fresh_package --> stale: baseline or Evidence mismatch
-    approved --> ready: deterministic fresh evaluation
-    approved --> stale: later baseline or Evidence mismatch
+    fresh_package --> stale: trusted fact advances scope generation
+    approved --> ready: zero Critical/High/blocking-Medium
+    approved --> stale: later fact or blocker advances generation
     rejected --> not_ready: deterministic evaluation
-    rejected --> stale: later baseline or Evidence mismatch
+    rejected --> stale: later trusted fact advances generation
     ready --> stale: effective verdict fencing
     not_ready --> stale: effective freshness fencing
+    stale --> next_generation: new trusted Package required
+    next_generation --> fresh_package: new package and new decision chain
 ```
 
-Package, decision, invalidation, and verdict rows are immutable. `stale` is an
-effective state backed by current exact baseline derivation and, once observed
-through the freshness/decision/readiness actions, one durable invalidation row.
-Stale approval never transitions to ready. Neither `approved` nor `ready`
-creates Git, pull-request, tag, merge, deployment, command, or Runner authority.
+Package, decision, invalidation, blocker, and verdict rows are immutable.
+Freshness scope generation advances and appends invalidation plus a
+package-local sequenced AuditEvent in the same database transaction as an
+accepted Validation/Suite/Evidence/Checkpoint/Workspace/Grant/blocker change.
+`stale` never mutates or reuses the old Decision; only a new Package generation
+can be reviewed. Stale approval never transitions to ready. Neither `approved`
+nor `ready` creates Git, pull-request, tag, merge, deployment, command, or
+Runner authority.

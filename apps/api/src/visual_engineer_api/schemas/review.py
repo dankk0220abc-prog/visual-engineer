@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
@@ -24,6 +24,7 @@ class ReviewDecisionCreate(BaseModel):
 
     decision: Literal["approve", "reject"]
     reason: Annotated[str | None, StringConstraints(max_length=2000)] = None
+    expected_generation: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def require_rejection_reason(self) -> "ReviewDecisionCreate":
@@ -46,6 +47,11 @@ class ReviewPackageInvalidationResponse(BaseModel):
         "source_revision_changed",
         "suite_result_superseded",
         "evidence_integrity_failed",
+        "validation_facts_changed",
+        "policy_changed",
+        "grant_lineage_changed",
+        "blocker_summary_changed",
+        "remediation_generation_required",
     ]
     observed_value: str
     request_id: str
@@ -57,11 +63,17 @@ class ReviewDecisionResponse(BaseModel):
 
     id: uuid.UUID
     review_package_id: uuid.UUID
+    package_version: int
+    expected_generation: int
     package_digest: Digest
+    policy_digest: Digest
     decision: Literal["approve", "reject"]
     reason: str | None
     actor_type: Literal["local_user"]
     request_id: str
+    idempotency_key: str
+    idempotency_request_hash: Digest
+    decision_digest: Digest
     git_authorization: Literal[False]
     deployment_authorization: Literal[False]
     created_at: datetime
@@ -73,9 +85,17 @@ class ReleaseReadinessVerdictResponse(BaseModel):
     id: uuid.UUID
     review_package_id: uuid.UUID
     review_decision_id: uuid.UUID
+    package_version: int
+    freshness_generation: int
     package_digest: Digest
     decision_digest: Digest
     evidence_manifest_digest: Digest
+    suite_result_digest: Digest
+    policy_digest: Digest
+    blocker_summary_digest: Digest
+    critical_count: int
+    high_count: int
+    blocking_medium_count: int
     verdict: Literal["ready", "not_ready"]
     effective_verdict: Literal["ready", "not_ready", "stale"]
     reason_codes: list[str]
@@ -87,7 +107,11 @@ class ReleaseReadinessVerdictResponse(BaseModel):
 
 class ReviewPackageResponse(BaseModel):
     id: uuid.UUID
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
+    package_version: int
+    freshness_state_id: uuid.UUID
+    freshness_generation: int
+    current_freshness_generation: int
     run_id: uuid.UUID
     plan_id: uuid.UUID
     repository_handle_id: uuid.UUID
@@ -95,11 +119,21 @@ class ReviewPackageResponse(BaseModel):
     workspace_id: uuid.UUID
     checkpoint_id: uuid.UUID
     checkpoint_fingerprint: Digest
+    checkpoint_diff_hash: Digest
     suite_run_id: uuid.UUID
     suite_result_id: uuid.UUID
+    execution_grant_id: uuid.UUID
+    suite_policy_digest: Digest
     suite_result_digest: Digest
     evidence_manifest: dict[str, object]
     evidence_manifest_digest: Digest
+    blocker_summary: dict[str, object]
+    blocker_summary_digest: Digest
+    blocker_source: str
+    blocker_source_version: int
+    critical_count: int
+    high_count: int
+    blocking_medium_count: int
     package_digest: Digest
     freshness: ReviewFreshness
     stale_reason_code: str | None

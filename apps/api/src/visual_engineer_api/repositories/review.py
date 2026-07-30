@@ -1,15 +1,23 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from visual_engineer_api.models.review import (
     ReleaseReadinessVerdict,
+    ReviewBlockerFinding,
     ReviewDecision,
+    ReviewFreshnessState,
     ReviewPackage,
     ReviewPackageInvalidation,
 )
-from visual_engineer_api.models.validation import ValidationSuiteResult, ValidationSuiteRun
+from visual_engineer_api.models.run import AuditEvent
+from visual_engineer_api.models.validation import (
+    ValidationRun,
+    ValidationSuiteResult,
+    ValidationSuiteRun,
+)
 from visual_engineer_api.models.workspace import RepositoryHandle, Workspace, WorkspaceCheckpoint
 
 
@@ -38,12 +46,33 @@ class ReviewRepository:
         return self._session.scalar(statement)
 
     def package_by_result(
-        self, result_id: uuid.UUID, *, lock: bool = False
+        self,
+        result_id: uuid.UUID,
+        *,
+        generation: int | None = None,
+        lock: bool = False,
     ) -> ReviewPackage | None:
         statement = select(ReviewPackage).where(ReviewPackage.suite_result_id == result_id)
+        if generation is not None:
+            statement = statement.where(ReviewPackage.freshness_generation == generation)
+        statement = statement.order_by(
+            ReviewPackage.package_version.desc(),
+            ReviewPackage.created_at.desc(),
+            ReviewPackage.id.desc(),
+        )
         if lock:
             statement = statement.with_for_update()
         return self._session.scalar(statement)
+
+    def next_package_version(self, result_id: uuid.UUID) -> int:
+        return (
+            self._session.scalar(
+                select(func.coalesce(func.max(ReviewPackage.package_version), 0)).where(
+                    ReviewPackage.suite_result_id == result_id
+                )
+            )
+            or 0
+        ) + 1
 
     def list_packages(self) -> list[ReviewPackage]:
         return list(
@@ -63,6 +92,12 @@ class ReviewRepository:
 
     def decision(self, package_id: uuid.UUID, *, lock: bool = False) -> ReviewDecision | None:
         statement = select(ReviewDecision).where(ReviewDecision.review_package_id == package_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def decision_by_idempotency(self, key: str, *, lock: bool = False) -> ReviewDecision | None:
+        statement = select(ReviewDecision).where(ReviewDecision.idempotency_key == key)
         if lock:
             statement = statement.with_for_update()
         return self._session.scalar(statement)
@@ -160,3 +195,104 @@ class ReviewRepository:
             )
             .limit(1)
         )
+
+    def freshness_state(
+        self,
+        *,
+        plan_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        checkpoint_id: uuid.UUID,
+        create: bool = False,
+        lock: bool = False,
+    ) -> ReviewFreshnessState | None:
+        if create:
+            self._session.execute(
+                insert(ReviewFreshnessState)
+                .values(
+                    id=uuid.uuid4(),
+                    plan_id=plan_id,
+                    workspace_id=workspace_id,
+                    checkpoint_id=checkpoint_id,
+                    generation=1,
+                    last_change_kind="scope_initialized",
+                )
+                .on_conflict_do_nothing(index_elements=("plan_id", "workspace_id", "checkpoint_id"))
+            )
+        statement = select(ReviewFreshnessState).where(
+            ReviewFreshnessState.plan_id == plan_id,
+            ReviewFreshnessState.workspace_id == workspace_id,
+            ReviewFreshnessState.checkpoint_id == checkpoint_id,
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def freshness_state_by_id(
+        self, state_id: uuid.UUID, *, lock: bool = False
+    ) -> ReviewFreshnessState | None:
+        statement = select(ReviewFreshnessState).where(ReviewFreshnessState.id == state_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def blocker_findings(
+        self,
+        *,
+        plan_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        checkpoint_id: uuid.UUID,
+        lock: bool = False,
+    ) -> list[ReviewBlockerFinding]:
+        statement = (
+            select(ReviewBlockerFinding)
+            .where(
+                ReviewBlockerFinding.plan_id == plan_id,
+                ReviewBlockerFinding.workspace_id == workspace_id,
+                ReviewBlockerFinding.checkpoint_id == checkpoint_id,
+            )
+            .order_by(
+                ReviewBlockerFinding.finding_key,
+                ReviewBlockerFinding.finding_version.desc(),
+                ReviewBlockerFinding.created_at.desc(),
+                ReviewBlockerFinding.id.desc(),
+            )
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return list(self._session.scalars(statement))
+
+    def latest_validation_run(
+        self, *, plan_id: uuid.UUID, checkpoint_id: uuid.UUID
+    ) -> ValidationRun | None:
+        return self._session.scalar(
+            select(ValidationRun)
+            .where(
+                ValidationRun.plan_id == plan_id,
+                ValidationRun.checkpoint_id == checkpoint_id,
+            )
+            .order_by(ValidationRun.created_at.desc(), ValidationRun.id.desc())
+            .limit(1)
+        )
+
+    def latest_suite_run(
+        self, *, plan_id: uuid.UUID, checkpoint_id: uuid.UUID
+    ) -> ValidationSuiteRun | None:
+        return self._session.scalar(
+            select(ValidationSuiteRun)
+            .where(
+                ValidationSuiteRun.plan_id == plan_id,
+                ValidationSuiteRun.checkpoint_id == checkpoint_id,
+            )
+            .order_by(ValidationSuiteRun.created_at.desc(), ValidationSuiteRun.id.desc())
+            .limit(1)
+        )
+
+    def next_review_event_sequence(self, package_id: uuid.UUID) -> int:
+        return (
+            self._session.scalar(
+                select(func.coalesce(func.max(AuditEvent.review_sequence), 0)).where(
+                    AuditEvent.review_package_id == package_id
+                )
+            )
+            or 0
+        ) + 1

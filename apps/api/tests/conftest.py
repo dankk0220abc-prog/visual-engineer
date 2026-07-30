@@ -47,6 +47,7 @@ def db_session(database_url: str) -> Generator[Session, None, None]:
             text(
                 "TRUNCATE TABLE release_readiness_verdicts, review_decisions, "
                 "review_package_invalidations, review_packages, "
+                "review_blocker_findings, review_freshness_states, "
                 "validation_suite_results, validation_suite_step_runs, "
                 "validation_suite_runs, validation_evidence, validation_step_runs, "
                 "validation_runs, "

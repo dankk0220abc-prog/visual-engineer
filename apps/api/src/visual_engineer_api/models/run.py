@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -189,7 +190,19 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
     __table_args__ = (
         CheckConstraint("actor_type IN ('local_user', 'system')", name="ck_audit_actor_type"),
+        CheckConstraint(
+            "(review_package_id IS NULL AND review_sequence IS NULL) OR "
+            "(review_package_id IS NOT NULL AND review_sequence >= 1)",
+            name="ck_audit_review_sequence",
+        ),
         Index("ix_audit_events_run_created_at", "run_id", "created_at", "id"),
+        Index(
+            "uq_audit_review_sequence",
+            "review_package_id",
+            "review_sequence",
+            unique=True,
+            postgresql_where=text("review_package_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -200,6 +213,11 @@ class AuditEvent(Base):
     actor_type: Mapped[str] = mapped_column(String(32), nullable=False)
     request_id: Mapped[str] = mapped_column(String(128), nullable=False)
     details: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False)
+    review_package_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("review_packages.id", ondelete="RESTRICT"),
+    )
+    review_sequence: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

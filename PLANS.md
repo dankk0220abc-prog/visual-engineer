@@ -52,17 +52,22 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The active completed implementation plan is
-[`docs/exec-plans/phase-5-governed-final-review-readiness.md`](docs/exec-plans/phase-5-governed-final-review-readiness.md).
-It implements **Phase 5 Third Vertical Slice — Governed Final Review & Release
-Readiness** from local `main`
-`50dcc05ce48d042882bcdf199ae1bee662a83af6`. The locally implemented and
-verified slice is limited to immutable Review Packages and Decisions,
-freshness/stale fencing, deterministic local release-readiness verdicts,
-Evidence Manifests, API/generated contracts, and a browser-first review
-workflow. It is ready for independent focused review, not independently
-approved or sealed. Review approval is not Git or deployment authority. Phase
-6, Git delivery, CreativeDeploy, and Customer 0 remain unauthorized.
+The active targeted-remediation plan is
+[`docs/exec-plans/phase-5-governed-final-review-remediation-1.md`](docs/exec-plans/phase-5-governed-final-review-remediation-1.md).
+It addresses only the five blocking Medium Findings recorded by the
+independent Third Slice focused-review FAIL checkpoint
+`5371495b1dd27db2ff3bbca4ddc12eaee47e7982`: freshness generation,
+server/database canonical digest reconstruction, append-only review history,
+expected-generation keyed Decision replay, and frozen zero-blocker readiness
+proof. Its successful endpoint is readiness for a new independent focused
+re-review, not Gate PASS, sealing, main integration, or later-phase
+authorization. Review approval is not Git or deployment authority. Phase 6,
+Git delivery, CreativeDeploy, and Customer 0 remain unauthorized.
+
+The original Third Slice implementation plan remains at
+[`docs/exec-plans/phase-5-governed-final-review-readiness.md`](docs/exec-plans/phase-5-governed-final-review-readiness.md);
+its implementation evidence and the historical independent FAIL are not
+rewritten by this remediation.
 
 The completed second-slice independent focused re-audit and sealing plan
 remains at

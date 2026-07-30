@@ -19,15 +19,16 @@ fixture. It completed independent focused re-audit, was sealed, and was
 integrated into local `main` by pure fast-forward at
 `50dcc05ce48d042882bcdf199ae1bee662a83af6`.
 
-The Third Slice may package only trusted immutable Suite Evidence, accept one
-immutable local-user Review Decision, and compute a deterministic readiness
-verdict while the exact revision/Workspace/Checkpoint/Evidence baseline
-remains fresh. A stale approval must fail closed. Review approval is explicitly
-separate from Git commit, push, pull request, merge, tag, or deployment
-authority. Before this task, neither a later Phase 5 slice nor Phase 6 had
-started. The local implementation and verification are complete and ready for
-independent focused review; no independent Third Slice security decision,
-sealing, main integration, Git delivery, or Phase 6 authorization is claimed.
+The Third Slice independent focused review remains a historical FAIL with five
+blocking Medium Findings. The targeted remediation candidate binds immutable
+Suite Evidence, freshness generation, Checkpoint diff, policy, Grant lineage,
+trusted blocker counts, one keyed immutable local-user Review Decision, and a
+canonical deterministic readiness chain. Accepted later facts atomically stale
+the old generation; a stale approval must fail closed. Review approval remains
+explicitly separate from Git commit, push, pull request, merge, tag, or
+deployment authority. The remediation is eligible only for a new independent
+focused re-review after local verification; it is not an independent PASS,
+seal, main integration, Git delivery, later-slice, or Phase 6 authorization.
 
 The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
@@ -84,14 +85,18 @@ success is reconstructed from locked Run/Job/Attempt/Lease/Grant/Permit/
 Evidence records with recomputed digests and is independently constrained by
 PostgreSQL transition/result triggers; mutable step summaries are not proof.
 
-A Review Package can select only one latest successful trusted Suite Result.
-The Control Plane reconstructs its two ordered child chains before storing a
-versioned Evidence Manifest and package digest. Package/decision/verdict rows
-are immutable; a separate immutable invalidation records the first stale
-revision, Workspace, Checkpoint, later Suite Result, or Evidence integrity
-failure. Effective freshness is recalculated on reads, decisions, and
-readiness. PostgreSQL independently rejects stale decisions, foreign digest
-bindings, record mutation, and a stale or rejected ready verdict.
+A Review Package can select only one latest successful trusted Suite Result
+per freshness generation. The Control Plane and PostgreSQL independently
+reconstruct its two ordered child chains, versioned Evidence Manifest,
+Checkpoint tree/diff, Suite/Profile versions, policy, Grant lineage, aggregate
+Result, and frozen blocker summary before accepting the package digest.
+Validation, Suite, Evidence, Workspace, Checkpoint, Grant, or blocker changes
+advance the locked scope and append an immutable invalidation/event. Package,
+Decision, blocker, verdict, and AuditEvent rows are append-only. Decision
+requests bind expected generation and a persisted idempotency key/hash.
+PostgreSQL independently rejects stale generations, forged canonical digests,
+foreign bindings, record mutation, and any ready verdict whose Decision is not
+approve or whose Critical/High/blocking-Medium counts are not `0/0/0`.
 
 Review approval and readiness are governance evidence only. Database checks,
 API literals, and browser copy all fix Git and deployment authorization to

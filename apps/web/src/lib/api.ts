@@ -1043,6 +1043,7 @@ export async function refreshReviewPackage(
 export async function decideReviewPackage(
   packageId: string,
   input: ReviewDecisionInput,
+  idempotencyKey = `review-decision-${packageId}-${crypto.randomUUID()}`,
 ): Promise<ReviewPackage> {
   const { data } = await request<JsonResponse<ReviewDecisionOperation, 200>>(
     `/api/v1/review-packages/${encodeURIComponent(packageId)}/decisions`,
@@ -1050,6 +1051,7 @@ export async function decideReviewPackage(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
         "X-Request-ID": crypto.randomUUID(),
       },
       body: JSON.stringify(input),

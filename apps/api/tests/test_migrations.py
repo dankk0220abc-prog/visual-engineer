@@ -24,6 +24,8 @@ def test_initial_migration_round_trip(database_url: str) -> None:
         "runner_jobs",
         "runner_job_attempts",
         "runner_job_events",
+        "review_freshness_states",
+        "review_blocker_findings",
         "review_packages",
         "review_package_invalidations",
         "review_decisions",

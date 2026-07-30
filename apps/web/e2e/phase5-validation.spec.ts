@@ -360,6 +360,13 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
   await expect(packageCard.getByText("Evidence Manifest 2/2")).toBeVisible({
     timeout: 30_000,
   });
+  await expect(packageCard.getByText("Generation 1 / current 1")).toBeVisible();
+  await expect(
+    packageCard.getByText("Critical 0 · High 0 · Blocking medium 0"),
+  ).toBeVisible();
+  await expect(
+    packageCard.getByText("governed-review-security-findings:v1"),
+  ).toBeVisible();
   await expect(
     packageCard.getByText(
       "Git authorization: false · Deployment authorization: false",

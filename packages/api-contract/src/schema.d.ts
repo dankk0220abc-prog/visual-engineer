@@ -2365,11 +2365,17 @@ export interface components {
     };
     /** ReleaseReadinessVerdictResponse */
     ReleaseReadinessVerdictResponse: {
+      /** Blocker Summary Digest */
+      blocker_summary_digest: string;
+      /** Blocking Medium Count */
+      blocking_medium_count: number;
       /**
        * Created At
        * Format: date-time
        */
       created_at: string;
+      /** Critical Count */
+      critical_count: number;
       /** Decision Digest */
       decision_digest: string;
       /**
@@ -2384,11 +2390,15 @@ export interface components {
       effective_verdict: "ready" | "not_ready" | "stale";
       /** Evidence Manifest Digest */
       evidence_manifest_digest: string;
+      /** Freshness Generation */
+      freshness_generation: number;
       /**
        * Git Authorization
        * @constant
        */
       git_authorization: false;
+      /** High Count */
+      high_count: number;
       /**
        * Id
        * Format: uuid
@@ -2396,6 +2406,10 @@ export interface components {
       id: string;
       /** Package Digest */
       package_digest: string;
+      /** Package Version */
+      package_version: number;
+      /** Policy Digest */
+      policy_digest: string;
       /** Reason Codes */
       reason_codes: string[];
       /**
@@ -2408,6 +2422,8 @@ export interface components {
        * Format: uuid
        */
       review_package_id: string;
+      /** Suite Result Digest */
+      suite_result_digest: string;
       /**
        * Verdict
        * @enum {string}
@@ -2591,6 +2607,8 @@ export interface components {
        * @enum {string}
        */
       decision: "approve" | "reject";
+      /** Expected Generation */
+      expected_generation?: number | null;
       /** Reason */
       reason?: string | null;
     };
@@ -2611,11 +2629,15 @@ export interface components {
        * @enum {string}
        */
       decision: "approve" | "reject";
+      /** Decision Digest */
+      decision_digest: string;
       /**
        * Deployment Authorization
        * @constant
        */
       deployment_authorization: false;
+      /** Expected Generation */
+      expected_generation: number;
       /**
        * Git Authorization
        * @constant
@@ -2626,8 +2648,16 @@ export interface components {
        * Format: uuid
        */
       id: string;
+      /** Idempotency Key */
+      idempotency_key: string;
+      /** Idempotency Request Hash */
+      idempotency_request_hash: string;
       /** Package Digest */
       package_digest: string;
+      /** Package Version */
+      package_version: number;
+      /** Policy Digest */
+      policy_digest: string;
       /** Reason */
       reason: string | null;
       /** Request Id */
@@ -2676,7 +2706,12 @@ export interface components {
         | "checkpoint_superseded"
         | "source_revision_changed"
         | "suite_result_superseded"
-        | "evidence_integrity_failed";
+        | "evidence_integrity_failed"
+        | "validation_facts_changed"
+        | "policy_changed"
+        | "grant_lineage_changed"
+        | "blocker_summary_changed"
+        | "remediation_generation_required";
       /** Request Id */
       request_id: string;
       /**
@@ -2694,6 +2729,20 @@ export interface components {
     };
     /** ReviewPackageResponse */
     ReviewPackageResponse: {
+      /** Blocker Source */
+      blocker_source: string;
+      /** Blocker Source Version */
+      blocker_source_version: number;
+      /** Blocker Summary */
+      blocker_summary: {
+        [key: string]: unknown;
+      };
+      /** Blocker Summary Digest */
+      blocker_summary_digest: string;
+      /** Blocking Medium Count */
+      blocking_medium_count: number;
+      /** Checkpoint Diff Hash */
+      checkpoint_diff_hash: string;
       /** Checkpoint Fingerprint */
       checkpoint_fingerprint: string;
       /**
@@ -2706,6 +2755,10 @@ export interface components {
        * Format: date-time
        */
       created_at: string;
+      /** Critical Count */
+      critical_count: number;
+      /** Current Freshness Generation */
+      current_freshness_generation: number;
       decision: components["schemas"]["ReviewDecisionResponse"] | null;
       /**
        * Deployment Authorization
@@ -2718,12 +2771,26 @@ export interface components {
       };
       /** Evidence Manifest Digest */
       evidence_manifest_digest: string;
+      /**
+       * Execution Grant Id
+       * Format: uuid
+       */
+      execution_grant_id: string;
       freshness: components["schemas"]["ReviewFreshness"];
+      /** Freshness Generation */
+      freshness_generation: number;
+      /**
+       * Freshness State Id
+       * Format: uuid
+       */
+      freshness_state_id: string;
       /**
        * Git Authorization
        * @constant
        */
       git_authorization: false;
+      /** High Count */
+      high_count: number;
       /**
        * Id
        * Format: uuid
@@ -2733,6 +2800,8 @@ export interface components {
         components["schemas"]["ReviewPackageInvalidationResponse"] | null;
       /** Package Digest */
       package_digest: string;
+      /** Package Version */
+      package_version: number;
       /**
        * Plan Id
        * Format: uuid
@@ -2752,13 +2821,15 @@ export interface components {
       run_id: string;
       /**
        * Schema Version
-       * @constant
+       * @enum {integer}
        */
-      schema_version: 1;
+      schema_version: 1 | 2;
       /** Source Revision */
       source_revision: string;
       /** Stale Reason Code */
       stale_reason_code: string | null;
+      /** Suite Policy Digest */
+      suite_policy_digest: string;
       /** Suite Result Digest */
       suite_result_digest: string;
       /**
@@ -5618,7 +5689,9 @@ export interface operations {
   decide_review_package_api_v1_review_packages__package_id__decisions_post: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        "Idempotency-Key"?: string | null;
+      };
       path: {
         package_id: string;
       };

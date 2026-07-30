@@ -327,9 +327,15 @@ rewritten. The second slice adds
 `20260730_0008_add_governed_validation_suites`, followed by additive lineage
 and trusted-aggregation enforcement in
 `20260730_0009_enforce_suite_lineage_and_evidence`. The Third Slice adds
-`20260730_0010_add_governed_final_review`. The complete base-to-head,
-downgrade-to-base, and upgrade-to-head roundtrip must pass on real PostgreSQL
-before the implementation checkpoint.
+`20260730_0010_add_governed_final_review`. Targeted remediation adds
+`20260730_0011_enforce_review_integrity`: generation-scoped freshness,
+append-only blocker facts, versioned Package/Decision/readiness bindings,
+canonical JSON digest reconstruction, sequenced immutable review AuditEvents,
+and database-triggered invalidation. Existing schema-v1 packages are
+conservatively backfilled and invalidated; they cannot receive a new Decision
+or ready verdict. The complete base-to-head, downgrade-to-base, and
+upgrade-to-head roundtrip must pass on real PostgreSQL before the remediation
+checkpoint.
 
 ## Future entities
 

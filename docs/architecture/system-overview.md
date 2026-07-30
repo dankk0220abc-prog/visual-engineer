@@ -302,13 +302,15 @@ sequenceDiagram
 
     User->>Web: Select latest successful Suite Result
     Web->>API: Create immutable Review Package
-    API->>DB: Reconstruct Evidence; store Manifest/package digests
+    API->>DB: Lock generation; reconstruct Evidence, policy, Grant, blockers
+    DB-->>API: Canonical Manifest/package/blocker digests
     User->>Web: Recheck freshness and inspect exact Evidence
     User->>Web: Approve or reasoned reject
-    API->>DB: Lock baseline; store one immutable Review Decision
+    API->>DB: Bind expected generation + keyed immutable Decision
     User->>Web: Compute Release Readiness
-    API->>DB: Lock and revalidate package/decision/current baseline
+    API->>DB: Recompute full chain; require blocker counts 0/0/0
     API-->>Web: ready, not_ready, or effective stale
+    Note over API,DB: Later trusted fact atomically invalidates old generation
     Note over Web,DB: Git and deployment authorization remain false
 ```
 

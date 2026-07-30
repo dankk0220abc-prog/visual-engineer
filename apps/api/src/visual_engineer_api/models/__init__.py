@@ -1,6 +1,8 @@
 from visual_engineer_api.models.review import (
     ReleaseReadinessVerdict,
+    ReviewBlockerFinding,
     ReviewDecision,
+    ReviewFreshnessState,
     ReviewPackage,
     ReviewPackageInvalidation,
 )
@@ -47,7 +49,9 @@ __all__ = [
     "ReleaseReadinessVerdict",
     "RepositoryHandle",
     "RepositorySnapshot",
+    "ReviewBlockerFinding",
     "ReviewDecision",
+    "ReviewFreshnessState",
     "ReviewPackage",
     "ReviewPackageInvalidation",
     "Run",

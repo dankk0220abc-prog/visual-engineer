@@ -10,4 +10,8 @@ trap cleanup EXIT INT TERM
 docker compose --profile test up -d --wait test-db
 test_db_port=${TEST_POSTGRES_PUBLISHED_PORT:-55433}
 TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgresql+psycopg://visualengineer:visualengineer-test-local@127.0.0.1:$test_db_port/visualengineer_test}" \
-  uv run pytest apps/api/tests/test_phase5_governed_final_review.py --no-cov -q
+  uv run pytest \
+    apps/api/tests/test_phase5_governed_final_review.py \
+    apps/api/tests/test_phase5_governed_final_review_focused_audit.py \
+    apps/api/tests/test_phase5_governed_final_review_remediation.py \
+    --no-cov -q
