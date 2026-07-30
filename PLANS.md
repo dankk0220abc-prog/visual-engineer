@@ -53,14 +53,13 @@ Every plan under `docs/exec-plans/` contains:
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
 The active plan is
-[`docs/exec-plans/phase-5-validation-suites-focused-review.md`](docs/exec-plans/phase-5-validation-suites-focused-review.md).
-The independent focused review of the second Phase 5 slice is complete as
-FAIL. Two real-PostgreSQL secure-expectation tests independently establish
-blocking Medium Findings: one approved Suite Grant can create a second root
-Suite attempt under a new idempotency key, and injected successful step
-summaries can become a successful aggregate with zero Evidence references.
-The contractually gated final aggregate and PASS sealing were not run.
-Remediation and a fresh independent focused re-review are required.
+[`docs/exec-plans/phase-5-validation-suites-remediation-1.md`](docs/exec-plans/phase-5-validation-suites-remediation-1.md).
+It is the completed narrow implementer remediation for the two blocking Medium
+focused-review Findings: single-use lineage-bound Suite Grant authority and
+trusted ordered aggregate Evidence. Local verification is complete and the
+candidate is ready for a fresh independent focused re-audit. The historical
+independent focused review remains FAIL at its inspected checkpoint. This
+completion cannot declare Security Gate PASS or authorize a later phase.
 
 The second-slice implementation plan remains at
 [`docs/exec-plans/phase-5-governed-validation-suites.md`](docs/exec-plans/phase-5-governed-validation-suites.md).

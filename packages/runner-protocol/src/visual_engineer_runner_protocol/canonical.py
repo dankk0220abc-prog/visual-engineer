@@ -33,6 +33,16 @@ def permission_policy_hash_matches(value: BaseModel | dict[str, Any], expected: 
 def compute_execution_grant_policy_hash(value: BaseModel | dict[str, Any]) -> str:
     payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
     payload.pop("policy_hash", None)
+    if not payload.get("allowed_validation_suites"):
+        for field in (
+            "allowed_validation_suites",
+            "validation_suite_definition_digest",
+            "validation_suite_root_run_id",
+            "validation_suite_retry_of_run_id",
+            "validation_suite_attempt_number",
+            "validation_suite_allowed_run_count",
+        ):
+            payload.pop(field, None)
     return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
 

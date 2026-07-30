@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import uuid
 from collections.abc import Sequence
 from datetime import timedelta
 from typing import NoReturn
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from visual_engineer_api.models.run import AuditEvent
 from visual_engineer_api.models.validation import (
+    ValidationEvidence,
     ValidationSuiteResult,
     ValidationSuiteRun,
     ValidationSuiteStepRun,
@@ -43,8 +46,13 @@ from visual_engineer_api.services.validation import (
 )
 from visual_engineer_runner_protocol import (
     VALIDATION_SUITE_CATALOG,
+    ValidationExecuteJobSpec,
+    ValidationExecutionResult,
+    WorkspaceOperation,
+    compute_validation_evidence_digest,
     compute_validation_policy_digest,
     execution_grant_policy_hash_matches,
+    validation_profile,
     validation_suite,
 )
 
@@ -137,7 +145,27 @@ class ValidationSuiteService:
         grant, checkpoint, workspace, _handle = self._required_suite_grant(
             payload.execution_grant_id,
             suite.reference,
+            expected_attempt_number=1,
+            expected_root_suite_run_id=None,
+            expected_retry_of_suite_run_id=None,
         )
+        replay = self._validation.get_suite_by_idempotency(
+            idempotency_key,
+            lock=True,
+        )
+        if replay is not None:
+            if replay.idempotency_request_hash != request_hash:
+                self._conflict(
+                    "suite_idempotency_conflict",
+                    "Idempotency-Key is associated with a different Suite request",
+                )
+            return self._response(self._sync(replay))
+        consumed = self._validation.get_suite_by_grant(grant.id, lock=True)
+        if consumed is not None:
+            self._conflict(
+                "validation_suite_grant_already_consumed",
+                "Suite-scoped Execution Grant already authorizes a Suite lineage",
+            )
         now = utc_now()
         run_id = uuid.uuid4()
         policy_digest = compute_validation_policy_digest(
@@ -176,6 +204,7 @@ class ValidationSuiteService:
             attempt_number=1,
             idempotency_key=idempotency_key,
             idempotency_request_hash=request_hash,
+            root_suite_run_id=run_id,
             requested_at=now,
             version=1,
         )
@@ -300,11 +329,7 @@ class ValidationSuiteService:
                 "validation_suite_retry_not_allowed",
                 "Only a terminal non-success Suite Run can be retried",
             )
-        root = (
-            source
-            if source.retry_of_suite_run_id is None
-            else self._required_run(source.retry_of_suite_run_id)
-        )
+        root = self._required_run(source.root_suite_run_id, lock=True)
         attempt_number = source.attempt_number + 1
         if attempt_number > source.max_attempts:
             self._conflict(
@@ -334,12 +359,6 @@ class ValidationSuiteService:
                     "Idempotency-Key is associated with a different Suite retry",
                 )
             return self._response(self._sync(replay))
-        if self._validation.suite_retry(root.id, attempt_number) is not None:
-            self._conflict(
-                "validation_suite_retry_exists",
-                "This Suite attempt already exists",
-            )
-
         suite = validation_suite(source.suite_id)
         if suite is None or suite.version != source.suite_version:
             raise ValidationSuiteServiceError(
@@ -350,7 +369,32 @@ class ValidationSuiteService:
         grant, checkpoint, workspace, _ = self._required_suite_grant(
             payload.execution_grant_id,
             suite.reference,
+            expected_attempt_number=attempt_number,
+            expected_root_suite_run_id=root.id,
+            expected_retry_of_suite_run_id=source.id,
         )
+        replay = self._validation.get_suite_by_idempotency(
+            idempotency_key,
+            lock=True,
+        )
+        if replay is not None:
+            if replay.idempotency_request_hash != request_hash:
+                self._conflict(
+                    "suite_idempotency_conflict",
+                    "Idempotency-Key is associated with a different Suite retry",
+                )
+            return self._response(self._sync(replay))
+        consumed = self._validation.get_suite_by_grant(grant.id, lock=True)
+        if consumed is not None:
+            self._conflict(
+                "validation_suite_grant_already_consumed",
+                "Suite-scoped Execution Grant already authorizes a Suite lineage",
+            )
+        if self._validation.suite_retry(root.id, attempt_number) is not None:
+            self._conflict(
+                "validation_suite_retry_exists",
+                "This Suite attempt already exists",
+            )
         if (
             source.run_id != grant.run_id
             or source.plan_id != grant.plan_id
@@ -400,7 +444,8 @@ class ValidationSuiteService:
             combined_output_bytes=0,
             max_attempts=source.max_attempts,
             attempt_number=attempt_number,
-            retry_of_suite_run_id=root.id,
+            retry_of_suite_run_id=source.id,
+            root_suite_run_id=root.id,
             idempotency_key=idempotency_key,
             idempotency_request_hash=request_hash,
             requested_at=now,
@@ -678,6 +723,15 @@ class ValidationSuiteService:
         return self._required_run(current.id)
 
     def _dispatch_next(self, suite_run_id: uuid.UUID, *, request_id: str) -> None:
+        probe = self._validation.get_suite_run(suite_run_id)
+        if probe is None:
+            return
+        grant_context = self._validation.validation_grant(
+            probe.execution_grant_id,
+            lock=True,
+        )
+        if grant_context is None:
+            return
         current = self._required_run(suite_run_id, lock=True)
         if current.state in _TERMINAL_STATES or current.state == "cancel_requested":
             return
@@ -755,33 +809,41 @@ class ValidationSuiteService:
         now = utc_now()
         started_at = suite_run.started_at or suite_run.requested_at
         evidence_references: list[dict[str, object]] = []
+        runner_references: list[str] = []
         redaction_count = 0
         output_truncated = False
         cleanup_succeeded = True
-        profile_references = []
+        profile_references: list[str] = []
+        trusted_output_bytes = 0
+        trusted_success = True
         for step in steps:
             profile_references.append(f"{step.profile_id}:v{step.profile_version}")
-            redaction_count += step.redaction_count
-            output_truncated = output_truncated or step.output_truncated
-            cleanup_succeeded = cleanup_succeeded and step.cleanup_succeeded is not False
-            if step.evidence_id is not None:
-                evidence_references.append(
-                    {
-                        "sequence": step.sequence,
-                        "step_id": step.step_id,
-                        "profile": f"{step.profile_id}:v{step.profile_version}",
-                        "validation_run_id": str(step.validation_run_id),
-                        "runner_job_id": str(step.runner_job_id),
-                        "runner_id": str(step.runner_id),
-                        "attempt_id": str(step.attempt_id),
-                        "lease_id": str(step.lease_id),
-                        "evidence_id": str(step.evidence_id),
-                        "reused": step.reused_from_step_run_id is not None,
-                    }
+            if step.state == "succeeded":
+                trusted = self._trusted_success_step(suite_run, step)
+                if trusted is None:
+                    trusted_success = False
+                    continue
+                reference, evidence = trusted
+                evidence_references.append(reference)
+                runner_references.append(str(evidence.runner_id))
+                if step.reused_from_step_run_id is None:
+                    trusted_output_bytes += len(evidence.stdout.encode("utf-8")) + len(
+                        evidence.stderr.encode("utf-8")
+                    )
+                    redaction_count += evidence.redaction_count
+                output_truncated = (
+                    output_truncated or evidence.stdout_truncated or evidence.stderr_truncated
                 )
+                cleanup_succeeded = cleanup_succeeded and evidence.sandbox_cleaned
+            else:
+                cleanup_succeeded = cleanup_succeeded and step.cleanup_succeeded is not False
+        if verdict == "succeeded":
+            suite_run.combined_output_bytes = trusted_output_bytes
         invariant = self._baseline_is_current(suite_run)
         if verdict == "succeeded" and (
-            not invariant
+            not trusted_success
+            or len(evidence_references) != len(steps)
+            or not invariant
             or not cleanup_succeeded
             or suite_run.combined_output_bytes > suite_run.total_output_bytes
             or any(step.state != "succeeded" for step in steps)
@@ -814,9 +876,12 @@ class ValidationSuiteService:
             "checkpoint_id": str(suite_run.checkpoint_id),
             "checkpoint_fingerprint": suite_run.checkpoint_fingerprint,
             "attempt_number": suite_run.attempt_number,
+            "root_suite_run_id": str(suite_run.root_suite_run_id),
+            "execution_grant_id": str(suite_run.execution_grant_id),
             "verdict": verdict,
             "profiles": profile_references,
             "evidence": evidence_references,
+            "runners": runner_references,
             "combined_output_bytes": suite_run.combined_output_bytes,
             "redaction_count": redaction_count,
             "output_truncated": output_truncated,
@@ -825,13 +890,31 @@ class ValidationSuiteService:
             "canonical_workspace_invariant": invariant,
             "artifact_count": 0,
             "artifact_bytes": 0,
+            "budgets": {
+                "total_timeout_seconds": suite_run.total_timeout_seconds,
+                "total_output_bytes": suite_run.total_output_bytes,
+                "max_attempts": suite_run.max_attempts,
+            },
         }
         self._validation.add(
             ValidationSuiteResult(
                 suite_run_id=suite_run.id,
+                root_suite_run_id=suite_run.root_suite_run_id,
+                run_id=suite_run.run_id,
+                execution_grant_id=suite_run.execution_grant_id,
+                suite_id=suite_run.suite_id,
+                suite_version=suite_run.suite_version,
+                source_revision=suite_run.source_revision,
+                checkpoint_id=suite_run.checkpoint_id,
+                policy_digest=suite_run.policy_digest,
+                attempt_number=suite_run.attempt_number,
+                total_timeout_seconds=suite_run.total_timeout_seconds,
+                total_output_bytes=suite_run.total_output_bytes,
+                max_attempts=suite_run.max_attempts,
                 verdict=verdict,
                 profile_references=profile_references,
                 evidence_references=evidence_references,
+                runner_references=runner_references,
                 audit_event_references=[str(audit.id)],
                 started_at=started_at,
                 completed_at=now,
@@ -854,10 +937,328 @@ class ValidationSuiteService:
             )
         )
 
+    def _trusted_success_step(
+        self,
+        suite_run: ValidationSuiteRun,
+        step: ValidationSuiteStepRun,
+    ) -> tuple[dict[str, object], ValidationEvidence] | None:
+        suite = validation_suite(suite_run.suite_id)
+        if suite is None or suite.version != suite_run.suite_version:
+            return None
+        definitions = {item.sequence: item for item in suite.steps}
+        definition = definitions.get(step.sequence)
+        if (
+            definition is None
+            or len(definitions) != suite_run.step_count
+            or step.step_id != definition.step_id
+            or step.profile_id != definition.profile_id
+            or step.profile_version != definition.profile_version
+            or step.timeout_seconds != definition.timeout_seconds
+            or step.max_output_bytes != definition.max_output_bytes
+            or step.state != "succeeded"
+            or step.validation_run_id is None
+            or step.runner_job_id is None
+            or step.runner_id is None
+            or step.attempt_id is None
+            or step.lease_id is None
+            or step.evidence_id is None
+            or step.cleanup_succeeded is not True
+            or step.exit_code != 0
+        ):
+            return None
+
+        proof_suite = suite_run
+        proof_step = step
+        if step.reused_from_step_run_id is not None:
+            source_step = self._validation.suite_step(
+                step.reused_from_step_run_id,
+                lock=True,
+            )
+            if source_step is None:
+                return None
+            source_suite = self._validation.get_suite_run(
+                source_step.suite_run_id,
+                lock=True,
+            )
+            if (
+                source_suite is None
+                or source_suite.root_suite_run_id != suite_run.root_suite_run_id
+                or source_suite.attempt_number >= suite_run.attempt_number
+                or source_step.reused_from_step_run_id is not None
+                or source_step.sequence != step.sequence
+                or source_step.step_id != step.step_id
+                or source_step.profile_id != step.profile_id
+                or source_step.profile_version != step.profile_version
+                or source_step.state != "succeeded"
+                or source_step.validation_run_id != step.validation_run_id
+                or source_step.runner_job_id != step.runner_job_id
+                or source_step.runner_id != step.runner_id
+                or source_step.attempt_id != step.attempt_id
+                or source_step.lease_id != step.lease_id
+                or source_step.evidence_id != step.evidence_id
+                or step.output_bytes != 0
+                or step.redaction_count != 0
+            ):
+                return None
+            proof_suite = source_suite
+            proof_step = source_step
+
+        validation_run = self._validation.get_run(step.validation_run_id, lock=True)
+        evidence = self._validation.evidence_by_id(step.evidence_id, lock=True)
+        job = self._validation.job(step.runner_job_id)
+        attempt = self._validation.attempt(step.attempt_id)
+        if (
+            validation_run is None
+            or evidence is None
+            or job is None
+            or attempt is None
+            or evidence.side_effect_permit_id is None
+        ):
+            return None
+        permit = self._validation.permit(evidence.side_effect_permit_id)
+        grant_context = self._validation.validation_grant(
+            validation_run.execution_grant_id,
+            lock=True,
+        )
+        profile = validation_profile(step.profile_id)
+        if permit is None or grant_context is None or profile is None:
+            return None
+        grant, checkpoint, workspace, handle = grant_context
+
+        expected_root_binding = (
+            None if proof_suite.attempt_number == 1 else proof_suite.root_suite_run_id
+        )
+        expected_retry_binding = (
+            None if proof_suite.attempt_number == 1 else proof_suite.retry_of_suite_run_id
+        )
+        if (
+            proof_suite.run_id != suite_run.run_id
+            or proof_suite.plan_id != suite_run.plan_id
+            or proof_suite.source_revision != suite_run.source_revision
+            or proof_suite.workspace_id != suite_run.workspace_id
+            or proof_suite.checkpoint_id != suite_run.checkpoint_id
+            or proof_suite.checkpoint_fingerprint != suite_run.checkpoint_fingerprint
+            or proof_suite.suite_id != suite_run.suite_id
+            or proof_suite.suite_version != suite_run.suite_version
+            or grant.id != proof_suite.execution_grant_id
+            or grant.allowed_validation_suites != [suite.reference]
+            or grant.allowed_validation_profiles != [item.profile_reference for item in suite.steps]
+            or grant.validation_suite_definition_digest != suite.policy_digest
+            or grant.validation_suite_root_run_id != expected_root_binding
+            or grant.validation_suite_retry_of_run_id != expected_retry_binding
+            or grant.validation_suite_attempt_number != proof_suite.attempt_number
+            or grant.validation_suite_allowed_run_count != 1
+            or grant.max_validation_runs != len(suite.steps)
+            or checkpoint.id != suite_run.checkpoint_id
+            or checkpoint.tree_fingerprint != suite_run.checkpoint_fingerprint
+            or checkpoint.source_revision != suite_run.source_revision
+            or workspace.id != suite_run.workspace_id
+            or workspace.current_tree_hash != suite_run.checkpoint_fingerprint
+            or workspace.source_revision != suite_run.source_revision
+        ):
+            return None
+        try:
+            grant_policy = ValidationService(self._session)._policy(grant, handle)
+        except ValidationServiceError:
+            return None
+        if not execution_grant_policy_hash_matches(
+            grant_policy, grant.policy_hash
+        ) or proof_suite.policy_digest != self._suite_policy_digest(
+            proof_suite, suite.policy_digest, grant.policy_hash
+        ):
+            return None
+
+        if (
+            validation_run.id != proof_step.validation_run_id
+            or validation_run.run_id != proof_suite.run_id
+            or validation_run.plan_id != proof_suite.plan_id
+            or validation_run.source_revision != proof_suite.source_revision
+            or validation_run.workspace_id != proof_suite.workspace_id
+            or validation_run.checkpoint_id != proof_suite.checkpoint_id
+            or validation_run.checkpoint_fingerprint != proof_suite.checkpoint_fingerprint
+            or validation_run.execution_grant_id != grant.id
+            or validation_run.runner_job_id != job.id
+            or validation_run.runner_id != evidence.runner_id
+            or validation_run.attempt_id != evidence.attempt_id
+            or validation_run.lease_id != evidence.lease_id
+            or validation_run.profile_id != definition.profile_id
+            or validation_run.profile_version != definition.profile_version
+            or validation_run.timeout_seconds != definition.timeout_seconds
+            or validation_run.max_output_bytes != definition.max_output_bytes
+            or validation_run.max_artifact_bytes != 0
+            or validation_run.max_artifact_count != 0
+            or validation_run.state != "succeeded"
+            or validation_run.completed_at is None
+        ):
+            return None
+
+        try:
+            stored_spec = ValidationExecuteJobSpec.model_validate(
+                {"kind": job.kind, **job.parameters}
+            )
+            result = ValidationExecutionResult.model_validate(job.result)
+        except (TypeError, ValidationError):
+            return None
+        expected_validation_policy = compute_validation_policy_digest(
+            {
+                "grant_policy_hash": grant.policy_hash,
+                "workspace_id": str(validation_run.workspace_id),
+                "checkpoint_id": str(validation_run.checkpoint_id),
+                "checkpoint_fingerprint": validation_run.checkpoint_fingerprint,
+                "profile": profile.reference,
+                "timeout_seconds": profile.timeout_seconds,
+                "max_output_bytes": profile.max_output_bytes,
+                "max_artifact_bytes": profile.max_artifact_bytes,
+                "max_artifact_count": profile.max_artifact_count,
+            }
+        )
+        if (
+            job.kind != "validation_execute_v1"
+            or job.state != "succeeded"
+            or job.execution_grant_id != grant.id
+            or job.workspace_id != validation_run.workspace_id
+            or job.repository_handle_id != grant.repository_handle_id
+            or job.source_revision != validation_run.source_revision
+            or job.execution_policy_hash != grant.policy_hash
+            or stored_spec.validation_run_id != validation_run.id
+            or stored_spec.validation_step_id != definition.step_id
+            or stored_spec.profile_id != definition.profile_id
+            or stored_spec.profile_version != definition.profile_version
+            or stored_spec.checkpoint_id != validation_run.checkpoint_id
+            or stored_spec.checkpoint_fingerprint != validation_run.checkpoint_fingerprint
+            or stored_spec.validation_policy_digest != expected_validation_policy
+            or validation_run.policy_digest != expected_validation_policy
+            or attempt.id != evidence.attempt_id
+            or attempt.job_id != job.id
+            or attempt.runner_id != evidence.runner_id
+            or attempt.lease_id != evidence.lease_id
+            or attempt.state != "succeeded"
+            or attempt.completed_at is None
+        ):
+            return None
+
+        artifact_payload = [item.model_dump(mode="json") for item in (result.artifacts or [])]
+        evidence_matches_result = (
+            evidence.validation_run_id == result.validation_run_id
+            and evidence.runner_id == attempt.runner_id
+            and evidence.attempt_id == attempt.id
+            and evidence.lease_id == attempt.lease_id
+            and evidence.result_schema_version == result.result_schema_version == 1
+            and evidence.validation_step_id == result.validation_step_id == definition.step_id
+            and evidence.source_revision == result.source_revision == validation_run.source_revision
+            and evidence.policy_digest == result.policy_digest == validation_run.policy_digest
+            and evidence.fixed_argv == result.fixed_argv == list(profile.safe_argv)
+            and evidence.fixed_argv_digest == result.fixed_argv_digest
+            and evidence.fixed_cwd == result.fixed_cwd
+            and evidence.fixed_environment_digest == result.fixed_environment_digest
+            and evidence.started_at == result.started_at
+            and evidence.completed_at == result.completed_at
+            and evidence.duration_ms == round(result.duration_ms)
+            and evidence.exit_code == result.exit_code == 0
+            and evidence.stdout == result.stdout
+            and evidence.stderr == result.stderr
+            and evidence.stdout_truncated == result.stdout_truncated
+            and evidence.stderr_truncated == result.stderr_truncated
+            and evidence.redaction_count == result.redaction_count
+            and evidence.timed_out == result.timed_out is False
+            and evidence.cancelled == result.cancelled is False
+            and evidence.network_isolated == result.network_isolated is True
+            and evidence.filesystem_isolated == result.filesystem_isolated is True
+            and evidence.sandbox_cleaned == result.sandbox_cleaned is True
+            and evidence.artifact_count == result.artifact_count == 0
+            and evidence.artifact_bytes == result.artifact_bytes == 0
+            and evidence.artifact_summary == {"files": artifact_payload}
+            and evidence.artifact_manifest_digest == result.artifact_manifest_digest
+            and evidence.side_effect_permit_id == result.side_effect_permit_id
+            and evidence.side_effect_permit_sequence == result.side_effect_permit_sequence
+            and evidence.side_effect_permit_digest == result.side_effect_permit_digest
+            and evidence.fencing_token == result.fencing_token
+            and evidence.execution_envelope_digest == result.execution_envelope_digest
+            and evidence.evidence_digest == result.evidence_digest
+            and result.evidence_digest is not None
+            and hmac.compare_digest(
+                result.evidence_digest,
+                compute_validation_evidence_digest(result),
+            )
+        )
+        output_bytes = len(evidence.stdout.encode("utf-8")) + len(evidence.stderr.encode("utf-8"))
+        if (
+            not evidence_matches_result
+            or output_bytes > definition.max_output_bytes
+            or (
+                proof_step.output_bytes != output_bytes
+                or proof_step.redaction_count != evidence.redaction_count
+                or proof_step.output_truncated
+                != (evidence.stdout_truncated or evidence.stderr_truncated)
+                or proof_step.cleanup_succeeded is not True
+                or proof_step.exit_code != 0
+            )
+            or permit.id != evidence.side_effect_permit_id
+            or permit.state != "completed"
+            or permit.terminal_at is None
+            or permit.operation != WorkspaceOperation.VALIDATE.value
+            or permit.runner_id != attempt.runner_id
+            or permit.job_id != job.id
+            or permit.attempt_id != attempt.id
+            or permit.lease_id != attempt.lease_id
+            or permit.grant_id != grant.id
+            or permit.workspace_id != validation_run.workspace_id
+            or permit.repository_handle_id != grant.repository_handle_id
+            or permit.policy_hash != grant.policy_hash
+            or permit.source_revision != validation_run.source_revision
+            or permit.sequence != evidence.side_effect_permit_sequence
+            or permit.operation_digest != evidence.side_effect_permit_digest
+        ):
+            return None
+
+        return (
+            {
+                "sequence": step.sequence,
+                "step_id": step.step_id,
+                "profile": f"{step.profile_id}:v{step.profile_version}",
+                "validation_run_id": str(validation_run.id),
+                "runner_job_id": str(job.id),
+                "runner_id": str(evidence.runner_id),
+                "attempt_id": str(evidence.attempt_id),
+                "lease_id": str(evidence.lease_id),
+                "grant_id": str(grant.id),
+                "evidence_id": str(evidence.id),
+                "evidence_digest": evidence.evidence_digest or "",
+                "reused": step.reused_from_step_run_id is not None,
+            },
+            evidence,
+        )
+
+    @staticmethod
+    def _suite_policy_digest(
+        suite_run: ValidationSuiteRun,
+        definition_digest: str,
+        grant_policy_hash: str,
+    ) -> str:
+        payload: dict[str, object] = {
+            "suite_definition_digest": definition_digest,
+            "grant_policy_hash": grant_policy_hash,
+            "workspace_id": str(suite_run.workspace_id),
+            "checkpoint_id": str(suite_run.checkpoint_id),
+            "checkpoint_fingerprint": suite_run.checkpoint_fingerprint,
+            "source_revision": suite_run.source_revision,
+            "total_timeout_seconds": suite_run.total_timeout_seconds,
+            "total_output_bytes": suite_run.total_output_bytes,
+            "max_attempts": suite_run.max_attempts,
+        }
+        if suite_run.attempt_number > 1:
+            payload["attempt_number"] = suite_run.attempt_number
+            payload["retry_of_suite_run_id"] = str(suite_run.root_suite_run_id)
+        return compute_validation_policy_digest(payload)
+
     def _required_suite_grant(
         self,
         grant_id: uuid.UUID,
         suite_reference: str,
+        *,
+        expected_attempt_number: int,
+        expected_root_suite_run_id: uuid.UUID | None,
+        expected_retry_of_suite_run_id: uuid.UUID | None,
     ) -> tuple[
         ExecutionGrant,
         WorkspaceCheckpoint,
@@ -877,10 +1278,16 @@ class ValidationSuiteService:
             or suite.reference != suite_reference
             or grant.allowed_validation_suites != [suite_reference]
             or grant.allowed_validation_profiles != [step.profile_reference for step in suite.steps]
+            or grant.validation_suite_definition_digest != suite.policy_digest
+            or grant.validation_suite_attempt_number != expected_attempt_number
+            or grant.validation_suite_root_run_id != expected_root_suite_run_id
+            or grant.validation_suite_retry_of_run_id != expected_retry_of_suite_run_id
+            or grant.validation_suite_allowed_run_count != 1
+            or grant.max_validation_runs != len(suite.steps)
         ):
             raise ValidationSuiteServiceError(
                 "validation_suite_grant_denied",
-                "Execution Grant does not bind the exact immutable Suite definition",
+                "Execution Grant does not bind the exact immutable Suite lineage",
                 category="policy",
             )
         now = utc_now()
@@ -993,6 +1400,7 @@ class ValidationSuiteService:
             max_attempts=suite_run.max_attempts,
             attempt_number=suite_run.attempt_number,
             retry_of_suite_run_id=suite_run.retry_of_suite_run_id,
+            root_suite_run_id=suite_run.root_suite_run_id,
             requested_at=suite_run.requested_at,
             started_at=suite_run.started_at,
             deadline_at=suite_run.deadline_at,

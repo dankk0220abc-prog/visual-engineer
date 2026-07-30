@@ -269,6 +269,19 @@ class ValidationSuiteResultResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    suite_run_id: uuid.UUID
+    root_suite_run_id: uuid.UUID
+    run_id: uuid.UUID
+    execution_grant_id: uuid.UUID
+    suite_id: Literal["fixture-integrity-suite-v1"]
+    suite_version: Literal[1]
+    source_revision: str
+    checkpoint_id: uuid.UUID
+    policy_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    attempt_number: int
+    total_timeout_seconds: int
+    total_output_bytes: int
+    max_attempts: int
     verdict: Literal[
         "succeeded",
         "failed",
@@ -278,6 +291,7 @@ class ValidationSuiteResultResponse(BaseModel):
     ]
     profile_references: list[str]
     evidence_references: list[dict[str, object]]
+    runner_references: list[str]
     audit_event_references: list[str]
     started_at: datetime
     completed_at: datetime
@@ -319,6 +333,7 @@ class ValidationSuiteRunResponse(BaseModel):
     max_attempts: int
     attempt_number: int
     retry_of_suite_run_id: uuid.UUID | None
+    root_suite_run_id: uuid.UUID
     requested_at: datetime
     started_at: datetime | None
     deadline_at: datetime | None

@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -128,6 +129,31 @@ class ExecutionGrant(Base):
             name="ck_grants_policy_hash",
         ),
         CheckConstraint(
+            "("
+            "jsonb_array_length(allowed_validation_suites) = 0 "
+            "AND validation_suite_definition_digest IS NULL "
+            "AND validation_suite_root_run_id IS NULL "
+            "AND validation_suite_retry_of_run_id IS NULL "
+            "AND validation_suite_attempt_number = 0 "
+            "AND validation_suite_allowed_run_count = 0"
+            ") OR ("
+            "jsonb_array_length(allowed_validation_suites) = 1 "
+            "AND validation_suite_definition_digest ~ '^[0-9a-f]{64}$' "
+            "AND validation_suite_attempt_number BETWEEN 1 AND 5 "
+            "AND validation_suite_allowed_run_count = 1 "
+            "AND max_validation_runs = 2 "
+            "AND ("
+            "(validation_suite_attempt_number = 1 "
+            "AND validation_suite_root_run_id IS NULL "
+            "AND validation_suite_retry_of_run_id IS NULL) OR "
+            "(validation_suite_attempt_number > 1 "
+            "AND validation_suite_root_run_id IS NOT NULL "
+            "AND validation_suite_retry_of_run_id IS NOT NULL)"
+            ")"
+            ")",
+            name="ck_grants_validation_suite_lineage",
+        ),
+        CheckConstraint(
             "snapshot_fingerprint ~ '^[0-9a-f]{64}$'",
             name="ck_grants_snapshot_fingerprint",
         ),
@@ -148,6 +174,24 @@ class ExecutionGrant(Base):
         ),
         Index("ix_execution_grants_status_expires", "status", "expires_at"),
         Index("ix_execution_grants_plan_created", "plan_id", "created_at"),
+        Index(
+            "uq_active_root_suite_grant",
+            "plan_id",
+            "validation_checkpoint_id",
+            "validation_suite_definition_digest",
+            unique=True,
+            postgresql_where=text(
+                "validation_suite_attempt_number = 1 AND status IN ('pending', 'approved')"
+            ),
+        ),
+        Index(
+            "uq_active_retry_suite_grant",
+            "validation_suite_retry_of_run_id",
+            unique=True,
+            postgresql_where=text(
+                "validation_suite_attempt_number > 1 AND status IN ('pending', 'approved')"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -191,6 +235,29 @@ class ExecutionGrant(Base):
     )
     allowed_validation_suites: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list
+    )
+    validation_suite_definition_digest: Mapped[str | None] = mapped_column(String(64))
+    validation_suite_root_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "validation_suite_runs.id",
+            name="fk_grants_validation_suite_root_run",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+    )
+    validation_suite_retry_of_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "validation_suite_runs.id",
+            name="fk_grants_validation_suite_retry_of_run",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+    )
+    validation_suite_attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_suite_allowed_run_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
     )
     max_validation_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     validation_timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -432,6 +432,16 @@ class ValidationService:
                     "validation_workspace_id": grant.validation_workspace_id,
                     "validation_checkpoint_id": grant.validation_checkpoint_id,
                     "allowed_validation_profiles": grant.allowed_validation_profiles,
+                    "allowed_validation_suites": grant.allowed_validation_suites,
+                    "validation_suite_definition_digest": (
+                        grant.validation_suite_definition_digest
+                    ),
+                    "validation_suite_root_run_id": grant.validation_suite_root_run_id,
+                    "validation_suite_retry_of_run_id": (grant.validation_suite_retry_of_run_id),
+                    "validation_suite_attempt_number": (grant.validation_suite_attempt_number),
+                    "validation_suite_allowed_run_count": (
+                        grant.validation_suite_allowed_run_count
+                    ),
                     "max_validation_runs": grant.max_validation_runs,
                     "validation_timeout_seconds": grant.validation_timeout_seconds,
                     "validation_cpu_seconds": grant.validation_cpu_seconds,

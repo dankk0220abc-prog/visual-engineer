@@ -1402,6 +1402,8 @@ export interface components {
       validation_profile_id?: "fixture-python-stdlib-v1" | null;
       /** Validation Suite Id */
       validation_suite_id?: "fixture-integrity-suite-v1" | null;
+      /** Validation Suite Retry Of Run Id */
+      validation_suite_retry_of_run_id?: string | null;
       /** Validation Suite Version */
       validation_suite_version?: 1 | null;
     };
@@ -1462,6 +1464,8 @@ export interface components {
       allowed_paths: string[];
       /** Allowed Validation Profiles */
       allowed_validation_profiles?: string[];
+      /** Allowed Validation Suites */
+      allowed_validation_suites?: string[];
       /** Denied Paths */
       denied_paths: string[];
       /**
@@ -1576,6 +1580,22 @@ export interface components {
        * @default 0
        */
       validation_pid_limit: number;
+      /**
+       * Validation Suite Allowed Run Count
+       * @default 0
+       */
+      validation_suite_allowed_run_count: number;
+      /**
+       * Validation Suite Attempt Number
+       * @default 0
+       */
+      validation_suite_attempt_number: number;
+      /** Validation Suite Definition Digest */
+      validation_suite_definition_digest?: string | null;
+      /** Validation Suite Retry Of Run Id */
+      validation_suite_retry_of_run_id?: string | null;
+      /** Validation Suite Root Run Id */
+      validation_suite_root_run_id?: string | null;
       /**
        * Validation Timeout Seconds
        * @default 0
@@ -1706,6 +1726,16 @@ export interface components {
       validation_output_bytes: number;
       /** Validation Pid Limit */
       validation_pid_limit: number;
+      /** Validation Suite Allowed Run Count */
+      validation_suite_allowed_run_count: number;
+      /** Validation Suite Attempt Number */
+      validation_suite_attempt_number: number;
+      /** Validation Suite Definition Digest */
+      validation_suite_definition_digest: string | null;
+      /** Validation Suite Retry Of Run Id */
+      validation_suite_retry_of_run_id: string | null;
+      /** Validation Suite Root Run Id */
+      validation_suite_root_run_id: string | null;
       /** Validation Timeout Seconds */
       validation_timeout_seconds: number;
       /** Validation Workspace Id */
@@ -3628,12 +3658,19 @@ export interface components {
        * @constant
        */
       artifact_count: 0;
+      /** Attempt Number */
+      attempt_number: number;
       /** Audit Event References */
       audit_event_references: string[];
       /** Cancelled */
       cancelled: boolean;
       /** Canonical Workspace Invariant */
       canonical_workspace_invariant: boolean;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
       /** Cleanup Succeeded */
       cleanup_succeeded: boolean;
       /** Combined Output Bytes */
@@ -3655,27 +3692,69 @@ export interface components {
         [key: string]: unknown;
       }[];
       /**
+       * Execution Grant Id
+       * Format: uuid
+       */
+      execution_grant_id: string;
+      /**
        * Id
        * Format: uuid
        */
       id: string;
+      /** Max Attempts */
+      max_attempts: number;
       /** Output Truncated */
       output_truncated: boolean;
+      /** Policy Digest */
+      policy_digest: string;
       /** Profile References */
       profile_references: string[];
       /** Recovery Required */
       recovery_required: boolean;
       /** Redaction Count */
       redaction_count: number;
+      /**
+       * Root Suite Run Id
+       * Format: uuid
+       */
+      root_suite_run_id: string;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+      /** Runner References */
+      runner_references: string[];
       /** Source Invariant */
       source_invariant: boolean;
+      /** Source Revision */
+      source_revision: string;
       /**
        * Started At
        * Format: date-time
        */
       started_at: string;
+      /**
+       * Suite Id
+       * @constant
+       */
+      suite_id: "fixture-integrity-suite-v1";
+      /**
+       * Suite Run Id
+       * Format: uuid
+       */
+      suite_run_id: string;
+      /**
+       * Suite Version
+       * @constant
+       */
+      suite_version: 1;
       /** Timed Out */
       timed_out: boolean;
+      /** Total Output Bytes */
+      total_output_bytes: number;
+      /** Total Timeout Seconds */
+      total_timeout_seconds: number;
       /**
        * Verdict
        * @enum {string}
@@ -3782,6 +3861,11 @@ export interface components {
       result: components["schemas"]["ValidationSuiteResultResponse"] | null;
       /** Retry Of Suite Run Id */
       retry_of_suite_run_id: string | null;
+      /**
+       * Root Suite Run Id
+       * Format: uuid
+       */
+      root_suite_run_id: string;
       /**
        * Run Id
        * Format: uuid

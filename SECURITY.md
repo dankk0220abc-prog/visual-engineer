@@ -15,8 +15,9 @@ was explicitly integrated into local `main` at
 Phase 5 slice is integrated in local `main` at
 `f547091307c52df8f20fc69bac4b4826cbbc74ad`. The second slice is limited to a
 system-owned Suite of fixed-Profile validations of the trusted synthetic
-fixture. Its implementation evidence does not declare Security Gate PASS and
-requires an independent focused review.
+fixture. Its targeted Grant-lineage and trusted-aggregation remediation is
+locally verified and ready for independent focused re-audit. Its implementation
+evidence does not declare Security Gate PASS.
 
 The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
@@ -65,7 +66,13 @@ Validation Run at a time, revalidates every child result, enforces the combined
 timeout/output/attempt budgets, and writes one immutable aggregate result.
 Cancel and total timeout cancel any active child before terminalizing and
 never dispatch a pending child. Retry requires a fresh approved Suite Grant;
-successful child Evidence is referenced without redispatch or output recharge.
+that Grant policy binds the immutable definition digest, exact root/source/
+attempt lineage, and one allowed Suite Run. Grant-to-Suite and root/attempt
+uniqueness reject replay and concurrent double consumption. Successful child
+Evidence is referenced without redispatch or output recharge. Aggregate
+success is reconstructed from locked Run/Job/Attempt/Lease/Grant/Permit/
+Evidence records with recomputed digests and is independently constrained by
+PostgreSQL transition/result triggers; mutable step summaries are not proof.
 
 File access is descriptor-rooted and no-follow; status/diff/rollback/discard
 use fixed operations. Workspace registry, ownership, and pending/completed

@@ -25,11 +25,22 @@ artifacts, and at most two Suite attempts. A retry requires a fresh Grant,
 reuses successful immutable Evidence without redispatch or recharge, and
 creates fresh child execution identities for remaining steps.
 
+Each Suite Grant is itself lineage authority, not a reusable pool of child-run
+budget. Its canonical policy binds the immutable Suite-definition digest,
+root/source Suite Run IDs, exact attempt number, and one allowed Suite Run.
+One Grant can therefore create at most one Suite Run. A retry Grant names the
+immediate terminal non-success source, while the server derives the common
+root and next attempt.
+
 ## Consequences
 
 - Every executed step retains the first-slice execution and cleanup fences.
 - Aggregate state, budgets, idempotency, cancellation, retry lineage, and
   Evidence references require additive PostgreSQL entities and triggers.
+- Successful aggregation is reconstructed from the exact catalog definition
+  and locked Validation Run, Job, Attempt, Lease, Grant, Permit, result, and
+  recomputed Evidence digest. Persisted Suite-step summaries are not trusted
+  as proof.
 - Suite cancellation/timeout must cancel an active child before terminalizing
   and must never dispatch a later pending step.
 - Runner Protocol gains one closed Profile/step literal but no generic Suite,

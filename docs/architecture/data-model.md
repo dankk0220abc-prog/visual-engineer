@@ -208,19 +208,26 @@ second step or evidence row.
 ValidationSuiteRun binds a source-owned Suite ID/version and policy digest to
 the exact Run, Plan, approved revision, sealed Workspace Checkpoint,
 Suite-scoped Execution Grant, idempotency key, total timeout/output budgets,
-and attempt/retry lineage. ValidationSuiteStepRun materializes only the
-catalogued order and fixed Profile references. Each dispatched step points to
-an independent ValidationRun and therefore to its own Runner Job, Attempt,
-Lease, Permit, result, and immutable Evidence. A reused successful step points
-to its original immutable Evidence and consumes zero retry output.
+and explicit root/source/attempt retry lineage. The Grant policy separately
+stores the immutable Suite-definition digest, root/source bindings, attempt
+number, and allowed Suite Run count of exactly one. A unique Grant-to-Suite
+binding and unique root/attempt pair make Grant consumption and linear retry
+authority durable. ValidationSuiteStepRun materializes only the catalogued
+order and fixed Profile references. Each dispatched step points to an
+independent ValidationRun and therefore to its own Runner Job, Attempt, Lease,
+Permit, result, and immutable Evidence. A reused successful step points to its
+original immutable Evidence and consumes zero retry output.
 
 ValidationSuiteResult is the single immutable aggregate verdict. It records
-ordered Evidence references, timing, output/redaction/truncation consumption,
-zero-artifact summary, cleanup and source/canonical-Workspace invariance, and
-Audit/Runner event references. Database checks and triggers close state values,
-enforce unique order/idempotency/attempts, protect immutable authority and
-terminal rows, and prevent a successful aggregate whose steps or budget are
-inconsistent.
+the exact Suite/root/Run/Grant/definition/revision/Checkpoint/policy/attempt
+and budget bindings, ordered Evidence/Profile/Runner references, timing,
+output/redaction/truncation consumption, zero-artifact summary, cleanup and
+source/canonical-Workspace invariance, and Audit references. The Control Plane
+reconstructs successful references from locked child execution records and
+recomputed Evidence digests. Database checks and triggers close state values,
+enforce unique order/idempotency/lineage attempts, reject null/foreign/
+duplicate/reordered proof, protect immutable authority and terminal rows, and
+prevent a successful aggregate whose steps or budget are inconsistent.
 
 ## Relationships
 
@@ -290,7 +297,9 @@ Phase 4 ended with Alembic revision
 binding revision
 `20260729_0007_bind_validation_result_evidence`; prior migrations are not
 rewritten. The second slice adds
-`20260730_0008_add_governed_validation_suites`. The complete base-to-head,
+`20260730_0008_add_governed_validation_suites`, followed by additive lineage
+and trusted-aggregation enforcement in
+`20260730_0009_enforce_suite_lineage_and_evidence`. The complete base-to-head,
 downgrade-to-base, and upgrade-to-head roundtrip must pass on real PostgreSQL
 before the implementation checkpoint.
 

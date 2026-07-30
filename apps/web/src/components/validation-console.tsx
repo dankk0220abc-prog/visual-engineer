@@ -267,6 +267,31 @@ export function ValidationConsole() {
     }
   }
 
+  async function requestRetryGrant(run: ValidationSuiteRun) {
+    const candidate = candidates.find(
+      (item) => item.checkpoint.id === run.checkpoint_id,
+    );
+    if (!candidate || !suite) return;
+    setBusy(`retry-grant-${run.id}`);
+    setError("");
+    try {
+      await createExecutionGrant({
+        plan_id: candidate.implementationGrant.plan_id,
+        repository_handle_id:
+          candidate.implementationGrant.repository_handle_id,
+        validation_checkpoint_id: run.checkpoint_id,
+        validation_suite_id: suite.suite_id,
+        validation_suite_version: suite.suite_version,
+        validation_suite_retry_of_run_id: run.id,
+      });
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function decideGrant(
     grant: ExecutionGrant,
     decision: "approve" | "reject",
@@ -587,16 +612,23 @@ export function ValidationConsole() {
                     ) : null}
                     {grant.status === "approved" ? (
                       grant.allowed_validation_suites.length ? (
-                        <button
-                          type="button"
-                          className="mt-5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:opacity-50"
-                          disabled={Boolean(busy)}
-                          onClick={() => void startSuite(grant)}
-                        >
-                          {busy === `suite-${grant.id}`
-                            ? "排队中…"
-                            : "Run fixed Suite"}
-                        </button>
+                        grant.validation_suite_attempt_number === 1 ? (
+                          <button
+                            type="button"
+                            className="mt-5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:opacity-50"
+                            disabled={Boolean(busy)}
+                            onClick={() => void startSuite(grant)}
+                          >
+                            {busy === `suite-${grant.id}`
+                              ? "排队中…"
+                              : "Run fixed Suite"}
+                          </button>
+                        ) : (
+                          <p className="mt-5 text-xs text-slate-600">
+                            此 Grant 仅绑定 Suite retry source{" "}
+                            {grant.validation_suite_retry_of_run_id}。
+                          </p>
+                        )
                       ) : (
                         <button
                           type="button"
@@ -632,6 +664,9 @@ export function ValidationConsole() {
                       grant.id !== run.execution_grant_id &&
                       grant.status === "approved" &&
                       grant.validation_checkpoint_id === run.checkpoint_id &&
+                      grant.validation_suite_retry_of_run_id === run.id &&
+                      grant.validation_suite_attempt_number ===
+                        run.attempt_number + 1 &&
                       grant.allowed_validation_suites.includes(
                         `${run.suite_id}:v${run.suite_version}`,
                       ),
@@ -805,10 +840,19 @@ export function ValidationConsole() {
                                 : "Retry failed steps"}
                             </button>
                             {!retryGrant ? (
-                              <span className="text-xs text-slate-600">
-                                Retry disabled: 需要同一 Checkpoint 的新批准
-                                Suite Grant。
-                              </span>
+                              <button
+                                type="button"
+                                className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 disabled:opacity-50"
+                                disabled={
+                                  Boolean(busy) ||
+                                  run.attempt_number >= run.max_attempts
+                                }
+                                onClick={() => void requestRetryGrant(run)}
+                              >
+                                {busy === `retry-grant-${run.id}`
+                                  ? "申请中…"
+                                  : "Request lineage-bound retry Grant"}
+                              </button>
                             ) : null}
                             {run.attempt_number >= run.max_attempts ? (
                               <span className="text-xs text-slate-600">

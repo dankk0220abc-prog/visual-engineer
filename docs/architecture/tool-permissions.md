@@ -90,8 +90,11 @@ fixed order with fail-fast, a 30-second total timeout, 10,000 retained output
 bytes, zero artifacts, and two Suite attempts. Only the Control Plane can
 materialize steps. It queues one child at a time, independently validates each
 result, cancels an active child before Suite cancellation/timeout, and requires
-a fresh Suite Grant for retry. Reused successful Evidence is not redispatched
-or charged again.
+a fresh lineage-bound Suite Grant for retry. A Suite Grant policy authorizes
+one exact root or retry attempt and is durably consumed by one Suite Run.
+Successful aggregation revalidates the exact child Grant/Job/Attempt/Lease/
+Permit/Evidence chain and its digests in catalog order. Reused successful
+Evidence is not redispatched or charged again.
 
 ## Implemented Level 0 controls
 

@@ -2,14 +2,16 @@
 
 - Phase: Phase 5 — Governed Multi-Step Validation Suites
 - Overall status:
-  `FOCUSED_SECURITY_REVIEW_FAIL_REMEDIATION_REQUIRED`
-- Governance qualifier: SECOND-SLICE CANDIDATE NOT APPROVED; FINAL AGGREGATE
-  NOT RUN
+  `PHASE_5_SUITES_TARGETED_REMEDIATION_COMPLETE_READY_FOR_INDEPENDENT_FOCUSED_RE_AUDIT`
+- Governance qualifier: HISTORICAL FOCUSED REVIEW REMAINS FAIL; REMEDIATION
+  CANDIDATE NOT INDEPENDENTLY APPROVED
 - Last updated: 2026-07-30
 - Current main / second-slice baseline:
   `f547091307c52df8f20fc69bac4b4826cbbc74ad`
 - Current implementation branch:
-  `feat/phase-5-governed-validation-suites`
+  `fix/phase-5-validation-suites-remediation-1`
+- Phase 5 second-slice remediation base:
+  `d325fa197e1fdad2c522fdf76f11b738682a86ca`
 - Phase 5 second-slice focused-review branch:
   `audit/phase-5-validation-suites-focused-max`
 - Phase 5 second-slice reviewed candidate:
@@ -74,6 +76,49 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 Validation Suites targeted remediation 1
+
+The narrow implementation candidate addresses only
+`VE-P5-SUITES-FR-001` and `VE-P5-SUITES-FR-002`. It does not revise or
+supersede the independent focused-review FAIL at
+`d325fa197e1fdad2c522fdf76f11b738682a86ca`.
+
+The additive `20260730_0009` migration and matching models bind every Suite
+Grant to the immutable Suite-definition digest, exact root/source/attempt
+lineage, and one allowed Suite Run. PostgreSQL enforces one Suite Run per
+Grant and one attempt per root; service locks and idempotency rechecks give
+typed exact replay and concurrent-consumption denial. A retry Grant must name
+the latest terminal non-success source and gets a server-derived root and next
+attempt.
+
+Successful Suite aggregation no longer trusts mutable step summaries. The
+Control Plane reconstructs catalog-ordered proof from the exact Validation
+Run, Job/spec/result, Attempt, Lease, original lineage Grant and policy,
+completed Permit, immutable Evidence, recomputed digests, cleanup, zero
+artifacts, budgets, and source/canonical Workspace invariance. PostgreSQL
+triggers independently reject illegal step/Suite transitions and missing,
+foreign, duplicate, reordered, null, or stale aggregate references.
+
+The original unchanged Findings first reproduced `3/3` each on real
+PostgreSQL, then pass `2/2` after remediation. Permanent two-session and
+direct-SQL regressions cover same/different idempotency keys, Grant
+consumption, revoked/expired/stale authority, cross-Suite Run/Job/Attempt/
+Lease/Evidence binding, definition injection, and malformed aggregate
+references with unchanged durable counts. Focused Protocol/Runner, migration
+downgrade/re-upgrade, generated contracts, strict Ruff/mypy, and Web
+typecheck/`47/47`/build pass.
+
+Full related verification and the final aggregate are complete. The first
+aggregate passed all gates before E2E, then exited `2` on an external
+`ghcr.io` token-fetch `EOF`. The single allowed full rerun reused the exact
+completed-source local images and exited `0`: Python `248/248` at `83.27%`,
+Web `47/47`, E2E `16/16`, Runner security `111/111`, migration, contracts,
+build, Eval 67, source/canonical invariance, Chaos, and exact Docker cleanup
+pass. The completion label is
+`PHASE 5 SUITES TARGETED REMEDIATION COMPLETE — READY FOR INDEPENDENT FOCUSED RE-AUDIT`.
+It is not a Security Gate PASS, sealing decision, main-integration
+authorization, Customer 0 authorization, or later-phase authorization.
 
 ## Phase 5 governed multi-step Validation Suites candidate
 

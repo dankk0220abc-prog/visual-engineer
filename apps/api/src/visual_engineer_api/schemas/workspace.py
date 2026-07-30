@@ -91,6 +91,7 @@ class ExecutionGrantCreate(BaseModel):
     validation_profile_id: Literal["fixture-python-stdlib-v1"] | None = None
     validation_suite_id: Literal["fixture-integrity-suite-v1"] | None = None
     validation_suite_version: Literal[1] | None = None
+    validation_suite_retry_of_run_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def validate_optional_validation_scope(self) -> "ExecutionGrantCreate":
@@ -102,6 +103,8 @@ class ExecutionGrantCreate(BaseModel):
             raise ValueError("Suite version requires a fixed Validation Suite")
         if suite_selected and self.validation_suite_version is None:
             raise ValueError("Validation Suite ID and version must be supplied together")
+        if self.validation_suite_retry_of_run_id is not None and not suite_selected:
+            raise ValueError("Suite retry lineage requires a fixed Validation Suite")
         validation_selected = profile_selected or suite_selected
         if (self.validation_checkpoint_id is not None) != validation_selected:
             raise ValueError(
@@ -164,6 +167,11 @@ class ExecutionGrantResponse(BaseModel):
     validation_checkpoint_id: uuid.UUID | None
     allowed_validation_profiles: list[str]
     allowed_validation_suites: list[str]
+    validation_suite_definition_digest: str | None
+    validation_suite_root_run_id: uuid.UUID | None
+    validation_suite_retry_of_run_id: uuid.UUID | None
+    validation_suite_attempt_number: int
+    validation_suite_allowed_run_count: int
     max_validation_runs: int
     validation_timeout_seconds: int
     validation_cpu_seconds: int

@@ -299,6 +299,12 @@ class WorkspaceService:
             "validation_workspace_id": None,
             "validation_checkpoint_id": None,
             "allowed_validation_profiles": [],
+            "allowed_validation_suites": [],
+            "validation_suite_definition_digest": None,
+            "validation_suite_root_run_id": None,
+            "validation_suite_retry_of_run_id": None,
+            "validation_suite_attempt_number": 0,
+            "validation_suite_allowed_run_count": 0,
             "max_validation_runs": 0,
             "validation_timeout_seconds": 0,
             "validation_cpu_seconds": 0,
@@ -339,6 +345,11 @@ class WorkspaceService:
             validation_checkpoint_id=policy.validation_checkpoint_id,
             allowed_validation_profiles=policy.allowed_validation_profiles,
             allowed_validation_suites=[],
+            validation_suite_definition_digest=None,
+            validation_suite_root_run_id=None,
+            validation_suite_retry_of_run_id=None,
+            validation_suite_attempt_number=0,
+            validation_suite_allowed_run_count=0,
             max_validation_runs=policy.max_validation_runs,
             validation_timeout_seconds=policy.validation_timeout_seconds,
             validation_cpu_seconds=policy.validation_cpu_seconds,
@@ -414,19 +425,8 @@ class WorkspaceService:
                     )
                 profiles.append(step_profile)
             allowed_suites = [suite.reference]
-            max_validation_runs = suite.max_attempts * len(suite.steps)
+            max_validation_runs = len(suite.steps)
         allowed_profiles = [item.reference for item in profiles]
-        existing = self._validation.latest_validation_grant_for_checkpoint(
-            payload.plan_id,
-            checkpoint_id,
-            allowed_profiles=allowed_profiles,
-            allowed_suites=allowed_suites,
-        )
-        if existing is not None:
-            if self._expire_grant(existing):
-                self._session.commit()
-            if existing.status in {"pending", "approved"}:
-                return self._grant_response(existing)
 
         checkpoint_context = self._validation.checkpoint_context(checkpoint_id, lock=True)
         if checkpoint_context is None:
@@ -468,6 +468,84 @@ class WorkspaceService:
                 "Workspace Checkpoint no longer matches the approved exact baseline",
             )
 
+        suite_root_run_id: uuid.UUID | None = None
+        suite_retry_of_run_id: uuid.UUID | None = None
+        suite_attempt_number = 0
+        suite_definition_digest: str | None = None
+        suite_allowed_run_count = 0
+        if suite is not None:
+            suite_definition_digest = suite.policy_digest
+            suite_allowed_run_count = 1
+            latest_suite = self._validation.latest_suite_for_baseline(
+                plan_id=plan.id,
+                checkpoint_id=checkpoint.id,
+                suite_id=suite.suite_id,
+                suite_version=suite.version,
+                lock=True,
+            )
+            retry_source_id = payload.validation_suite_retry_of_run_id
+            if retry_source_id is None:
+                if latest_suite is not None:
+                    self._conflict(
+                        "validation_suite_retry_lineage_required",
+                        "A new Suite Grant for this baseline must bind an explicit retry source",
+                    )
+                suite_attempt_number = 1
+            else:
+                retry_source = self._validation.get_suite_run(retry_source_id, lock=True)
+                if retry_source is None:
+                    self._not_found(
+                        "validation_suite_retry_source_not_found",
+                        "Validation Suite retry source was not found",
+                    )
+                if (
+                    latest_suite is None
+                    or latest_suite.id != retry_source.id
+                    or retry_source.plan_id != plan.id
+                    or retry_source.workspace_id != workspace.id
+                    or retry_source.checkpoint_id != checkpoint.id
+                    or retry_source.source_revision != checkpoint.source_revision
+                    or retry_source.suite_id != suite.suite_id
+                    or retry_source.suite_version != suite.version
+                ):
+                    self._conflict(
+                        "validation_suite_retry_binding_mismatch",
+                        "Retry source does not match the latest exact Suite lineage",
+                    )
+                if retry_source.state not in {
+                    "failed",
+                    "timed_out",
+                    "cancelled",
+                    "recovery_required",
+                }:
+                    self._conflict(
+                        "validation_suite_retry_not_allowed",
+                        "Only a terminal non-success Suite Run can authorize retry",
+                    )
+                suite_attempt_number = retry_source.attempt_number + 1
+                if suite_attempt_number > suite.max_attempts:
+                    self._conflict(
+                        "validation_suite_attempt_budget_exhausted",
+                        "Validation Suite retry attempt budget is exhausted",
+                    )
+                suite_root_run_id = retry_source.root_suite_run_id
+                suite_retry_of_run_id = retry_source.id
+
+        existing = self._validation.latest_validation_grant_for_checkpoint(
+            payload.plan_id,
+            checkpoint_id,
+            allowed_profiles=allowed_profiles,
+            allowed_suites=allowed_suites,
+            suite_root_run_id=suite_root_run_id,
+            suite_retry_of_run_id=suite_retry_of_run_id,
+            suite_attempt_number=suite_attempt_number,
+        )
+        if existing is not None:
+            if self._expire_grant(existing):
+                self._session.commit()
+            if existing.status in {"pending", "approved"}:
+                return self._grant_response(existing)
+
         now = utc_now()
         grant_id = uuid.uuid4()
         expires_at = min(
@@ -499,6 +577,12 @@ class WorkspaceService:
             "validation_workspace_id": workspace.id,
             "validation_checkpoint_id": checkpoint.id,
             "allowed_validation_profiles": allowed_profiles,
+            "allowed_validation_suites": allowed_suites,
+            "validation_suite_definition_digest": suite_definition_digest,
+            "validation_suite_root_run_id": suite_root_run_id,
+            "validation_suite_retry_of_run_id": suite_retry_of_run_id,
+            "validation_suite_attempt_number": suite_attempt_number,
+            "validation_suite_allowed_run_count": suite_allowed_run_count,
             "max_validation_runs": max_validation_runs,
             "validation_timeout_seconds": max(item.timeout_seconds for item in profiles),
             "validation_cpu_seconds": max(item.cpu_seconds for item in profiles),
@@ -539,6 +623,11 @@ class WorkspaceService:
             validation_checkpoint_id=policy.validation_checkpoint_id,
             allowed_validation_profiles=policy.allowed_validation_profiles,
             allowed_validation_suites=allowed_suites,
+            validation_suite_definition_digest=policy.validation_suite_definition_digest,
+            validation_suite_root_run_id=policy.validation_suite_root_run_id,
+            validation_suite_retry_of_run_id=policy.validation_suite_retry_of_run_id,
+            validation_suite_attempt_number=policy.validation_suite_attempt_number,
+            validation_suite_allowed_run_count=policy.validation_suite_allowed_run_count,
             max_validation_runs=policy.max_validation_runs,
             validation_timeout_seconds=policy.validation_timeout_seconds,
             validation_cpu_seconds=policy.validation_cpu_seconds,
@@ -1099,6 +1188,16 @@ class WorkspaceService:
                     "validation_workspace_id": grant.validation_workspace_id,
                     "validation_checkpoint_id": grant.validation_checkpoint_id,
                     "allowed_validation_profiles": grant.allowed_validation_profiles,
+                    "allowed_validation_suites": grant.allowed_validation_suites,
+                    "validation_suite_definition_digest": (
+                        grant.validation_suite_definition_digest
+                    ),
+                    "validation_suite_root_run_id": grant.validation_suite_root_run_id,
+                    "validation_suite_retry_of_run_id": (grant.validation_suite_retry_of_run_id),
+                    "validation_suite_attempt_number": (grant.validation_suite_attempt_number),
+                    "validation_suite_allowed_run_count": (
+                        grant.validation_suite_allowed_run_count
+                    ),
                     "max_validation_runs": grant.max_validation_runs,
                     "validation_timeout_seconds": grant.validation_timeout_seconds,
                     "validation_cpu_seconds": grant.validation_cpu_seconds,
@@ -1282,6 +1381,11 @@ class WorkspaceService:
             validation_checkpoint_id=grant.validation_checkpoint_id,
             allowed_validation_profiles=grant.allowed_validation_profiles,
             allowed_validation_suites=grant.allowed_validation_suites,
+            validation_suite_definition_digest=grant.validation_suite_definition_digest,
+            validation_suite_root_run_id=grant.validation_suite_root_run_id,
+            validation_suite_retry_of_run_id=grant.validation_suite_retry_of_run_id,
+            validation_suite_attempt_number=grant.validation_suite_attempt_number,
+            validation_suite_allowed_run_count=grant.validation_suite_allowed_run_count,
             max_validation_runs=grant.max_validation_runs,
             validation_timeout_seconds=grant.validation_timeout_seconds,
             validation_cpu_seconds=grant.validation_cpu_seconds,

@@ -301,11 +301,18 @@ Step states are `pending`, `queued`, `running`, `succeeded`, `failed`,
 be active. Fail-fast turns undispatched pending steps into `skipped`.
 Cancellation or total timeout first fences and cancels the active child, then
 terminalizes the Suite; no pending step is dispatched afterward. Suite success
-requires every step to be successful and the Control Plane to revalidate
-cleanup, source/canonical invariance, and exact aggregate budgets.
+requires every step to be successful and the Control Plane to re-query and
+match the exact catalog step, Validation Run, Job, Attempt, Lease, lineage
+Grant, completed Permit, immutable Evidence, recomputed digests, cleanup,
+source/canonical invariance, and exact aggregate budgets. A database trigger
+also rejects illegal nonterminal transitions and any successful step or result
+without the complete ordered proof.
 
-Retry is a new Suite attempt with a new approved Suite Grant. Previously
-successful Evidence is reused without a new job or budget charge; every
-remaining step gets a new Validation Run, Attempt, Lease, and Permit. Terminal
-Suite rows/results are immutable. This implementer state remains pending the
-second-slice independent focused review.
+Retry is a new Suite attempt with a new approved Suite Grant bound to the
+immediate terminal non-success source, common root, next attempt, immutable
+definition digest, and one allowed Suite Run. One Grant cannot create a second
+root or retry even with a different idempotency key. Previously successful
+Evidence is reused without a new job or budget charge; every remaining step
+gets a new Validation Run, Attempt, Lease, and Permit. Terminal Suite
+rows/results are immutable. The targeted remediation is a local candidate
+pending fresh independent focused re-audit.

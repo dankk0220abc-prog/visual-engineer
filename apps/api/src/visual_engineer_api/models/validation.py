@@ -275,6 +275,15 @@ class ValidationSuiteRun(Base):
             name="uq_validation_suite_runs_idempotency_key",
         ),
         UniqueConstraint(
+            "execution_grant_id",
+            name="uq_validation_suite_runs_execution_grant",
+        ),
+        UniqueConstraint(
+            "root_suite_run_id",
+            "attempt_number",
+            name="uq_validation_suite_runs_root_attempt",
+        ),
+        UniqueConstraint(
             "retry_of_suite_run_id",
             "attempt_number",
             name="uq_validation_suite_runs_retry_attempt",
@@ -327,9 +336,18 @@ class ValidationSuiteRun(Base):
             name="ck_validation_suite_terminal_timestamp",
         ),
         CheckConstraint(
-            "(attempt_number = 1 AND retry_of_suite_run_id IS NULL) OR "
-            "(attempt_number > 1 AND retry_of_suite_run_id IS NOT NULL)",
+            "(attempt_number = 1 AND retry_of_suite_run_id IS NULL "
+            "AND root_suite_run_id = id) OR "
+            "(attempt_number > 1 AND retry_of_suite_run_id IS NOT NULL "
+            "AND root_suite_run_id <> id)",
             name="ck_validation_suite_retry_binding",
+        ),
+        CheckConstraint(
+            "suite_id = 'fixture-integrity-suite-v1' AND suite_version = 1 "
+            "AND failure_policy = 'fail_fast' AND step_count = 2 "
+            "AND total_timeout_seconds = 30 AND total_output_bytes = 10000 "
+            "AND max_attempts = 2 AND attempt_number BETWEEN 1 AND 2",
+            name="ck_validation_suite_trusted_definition",
         ),
         Index(
             "ix_validation_suite_runs_state_created",
@@ -385,6 +403,16 @@ class ValidationSuiteRun(Base):
     retry_of_suite_run_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("validation_suite_runs.id", ondelete="RESTRICT"),
+    )
+    root_suite_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "validation_suite_runs.id",
+            name="fk_validation_suite_runs_root",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+        nullable=False,
     )
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     idempotency_request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -547,6 +575,22 @@ class ValidationSuiteResult(Base):
             "artifact_count = 0 AND artifact_bytes = 0",
             name="ck_validation_suite_result_zero_artifacts",
         ),
+        CheckConstraint(
+            "suite_id = 'fixture-integrity-suite-v1' AND suite_version = 1",
+            name="ck_validation_suite_result_definition",
+        ),
+        CheckConstraint(
+            "policy_digest ~ '^[0-9a-f]{64}$'",
+            name="ck_validation_suite_result_policy_digest",
+        ),
+        CheckConstraint(
+            "attempt_number BETWEEN 1 AND max_attempts AND max_attempts BETWEEN 1 AND 5",
+            name="ck_validation_suite_result_attempt",
+        ),
+        CheckConstraint(
+            "total_timeout_seconds BETWEEN 1 AND 600 AND total_output_bytes BETWEEN 256 AND 262144",
+            name="ck_validation_suite_result_budgets",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -555,9 +599,36 @@ class ValidationSuiteResult(Base):
         ForeignKey("validation_suite_runs.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    root_suite_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("validation_suite_runs.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("runs.id", ondelete="RESTRICT"), nullable=False
+    )
+    execution_grant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("execution_grants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    suite_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    suite_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_revision: Mapped[str] = mapped_column(String(64), nullable=False)
+    checkpoint_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspace_checkpoints.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    policy_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_output_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
     verdict: Mapped[str] = mapped_column(String(24), nullable=False)
     profile_references: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     evidence_references: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    runner_references: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     audit_event_references: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

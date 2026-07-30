@@ -299,6 +299,19 @@ class ExecutionGrantPolicy(StrictModel):
             StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{2,63}:v[1-9][0-9]{0,2}$"),
         ]
     ] = Field(default_factory=list, max_length=4)
+    allowed_validation_suites: list[
+        Annotated[
+            str,
+            StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{2,63}:v[1-9][0-9]{0,2}$"),
+        ]
+    ] = Field(default_factory=list, max_length=1)
+    validation_suite_definition_digest: (
+        Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None
+    ) = None
+    validation_suite_root_run_id: uuid.UUID | None = None
+    validation_suite_retry_of_run_id: uuid.UUID | None = None
+    validation_suite_attempt_number: int = Field(default=0, ge=0, le=5)
+    validation_suite_allowed_run_count: int = Field(default=0, ge=0, le=1)
     max_validation_runs: int = Field(default=0, ge=0, le=10)
     validation_timeout_seconds: int = Field(default=0, ge=0, le=120)
     validation_cpu_seconds: int = Field(default=0, ge=0, le=120)
@@ -374,6 +387,35 @@ class ExecutionGrantPolicy(StrictModel):
                 raise ValueError(
                     "validation authority cannot include Workspace mutation operations"
                 )
+        suite_enabled = bool(self.allowed_validation_suites)
+        suite_binding_values = (
+            self.validation_suite_definition_digest,
+            self.validation_suite_root_run_id,
+            self.validation_suite_retry_of_run_id,
+            self.validation_suite_attempt_number,
+            self.validation_suite_allowed_run_count,
+        )
+        if suite_enabled:
+            if (
+                len(self.allowed_validation_suites) != 1
+                or self.validation_suite_definition_digest is None
+                or self.validation_suite_attempt_number < 1
+                or self.validation_suite_allowed_run_count != 1
+            ):
+                raise ValueError("Suite authority requires one exact definition and run budget")
+            if self.validation_suite_attempt_number == 1:
+                if (
+                    self.validation_suite_root_run_id is not None
+                    or self.validation_suite_retry_of_run_id is not None
+                ):
+                    raise ValueError("root Suite authority cannot carry retry lineage")
+            elif (
+                self.validation_suite_root_run_id is None
+                or self.validation_suite_retry_of_run_id is None
+            ):
+                raise ValueError("retry Suite authority requires root and source lineage")
+        elif any(suite_binding_values):
+            raise ValueError("non-Suite authority cannot carry Suite lineage")
         return self
 
 

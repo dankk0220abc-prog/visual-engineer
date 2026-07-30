@@ -179,6 +179,13 @@ Profile mode; it is never caller input. This keeps every step independently
 Attempt/Lease/Permit fenced and avoids a command-bearing orchestration
 envelope.
 
+For Suite-scoped children, the immutable Execution Grant policy also carries
+the source-owned Suite reference and definition digest, root/source Suite Run
+bindings, exact attempt number, and allowed Suite Run count of one. These
+fields participate in the canonical policy hash. Non-Suite Grant hashes omit
+the additive empty bindings so the sealed first-slice policy representation
+remains stable.
+
 The corresponding result repeats the exact identities and literal Profile,
 uses only the fixed safe argv display
 `python -I -S <system-owned-fixture-validator>`, and carries a versioned

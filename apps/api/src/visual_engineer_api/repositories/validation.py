@@ -15,6 +15,7 @@ from visual_engineer_api.models.validation import (
 from visual_engineer_api.models.workspace import (
     ExecutionGrant,
     RepositoryHandle,
+    SideEffectPermit,
     Workspace,
     WorkspaceCheckpoint,
 )
@@ -80,8 +81,16 @@ class ValidationRepository:
             )
         )
 
-    def evidence_by_id(self, evidence_id: uuid.UUID) -> ValidationEvidence | None:
-        return self._session.get(ValidationEvidence, evidence_id)
+    def evidence_by_id(
+        self,
+        evidence_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> ValidationEvidence | None:
+        statement = select(ValidationEvidence).where(ValidationEvidence.id == evidence_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
 
     def get_suite_run(
         self,
@@ -101,6 +110,47 @@ class ValidationRepository:
         lock: bool = False,
     ) -> ValidationSuiteRun | None:
         statement = select(ValidationSuiteRun).where(ValidationSuiteRun.idempotency_key == key)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def get_suite_by_grant(
+        self,
+        grant_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> ValidationSuiteRun | None:
+        statement = select(ValidationSuiteRun).where(
+            ValidationSuiteRun.execution_grant_id == grant_id
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def latest_suite_for_baseline(
+        self,
+        *,
+        plan_id: uuid.UUID,
+        checkpoint_id: uuid.UUID,
+        suite_id: str,
+        suite_version: int,
+        lock: bool = False,
+    ) -> ValidationSuiteRun | None:
+        statement = (
+            select(ValidationSuiteRun)
+            .where(
+                ValidationSuiteRun.plan_id == plan_id,
+                ValidationSuiteRun.checkpoint_id == checkpoint_id,
+                ValidationSuiteRun.suite_id == suite_id,
+                ValidationSuiteRun.suite_version == suite_version,
+            )
+            .order_by(
+                ValidationSuiteRun.attempt_number.desc(),
+                ValidationSuiteRun.created_at.desc(),
+                ValidationSuiteRun.id.desc(),
+            )
+            .limit(1)
+        )
         if lock:
             statement = statement.with_for_update()
         return self._session.scalar(statement)
@@ -137,6 +187,17 @@ class ValidationRepository:
             statement = statement.with_for_update()
         return list(self._session.scalars(statement))
 
+    def suite_step(
+        self,
+        step_run_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> ValidationSuiteStepRun | None:
+        statement = select(ValidationSuiteStepRun).where(ValidationSuiteStepRun.id == step_run_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
     def suite_result(self, suite_run_id: uuid.UUID) -> ValidationSuiteResult | None:
         return self._session.scalar(
             select(ValidationSuiteResult).where(ValidationSuiteResult.suite_run_id == suite_run_id)
@@ -149,7 +210,7 @@ class ValidationRepository:
     ) -> ValidationSuiteRun | None:
         return self._session.scalar(
             select(ValidationSuiteRun).where(
-                ValidationSuiteRun.retry_of_suite_run_id == root_suite_run_id,
+                ValidationSuiteRun.root_suite_run_id == root_suite_run_id,
                 ValidationSuiteRun.attempt_number == attempt_number,
             )
         )
@@ -214,6 +275,9 @@ class ValidationRepository:
         *,
         allowed_profiles: list[str],
         allowed_suites: list[str],
+        suite_root_run_id: uuid.UUID | None,
+        suite_retry_of_run_id: uuid.UUID | None,
+        suite_attempt_number: int,
     ) -> ExecutionGrant | None:
         return self._session.scalar(
             select(ExecutionGrant)
@@ -222,6 +286,9 @@ class ValidationRepository:
                 ExecutionGrant.validation_checkpoint_id == checkpoint_id,
                 ExecutionGrant.allowed_validation_profiles == allowed_profiles,
                 ExecutionGrant.allowed_validation_suites == allowed_suites,
+                ExecutionGrant.validation_suite_root_run_id == suite_root_run_id,
+                ExecutionGrant.validation_suite_retry_of_run_id == suite_retry_of_run_id,
+                ExecutionGrant.validation_suite_attempt_number == suite_attempt_number,
                 ExecutionGrant.status.in_(("pending", "approved")),
             )
             .order_by(ExecutionGrant.created_at.desc(), ExecutionGrant.id.desc())
@@ -233,6 +300,9 @@ class ValidationRepository:
 
     def attempt(self, attempt_id: uuid.UUID) -> RunnerJobAttempt | None:
         return self._session.get(RunnerJobAttempt, attempt_id)
+
+    def permit(self, permit_id: uuid.UUID) -> SideEffectPermit | None:
+        return self._session.get(SideEffectPermit, permit_id)
 
     def latest_attempt(self, job_id: uuid.UUID) -> RunnerJobAttempt | None:
         return self._session.scalar(

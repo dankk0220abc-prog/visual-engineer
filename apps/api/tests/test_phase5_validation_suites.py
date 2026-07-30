@@ -46,6 +46,8 @@ def _prepare_suite(
     client: TestClient,
     db_session: Session,
     runner_bootstrap_token: str,
+    *,
+    start_suite: bool = True,
 ) -> SuiteContext:
     runner, token, repository = register_workspace_runner(
         client,
@@ -157,16 +159,19 @@ def _prepare_suite(
     assert approved.status_code == 200, approved.text
 
     idempotency_key = f"suite-create-{uuid.uuid4()}"
-    created_suite = client.post(
-        "/api/v1/validation-suite-runs",
-        headers={"Idempotency-Key": idempotency_key},
-        json={
-            "execution_grant_id": grant["id"],
-            "suite_id": "fixture-integrity-suite-v1",
-            "suite_version": 1,
-        },
-    )
-    assert created_suite.status_code == 201, created_suite.text
+    suite_run: dict[str, Any] = {}
+    if start_suite:
+        created_suite = client.post(
+            "/api/v1/validation-suite-runs",
+            headers={"Idempotency-Key": idempotency_key},
+            json={
+                "execution_grant_id": grant["id"],
+                "suite_id": "fixture-integrity-suite-v1",
+                "suite_version": 1,
+            },
+        )
+        assert created_suite.status_code == 201, created_suite.text
+        suite_run = cast(dict[str, Any], created_suite.json())
     return SuiteContext(
         runner=runner,
         token=token,
@@ -177,7 +182,7 @@ def _prepare_suite(
         checkpoint_fingerprint=checkpoint_fingerprint,
         grant_id=cast(str, grant["id"]),
         idempotency_key=idempotency_key,
-        suite_run=cast(dict[str, Any], created_suite.json()),
+        suite_run=suite_run,
     )
 
 
@@ -266,7 +271,12 @@ def _complete_step(
     return cast(dict[str, Any], synchronized.json())
 
 
-def _new_suite_grant(client: TestClient, context: SuiteContext) -> dict[str, Any]:
+def _new_suite_grant(
+    client: TestClient,
+    context: SuiteContext,
+    *,
+    retry_of_suite_run_id: str,
+) -> dict[str, Any]:
     revoked = client.post(
         f"/api/v1/execution-grants/{context.grant_id}/revoke",
         headers={"X-Request-ID": str(uuid.uuid4())},
@@ -282,10 +292,14 @@ def _new_suite_grant(client: TestClient, context: SuiteContext) -> dict[str, Any
             "validation_checkpoint_id": context.checkpoint_id,
             "validation_suite_id": "fixture-integrity-suite-v1",
             "validation_suite_version": 1,
+            "validation_suite_retry_of_run_id": retry_of_suite_run_id,
         },
     )
     assert pending.status_code == 201, pending.text
     grant = cast(dict[str, Any], pending.json())
+    assert grant["validation_suite_retry_of_run_id"] == retry_of_suite_run_id
+    assert grant["validation_suite_attempt_number"] == 2
+    assert grant["validation_suite_allowed_run_count"] == 1
     approved = client.post(
         f"/api/v1/execution-grants/{grant['id']}/decisions",
         headers={"X-Request-ID": str(uuid.uuid4())},
@@ -489,10 +503,15 @@ def test_suite_partial_failure_retry_reuses_success_without_redispatch(
     assert stale_grant_retry.status_code == 422, stale_grant_retry.text
     assert stale_grant_retry.json()["error"]["code"] == "validation_suite_new_grant_required"
 
-    new_grant = _new_suite_grant(client, context)
+    new_grant = _new_suite_grant(
+        client,
+        context,
+        retry_of_suite_run_id=failed["id"],
+    )
+    retry_key = f"suite-retry-{uuid.uuid4()}"
     retried = client.post(
         f"/api/v1/validation-suite-runs/{failed['id']}/retry",
-        headers={"Idempotency-Key": f"suite-retry-{uuid.uuid4()}"},
+        headers={"Idempotency-Key": retry_key},
         json={"execution_grant_id": new_grant["id"]},
     )
     assert retried.status_code == 201, retried.text
@@ -505,6 +524,22 @@ def test_suite_partial_failure_retry_reuses_success_without_redispatch(
     assert retry_payload["steps"][0]["output_bytes"] == 0
     assert retry_payload["steps"][1]["state"] == "queued"
     assert retry_payload["steps"][1]["validation_run_id"] != failed["steps"][1]["validation_run_id"]
+    replayed_retry = client.post(
+        f"/api/v1/validation-suite-runs/{failed['id']}/retry",
+        headers={"Idempotency-Key": retry_key},
+        json={"execution_grant_id": new_grant["id"]},
+    )
+    assert replayed_retry.status_code == 201, replayed_retry.text
+    assert replayed_retry.json()["id"] == retry_payload["id"]
+    different_key_retry = client.post(
+        f"/api/v1/validation-suite-runs/{failed['id']}/retry",
+        headers={"Idempotency-Key": f"suite-retry-replay-{uuid.uuid4()}"},
+        json={"execution_grant_id": new_grant["id"]},
+    )
+    assert different_key_retry.status_code == 409, different_key_retry.text
+    assert different_key_retry.json()["error"]["code"] == (
+        "validation_suite_grant_already_consumed"
+    )
 
     succeeded = _complete_step(
         client,
