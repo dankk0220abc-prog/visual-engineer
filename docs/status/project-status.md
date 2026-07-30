@@ -3,13 +3,19 @@
 - Phase: Phase 5 Third Vertical Slice — Governed Final Review & Release
   Readiness
 - Overall status:
-  `PHASE_5_FINAL_REVIEW_TARGETED_REMEDIATION_COMPLETE_READY_FOR_INDEPENDENT_FOCUSED_RE_REVIEW`
-- Governance qualifier: IMPLEMENTER TARGETED REMEDIATION; HISTORICAL
-  INDEPENDENT FOCUSED REVIEW FAIL PRESERVED; NO GATE PASS, SEALING, MAIN
-  INTEGRATION, DELIVERY, OR PHASE 6 AUTHORIZATION
+  `PHASE_5_THIRD_SLICE_FOCUSED_RE_REVIEW_FAIL_REMEDIATION_REQUIRED`
+- Governance qualifier: INDEPENDENT FOCUSED RE-REVIEW FAIL; ONE NEW BLOCKING
+  MEDIUM; FINAL AGGREGATE NOT RUN; NO SEALING, MAIN INTEGRATION, DELIVERY, OR
+  PHASE 6 AUTHORIZATION
 - Last updated: 2026-07-30
 - Current main / Third Slice base:
   `50dcc05ce48d042882bcdf199ae1bee662a83af6`
+- Current focused re-review branch:
+  `audit/phase-5-governed-final-review-reaudit-max`
+- Reviewed remediation candidate:
+  `3eddb9623550227a30013df6dbc6dc7a17d5315c`
+- Focused re-review Finding:
+  `VE-P5-REVIEW-RR-001` — blocking Medium
 - Current focused-review branch:
   `audit/phase-5-governed-final-review-focused-max`
 - Reviewed Third Slice candidate:
@@ -21,7 +27,7 @@
 - Third Slice remediation base:
   `5371495b1dd27db2ff3bbca4ddc12eaee47e7982`
 - Active plan:
-  [`docs/exec-plans/phase-5-governed-final-review-remediation-1.md`](../exec-plans/phase-5-governed-final-review-remediation-1.md)
+  [`docs/exec-plans/phase-5-governed-final-review-focused-rereview.md`](../exec-plans/phase-5-governed-final-review-focused-rereview.md)
 - Phase 5 second-slice remediation branch:
   `fix/phase-5-validation-suites-remediation-1`
 - Phase 5 second-slice remediation candidate:
@@ -92,6 +98,49 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 Third Vertical Slice independent focused re-review decision
+
+The remediation candidate remains **not approved** for PASS sealing, main
+integration, Customer 0, a later Phase 5 slice, or Phase 6.
+
+The exact remediation baseline and one-commit ancestry pass preflight. The
+original focused test and historical FAIL documents remain unchanged. The
+unchanged original real-PostgreSQL focused matrix passes `6/6`.
+
+One distinct independent secure expectation fails on its first run and one
+unchanged rerun. `VE-P5-REVIEW-RR-001` is blocking Medium: after a trusted
+repository revision-authority change, the Package read path reports stale but
+the freshness generation and durable invalidation remain unchanged. The
+database accepts one approved Decision and one durable `ready` row for the old
+generation. Workspace/Evidence remain unchanged, no readiness-success event or
+Git-delivery authority is created, and the API continues to mask the verdict
+as effective stale. That masking does not satisfy the database
+zero-approved-decision/readiness invariant.
+
+The five-Finding disposition is FR-001 **FAIL**, FR-002/FR-003/FR-004 **PASS
+within the executed original scope**, and FR-005 **FAIL downstream** for
+approved-readiness correctness. Critical/High/blocking Medium counts are
+`0 / 0 / 1`.
+
+The blocker stop applies. Remaining expanded focused checks, final
+`make verify`, migration roundtrip, browser/accessibility expansion, broad
+Security/Eval/Chaos, post-aggregate cleanup probe, and PASS sealing are
+**NOT RUN**. Historical implementer results are not promoted into this
+independent decision.
+
+Production code remains unchanged from
+`3eddb9623550227a30013df6dbc6dc7a17d5315c`. Exact audit-owned Compose
+projects have zero container/network/volume residue. Main remains
+`50dcc05ce48d042882bcdf199ae1bee662a83af6`. No CreativeDeploy, sibling
+repository, remote, push, pull request, merge, tag, Customer 0, later slice, or
+Phase 6 action occurred.
+
+Detailed independent artifacts:
+
+- [`docs/exec-plans/phase-5-governed-final-review-focused-rereview.md`](../exec-plans/phase-5-governed-final-review-focused-rereview.md)
+- [`docs/security/audits/phase-5-governed-final-review-focused-rereview.md`](../security/audits/phase-5-governed-final-review-focused-rereview.md)
+- [`docs/evidence/phase-5-governed-final-review-focused-rereview-verification.md`](../evidence/phase-5-governed-final-review-focused-rereview-verification.md)
 
 ## Phase 5 Third Vertical Slice targeted remediation 1
 
