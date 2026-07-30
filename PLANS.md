@@ -53,13 +53,20 @@ Every plan under `docs/exec-plans/` contains:
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
 The active plan is
+[`docs/exec-plans/phase-5-validation-suites-focused-reaudit.md`](docs/exec-plans/phase-5-validation-suites-focused-reaudit.md).
+It is the completed independent focused re-audit and local sealing record for
+the two historical blocking Medium Findings: single-use lineage-bound Suite
+Grant authority and trusted ordered aggregate Evidence. Both Findings and the
+explicitly stopped budget/race/cleanup boundaries pass against the exact
+remediation candidate, and the final complete aggregate passes. The historical
+focused-review FAIL remains preserved at its inspected checkpoint. This local
+seal does not move `main` or authorize a push, pull request, tag, deployment,
+Customer 0, a later Phase 5 slice, or Phase 6.
+
+The completed narrow implementer remediation plan remains at
 [`docs/exec-plans/phase-5-validation-suites-remediation-1.md`](docs/exec-plans/phase-5-validation-suites-remediation-1.md).
-It is the completed narrow implementer remediation for the two blocking Medium
-focused-review Findings: single-use lineage-bound Suite Grant authority and
-trusted ordered aggregate Evidence. Local verification is complete and the
-candidate is ready for a fresh independent focused re-audit. The historical
-independent focused review remains FAIL at its inspected checkpoint. This
-completion cannot declare Security Gate PASS or authorize a later phase.
+Its evidence remains historical implementer context and is not substituted for
+the independent decision.
 
 The second-slice implementation plan remains at
 [`docs/exec-plans/phase-5-governed-validation-suites.md`](docs/exec-plans/phase-5-governed-validation-suites.md).

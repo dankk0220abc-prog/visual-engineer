@@ -2,14 +2,18 @@
 
 - Phase: Phase 5 — Governed Multi-Step Validation Suites
 - Overall status:
-  `PHASE_5_SUITES_TARGETED_REMEDIATION_COMPLETE_READY_FOR_INDEPENDENT_FOCUSED_RE_AUDIT`
-- Governance qualifier: HISTORICAL FOCUSED REVIEW REMAINS FAIL; REMEDIATION
-  CANDIDATE NOT INDEPENDENTLY APPROVED
+  `PHASE_5_SUITES_FOCUSED_RE_AUDIT_PASS_SECOND_SLICE_LOCALLY_SEALED_READY_FOR_USER_AUTHORIZED_MAIN_INTEGRATION`
+- Governance qualifier: LOCAL SECOND-SLICE SEAL ONLY; MAIN UNCHANGED; NO
+  DELIVERY OR NEXT-PHASE AUTHORIZATION
 - Last updated: 2026-07-30
 - Current main / second-slice baseline:
   `f547091307c52df8f20fc69bac4b4826cbbc74ad`
-- Current implementation branch:
+- Current audit / sealing branch:
+  `audit/phase-5-validation-suites-reaudit-max`
+- Phase 5 second-slice remediation branch:
   `fix/phase-5-validation-suites-remediation-1`
+- Phase 5 second-slice remediation candidate:
+  `b6d53ba0275933e18919ceb2d90152e5ae8efcac`
 - Phase 5 second-slice remediation base:
   `d325fa197e1fdad2c522fdf76f11b738682a86ca`
 - Phase 5 second-slice focused-review branch:
@@ -76,6 +80,72 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 Validation Suites independent focused re-audit and sealing decision
+
+The narrow independent decisions are:
+
+- `VE-P5-SUITES-FR-001`: **PASS**;
+- `VE-P5-SUITES-FR-002`: **PASS**;
+- required combined-output/race/cancel/cleanup/invariance boundaries:
+  **PASS**;
+- new Critical/High/blocking Medium Findings: **0 / 0 / 0**; and
+- final complete aggregate and local sealing gate: **PASS**.
+
+The unchanged historical focused tests pass `2/2` on real PostgreSQL. Four new
+independent cases pass `4/4`: retry versus late old completion, foreign retry
+Grant, coherent foreign ordered Evidence, and legal trusted digest/replay/
+terminal fencing. The combined focused Suite matrix passes `23/23`, and
+focused Protocol/Runner passes `6/6`.
+
+FR-001 now has independent evidence that one approved Grant produces at most
+one root/retry attempt, exact replay is idempotent, retry requires a fresh
+lineage-bound Grant, and late old completion cannot contaminate the new
+attempt. Denials and replays produce no extra Suite Run, step, Job, Attempt,
+Lease, Permit, Result, Evidence, event, charge, or canonical Workspace change.
+
+FR-002 now has independent evidence that a coherent but foreign ordered
+Evidence chain cannot authorize success, while a legal two-step execution
+binds a recomputed digest and exact root/Suite/version/revision/checkpoint/
+Grant/policy/budget/Evidence chain. Missing, foreign, duplicate, reordered,
+stale, mismatched, non-success, or replace-after-terminal proof is denied with
+zero success side effects.
+
+The exact 10,000-byte combined output succeeds and 10,001 bytes fails closed.
+Cancel-before-next-dispatch, retry/old-completion competition, cleanup
+failure-to-`recovery_required`, and source/canonical invariance pass.
+Migration 0009 base/head/base/head and contract drift checks pass.
+
+The final complete `make verify` exits `0`: Python/API/Runner/Protocol
+`252/252` at `83.33%`, Web `47/47`, E2E `16/16`, Workspace repair `86/86`
+plus API `14/14`, Workspace Security `64/64`, Runner Security `111/111`,
+Eval 67, migration, contracts, build, Docker, Chaos, sandbox security, source
+invariance, and final diff check pass.
+
+First failures remain disclosed. One new-test Ruff failure and one new
+ExecPlan Prettier failure were audit-only. A reused Web image was initially
+mapped to an API port different from its build-time `38640` binding, causing
+browser failures/timeouts; the task-owned run was cleaned. Bundle inspection
+confirmed the environment mismatch, and a complete rerun using the
+repository's formal port/skip-build controls passed. No production
+configuration was changed.
+
+Production code is unchanged from
+`b6d53ba0275933e18919ceb2d90152e5ae8efcac`. All five focused/final/E2E/Chaos
+project inventories are zero containers, networks, and volumes, and all
+published ports are free. `main` remains
+`f547091307c52df8f20fc69bac4b4826cbbc74ad`. No remote, push, merge, pull
+request, tag, Customer 0, later slice, or Phase 6 action occurred.
+
+The local sealing subject is
+`chore: seal phase 5 governed validation suites`. This seal is ready only for
+an explicitly user-authorized local main integration.
+
+Detailed independent artifacts:
+
+- [`docs/exec-plans/phase-5-validation-suites-focused-reaudit.md`](../exec-plans/phase-5-validation-suites-focused-reaudit.md)
+- [`docs/security/audits/phase-5-validation-suites-focused-reaudit.md`](../security/audits/phase-5-validation-suites-focused-reaudit.md)
+- [`docs/evidence/phase-5-validation-suites-focused-reaudit-verification.md`](../evidence/phase-5-validation-suites-focused-reaudit-verification.md)
 
 ## Phase 5 Validation Suites targeted remediation 1
 
