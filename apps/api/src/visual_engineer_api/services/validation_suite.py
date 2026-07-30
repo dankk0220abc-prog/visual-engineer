@@ -941,6 +941,8 @@ class ValidationSuiteService:
         self,
         suite_run: ValidationSuiteRun,
         step: ValidationSuiteStepRun,
+        *,
+        lock: bool = True,
     ) -> tuple[dict[str, object], ValidationEvidence] | None:
         suite = validation_suite(suite_run.suite_id)
         if suite is None or suite.version != suite_run.suite_version:
@@ -972,13 +974,13 @@ class ValidationSuiteService:
         if step.reused_from_step_run_id is not None:
             source_step = self._validation.suite_step(
                 step.reused_from_step_run_id,
-                lock=True,
+                lock=lock,
             )
             if source_step is None:
                 return None
             source_suite = self._validation.get_suite_run(
                 source_step.suite_run_id,
-                lock=True,
+                lock=lock,
             )
             if (
                 source_suite is None
@@ -1003,8 +1005,8 @@ class ValidationSuiteService:
             proof_suite = source_suite
             proof_step = source_step
 
-        validation_run = self._validation.get_run(step.validation_run_id, lock=True)
-        evidence = self._validation.evidence_by_id(step.evidence_id, lock=True)
+        validation_run = self._validation.get_run(step.validation_run_id, lock=lock)
+        evidence = self._validation.evidence_by_id(step.evidence_id, lock=lock)
         job = self._validation.job(step.runner_job_id)
         attempt = self._validation.attempt(step.attempt_id)
         if (
@@ -1018,7 +1020,7 @@ class ValidationSuiteService:
         permit = self._validation.permit(evidence.side_effect_permit_id)
         grant_context = self._validation.validation_grant(
             validation_run.execution_grant_id,
-            lock=True,
+            lock=lock,
         )
         profile = validation_profile(step.profile_id)
         if permit is None or grant_context is None or profile is None:
@@ -1232,11 +1234,13 @@ class ValidationSuiteService:
     def trusted_success_manifest(
         self,
         suite_run_id: uuid.UUID,
+        *,
+        lock: bool = True,
     ) -> tuple[ValidationSuiteRun, ValidationSuiteResult, Sequence[dict[str, object]]]:
         """Reconstruct the exact successful Suite proof for final review."""
-        suite_run = self._required_run(suite_run_id, lock=True)
+        suite_run = self._required_run(suite_run_id, lock=lock)
         result = self._validation.suite_result(suite_run.id)
-        steps = self._validation.suite_steps(suite_run.id, lock=True)
+        steps = self._validation.suite_steps(suite_run.id, lock=lock)
         if (
             suite_run.state != "succeeded"
             or result is None
@@ -1257,7 +1261,7 @@ class ValidationSuiteService:
         redaction_count = 0
         output_truncated = False
         for step in steps:
-            trusted = self._trusted_success_step(suite_run, step)
+            trusted = self._trusted_success_step(suite_run, step, lock=lock)
             if trusted is None:
                 raise ValidationSuiteServiceError(
                     "review_evidence_integrity_failed",

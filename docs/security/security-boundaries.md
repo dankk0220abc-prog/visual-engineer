@@ -127,12 +127,18 @@ latest Checkpoint, Suite/Profile identity and version, policy digest, Grant
 lineage, aggregate Result, ordered Evidence, and trusted blocker inventory.
 Accepted changes to those facts advance a locked freshness scope and append an
 invalidation plus ordered AuditEvent in the same PostgreSQL transaction.
-Immutable source policy/Evidence rejects in-place replacement. Decision
-creation requires the observed generation and persists an independent
-idempotency key/request hash. PostgreSQL recomputes the package, Decision, and
-readiness digest chain; `ready` additionally requires Critical, High, and
-blocking-Medium counts all equal zero. Review events and records are
-append-only, and Git/deployment authorization is independently forced false.
+The sole trusted Repository Handle revision writer additionally acquires a
+transaction-level revision mutex, locks the Handle, and advances affected
+scopes before committing its revision/status transition. Immutable source
+policy/Evidence rejects in-place replacement. Decision creation requires the
+observed generation and persists an independent idempotency key/request hash;
+generation and freshness are checked before keyed replay. Decision and
+readiness writes acquire the same mutex, lock the Handle, and PostgreSQL
+directly compares its trusted revision/status with the frozen Package.
+PostgreSQL also recomputes the package, Decision, and readiness digest chain;
+`ready` additionally requires Critical, High, and blocking-Medium counts all
+equal zero. Review events and records are append-only, and Git/deployment
+authorization is independently forced false.
 
 ## Runner identity and protocol boundary
 

@@ -341,6 +341,13 @@ Package, decision, invalidation, blocker, and verdict rows are immutable.
 Freshness scope generation advances and appends invalidation plus a
 package-local sequenced AuditEvent in the same database transaction as an
 accepted Validation/Suite/Evidence/Checkpoint/Workspace/Grant/blocker change.
+An authenticated Runner Repository Handle revision/status transition is also
+an accepted freshness change: the sole trusted registration writer acquires a
+revision-authority transaction mutex, locks the Handle, updates it, and
+advances every affected scope before one commit. Review Decision and readiness
+writes acquire the same mutex and independently compare the frozen Package
+revision with the locked Handle, so an out-of-band table change cannot create
+a stale database-ready chain.
 `stale` never mutates or reuses the old Decision; only a new Package generation
 can be reviewed. Stale approval never transitions to ready. Neither `approved`
 nor `ready` creates Git, pull-request, tag, merge, deployment, command, or

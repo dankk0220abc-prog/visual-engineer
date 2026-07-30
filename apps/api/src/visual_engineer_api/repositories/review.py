@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -81,6 +81,20 @@ class ReviewRepository:
                     ReviewPackage.created_at.desc(), ReviewPackage.id.desc()
                 )
             )
+        )
+
+    def revision_authority(
+        self, repository_handle_id: uuid.UUID, *, lock: bool = False
+    ) -> RepositoryHandle | None:
+        statement = select(RepositoryHandle).where(RepositoryHandle.id == repository_handle_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def lock_revision_authority(self, repository_handle_id: uuid.UUID) -> None:
+        self._session.execute(
+            text("SELECT lock_review_revision_authority(CAST(:repository_handle_id AS uuid))"),
+            {"repository_handle_id": str(repository_handle_id)},
         )
 
     def invalidation(self, package_id: uuid.UUID) -> ReviewPackageInvalidation | None:

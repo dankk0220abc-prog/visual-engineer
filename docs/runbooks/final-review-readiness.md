@@ -39,10 +39,14 @@ slice, or Phase 6.
 
 ## Stale or blocked handling
 
-Any accepted Validation/Suite/Evidence/Workspace/Checkpoint/Grant/blocker fact
-change advances the database freshness generation. The old Package, Decision,
-and readiness remain historical and immutable; the old effective readiness is
-`stale`. Do not retry approval with the old generation.
+Any accepted
+Validation/Suite/Evidence/Workspace/Checkpoint/Repository-Handle-revision/
+Grant/blocker fact change advances the database freshness generation. The
+authenticated Runner registration transaction is the trusted Repository
+Handle revision writer; it must update the Handle, generation, invalidation,
+and invalidation AuditEvent in one commit. The old Package, Decision, and
+readiness remain historical and immutable; the old effective readiness is
+`stale`. Do not retry approval with the old generation or its idempotency key.
 
 After the new trusted validation facts are complete, create a new Package
 generation and perform a new Decision/readiness workflow. Never copy or attach
@@ -56,10 +60,15 @@ For focused verification, confirm:
   PostgreSQL canonical recomputation;
 - stale packages are invalidated and cannot receive a database-only Decision
   or `ready` row;
+- the trusted Repository Handle revision transaction advances generation
+  exactly once, while an exact unchanged registration does not;
+- an out-of-band Handle revision drift is independently rejected by the
+  Decision and readiness database insert guards;
 - Critical, High, or blocking-Medium count above zero prevents approve/ready;
 - direct update/delete of review records and AuditEvents fails;
 - each Package has a unique monotonically increasing review-event sequence;
-- replay adds no Decision or AuditEvent; and
+- replay is checked against current generation and revision before return, and
+  adds no Decision or AuditEvent; and
 - denied paths add no effective-ready verdict, readiness-success event, Git
   delivery Grant, Workspace/source/Evidence mutation, or duplicate charge.
 

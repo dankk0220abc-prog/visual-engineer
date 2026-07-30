@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import NoReturn
 
 from pydantic import ValidationError
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from visual_engineer_api.core.config import get_settings
@@ -137,9 +138,19 @@ class WorkspaceService:
         handle = self._repositories.get_repository_handle_by_opaque(
             authenticated.id,
             payload.opaque_handle,
-            lock=True,
         )
+        if handle is not None:
+            self._session.execute(
+                text("SELECT lock_review_revision_authority(CAST(:repository_handle_id AS uuid))"),
+                {"repository_handle_id": str(handle.id)},
+            )
+            handle = self._repositories.get_repository_handle_by_opaque(
+                authenticated.id,
+                payload.opaque_handle,
+                lock=True,
+            )
         now = utc_now()
+        revision_authority_changed = False
         if handle is None:
             handle = RepositoryHandle(
                 runner_id=authenticated.id,
@@ -165,6 +176,9 @@ class WorkspaceService:
                 category="forbidden",
             )
         else:
+            revision_authority_changed = (
+                handle.current_revision != payload.current_revision or handle.status != "available"
+            )
             handle.display_name = payload.display_name
             handle.status = "available"
             handle.capabilities = list(payload.capabilities)
@@ -175,6 +189,18 @@ class WorkspaceService:
             handle.dirty_path_count = payload.dirty_path_count
             handle.last_verified_at = now
             handle.metadata_version = payload.metadata_version
+        self._session.flush()
+        if revision_authority_changed:
+            self._session.execute(
+                text(
+                    "SELECT bump_review_freshness_repository_handle("
+                    "CAST(:repository_handle_id AS uuid), :change_kind)"
+                ),
+                {
+                    "repository_handle_id": str(handle.id),
+                    "change_kind": "repository_handles:trusted_registration",
+                },
+            )
         self._session.commit()
         return RepositoryRegistrationResponse(
             repository_handle_id=handle.id,

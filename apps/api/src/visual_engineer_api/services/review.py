@@ -274,7 +274,7 @@ class ReviewService:
         request_id: str,
         idempotency_key: str | None = None,
     ) -> ReviewPackageResponse:
-        package = self._required_package(package_id, lock=True)
+        package = self._required_package_with_revision_authority(package_id)
         reason = payload.reason.strip() if payload.reason is not None else None
         expected_generation = (
             payload.expected_generation
@@ -293,6 +293,29 @@ class ReviewService:
         }
         request_hash = self._trusted_digest(request_payload)
         decision_key = idempotency_key or f"legacy:{package.id}:{request_hash}"
+
+        scope = self._reviews.freshness_state_by_id(package.freshness_state_id, lock=True)
+        if (
+            scope is None
+            or expected_generation != package.freshness_generation
+            or scope.generation != expected_generation
+        ):
+            self._conflict(
+                "review_generation_mismatch",
+                "Review Decision expected generation does not match the current Package generation",
+            )
+        stale_reason, observed = self._freshness_reason(package, lock_context=True)
+        if stale_reason is not None:
+            self._record_invalidation(
+                package,
+                reason_code=stale_reason,
+                observed_value=observed,
+                request_id=request_id,
+            )
+            self._conflict(
+                "stale_review_package",
+                "Stale Review Package cannot receive or replay a final decision",
+            )
 
         keyed_replay = self._reviews.decision_by_idempotency(decision_key, lock=True)
         if keyed_replay is not None:
@@ -320,28 +343,6 @@ class ReviewService:
                 "Review Package already has a different final decision",
             )
 
-        scope = self._reviews.freshness_state_by_id(package.freshness_state_id, lock=True)
-        if (
-            scope is None
-            or expected_generation != package.freshness_generation
-            or scope.generation != expected_generation
-        ):
-            self._conflict(
-                "review_generation_mismatch",
-                "Review Decision expected generation does not match the current Package generation",
-            )
-        stale_reason, observed = self._freshness_reason(package)
-        if stale_reason is not None:
-            self._record_invalidation(
-                package,
-                reason_code=stale_reason,
-                observed_value=observed,
-                request_id=request_id,
-            )
-            self._conflict(
-                "stale_review_package",
-                "Stale Review Package cannot receive a final decision",
-            )
         self._verify_package_integrity(package)
         if payload.decision == "approve" and (
             package.critical_count > 0
@@ -428,7 +429,7 @@ class ReviewService:
         *,
         request_id: str,
     ) -> ReviewPackageResponse:
-        package = self._required_package(package_id, lock=True)
+        package = self._required_package_with_revision_authority(package_id)
         scope = self._reviews.freshness_state_by_id(package.freshness_state_id, lock=True)
         if scope is None:
             self._conflict(
@@ -443,7 +444,7 @@ class ReviewService:
             )
         existing = self._reviews.readiness(package.id, lock=True)
         if existing is not None:
-            stale_reason, observed = self._freshness_reason(package)
+            stale_reason, observed = self._freshness_reason(package, lock_context=True)
             if stale_reason is not None:
                 self._record_invalidation(
                     package,
@@ -453,7 +454,7 @@ class ReviewService:
                 )
             return self._response(package)
 
-        stale_reason, observed = self._freshness_reason(package)
+        stale_reason, observed = self._freshness_reason(package, lock_context=True)
         if stale_reason is not None:
             self._record_invalidation(
                 package,
@@ -556,7 +557,7 @@ class ReviewService:
 
     def refresh_freshness(self, package_id: uuid.UUID, *, request_id: str) -> ReviewPackageResponse:
         package = self._required_package(package_id, lock=True)
-        stale_reason, observed = self._freshness_reason(package)
+        stale_reason, observed = self._freshness_reason(package, lock_context=True)
         if stale_reason is not None:
             self._record_invalidation(
                 package,
@@ -566,7 +567,12 @@ class ReviewService:
             )
         return self._response(package)
 
-    def _freshness_reason(self, package: ReviewPackage) -> tuple[str | None, str]:
+    def _freshness_reason(
+        self,
+        package: ReviewPackage,
+        *,
+        lock_context: bool = False,
+    ) -> tuple[str | None, str]:
         invalidation = self._reviews.invalidation(package.id)
         if invalidation is not None:
             return invalidation.reason_code, invalidation.observed_value
@@ -586,7 +592,10 @@ class ReviewService:
                 reason_by_change.get(scope.last_change_kind, "validation_facts_changed"),
                 f"generation:{scope.generation}",
             )
-        context = self._reviews.suite_context(package.suite_run_id, lock=True)
+        context = self._reviews.suite_context(
+            package.suite_run_id,
+            lock=lock_context,
+        )
         if context is None:
             return "evidence_integrity_failed", "suite_context_missing"
         suite_run, result, workspace, checkpoint, handle = context
@@ -608,7 +617,10 @@ class ReviewService:
         try:
             _, trusted_result, entries = ValidationSuiteService(
                 self._session
-            ).trusted_success_manifest(package.suite_run_id)
+            ).trusted_success_manifest(
+                package.suite_run_id,
+                lock=lock_context,
+            )
         except ValidationSuiteServiceError:
             return "evidence_integrity_failed", "trusted_reconstruction_failed"
         manifest = self._manifest(
@@ -1046,6 +1058,20 @@ class ReviewService:
         if package is None:
             self._not_found("review_package_not_found", "Review Package was not found")
         return package
+
+    def _required_package_with_revision_authority(self, package_id: uuid.UUID) -> ReviewPackage:
+        package = self._required_package(package_id)
+        self._reviews.lock_revision_authority(package.repository_handle_id)
+        authority = self._reviews.revision_authority(
+            package.repository_handle_id,
+            lock=True,
+        )
+        if authority is None:
+            self._conflict(
+                "review_revision_authority_missing",
+                "Review Package trusted Repository revision authority is missing",
+            )
+        return self._required_package(package_id, lock=True)
 
     @staticmethod
     def _not_found(code: str, message: str) -> NoReturn:

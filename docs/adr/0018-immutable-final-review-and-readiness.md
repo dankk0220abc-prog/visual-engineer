@@ -34,19 +34,25 @@ The targeted security remediation adds an explicit
 Checkpoint diff, Grant lineage, Suite policy, complete Evidence Manifest, and
 server-derived Critical/High/blocking-Medium summary into one PostgreSQL-
 recomputed canonical digest chain. Any accepted validation, Suite, Evidence,
-Checkpoint, Workspace, Grant, or blocker fact change advances the scope and
-atomically appends a package invalidation event. Immutable source facts reject
-in-place policy or Evidence replacement.
+Checkpoint, Workspace, authenticated Repository Handle revision/status,
+Grant, or blocker fact change advances the scope and atomically appends a
+package invalidation event. The sole trusted Handle writer uses a
+transaction-level revision mutex, locks the Handle, and invokes the database
+scope-bump function before committing the authority change. Immutable source
+facts reject in-place policy or Evidence replacement.
 
 Every read exposes effective freshness. A historical `ready` verdict becomes
 effectively `stale` whenever the current generation or baseline no longer
 matches. Decision requests bind the observed generation and a persisted keyed
-idempotency hash. Decision and readiness creation lock and revalidate the
-baseline, trusted Evidence, policy, Grant, and blocker summary. PostgreSQL
-recomputes the canonical package/Decision/readiness values, rejects mutation
-or foreign bindings, and permits `ready` only for an approved current
-generation whose three blocking counts are zero. Review AuditEvents carry a
-package-local monotonic sequence and are append-only.
+idempotency hash. Current generation and freshness are revalidated before
+returning an exact keyed replay. Decision and readiness creation acquire the
+same revision mutex and lock/revalidate the Repository Handle, baseline,
+trusted Evidence, policy, Grant, and blocker summary. PostgreSQL directly
+compares the Handle revision/status with the frozen Package before either row
+can be inserted, recomputes the canonical package/Decision/readiness values,
+rejects mutation or foreign bindings, and permits `ready` only for an approved
+current generation whose three blocking counts are zero. Review AuditEvents
+carry a package-local monotonic sequence and are append-only.
 
 All four records force `git_authorization = false` and
 `deployment_authorization = false`. They do not create commands, branches,

@@ -3,13 +3,22 @@
 - Phase: Phase 5 Third Vertical Slice — Governed Final Review & Release
   Readiness
 - Overall status:
-  `PHASE_5_THIRD_SLICE_FOCUSED_RE_REVIEW_FAIL_REMEDIATION_REQUIRED`
-- Governance qualifier: INDEPENDENT FOCUSED RE-REVIEW FAIL; ONE NEW BLOCKING
-  MEDIUM; FINAL AGGREGATE NOT RUN; NO SEALING, MAIN INTEGRATION, DELIVERY, OR
-  PHASE 6 AUTHORIZATION
+  `PHASE_5_REVIEW_REVISION_FRESHNESS_REMEDIATION_COMPLETE_READY_FOR_INDEPENDENT_SINGLE_FINDING_RE_REVIEW`
+- Governance qualifier: IMPLEMENTER SINGLE-FINDING REMEDIATION COMPLETE;
+  HISTORICAL INDEPENDENT FOCUSED RE-REVIEW FAIL PRESERVED; FINAL AGGREGATE NOT
+  RUN; NO GATE PASS, SEALING, MAIN INTEGRATION, DELIVERY, OR PHASE 6
+  AUTHORIZATION
 - Last updated: 2026-07-30
 - Current main / Third Slice base:
   `50dcc05ce48d042882bcdf199ae1bee662a83af6`
+- Current revision-freshness remediation branch:
+  `fix/phase-5-review-revision-freshness-remediation-2`
+- Revision-freshness remediation base / independent FAIL checkpoint:
+  `cce04d460a40416bc01f6ca2b44ee71948775c88`
+- Revision-freshness remediation plan:
+  [`docs/exec-plans/phase-5-review-revision-freshness-remediation-2.md`](../exec-plans/phase-5-review-revision-freshness-remediation-2.md)
+- Revision-freshness remediation evidence:
+  [`docs/evidence/phase-5-review-revision-freshness-remediation-2-verification.md`](../evidence/phase-5-review-revision-freshness-remediation-2-verification.md)
 - Current focused re-review branch:
   `audit/phase-5-governed-final-review-reaudit-max`
 - Reviewed remediation candidate:
@@ -26,7 +35,7 @@
   `fix/phase-5-governed-final-review-remediation-1`
 - Third Slice remediation base:
   `5371495b1dd27db2ff3bbca4ddc12eaee47e7982`
-- Active plan:
+- Preserved independent re-review plan:
   [`docs/exec-plans/phase-5-governed-final-review-focused-rereview.md`](../exec-plans/phase-5-governed-final-review-focused-rereview.md)
 - Phase 5 second-slice remediation branch:
   `fix/phase-5-validation-suites-remediation-1`
@@ -98,6 +107,50 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 Review revision-freshness targeted remediation 2
+
+`VE-P5-REVIEW-RR-001` is closed in the implementer candidate and is ready for
+an independent single-Finding re-review. This does not replace or revise the
+historical independent FAIL below.
+
+The sole trusted Repository Handle revision writer is the authenticated Runner
+registration transaction. It now acquires a shared PostgreSQL
+revision-authority mutex and Handle row lock, persists the revision/status
+change, advances every affected freshness scope, invalidates old Packages and
+effective readiness, and appends the immutable invalidation AuditEvent before
+one commit. Decision and readiness paths acquire the same mutex, lock the
+trusted Handle, revalidate the frozen revision and current generation before
+write, and revalidate generation/freshness before an exact keyed replay.
+Additive database insert guards reject a stale direct approve/reject or ready
+row even after an out-of-band Handle table update.
+
+Current implementer verification:
+
+- unchanged independent Finding plus permanent regression matrix: `8/8`;
+- focused Review API and `FR-002`/`FR-003`/`FR-004`/`FR-005` non-regression:
+  `28/28`;
+- affected Workspace/Validation API tests: `37/37`;
+- clean migration pytest: `1/1`;
+- populated `0012 -> 0011 -> 0012` and clean
+  `base -> head -> base -> head`: pass;
+- contracts, lint, Python/TypeScript typecheck, Web build, source invariance,
+  formatting, and `git diff --check`: pass; and
+- source invariance compares `119` entries, `10` Git objects, and `2` status
+  records with status `PASS`.
+
+No full `make verify`, full E2E, Chaos, Security, Eval, browser expansion, or
+final aggregate was run in this remediation. No API schema or HTTP contract
+changed. `changes_requested` remains outside the closed Third Slice terminal
+Decision domain and is rejected with `422`; approve/reject remain the only
+terminal Decisions. Approval and readiness still create no Git, pull-request,
+merge, tag, deployment, command, or later-phase authority.
+
+Detailed implementer artifacts:
+
+- [`docs/exec-plans/phase-5-review-revision-freshness-remediation-2.md`](../exec-plans/phase-5-review-revision-freshness-remediation-2.md)
+- [`docs/evidence/phase-5-review-revision-freshness-remediation-2-verification.md`](../evidence/phase-5-review-revision-freshness-remediation-2-verification.md)
+- [`docs/runbooks/final-review-readiness.md`](../runbooks/final-review-readiness.md)
 
 ## Phase 5 Third Vertical Slice independent focused re-review decision
 

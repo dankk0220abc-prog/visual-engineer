@@ -94,9 +94,14 @@ Validation, Suite, Evidence, Workspace, Checkpoint, Grant, or blocker changes
 advance the locked scope and append an immutable invalidation/event. Package,
 Decision, blocker, verdict, and AuditEvent rows are append-only. Decision
 requests bind expected generation and a persisted idempotency key/hash.
-PostgreSQL independently rejects stale generations, forged canonical digests,
-foreign bindings, record mutation, and any ready verdict whose Decision is not
-approve or whose Critical/High/blocking-Medium counts are not `0/0/0`.
+Authenticated Repository Handle revision/status changes use the same
+transaction to advance every affected scope and invalidate old readiness.
+Decision and readiness writes serialize on that revision authority and
+PostgreSQL independently compares the current Handle revision/status with the
+frozen Package. Generation and freshness are checked before keyed replay.
+PostgreSQL also rejects stale generations, forged canonical digests, foreign
+bindings, record mutation, and any ready verdict whose Decision is not approve
+or whose Critical/High/blocking-Medium counts are not `0/0/0`.
 
 Review approval and readiness are governance evidence only. Database checks,
 API literals, and browser copy all fix Git and deployment authorization to
