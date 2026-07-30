@@ -52,17 +52,26 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The active targeted-remediation plan is
+The active independent single-Finding record is
+[`docs/exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md`](docs/exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md).
+It reviews only `VE-P5-REVIEW-RR-001` at
+`efeecda57109ff8c3470f83a2aeb659e7ead31be`. The unchanged minimum matrix
+passes, but concurrent identical trusted revision replay advances generation
+twice and makes the single-Finding decision FAIL. Final aggregate, sealing,
+main integration, Git delivery, CreativeDeploy, Customer 0, later phases, and
+Phase 6 remain unauthorized.
+
+The targeted revision-freshness remediation plan remains at
+[`docs/exec-plans/phase-5-review-revision-freshness-remediation-2.md`](docs/exec-plans/phase-5-review-revision-freshness-remediation-2.md).
+Its implementer evidence is preserved historical context and does not override
+the later independent FAIL.
+
+The earlier five-Finding targeted-remediation plan remains at
 [`docs/exec-plans/phase-5-governed-final-review-remediation-1.md`](docs/exec-plans/phase-5-governed-final-review-remediation-1.md).
-It addresses only the five blocking Medium Findings recorded by the
-independent Third Slice focused-review FAIL checkpoint
-`5371495b1dd27db2ff3bbca4ddc12eaee47e7982`: freshness generation,
-server/database canonical digest reconstruction, append-only review history,
-expected-generation keyed Decision replay, and frozen zero-blocker readiness
-proof. Its successful endpoint is readiness for a new independent focused
-re-review, not Gate PASS, sealing, main integration, or later-phase
-authorization. Review approval is not Git or deployment authority. Phase 6,
-Git delivery, CreativeDeploy, and Customer 0 remain unauthorized.
+It addressed freshness generation, server/database canonical digest
+reconstruction, append-only review history, expected-generation keyed
+Decision replay, and frozen zero-blocker readiness proof. Its implementer
+result is not a Gate decision.
 
 The original Third Slice implementation plan remains at
 [`docs/exec-plans/phase-5-governed-final-review-readiness.md`](docs/exec-plans/phase-5-governed-final-review-readiness.md);

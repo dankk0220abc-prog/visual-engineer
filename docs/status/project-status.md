@@ -3,14 +3,24 @@
 - Phase: Phase 5 Third Vertical Slice — Governed Final Review & Release
   Readiness
 - Overall status:
-  `PHASE_5_REVIEW_REVISION_FRESHNESS_REMEDIATION_COMPLETE_READY_FOR_INDEPENDENT_SINGLE_FINDING_RE_REVIEW`
-- Governance qualifier: IMPLEMENTER SINGLE-FINDING REMEDIATION COMPLETE;
-  HISTORICAL INDEPENDENT FOCUSED RE-REVIEW FAIL PRESERVED; FINAL AGGREGATE NOT
-  RUN; NO GATE PASS, SEALING, MAIN INTEGRATION, DELIVERY, OR PHASE 6
+  `PHASE_5_REVIEW_REVISION_FRESHNESS_SINGLE_FINDING_RE_REVIEW_FAIL_REMEDIATION_REQUIRED`
+- Governance qualifier: INDEPENDENT SINGLE-FINDING RE-REVIEW FAIL;
+  CONCURRENT IDENTICAL REVISION REPLAY ADVANCES GENERATION TWICE; FINAL
+  AGGREGATE NOT RUN; NO SEALING, MAIN INTEGRATION, DELIVERY, OR PHASE 6
   AUTHORIZATION
-- Last updated: 2026-07-30
+- Last updated: 2026-07-31
 - Current main / Third Slice base:
   `50dcc05ce48d042882bcdf199ae1bee662a83af6`
+- Current independent single-Finding re-review branch:
+  `audit/phase-5-review-revision-freshness-single-finding-rereview`
+- Reviewed revision-freshness candidate:
+  `efeecda57109ff8c3470f83a2aeb659e7ead31be`
+- Independent single-Finding re-review plan:
+  [`docs/exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md`](../exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md)
+- Independent single-Finding audit:
+  [`docs/security/audits/phase-5-review-revision-freshness-single-finding-rereview.md`](../security/audits/phase-5-review-revision-freshness-single-finding-rereview.md)
+- Independent single-Finding evidence:
+  [`docs/evidence/phase-5-review-revision-freshness-single-finding-rereview-verification.md`](../evidence/phase-5-review-revision-freshness-single-finding-rereview-verification.md)
 - Current revision-freshness remediation branch:
   `fix/phase-5-review-revision-freshness-remediation-2`
 - Revision-freshness remediation base / independent FAIL checkpoint:
@@ -108,11 +118,52 @@
 - Remote: none
 - Remote CI: not run
 
+## Phase 5 Review revision-freshness independent single-Finding re-review
+
+`VE-P5-REVIEW-RR-001` remains **FAIL / REMEDIATION REQUIRED** at candidate
+`efeecda57109ff8c3470f83a2aeb659e7ead31be`.
+
+The exact Git/candidate preflight passed, historical FAIL evidence and the
+original independent test remain byte-identical, and the unchanged original
+Finding plus permanent remediation matrix passes `8/8`. The candidate
+successfully fences stale direct approve/reject/readiness writes, rejects
+`changes_requested`, rolls back revision/generation/invalidation/event
+together, invalidates historical ready state after one trusted revision
+change, and serializes both approve-first and revision-first transaction
+orders.
+
+The independent final matrix is `10 passed, 1 failed`. The sole failure
+deterministically synchronizes two trusted transactions at the production
+initial Handle lookup, then submits the same new revision. Both registrations
+return that revision, but the freshness generation advances from `1` to `3`
+instead of `2`. Invalidation and invalidation AuditEvent counts remain
+`1 / 1`, and Decision/ready counts remain `0 / 0`. The same secure assertion
+failed in two focused invocations and again in the final matrix.
+
+This violates the required replay idempotency and no-generation-gap
+invariants. The blocker stop applies: the `28/28` Review matrix, `37/37`
+Workspace/Validation matrix, dynamic migration roundtrips, final
+`make verify`, E2E/accessibility, Security/Eval/Chaos, Final Gate cleanup
+probe, and sealing were **NOT RUN**.
+
+Only the exact audit-owned PostgreSQL project was removed. Its filtered
+container/network/volume inventories are empty, cleanup replay succeeds, and
+port `62941` is free. Production code remains unchanged from the candidate.
+Main remains `50dcc05ce48d042882bcdf199ae1bee662a83af6`. No remote, push, pull
+request, merge, tag, deployment, CreativeDeploy, sibling repository, Customer
+0, later slice, or Phase 6 action occurred.
+
+Detailed independent artifacts:
+
+- [`docs/exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md`](../exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md)
+- [`docs/security/audits/phase-5-review-revision-freshness-single-finding-rereview.md`](../security/audits/phase-5-review-revision-freshness-single-finding-rereview.md)
+- [`docs/evidence/phase-5-review-revision-freshness-single-finding-rereview-verification.md`](../evidence/phase-5-review-revision-freshness-single-finding-rereview-verification.md)
+
 ## Phase 5 Review revision-freshness targeted remediation 2
 
-`VE-P5-REVIEW-RR-001` is closed in the implementer candidate and is ready for
-an independent single-Finding re-review. This does not replace or revise the
-historical independent FAIL below.
+The implementer candidate reported `VE-P5-REVIEW-RR-001` closed and ready for
+independent single-Finding re-review. The later independent decision above is
+the governing result; this section remains preserved implementer history.
 
 The sole trusted Repository Handle revision writer is the authenticated Runner
 registration transaction. It now acquires a shared PostgreSQL
