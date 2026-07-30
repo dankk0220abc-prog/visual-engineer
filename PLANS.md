@@ -52,7 +52,19 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The active independent single-Finding record is
+The active final narrow production remediation record is
+[`docs/exec-plans/phase-5-review-revision-freshness-remediation-3.md`](docs/exec-plans/phase-5-review-revision-freshness-remediation-3.md).
+It changes only the locked trusted Repository Handle lookup so a transaction
+that waited for the existing PostgreSQL revision-authority lock reloads the
+committed revision before deciding whether to advance freshness. The
+unchanged independent file now passes `11/11`; original `8/8`, focused Review
+`28/28`, affected Workspace/Validation `37/37`, migrations, static/build
+gates, and source invariance pass. This is implementer evidence ready only for
+a fresh independent single-Finding re-review after the local checkpoint; it
+is not Gate PASS, sealing, main integration, Git delivery, or later-phase
+authorization.
+
+The preserved independent single-Finding record is
 [`docs/exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md`](docs/exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md).
 It reviews only `VE-P5-REVIEW-RR-001` at
 `efeecda57109ff8c3470f83a2aeb659e7ead31be`. The unchanged minimum matrix

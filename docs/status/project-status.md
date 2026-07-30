@@ -3,14 +3,22 @@
 - Phase: Phase 5 Third Vertical Slice — Governed Final Review & Release
   Readiness
 - Overall status:
-  `PHASE_5_REVIEW_REVISION_FRESHNESS_SINGLE_FINDING_RE_REVIEW_FAIL_REMEDIATION_REQUIRED`
-- Governance qualifier: INDEPENDENT SINGLE-FINDING RE-REVIEW FAIL;
-  CONCURRENT IDENTICAL REVISION REPLAY ADVANCES GENERATION TWICE; FINAL
-  AGGREGATE NOT RUN; NO SEALING, MAIN INTEGRATION, DELIVERY, OR PHASE 6
-  AUTHORIZATION
+  `PHASE_5_REVIEW_REVISION_FRESHNESS_REMEDIATION_3_COMPLETE_READY_FOR_INDEPENDENT_RE_REVIEW`
+- Governance qualifier: IMPLEMENTER REMEDIATION COMPLETE; UNCHANGED
+  SINGLE-FINDING FILE PASSES; FRESH INDEPENDENT RE-REVIEW REQUIRED; FINAL
+  AGGREGATE NOT RUN; NO GATE PASS, SEALING, MAIN INTEGRATION, DELIVERY, OR
+  PHASE 6 AUTHORIZATION
 - Last updated: 2026-07-31
 - Current main / Third Slice base:
   `50dcc05ce48d042882bcdf199ae1bee662a83af6`
+- Current final narrow remediation branch:
+  `fix/phase-5-review-revision-freshness-remediation-3`
+- Final narrow remediation base / independent FAIL checkpoint:
+  `a1dd0a9b68c73a45e4aa8b8754e51c385f3bad95`
+- Final narrow remediation plan:
+  [`docs/exec-plans/phase-5-review-revision-freshness-remediation-3.md`](../exec-plans/phase-5-review-revision-freshness-remediation-3.md)
+- Final narrow remediation evidence:
+  [`docs/evidence/phase-5-review-revision-freshness-remediation-3-verification.md`](../evidence/phase-5-review-revision-freshness-remediation-3-verification.md)
 - Current independent single-Finding re-review branch:
   `audit/phase-5-review-revision-freshness-single-finding-rereview`
 - Reviewed revision-freshness candidate:
@@ -117,6 +125,54 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 Review revision-freshness final narrow remediation 3
+
+The production implementer has closed only the concurrent identical-revision
+replay defect within `VE-P5-REVIEW-RR-001`. The trusted registration path
+retains its existing PostgreSQL transaction-level advisory lock and Handle
+row lock, but its locked query now forces a reload of the already-loaded
+SQLAlchemy identity. A waiting transaction therefore compares the committed
+post-lock revision instead of the pre-wait ORM attribute.
+
+The unchanged independent concurrent reproduction first failed before repair
+with generation `1 -> 3`, two equal returned revisions, one invalidation, one
+AuditEvent, and zero Decision/ready rows. After the one-line production
+repair, that unchanged test passes with exact generation `1 -> 2`.
+
+An additive permanent `2/2` regression observes PostgreSQL
+`Lock/advisory`: identical concurrent callers both return the same revision
+and observe generation `2`; different concurrent revisions remain two real
+transitions and finish at generation `3`. Historical ready remains immutable
+but effectively stale, invalidation/AuditEvent remain `1/1`, no duplicate
+ready or blocker summary appears, and no generation gap remains.
+
+Current implementer verification:
+
+- original Finding plus remediation-2 matrix: `8/8`;
+- unchanged independent single-Finding file: `11/11`;
+- focused Review and `FR-002`/`FR-003`/`FR-004`/`FR-005`: `28/28`;
+- affected Workspace/Validation: `37/37`;
+- forced rollback, stale direct Decision/readiness fencing, keyed replay,
+  approve-first/revision-first lock order, and append-only AuditEvent: pass;
+- populated `0012 -> 0011 -> 0012`, clean
+  `base -> head -> base -> head`, one migration head, and migration pytest:
+  pass;
+- contracts, format, lint, Python/TypeScript typecheck, Web production build,
+  and source invariance: pass; and
+- exact task Compose cleanup: zero containers, networks, and volumes; cleanup
+  replay succeeds and the task port is free.
+
+No migration or contract changed. Full `make verify`, final aggregate, E2E,
+Chaos, broad Security/Eval, sealing, and main integration were not run.
+Detailed implementer artifacts:
+
+- [`docs/exec-plans/phase-5-review-revision-freshness-remediation-3.md`](../exec-plans/phase-5-review-revision-freshness-remediation-3.md)
+- [`docs/evidence/phase-5-review-revision-freshness-remediation-3-verification.md`](../evidence/phase-5-review-revision-freshness-remediation-3-verification.md)
+
+This implementer result is ready only for a fresh independent single-Finding
+re-review after the exact local checkpoint. It is not Security Gate PASS,
+sealing, main integration, delivery, or later-phase authorization.
 
 ## Phase 5 Review revision-freshness independent single-Finding re-review
 

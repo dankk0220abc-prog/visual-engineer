@@ -58,7 +58,7 @@ class WorkspaceRepository:
             RepositoryHandle.opaque_handle == opaque_handle,
         )
         if lock:
-            statement = statement.with_for_update()
+            statement = statement.with_for_update().execution_options(populate_existing=True)
         return self._session.scalar(statement)
 
     def list_repository_handles(self) -> list[RepositoryHandle]:
