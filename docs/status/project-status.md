@@ -3,14 +3,24 @@
 - Phase: Phase 5 Third Vertical Slice — Governed Final Review & Release
   Readiness
 - Overall status:
-  `PHASE_5_REVIEW_REVISION_FRESHNESS_REMEDIATION_3_COMPLETE_READY_FOR_INDEPENDENT_RE_REVIEW`
-- Governance qualifier: IMPLEMENTER REMEDIATION COMPLETE; UNCHANGED
-  SINGLE-FINDING FILE PASSES; FRESH INDEPENDENT RE-REVIEW REQUIRED; FINAL
-  AGGREGATE NOT RUN; NO GATE PASS, SEALING, MAIN INTEGRATION, DELIVERY, OR
-  PHASE 6 AUTHORIZATION
+  `PHASE_5_THIRD_SLICE_FINAL_GATE_PASS_SEALED_AWAITING_EXPLICIT_USER_AUTHORIZATION_FOR_LOCAL_FAST_FORWARD_MAIN`
+- Governance qualifier: INDEPENDENT `VE-P5-REVIEW-RR-001` PASS; ONE COMPLETE
+  AGGREGATE PASS; LOCAL SEAL ONLY; MAIN UNCHANGED; NO REMOTE, PUSH, PULL
+  REQUEST, TAG, DEPLOYMENT, DELIVERY, OR PHASE 6 AUTHORIZATION
 - Last updated: 2026-07-31
 - Current main / Third Slice base:
   `50dcc05ce48d042882bcdf199ae1bee662a83af6`
+- Final independent re-review branch:
+  `audit/phase-5-review-revision-freshness-final-rereview`
+- Final independent re-review candidate:
+  `7450d4665d682db808692347860a602809bfa080`
+- Final independent re-review plan:
+  [`docs/exec-plans/phase-5-review-revision-freshness-final-rereview.md`](../exec-plans/phase-5-review-revision-freshness-final-rereview.md)
+- Final independent re-review evidence:
+  [`docs/evidence/phase-5-review-revision-freshness-final-rereview-verification.md`](../evidence/phase-5-review-revision-freshness-final-rereview-verification.md)
+- Local sealing subject:
+  `chore: seal phase 5 governed final review`
+- Local sealing hash: reported in the post-commit handoff
 - Current final narrow remediation branch:
   `fix/phase-5-review-revision-freshness-remediation-3`
 - Final narrow remediation base / independent FAIL checkpoint:
@@ -125,6 +135,58 @@
 - Main: `928a89d2055d172bbd7c6670b42f668d103dcb03`
 - Remote: none
 - Remote CI: not run
+
+## Phase 5 Third Slice final independent re-review and seal
+
+`VE-P5-REVIEW-RR-001` is **PASS** at exact candidate
+`7450d4665d682db808692347860a602809bfa080`.
+
+The byte-unchanged independent file has SHA-256 `438acf30...` and passes
+`11/11`. A deterministic supporting concurrency test observes the second
+transaction in PostgreSQL `Lock/advisory` wait. For two identical trusted
+revision registrations:
+
+- both inputs and both returned revisions are identical;
+- both callers observe final generation `2`;
+- persisted generation is exact `1 -> 2`, never `3`;
+- invalidation and invalidation AuditEvent counts are `1 / 1`; and
+- historical Decision/readiness remain immutable while effective readiness
+  becomes stale.
+
+Two different concurrent revisions remain distinct transitions and finish at
+generation `3`. Sequential same-revision replay advances only once.
+Approve-first and revision-first orderings pass with real advisory waits.
+Forced failure rolls revision, generation, invalidation, and AuditEvent back
+together. Stale direct Decision/readiness writes, old-generation keyed replay,
+and AuditEvent update/delete remain fail closed.
+
+Current independent verification:
+
+- remediation-3 concurrent identical/different cases: `2/2`;
+- original Finding/remediation matrix: `8/8`;
+- unchanged independent single-Finding file: `11/11`;
+- focused Review matrix: `28/28`;
+- affected Workspace/Validation matrix: `37/37`;
+- populated and clean migration roundtrips plus migration pytest: pass;
+- contracts, format, lint, typecheck, build, source invariance, and
+  `git diff --check`: pass;
+- exactly one complete `make verify`: exit `0`, including Backend/Runner/
+  Protocol `293/293`, Web `50/50`, and Playwright `16/16`; and
+- exact audit, E2E, and Chaos project cleanup: zero containers, networks, and
+  volumes, with cleanup replay and final port bind probes passing.
+
+The reviewer changed no production code and preserved the earlier independent
+FAIL artifacts. Main remains
+`50dcc05ce48d042882bcdf199ae1bee662a83af6`. No remote, push, pull request,
+merge, tag, deployment, delivery, CreativeDeploy, Customer 0, later slice, or
+Phase 6 action occurred.
+
+Detailed final artifacts:
+
+- [`docs/exec-plans/phase-5-review-revision-freshness-final-rereview.md`](../exec-plans/phase-5-review-revision-freshness-final-rereview.md)
+- [`docs/evidence/phase-5-review-revision-freshness-final-rereview-verification.md`](../evidence/phase-5-review-revision-freshness-final-rereview-verification.md)
+
+`PHASE 5 THIRD SLICE FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
 
 ## Phase 5 Review revision-freshness final narrow remediation 3
 

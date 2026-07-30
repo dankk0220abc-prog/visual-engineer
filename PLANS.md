@@ -52,7 +52,20 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The active final narrow production remediation record is
+The active completed final independent re-review record is
+[`docs/exec-plans/phase-5-review-revision-freshness-final-rereview.md`](docs/exec-plans/phase-5-review-revision-freshness-final-rereview.md).
+It decides only `VE-P5-REVIEW-RR-001` at
+`7450d4665d682db808692347860a602809bfa080`. Real PostgreSQL confirms
+concurrent identical revision registration advances generation exactly
+`1 -> 2`, both responses return the same revision and generation, one
+invalidation/AuditEvent is created, and the second transaction waits on the
+shared advisory lock. Original `8/8`, independent `11/11`, Review `28/28`,
+Workspace/Validation `37/37`, migrations, static/build/invariance gates, one
+complete `make verify`, and exact Docker cleanup pass. The Third Slice Final
+Gate is sealed locally and awaits explicit user authorization for a local
+fast-forward of `main`.
+
+The preserved final narrow production remediation record is
 [`docs/exec-plans/phase-5-review-revision-freshness-remediation-3.md`](docs/exec-plans/phase-5-review-revision-freshness-remediation-3.md).
 It changes only the locked trusted Repository Handle lookup so a transaction
 that waited for the existing PostgreSQL revision-authority lock reloads the
@@ -62,7 +75,8 @@ unchanged independent file now passes `11/11`; original `8/8`, focused Review
 gates, and source invariance pass. This is implementer evidence ready only for
 a fresh independent single-Finding re-review after the local checkpoint; it
 is not Gate PASS, sealing, main integration, Git delivery, or later-phase
-authorization.
+authorization. The later final independent re-review above is the governing
+decision.
 
 The preserved independent single-Finding record is
 [`docs/exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md`](docs/exec-plans/phase-5-review-revision-freshness-single-finding-rereview.md).
