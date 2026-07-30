@@ -1,3 +1,9 @@
+from visual_engineer_api.models.review import (
+    ReleaseReadinessVerdict,
+    ReviewDecision,
+    ReviewPackage,
+    ReviewPackageInvalidation,
+)
 from visual_engineer_api.models.run import (
     ApprovalDecision,
     AuditEvent,
@@ -38,8 +44,12 @@ __all__ = [
     "ExecutionGrantDecision",
     "PermissionEnvelope",
     "Plan",
+    "ReleaseReadinessVerdict",
     "RepositoryHandle",
     "RepositorySnapshot",
+    "ReviewDecision",
+    "ReviewPackage",
+    "ReviewPackageInvalidation",
     "Run",
     "Runner",
     "RunnerJob",

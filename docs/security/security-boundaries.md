@@ -120,6 +120,14 @@ locks and uniqueness ensure one concurrent winner. Approval sets a terminal
 Phase 2 state and does not execute or authorize code. Phase 4 requires a new
 pending Grant and a second local-user approve/reject decision.
 
+The Phase 5 final Review Decision is a third, separate governance record bound
+to one immutable latest-success Evidence Package. Package freshness is derived
+from the exact source revision, Workspace tree, latest Checkpoint, latest
+successful Suite Result, and reconstructed Evidence digest chain. A mismatch
+creates or implies a stale fence before decision/readiness effect. PostgreSQL
+allows one immutable Review Decision and one immutable readiness snapshot, and
+independently forces Git/deployment authorization false.
+
 ## Runner identity and protocol boundary
 
 - Bootstrap registration uses an ignored high-entropy local token that is

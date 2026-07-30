@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from starlette.responses import Response
 
 from visual_engineer_api.api.health import router as health_router
+from visual_engineer_api.api.reviews import router as reviews_router
 from visual_engineer_api.api.runner_protocol import router as runner_protocol_router
 from visual_engineer_api.api.runners import router as runners_router
 from visual_engineer_api.api.runs import router as runs_router
@@ -216,6 +217,7 @@ def create_app() -> FastAPI:
     app.include_router(runners_router)
     app.include_router(workspaces_router)
     app.include_router(validations_router)
+    app.include_router(reviews_router)
     app.include_router(runner_protocol_router)
     return app
 

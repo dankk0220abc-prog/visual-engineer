@@ -163,6 +163,27 @@ type ValidationSuiteRunRetryOperation = OperationAt<
   "/api/v1/validation-suite-runs/{suite_run_id}/retry",
   "post"
 >;
+type ReviewPackageListOperation = OperationAt<"/api/v1/review-packages", "get">;
+type ReviewPackageCreateOperation = OperationAt<
+  "/api/v1/review-packages",
+  "post"
+>;
+type ReviewPackageDetailOperation = OperationAt<
+  "/api/v1/review-packages/{package_id}",
+  "get"
+>;
+type ReviewPackageFreshnessOperation = OperationAt<
+  "/api/v1/review-packages/{package_id}/freshness",
+  "post"
+>;
+type ReviewDecisionOperation = OperationAt<
+  "/api/v1/review-packages/{package_id}/decisions",
+  "post"
+>;
+type ReleaseReadinessOperation = OperationAt<
+  "/api/v1/review-packages/{package_id}/readiness",
+  "post"
+>;
 
 export type Task = JsonResponse<TaskDetailOperation, 200>;
 export type CreateTaskInput = JsonRequest<TaskCreateOperation>;
@@ -259,6 +280,11 @@ export type CreateValidationSuiteRunInput =
   JsonRequest<ValidationSuiteRunCreateOperation>;
 export type RetryValidationSuiteRunInput =
   JsonRequest<ValidationSuiteRunRetryOperation>;
+type ReviewPackageListPayload = JsonResponse<ReviewPackageListOperation, 200>;
+export type ReviewPackage = JsonResponse<ReviewPackageDetailOperation, 200>;
+export type CreateReviewPackageInput =
+  JsonRequest<ReviewPackageCreateOperation>;
+export type ReviewDecisionInput = JsonRequest<ReviewDecisionOperation>;
 
 export type HealthCheck = "live" | "ready";
 export type RepositoryKind = CreateTaskInput extends {
@@ -973,5 +999,74 @@ export async function retryValidationSuiteRun(
     },
     body: JSON.stringify(input),
   });
+  return data;
+}
+
+export async function listReviewPackages(): Promise<ReviewPackage[]> {
+  const { data } = await request<ReviewPackageListPayload>(
+    "/api/v1/review-packages",
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function createReviewPackage(
+  input: CreateReviewPackageInput,
+  idempotencyKey: string,
+): Promise<ReviewPackage> {
+  const { data } = await request<
+    JsonResponse<ReviewPackageCreateOperation, 201>
+  >("/api/v1/review-packages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function refreshReviewPackage(
+  packageId: string,
+): Promise<ReviewPackage> {
+  const { data } = await request<
+    JsonResponse<ReviewPackageFreshnessOperation, 200>
+  >(`/api/v1/review-packages/${encodeURIComponent(packageId)}/freshness`, {
+    method: "POST",
+    headers: { "X-Request-ID": crypto.randomUUID() },
+  });
+  return data;
+}
+
+export async function decideReviewPackage(
+  packageId: string,
+  input: ReviewDecisionInput,
+): Promise<ReviewPackage> {
+  const { data } = await request<JsonResponse<ReviewDecisionOperation, 200>>(
+    `/api/v1/review-packages/${encodeURIComponent(packageId)}/decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return data;
+}
+
+export async function evaluateReleaseReadiness(
+  packageId: string,
+): Promise<ReviewPackage> {
+  const { data } = await request<JsonResponse<ReleaseReadinessOperation, 200>>(
+    `/api/v1/review-packages/${encodeURIComponent(packageId)}/readiness`,
+    {
+      method: "POST",
+      headers: { "X-Request-ID": crypto.randomUUID() },
+    },
+  );
   return data;
 }

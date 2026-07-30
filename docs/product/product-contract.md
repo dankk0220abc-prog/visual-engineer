@@ -124,17 +124,20 @@ CreativeDeploy is not an external enterprise customer. This case provides no
 adoption, time-saving, quality-improvement, financial, production-usage, or
 production-deployment evidence.
 
-## Intended V1 beyond Phase 4
+## Intended V1 beyond the current Phase 5 slice
 
 V1 is not complete until a separately authorized system can:
 
 - safely extend a separately authorized workspace beyond the synthetic fixture;
 - execute separately approved closed validation commands without a shell;
 - show attributable tool and browser-validation evidence;
-- obtain a distinct final delivery approval; and
+- obtain a distinct Git-authorizing final delivery approval beyond the current
+  governance-only Review Decision; and
 - perform an explicitly allowed branch, commit, or pull-request action.
 
-These are future requirements, not Phase 4 capabilities.
+These are future requirements, not Third Slice capabilities. The current
+Review Package/Decision/Readiness workflow never grants Git or deployment
+authority.
 
 ## Quality attributes
 

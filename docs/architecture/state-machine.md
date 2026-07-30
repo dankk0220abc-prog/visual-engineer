@@ -314,5 +314,29 @@ definition digest, and one allowed Suite Run. One Grant cannot create a second
 root or retry even with a different idempotency key. Previously successful
 Evidence is reused without a new job or budget charge; every remaining step
 gets a new Validation Run, Attempt, Lease, and Permit. Terminal Suite
-rows/results are immutable. The targeted remediation is a local candidate
-pending fresh independent focused re-audit.
+rows/results are immutable. The Second Slice later completed independent
+focused re-audit, sealing, and pure-fast-forward local main integration at
+`50dcc05ce48d042882bcdf199ae1bee662a83af6`; its historical FAIL and remediation
+records remain unchanged.
+
+## Phase 5 final review and readiness lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> fresh_package: latest successful trusted Suite Evidence
+    fresh_package --> approved: one local-user decision
+    fresh_package --> rejected: one reasoned local-user decision
+    fresh_package --> stale: baseline or Evidence mismatch
+    approved --> ready: deterministic fresh evaluation
+    approved --> stale: later baseline or Evidence mismatch
+    rejected --> not_ready: deterministic evaluation
+    rejected --> stale: later baseline or Evidence mismatch
+    ready --> stale: effective verdict fencing
+    not_ready --> stale: effective freshness fencing
+```
+
+Package, decision, invalidation, and verdict rows are immutable. `stale` is an
+effective state backed by current exact baseline derivation and, once observed
+through the freshness/decision/readiness actions, one durable invalidation row.
+Stale approval never transitions to ready. Neither `approved` nor `ready`
+creates Git, pull-request, tag, merge, deployment, command, or Runner authority.

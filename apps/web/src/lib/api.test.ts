@@ -4,16 +4,21 @@ import {
   ApiError,
   cancelRun,
   createPlan,
+  createReviewPackage,
   createSnapshot,
   createTask,
+  decideReviewPackage,
   decidePlan,
+  evaluateReleaseReadiness,
   getHealth,
   getRun,
   getSnapshot,
   listAuditEvents,
   listPlans,
+  listReviewPackages,
   listRuns,
   listTasks,
+  refreshReviewPackage,
   revisePlan,
   startRun,
   submitPlan,
@@ -217,6 +222,76 @@ describe("API client", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ decision: "approve" }),
+      }),
+    );
+  });
+
+  it("uses only typed governed Review and Readiness endpoints", async () => {
+    const packageId = "30000000-0000-4000-8000-000000000001";
+    const suiteRunId = "10000000-0000-4000-8000-000000000001";
+    const reviewPackage = {
+      id: packageId,
+      package_digest: "a".repeat(64),
+      freshness: "fresh",
+      git_authorization: false,
+      deployment_authorization: false,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response({ items: [reviewPackage], total: 1 }))
+      .mockResolvedValueOnce(response(reviewPackage, { status: 201 }))
+      .mockResolvedValueOnce(response(reviewPackage))
+      .mockResolvedValueOnce(response(reviewPackage))
+      .mockResolvedValueOnce(response(reviewPackage));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listReviewPackages()).resolves.toEqual([reviewPackage]);
+    await expect(
+      createReviewPackage(
+        { suite_run_id: suiteRunId },
+        "review-package-idempotency",
+      ),
+    ).resolves.toEqual(reviewPackage);
+    await expect(refreshReviewPackage(packageId)).resolves.toEqual(
+      reviewPackage,
+    );
+    await expect(
+      decideReviewPackage(packageId, {
+        decision: "reject",
+        reason: "Evidence requires remediation.",
+      }),
+    ).resolves.toEqual(reviewPackage);
+    await expect(evaluateReleaseReadiness(packageId)).resolves.toEqual(
+      reviewPackage,
+    );
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      expect.stringContaining("/api/v1/review-packages"),
+      expect.stringContaining("/api/v1/review-packages"),
+      expect.stringContaining(`/api/v1/review-packages/${packageId}/freshness`),
+      expect.stringContaining(`/api/v1/review-packages/${packageId}/decisions`),
+      expect.stringContaining(`/api/v1/review-packages/${packageId}/readiness`),
+    ]);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("/api/v1/review-packages"),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "review-package-idempotency",
+        }),
+        body: JSON.stringify({ suite_run_id: suiteRunId }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining("/decisions"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          decision: "reject",
+          reason: "Evidence requires remediation.",
+        }),
       }),
     );
   });

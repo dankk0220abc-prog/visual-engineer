@@ -7,6 +7,7 @@ DATASETS = sorted((REPOSITORY_ROOT / "evals/datasets").glob("*.jsonl"))
 RUNNER_DATASET = "runner-protocol-v0.1.jsonl"
 WORKSPACE_DATASET = "workspace-tools-v0.1.jsonl"
 VALIDATION_SUITE_DATASET = "validation-suites-v0.1.jsonl"
+REVIEW_READINESS_DATASET = "review-readiness-v0.1.jsonl"
 RUNNER_FAILURE_CATEGORIES = {
     "authentication",
     "concurrency",
@@ -44,6 +45,15 @@ VALIDATION_SUITE_FAILURE_CATEGORIES = {
     "recovery",
     "retry",
     "timeout",
+}
+REVIEW_READINESS_FAILURE_CATEGORIES = {
+    "concurrency",
+    "delivery_authority",
+    "evidence",
+    "idempotency",
+    "immutability",
+    "none",
+    "stale",
 }
 
 
@@ -129,6 +139,15 @@ def main() -> None:
                     dataset_version="validation-suites-v0.1",
                     failure_categories=VALIDATION_SUITE_FAILURE_CATEGORIES,
                     label="Validation Suite",
+                )
+            elif dataset.name == REVIEW_READINESS_DATASET:
+                validate_mapped_case(
+                    dataset,
+                    line_number,
+                    value,
+                    dataset_version="review-readiness-v0.1",
+                    failure_categories=REVIEW_READINESS_FAILURE_CATEGORIES,
+                    label="Review Readiness",
                 )
             if "case_id" in value:
                 required = {"case_id", "category", "input", "expected"}

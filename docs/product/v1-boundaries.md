@@ -7,7 +7,7 @@ and Frontend Quality Remediation work for governed frontend teams. V1 is not a
 promise of arbitrary language, repository, backend, infrastructure, or general
 software-engineering support.
 
-## Implemented Foundation through Phase 4
+## Implemented Foundation through Phase 5 Third Vertical Slice
 
 - Task create/list/detail with bounded validation and idempotency.
 - Level 0 `read_only` Run creation and durable state.
@@ -47,6 +47,12 @@ software-engineering support.
   Checkpoints, initial-baseline rollback, and exact idempotent discard.
 - Browser surfaces and real-stack smoke/E2E/abrupt-loss recovery with full
   source and `.git` fingerprint comparison.
+- Immutable system-owned multi-step Validation Suites with trusted ordered
+  aggregate Evidence, bounded retry, cancellation, and zero-artifact policy.
+- Immutable Review Packages with exact Evidence Manifests, stale invalidation,
+  one local-user Review Decision, and deterministic Release Readiness Verdict.
+- Explicit false Git/deployment authorization at package, decision, verdict,
+  API, database, and browser boundaries.
 
 ## Reserved V1 seams
 
@@ -56,7 +62,7 @@ These remain deliberate future seams, not placeholder capabilities:
 - model invocation and model-specific evaluation;
 - non-fixture isolated workspaces;
 - controlled target-repository install/build/test/lint/browser commands;
-- separate final-change approval;
+- Git-authorizing final-change approval;
 - branch, local commit, remote push, and pull request.
 
 The current AuditEvent timeline is governance evidence, not a complete Agent

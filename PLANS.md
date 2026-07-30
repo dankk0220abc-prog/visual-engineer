@@ -52,16 +52,26 @@ Every plan under `docs/exec-plans/` contains:
 - `PLANNED`: described but not implemented.
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
-The active plan is
+The active completed implementation plan is
+[`docs/exec-plans/phase-5-governed-final-review-readiness.md`](docs/exec-plans/phase-5-governed-final-review-readiness.md).
+It implements **Phase 5 Third Vertical Slice — Governed Final Review & Release
+Readiness** from local `main`
+`50dcc05ce48d042882bcdf199ae1bee662a83af6`. The locally implemented and
+verified slice is limited to immutable Review Packages and Decisions,
+freshness/stale fencing, deterministic local release-readiness verdicts,
+Evidence Manifests, API/generated contracts, and a browser-first review
+workflow. It is ready for independent focused review, not independently
+approved or sealed. Review approval is not Git or deployment authority. Phase
+6, Git delivery, CreativeDeploy, and Customer 0 remain unauthorized.
+
+The completed second-slice independent focused re-audit and sealing plan
+remains at
 [`docs/exec-plans/phase-5-validation-suites-focused-reaudit.md`](docs/exec-plans/phase-5-validation-suites-focused-reaudit.md).
-It is the completed independent focused re-audit and local sealing record for
-the two historical blocking Medium Findings: single-use lineage-bound Suite
-Grant authority and trusted ordered aggregate Evidence. Both Findings and the
-explicitly stopped budget/race/cleanup boundaries pass against the exact
-remediation candidate, and the final complete aggregate passes. The historical
-focused-review FAIL remains preserved at its inspected checkpoint. This local
-seal does not move `main` or authorize a push, pull request, tag, deployment,
-Customer 0, a later Phase 5 slice, or Phase 6.
+Its seal was integrated into local `main` by pure fast-forward at
+`50dcc05ce48d042882bcdf199ae1bee662a83af6`. It remains the independent record
+for the two historical blocking Medium Findings and the stopped
+budget/race/cleanup boundaries. The historical focused-review FAIL,
+remediation, and sealing evidence are not rewritten.
 
 The completed narrow implementer remediation plan remains at
 [`docs/exec-plans/phase-5-validation-suites-remediation-1.md`](docs/exec-plans/phase-5-validation-suites-remediation-1.md).

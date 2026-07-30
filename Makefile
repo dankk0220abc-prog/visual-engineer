@@ -4,7 +4,7 @@ SHELL := /bin/sh
 TEST_DATABASE_URL ?= postgresql+psycopg://visualengineer:visualengineer-test-local@localhost:55433/visualengineer_test
 WORKSPACE_FIXTURE_REPOSITORY_PATH ?= $(CURDIR)/.runtime/workspace-fixture
 
-.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-runner test-web build build-web e2e eval verify platform-up platform-down platform-logs runner-status runner-smoke runner-chaos-check workspace-smoke workspace-chaos-check workspace-security-check workspace-security-audit workspace-security-repair-check phase4-findings-check source-invariance-check validation-security-check up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
+.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-runner test-web build build-web e2e eval verify platform-up platform-down platform-logs runner-status runner-smoke runner-chaos-check workspace-smoke workspace-chaos-check workspace-security-check workspace-security-audit workspace-security-repair-check phase4-findings-check source-invariance-check validation-security-check review-security-check up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
 
 help:
 	@echo "VisualEngineer Phase 5 commands: bootstrap platform-up validation-security-check verify platform-down"
@@ -88,6 +88,7 @@ security-check:
 	PYTHONPATH="apps/runner/src:packages/runner-protocol/src" uv run python scripts/check_phase4_findings.py
 	uv run pytest apps/api/tests/test_repository_scanner.py --no-cov -q
 	./scripts/run-runner-security-tests.sh
+	$(MAKE) review-security-check
 
 workspace-security-check:
 	uv run pytest apps/runner/tests/test_workspace_tools.py packages/runner-protocol/tests --no-cov -q
@@ -95,6 +96,9 @@ workspace-security-check:
 
 validation-security-check:
 	uv run python scripts/check_validation_sandbox.py
+
+review-security-check:
+	./scripts/run-review-security-tests.sh
 
 workspace-security-audit:
 	uv run pytest apps/runner/tests/security_audit --no-cov -q

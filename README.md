@@ -32,12 +32,15 @@ delivery integrations remain future capabilities.
 The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
 read-only repository intelligence, Phase 3 browser-orchestrated Local Runner,
 a completed Phase 4 Runner-owned isolated Workspace against the synthetic
-adversarial fixture, and a sealed first Phase 5 Governed Validation Execution
-slice in local `main` at
-`f547091307c52df8f20fc69bac4b4826cbbc74ad`. The second Phase 5 slice adds an
-locally verified remediation candidate for governed multi-step Validation
-Suites, ready for a fresh independent focused re-audit. It is not a Security
-Gate PASS. Historical audit FAIL verdicts remain preserved.
+adversarial fixture, and two sealed Phase 5 slices. The second slice completed
+independent focused re-audit and was integrated into local `main` by pure
+fast-forward at `50dcc05ce48d042882bcdf199ae1bee662a83af6`. The active work is
+**Phase 5 Third Vertical Slice — Governed Final Review & Release Readiness**,
+now locally implemented and verified on its feature branch, ready for
+independent focused review. This is not an independent decision, seal, or main
+integration. Historical focused-review FAIL, remediation, and sealing records
+remain preserved. Before this task, no later Phase 5 slice or Phase 6 work had
+started.
 
 A local user can independently approve a narrow Execution Grant, prepare an
 exact detached workspace, use closed UTF-8 file tools, inspect bounded
@@ -92,6 +95,12 @@ The implemented target is:
 - trusted Suite success reconstruction from the exact catalog, child
   Run/Job/Attempt/Lease/Grant/Permit/Evidence chain, recomputed digests, and
   ordered PostgreSQL-enforced aggregate references;
+- immutable final Review Packages with ordered Evidence Manifests, exact
+  revision/Workspace/Checkpoint/Suite Result freshness, permanent stale
+  invalidation, one immutable local-user Review Decision, and a deterministic
+  Release Readiness Verdict;
+- explicit false Git and deployment authorization throughout Review Package,
+  Decision, readiness, API, database, and browser surfaces;
 - browser Runner registry, dispatch, Job detail, progress, result, cancellation,
   offline/retry evidence, and Timeline;
 - generated OpenAPI-to-TypeScript contract artifacts;
@@ -163,8 +172,8 @@ documentation at `http://localhost:8000/docs`, liveness at
 `http://localhost:3000/runners`. Startup generates an ignored high-entropy
 local Bootstrap Token without printing it and waits for the Runner to become
 online. Phase 4 browser pages are `/repositories`, `/execution-grants`,
-`/workspaces`, and `/workspaces/{id}`. The Phase 5 fixture-only flow is
-`/validations`.
+`/workspaces`, and `/workspaces/{id}`. The Phase 5 fixture-only validation flow
+is `/validations`; governed final review is `/reviews`.
 
 Stop project services with:
 

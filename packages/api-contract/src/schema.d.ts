@@ -124,6 +124,92 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/review-packages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List governed Review Packages and effective freshness */
+    get: operations["list_review_packages_api_v1_review_packages_get"];
+    put?: never;
+    /** Create an immutable trusted-Evidence Review Package */
+    post: operations["create_review_package_api_v1_review_packages_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/review-packages/{package_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get an immutable Review Package and readiness state */
+    get: operations["get_review_package_api_v1_review_packages__package_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/review-packages/{package_id}/decisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Record one immutable local-user Review Decision */
+    post: operations["decide_review_package_api_v1_review_packages__package_id__decisions_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/review-packages/{package_id}/freshness": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Revalidate freshness and durably fence a stale Review Package */
+    post: operations["refresh_review_package_freshness_api_v1_review_packages__package_id__freshness_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/review-packages/{package_id}/readiness": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Compute one deterministic Release Readiness Verdict */
+    post: operations["evaluate_release_readiness_api_v1_review_packages__package_id__readiness_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/runner-jobs": {
     parameters: {
       query?: never;
@@ -2277,6 +2363,59 @@ export interface components {
        */
       token_type: "Bearer";
     };
+    /** ReleaseReadinessVerdictResponse */
+    ReleaseReadinessVerdictResponse: {
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Decision Digest */
+      decision_digest: string;
+      /**
+       * Deployment Authorization
+       * @constant
+       */
+      deployment_authorization: false;
+      /**
+       * Effective Verdict
+       * @enum {string}
+       */
+      effective_verdict: "ready" | "not_ready" | "stale";
+      /** Evidence Manifest Digest */
+      evidence_manifest_digest: string;
+      /**
+       * Git Authorization
+       * @constant
+       */
+      git_authorization: false;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Package Digest */
+      package_digest: string;
+      /** Reason Codes */
+      reason_codes: string[];
+      /**
+       * Review Decision Id
+       * Format: uuid
+       */
+      review_decision_id: string;
+      /**
+       * Review Package Id
+       * Format: uuid
+       */
+      review_package_id: string;
+      /**
+       * Verdict
+       * @enum {string}
+       */
+      verdict: "ready" | "not_ready";
+      /** Verdict Digest */
+      verdict_digest: string;
+    };
     /** RenewRequest */
     RenewRequest: {
       /**
@@ -2444,6 +2583,199 @@ export interface components {
        * @enum {string}
        */
       kind: "repository_status_check";
+    };
+    /** ReviewDecisionCreate */
+    ReviewDecisionCreate: {
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: "approve" | "reject";
+      /** Reason */
+      reason?: string | null;
+    };
+    /** ReviewDecisionResponse */
+    ReviewDecisionResponse: {
+      /**
+       * Actor Type
+       * @constant
+       */
+      actor_type: "local_user";
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: "approve" | "reject";
+      /**
+       * Deployment Authorization
+       * @constant
+       */
+      deployment_authorization: false;
+      /**
+       * Git Authorization
+       * @constant
+       */
+      git_authorization: false;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Package Digest */
+      package_digest: string;
+      /** Reason */
+      reason: string | null;
+      /** Request Id */
+      request_id: string;
+      /**
+       * Review Package Id
+       * Format: uuid
+       */
+      review_package_id: string;
+    };
+    /**
+     * ReviewFreshness
+     * @enum {string}
+     */
+    ReviewFreshness: "fresh" | "stale";
+    /** ReviewPackageCreate */
+    ReviewPackageCreate: {
+      /**
+       * Suite Run Id
+       * Format: uuid
+       */
+      suite_run_id: string;
+    };
+    /** ReviewPackageInvalidationResponse */
+    ReviewPackageInvalidationResponse: {
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Observed Value */
+      observed_value: string;
+      /** Package Digest */
+      package_digest: string;
+      /**
+       * Reason Code
+       * @enum {string}
+       */
+      reason_code:
+        | "workspace_changed"
+        | "checkpoint_superseded"
+        | "source_revision_changed"
+        | "suite_result_superseded"
+        | "evidence_integrity_failed";
+      /** Request Id */
+      request_id: string;
+      /**
+       * Review Package Id
+       * Format: uuid
+       */
+      review_package_id: string;
+    };
+    /** ReviewPackageListResponse */
+    ReviewPackageListResponse: {
+      /** Items */
+      items: components["schemas"]["ReviewPackageResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** ReviewPackageResponse */
+    ReviewPackageResponse: {
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      decision: components["schemas"]["ReviewDecisionResponse"] | null;
+      /**
+       * Deployment Authorization
+       * @constant
+       */
+      deployment_authorization: false;
+      /** Evidence Manifest */
+      evidence_manifest: {
+        [key: string]: unknown;
+      };
+      /** Evidence Manifest Digest */
+      evidence_manifest_digest: string;
+      freshness: components["schemas"]["ReviewFreshness"];
+      /**
+       * Git Authorization
+       * @constant
+       */
+      git_authorization: false;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      invalidation:
+        components["schemas"]["ReviewPackageInvalidationResponse"] | null;
+      /** Package Digest */
+      package_digest: string;
+      /**
+       * Plan Id
+       * Format: uuid
+       */
+      plan_id: string;
+      readiness:
+        components["schemas"]["ReleaseReadinessVerdictResponse"] | null;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+      /**
+       * Schema Version
+       * @constant
+       */
+      schema_version: 1;
+      /** Source Revision */
+      source_revision: string;
+      /** Stale Reason Code */
+      stale_reason_code: string | null;
+      /** Suite Result Digest */
+      suite_result_digest: string;
+      /**
+       * Suite Result Id
+       * Format: uuid
+       */
+      suite_result_id: string;
+      /**
+       * Suite Run Id
+       * Format: uuid
+       */
+      suite_run_id: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
     };
     /** RunCancelCreate */
     RunCancelCreate: {
@@ -5124,6 +5456,306 @@ export interface operations {
         };
       };
       /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_review_packages_api_v1_review_packages_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewPackageListResponse"];
+        };
+      };
+      /** @description Review resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review freshness or decision conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_review_package_api_v1_review_packages_post: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReviewPackageCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewPackageResponse"];
+        };
+      };
+      /** @description Review resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review freshness or decision conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_review_package_api_v1_review_packages__package_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        package_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewPackageResponse"];
+        };
+      };
+      /** @description Review resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review freshness or decision conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  decide_review_package_api_v1_review_packages__package_id__decisions_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        package_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReviewDecisionCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewPackageResponse"];
+        };
+      };
+      /** @description Review resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review freshness or decision conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  refresh_review_package_freshness_api_v1_review_packages__package_id__freshness_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        package_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewPackageResponse"];
+        };
+      };
+      /** @description Review resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review freshness or decision conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  evaluate_release_readiness_api_v1_review_packages__package_id__readiness_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        package_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewPackageResponse"];
+        };
+      };
+      /** @description Review resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review freshness or decision conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Review policy denied the request */
       422: {
         headers: {
           [name: string]: unknown;

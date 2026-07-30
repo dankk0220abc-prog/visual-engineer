@@ -1,9 +1,10 @@
 # System Overview
 
-VisualEngineer through the second Phase 5 implementation slice is a local,
-single-user governed planning, fixture-only isolated editing, fixed-Profile
-validation, and system-owned multi-step Suite foundation. Solid nodes below
-are implemented. Dashed nodes are future V1 boundaries.
+VisualEngineer through the Phase 5 Third Vertical Slice is a local, single-user
+governed planning, fixture-only isolated editing, fixed-Profile validation,
+system-owned multi-step Suite, and immutable final-review/readiness
+foundation. Solid nodes below are implemented. Dashed nodes are future V1
+boundaries.
 
 ```mermaid
 flowchart TB
@@ -23,6 +24,8 @@ flowchart TB
     IW["Detached isolated Workspace"]
     VS["Disposable validation sandbox"]
     VE["Bounded ValidationEvidence"]
+    RP["Immutable Review Package"]
+    RD["Review Decision + Readiness"]
     O["OpenAPI and generated TypeScript"]
 
     H -->|"create Task and Run; revise or decide Plan"| W
@@ -44,6 +47,9 @@ flowchart TB
     E -->|"fixed Profile only"| VS
     VS --> VE
     VE -->|"typed terminal result"| Q
+    VE -->|"trusted ordered manifest"| RP
+    H -->|"review and decide"| RD
+    RP --> RD
     A -->|"source contract"| O
     O -->|"typed client input"| W
 
@@ -55,7 +61,7 @@ flowchart TB
 
     IW -. "future separate authority" .-> C
     C -. "future evidence" .-> B
-    C -. "future final approval" .-> G
+    C -. "future Git delivery approval" .-> G
 ```
 
 ## Implemented responsibilities
@@ -76,6 +82,12 @@ Checkpoint, preserves a separate human approve/reject decision, creates/
 cancels a Validation Run or Suite Run, and renders ordered child timelines and
 bounded aggregate Evidence. It has no step editor, command, argv, environment,
 package, URL, or free-form tool input.
+
+The `/reviews` surface selects only the latest successful Suite Result, renders
+its immutable ordered Evidence Manifest and digests, rechecks freshness,
+records one local-user Review Decision, and computes one deterministic
+readiness verdict. It displays that Git and deployment authorization are
+always false.
 
 ### API
 
@@ -146,12 +158,13 @@ PostgreSQL stores Task, Run, RepositorySnapshot, Plan, ApprovalDecision,
 AuditEvent, Runner, PermissionEnvelope, RunnerJob, RunnerJobAttempt,
 RunnerJobEvent, RepositoryHandle, ExecutionGrant/Decision, Workspace/Event,
 Checkpoint, ValidationRun, ValidationStepRun, ValidationEvidence,
-ValidationSuiteRun, ValidationSuiteStepRun, and ValidationSuiteResult. Alembic
-owns schema history. Row locks and uniqueness serialize decisions, claims,
-workspace actions, validation/Suite dispatch, and terminal evidence. Database
-triggers reject Snapshot, PermissionEnvelope, Execution Grant policy,
-Checkpoint, validation evidence, Suite authority, and terminal aggregate
-mutation.
+ValidationSuiteRun, ValidationSuiteStepRun, ValidationSuiteResult,
+ReviewPackage/Invalidation, ReviewDecision, and ReleaseReadinessVerdict.
+Alembic owns schema history. Row locks and uniqueness serialize decisions,
+claims, workspace actions, validation/Suite dispatch, terminal evidence, and
+final review. Database triggers reject Snapshot, PermissionEnvelope, Execution
+Grant policy, Checkpoint, validation evidence, Suite authority, terminal
+aggregate, and governed review mutation.
 
 ### Contract
 
@@ -276,6 +289,27 @@ sequenceDiagram
     Runner->>API: Bounded result + cleanup proof
     API->>DB: Terminal state + immutable evidence
     Note over Workspace: State and bytes remain unchanged
+```
+
+## Phase 5 final review sequence
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web
+    participant API
+    participant DB as PostgreSQL
+
+    User->>Web: Select latest successful Suite Result
+    Web->>API: Create immutable Review Package
+    API->>DB: Reconstruct Evidence; store Manifest/package digests
+    User->>Web: Recheck freshness and inspect exact Evidence
+    User->>Web: Approve or reasoned reject
+    API->>DB: Lock baseline; store one immutable Review Decision
+    User->>Web: Compute Release Readiness
+    API->>DB: Lock and revalidate package/decision/current baseline
+    API-->>Web: ready, not_ready, or effective stale
+    Note over Web,DB: Git and deployment authorization remain false
 ```
 
 ## Deployment posture

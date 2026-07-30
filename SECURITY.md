@@ -2,8 +2,8 @@
 
 ## Current security posture
 
-VisualEngineer is currently a local, single-user development project through
-the second Phase 5 implementation slice.
+VisualEngineer is currently a local, single-user development project in
+**Phase 5 Third Vertical Slice — Governed Final Review & Release Readiness**.
 The original audit, independent re-audit, focused re-audit, and
 single-finding re-audit remain **Security Gate: FAIL** for the revisions they
 inspected. Those historical decisions are preserved. Four focused remediation
@@ -12,12 +12,22 @@ local Phase 4 Final Integration Gate PASS. That local result does not claim
 remote CI, customer, hostile multi-tenant, or production validation. Phase 4
 was explicitly integrated into local `main` at
 `928a89d2055d172bbd7c6670b42f668d103dcb03`; the independently sealed first
-Phase 5 slice is integrated in local `main` at
+Phase 5 slice was integrated at
 `f547091307c52df8f20fc69bac4b4826cbbc74ad`. The second slice is limited to a
 system-owned Suite of fixed-Profile validations of the trusted synthetic
-fixture. Its targeted Grant-lineage and trusted-aggregation remediation is
-locally verified and ready for independent focused re-audit. Its implementation
-evidence does not declare Security Gate PASS.
+fixture. It completed independent focused re-audit, was sealed, and was
+integrated into local `main` by pure fast-forward at
+`50dcc05ce48d042882bcdf199ae1bee662a83af6`.
+
+The Third Slice may package only trusted immutable Suite Evidence, accept one
+immutable local-user Review Decision, and compute a deterministic readiness
+verdict while the exact revision/Workspace/Checkpoint/Evidence baseline
+remains fresh. A stale approval must fail closed. Review approval is explicitly
+separate from Git commit, push, pull request, merge, tag, or deployment
+authority. Before this task, neither a later Phase 5 slice nor Phase 6 had
+started. The local implementation and verification are complete and ready for
+independent focused review; no independent Third Slice security decision,
+sealing, main integration, Git delivery, or Phase 6 authorization is claimed.
 
 The system has not been hardened for hostile multi-user input, Internet
 exposure, production repositories, or production credentials. Do not expose
@@ -73,6 +83,21 @@ Evidence is referenced without redispatch or output recharge. Aggregate
 success is reconstructed from locked Run/Job/Attempt/Lease/Grant/Permit/
 Evidence records with recomputed digests and is independently constrained by
 PostgreSQL transition/result triggers; mutable step summaries are not proof.
+
+A Review Package can select only one latest successful trusted Suite Result.
+The Control Plane reconstructs its two ordered child chains before storing a
+versioned Evidence Manifest and package digest. Package/decision/verdict rows
+are immutable; a separate immutable invalidation records the first stale
+revision, Workspace, Checkpoint, later Suite Result, or Evidence integrity
+failure. Effective freshness is recalculated on reads, decisions, and
+readiness. PostgreSQL independently rejects stale decisions, foreign digest
+bindings, record mutation, and a stale or rejected ready verdict.
+
+Review approval and readiness are governance evidence only. Database checks,
+API literals, and browser copy all fix Git and deployment authorization to
+false. No review endpoint accepts command, argv, environment, cwd, credential,
+Provider, branch, commit, remote, pull request, merge, tag, or deployment
+input.
 
 File access is descriptor-rooted and no-follow; status/diff/rollback/discard
 use fixed operations. Workspace registry, ownership, and pending/completed

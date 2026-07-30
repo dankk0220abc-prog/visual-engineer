@@ -1229,6 +1229,126 @@ class ValidationSuiteService:
             evidence,
         )
 
+    def trusted_success_manifest(
+        self,
+        suite_run_id: uuid.UUID,
+    ) -> tuple[ValidationSuiteRun, ValidationSuiteResult, Sequence[dict[str, object]]]:
+        """Reconstruct the exact successful Suite proof for final review."""
+        suite_run = self._required_run(suite_run_id, lock=True)
+        result = self._validation.suite_result(suite_run.id)
+        steps = self._validation.suite_steps(suite_run.id, lock=True)
+        if (
+            suite_run.state != "succeeded"
+            or result is None
+            or result.verdict != "succeeded"
+            or len(steps) != suite_run.step_count
+        ):
+            raise ValidationSuiteServiceError(
+                "review_suite_not_successful",
+                "Review Package requires one complete successful Validation Suite Result",
+                category="policy",
+            )
+
+        evidence_references: list[dict[str, object]] = []
+        manifest_entries: list[dict[str, object]] = []
+        runner_references: list[str] = []
+        profile_references: list[str] = []
+        trusted_output_bytes = 0
+        redaction_count = 0
+        output_truncated = False
+        for step in steps:
+            trusted = self._trusted_success_step(suite_run, step)
+            if trusted is None:
+                raise ValidationSuiteServiceError(
+                    "review_evidence_integrity_failed",
+                    "Validation Suite Evidence could not be reconstructed",
+                    category="policy",
+                )
+            reference, evidence = trusted
+            evidence_references.append(reference)
+            manifest_entries.append(
+                {
+                    **reference,
+                    "side_effect_permit_id": str(evidence.side_effect_permit_id),
+                    "side_effect_permit_sequence": evidence.side_effect_permit_sequence,
+                    "side_effect_permit_digest": evidence.side_effect_permit_digest or "",
+                    "fencing_token": evidence.fencing_token or "",
+                    "execution_envelope_digest": evidence.execution_envelope_digest or "",
+                }
+            )
+            runner_references.append(str(evidence.runner_id))
+            profile_references.append(f"{step.profile_id}:v{step.profile_version}")
+            if step.reused_from_step_run_id is None:
+                trusted_output_bytes += len(evidence.stdout.encode("utf-8")) + len(
+                    evidence.stderr.encode("utf-8")
+                )
+                redaction_count += evidence.redaction_count
+            output_truncated = (
+                output_truncated or evidence.stdout_truncated or evidence.stderr_truncated
+            )
+
+        aggregate_payload = {
+            "suite_run_id": str(suite_run.id),
+            "suite": f"{suite_run.suite_id}:v{suite_run.suite_version}",
+            "policy_digest": suite_run.policy_digest,
+            "source_revision": suite_run.source_revision,
+            "checkpoint_id": str(suite_run.checkpoint_id),
+            "checkpoint_fingerprint": suite_run.checkpoint_fingerprint,
+            "attempt_number": suite_run.attempt_number,
+            "root_suite_run_id": str(suite_run.root_suite_run_id),
+            "execution_grant_id": str(suite_run.execution_grant_id),
+            "verdict": "succeeded",
+            "profiles": profile_references,
+            "evidence": evidence_references,
+            "runners": runner_references,
+            "combined_output_bytes": trusted_output_bytes,
+            "redaction_count": redaction_count,
+            "output_truncated": output_truncated,
+            "cleanup_succeeded": True,
+            "source_invariant": True,
+            "canonical_workspace_invariant": True,
+            "artifact_count": 0,
+            "artifact_bytes": 0,
+            "budgets": {
+                "total_timeout_seconds": suite_run.total_timeout_seconds,
+                "total_output_bytes": suite_run.total_output_bytes,
+                "max_attempts": suite_run.max_attempts,
+            },
+        }
+        aggregate_digest = compute_validation_policy_digest(aggregate_payload)
+        if (
+            result.root_suite_run_id != suite_run.root_suite_run_id
+            or result.run_id != suite_run.run_id
+            or result.execution_grant_id != suite_run.execution_grant_id
+            or result.suite_id != suite_run.suite_id
+            or result.suite_version != suite_run.suite_version
+            or result.source_revision != suite_run.source_revision
+            or result.checkpoint_id != suite_run.checkpoint_id
+            or result.policy_digest != suite_run.policy_digest
+            or result.attempt_number != suite_run.attempt_number
+            or result.total_timeout_seconds != suite_run.total_timeout_seconds
+            or result.total_output_bytes != suite_run.total_output_bytes
+            or result.max_attempts != suite_run.max_attempts
+            or result.profile_references != profile_references
+            or result.evidence_references != evidence_references
+            or result.runner_references != runner_references
+            or result.combined_output_bytes != trusted_output_bytes
+            or result.redaction_count != redaction_count
+            or result.output_truncated != output_truncated
+            or not result.cleanup_succeeded
+            or not result.source_invariant
+            or not result.canonical_workspace_invariant
+            or result.artifact_count != 0
+            or result.artifact_bytes != 0
+            or not hmac.compare_digest(result.aggregate_digest, aggregate_digest)
+        ):
+            raise ValidationSuiteServiceError(
+                "review_aggregate_integrity_failed",
+                "Validation Suite aggregate does not match reconstructed Evidence",
+                category="policy",
+            )
+        return suite_run, result, manifest_entries
+
     @staticmethod
     def _suite_policy_digest(
         suite_run: ValidationSuiteRun,

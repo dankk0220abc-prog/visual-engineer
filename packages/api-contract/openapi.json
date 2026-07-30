@@ -2572,6 +2572,94 @@
         "title": "RegisterResponse",
         "type": "object"
       },
+      "ReleaseReadinessVerdictResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Decision Digest",
+            "type": "string"
+          },
+          "deployment_authorization": {
+            "const": false,
+            "title": "Deployment Authorization",
+            "type": "boolean"
+          },
+          "effective_verdict": {
+            "enum": ["ready", "not_ready", "stale"],
+            "title": "Effective Verdict",
+            "type": "string"
+          },
+          "evidence_manifest_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Manifest Digest",
+            "type": "string"
+          },
+          "git_authorization": {
+            "const": false,
+            "title": "Git Authorization",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "package_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Package Digest",
+            "type": "string"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "review_decision_id": {
+            "format": "uuid",
+            "title": "Review Decision Id",
+            "type": "string"
+          },
+          "review_package_id": {
+            "format": "uuid",
+            "title": "Review Package Id",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": ["ready", "not_ready"],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "verdict_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Verdict Digest",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "review_package_id",
+          "review_decision_id",
+          "package_digest",
+          "decision_digest",
+          "evidence_manifest_digest",
+          "verdict",
+          "effective_verdict",
+          "reason_codes",
+          "verdict_digest",
+          "git_authorization",
+          "deployment_authorization",
+          "created_at"
+        ],
+        "title": "ReleaseReadinessVerdictResponse",
+        "type": "object"
+      },
       "RenewRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2894,6 +2982,358 @@
         },
         "required": ["kind", "expected"],
         "title": "RepositoryStatusValidationStep",
+        "type": "object"
+      },
+      "ReviewDecisionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": ["decision"],
+        "title": "ReviewDecisionCreate",
+        "type": "object"
+      },
+      "ReviewDecisionResponse": {
+        "properties": {
+          "actor_type": {
+            "const": "local_user",
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "type": "string"
+          },
+          "deployment_authorization": {
+            "const": false,
+            "title": "Deployment Authorization",
+            "type": "boolean"
+          },
+          "git_authorization": {
+            "const": false,
+            "title": "Git Authorization",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "package_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Package Digest",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "review_package_id": {
+            "format": "uuid",
+            "title": "Review Package Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "review_package_id",
+          "package_digest",
+          "decision",
+          "reason",
+          "actor_type",
+          "request_id",
+          "git_authorization",
+          "deployment_authorization",
+          "created_at"
+        ],
+        "title": "ReviewDecisionResponse",
+        "type": "object"
+      },
+      "ReviewFreshness": {
+        "enum": ["fresh", "stale"],
+        "title": "ReviewFreshness",
+        "type": "string"
+      },
+      "ReviewPackageCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "suite_run_id": {
+            "format": "uuid",
+            "title": "Suite Run Id",
+            "type": "string"
+          }
+        },
+        "required": ["suite_run_id"],
+        "title": "ReviewPackageCreate",
+        "type": "object"
+      },
+      "ReviewPackageInvalidationResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "observed_value": {
+            "title": "Observed Value",
+            "type": "string"
+          },
+          "package_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Package Digest",
+            "type": "string"
+          },
+          "reason_code": {
+            "enum": [
+              "workspace_changed",
+              "checkpoint_superseded",
+              "source_revision_changed",
+              "suite_result_superseded",
+              "evidence_integrity_failed"
+            ],
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "review_package_id": {
+            "format": "uuid",
+            "title": "Review Package Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "review_package_id",
+          "package_digest",
+          "reason_code",
+          "observed_value",
+          "request_id",
+          "created_at"
+        ],
+        "title": "ReviewPackageInvalidationResponse",
+        "type": "object"
+      },
+      "ReviewPackageListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewPackageResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "ReviewPackageListResponse",
+        "type": "object"
+      },
+      "ReviewPackageResponse": {
+        "properties": {
+          "checkpoint_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Fingerprint",
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "format": "uuid",
+            "title": "Checkpoint Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewDecisionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deployment_authorization": {
+            "const": false,
+            "title": "Deployment Authorization",
+            "type": "boolean"
+          },
+          "evidence_manifest": {
+            "additionalProperties": true,
+            "title": "Evidence Manifest",
+            "type": "object"
+          },
+          "evidence_manifest_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Manifest Digest",
+            "type": "string"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/ReviewFreshness"
+          },
+          "git_authorization": {
+            "const": false,
+            "title": "Git Authorization",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invalidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPackageInvalidationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "package_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Package Digest",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "readiness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseReadinessVerdictResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "stale_reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Reason Code"
+          },
+          "suite_result_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Suite Result Digest",
+            "type": "string"
+          },
+          "suite_result_id": {
+            "format": "uuid",
+            "title": "Suite Result Id",
+            "type": "string"
+          },
+          "suite_run_id": {
+            "format": "uuid",
+            "title": "Suite Run Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "schema_version",
+          "run_id",
+          "plan_id",
+          "repository_handle_id",
+          "source_revision",
+          "workspace_id",
+          "checkpoint_id",
+          "checkpoint_fingerprint",
+          "suite_run_id",
+          "suite_result_id",
+          "suite_result_digest",
+          "evidence_manifest",
+          "evidence_manifest_digest",
+          "package_digest",
+          "freshness",
+          "stale_reason_code",
+          "git_authorization",
+          "deployment_authorization",
+          "created_at",
+          "invalidation",
+          "decision",
+          "readiness"
+        ],
+        "title": "ReviewPackageResponse",
         "type": "object"
       },
       "RunCancelCreate": {
@@ -8428,6 +8868,379 @@
         },
         "summary": "Get a Repository Handle without a Runner host path",
         "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/review-packages": {
+      "get": {
+        "operationId": "list_review_packages_api_v1_review_packages_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPackageListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review freshness or decision conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review policy denied the request"
+          }
+        },
+        "summary": "List governed Review Packages and effective freshness",
+        "tags": ["governed final review"]
+      },
+      "post": {
+        "operationId": "create_review_package_api_v1_review_packages_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewPackageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPackageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review freshness or decision conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review policy denied the request"
+          }
+        },
+        "summary": "Create an immutable trusted-Evidence Review Package",
+        "tags": ["governed final review"]
+      }
+    },
+    "/api/v1/review-packages/{package_id}": {
+      "get": {
+        "operationId": "get_review_package_api_v1_review_packages__package_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPackageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review freshness or decision conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review policy denied the request"
+          }
+        },
+        "summary": "Get an immutable Review Package and readiness state",
+        "tags": ["governed final review"]
+      }
+    },
+    "/api/v1/review-packages/{package_id}/decisions": {
+      "post": {
+        "operationId": "decide_review_package_api_v1_review_packages__package_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDecisionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPackageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review freshness or decision conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review policy denied the request"
+          }
+        },
+        "summary": "Record one immutable local-user Review Decision",
+        "tags": ["governed final review"]
+      }
+    },
+    "/api/v1/review-packages/{package_id}/freshness": {
+      "post": {
+        "operationId": "refresh_review_package_freshness_api_v1_review_packages__package_id__freshness_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPackageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review freshness or decision conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review policy denied the request"
+          }
+        },
+        "summary": "Revalidate freshness and durably fence a stale Review Package",
+        "tags": ["governed final review"]
+      }
+    },
+    "/api/v1/review-packages/{package_id}/readiness": {
+      "post": {
+        "operationId": "evaluate_release_readiness_api_v1_review_packages__package_id__readiness_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPackageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review freshness or decision conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Review policy denied the request"
+          }
+        },
+        "summary": "Compute one deterministic Release Readiness Verdict",
+        "tags": ["governed final review"]
       }
     },
     "/api/v1/runner-jobs": {

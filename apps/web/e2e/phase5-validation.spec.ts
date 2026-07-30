@@ -330,6 +330,57 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     persistedSuite.getByText("VE_VALIDATION_PROFILE_MANIFEST_PASS"),
   ).toBeVisible();
 
+  await page.goto("/reviews");
+  await expect(
+    page.getByRole("heading", { name: "Review & Release Readiness" }),
+  ).toBeVisible();
+  const reviewCandidate = page
+    .getByRole("listitem")
+    .filter({ hasText: suiteRunId });
+  const [packageResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/api/v1/review-packages") &&
+        response.ok(),
+    ),
+    reviewCandidate
+      .getByRole("button", { name: "Create immutable Review Package" })
+      .click(),
+  ]);
+  const packageBody: unknown = await packageResponse.json();
+  if (typeof packageBody !== "object" || packageBody === null) {
+    throw new Error("Review Package response is invalid");
+  }
+  const packageId = requireString(
+    (packageBody as JsonObject).id,
+    "Review Package ID",
+  );
+  const packageCard = page.getByRole("listitem").filter({ hasText: packageId });
+  await expect(packageCard.getByText("Evidence Manifest 2/2")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(
+    packageCard.getByText(
+      "Git authorization: false · Deployment authorization: false",
+    ),
+  ).toBeVisible();
+  await packageCard.getByRole("button", { name: "Recheck freshness" }).click();
+  await expect(packageCard.getByText("fresh", { exact: true })).toBeVisible();
+  await packageCard
+    .getByRole("button", { name: "Approve Review Package" })
+    .click();
+  await expect(packageCard.getByText(/Decision: approve/)).toBeVisible({
+    timeout: 30_000,
+  });
+  await packageCard
+    .getByRole("button", { name: "Compute deterministic Readiness" })
+    .click();
+  await expect(packageCard.getByText("Release Readiness: ready")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expectAccessibleAndContained(page);
+
   const revokedSuite = await apiJson(
     request,
     "post",

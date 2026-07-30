@@ -266,7 +266,34 @@ erDiagram
     VALIDATION_SUITE_RUN ||--|{ VALIDATION_SUITE_STEP_RUN : "catalog order"
     VALIDATION_SUITE_STEP_RUN }o--o| VALIDATION_RUN : "independent child"
     VALIDATION_SUITE_RUN ||--o| VALIDATION_SUITE_RESULT : "aggregate proof"
+    VALIDATION_SUITE_RESULT ||--o| REVIEW_PACKAGE : "trusted evidence"
+    REVIEW_PACKAGE ||--o| REVIEW_PACKAGE_INVALIDATION : "first stale fence"
+    REVIEW_PACKAGE ||--o| REVIEW_DECISION : "one final outcome"
+    REVIEW_PACKAGE ||--o| RELEASE_READINESS_VERDICT : "deterministic snapshot"
 ```
+
+## ReviewPackage, ReviewDecision, and ReleaseReadinessVerdict
+
+ReviewPackage is one immutable digest-addressed final-review input. It binds a
+latest successful ValidationSuiteResult to the exact Run, Plan, source
+revision, Repository Handle, Workspace, Checkpoint/fingerprint, Suite Run, and
+Suite Result/aggregate digest. Its versioned Evidence Manifest contains exactly
+the two catalog-ordered Evidence identities plus Runner Job, Attempt, Lease,
+Grant, completed Permit, Evidence, fencing, and execution-envelope digests.
+Raw stdout/stderr and artifact content are not copied.
+
+ReviewPackageInvalidation is an immutable first stale fence. It records
+workspace change, checkpoint supersession, source revision change, later
+successful Suite Result, or Evidence integrity failure against the package
+digest. Current freshness is also derived on every response so a historical
+ready verdict cannot remain effectively ready before invalidation persistence.
+
+ReviewDecision binds one `approve` or reasoned `reject` local-user outcome to
+the exact package digest. A unique package constraint, row lock, and database
+guard permit one final winner. ReleaseReadinessVerdict binds that decision,
+package, and Evidence Manifest digest to deterministic `ready` or `not_ready`
+reason codes. `ready` requires an approved, fresh, complete package. Every
+record independently fixes Git and deployment authorization to false.
 
 ## Database guarantees and service guarantees
 
@@ -299,14 +326,15 @@ binding revision
 rewritten. The second slice adds
 `20260730_0008_add_governed_validation_suites`, followed by additive lineage
 and trusted-aggregation enforcement in
-`20260730_0009_enforce_suite_lineage_and_evidence`. The complete base-to-head,
+`20260730_0009_enforce_suite_lineage_and_evidence`. The Third Slice adds
+`20260730_0010_add_governed_final_review`. The complete base-to-head,
 downgrade-to-base, and upgrade-to-head roundtrip must pass on real PostgreSQL
 before the implementation checkpoint.
 
 ## Future entities
 
-Agent Trace, general Artifact, arbitrary controlled-command result,
-final-delivery decision, and EvalResult tables remain future work. Phase 5
+Agent Trace, general Artifact, arbitrary controlled-command result, Git
+delivery authorization, and EvalResult tables remain future work. Phase 5
 ValidationEvidence is deliberately fixture/Profile-specific and does not
 establish any general command or artifact authority. Future entities require a
 real workflow, retention policy, constraints, and evidence.
