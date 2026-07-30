@@ -2,14 +2,20 @@
 
 - Phase: Phase 5 — Governed Multi-Step Validation Suites
 - Overall status:
-  `IMPLEMENTED_PENDING_INDEPENDENT_FOCUSED_REVIEW`
-- Governance qualifier: SECOND-SLICE IMPLEMENTER CANDIDATE ONLY; SECURITY GATE
-  NOT DECLARED
+  `FOCUSED_SECURITY_REVIEW_FAIL_REMEDIATION_REQUIRED`
+- Governance qualifier: SECOND-SLICE CANDIDATE NOT APPROVED; FINAL AGGREGATE
+  NOT RUN
 - Last updated: 2026-07-30
 - Current main / second-slice baseline:
   `f547091307c52df8f20fc69bac4b4826cbbc74ad`
 - Current implementation branch:
   `feat/phase-5-governed-validation-suites`
+- Phase 5 second-slice focused-review branch:
+  `audit/phase-5-validation-suites-focused-max`
+- Phase 5 second-slice reviewed candidate:
+  `10399722e37f3209fa08e5e7edc25f31b429aaad`
+- Phase 5 second-slice focused Findings:
+  `VE-P5-SUITES-FR-001`, `VE-P5-SUITES-FR-002` — blocking Medium
 - Phase 5 single-finding re-audit branch:
   `audit/phase-5-cancel-permit-single-finding-max`
 - Phase 5 single-finding re-audit candidate:
@@ -102,9 +108,54 @@ exits `0`: Python/API/Runner/Protocol `239/239` at 83.35% coverage, Web
 invariance pass. These are implementer results. Only the local checkpoint and
 clean-tree reconciliation remain administrative steps. The implementer does
 not declare Security Gate PASS.
-The only eligible next review covers Suite immutability, injection prevention,
-Suite/step state consistency, cancellation/retry races, aggregate budgets,
-result/Evidence aggregation, cleanup, and source/canonical invariance.
+The independent focused review described below supersedes the pending-review
+state. These implementer results remain historical context only.
+
+## Phase 5 governed multi-step Validation Suites focused-review decision
+
+The second-slice candidate is **not approved** for PASS sealing, main
+integration, Customer 0, a later Phase 5 slice, or Phase 6.
+
+**CONFIRMED**:
+
+- the review started from exact candidate
+  `10399722e37f3209fa08e5e7edc25f31b429aaad`, whose exact parent is unchanged
+  main `f547091307c52df8f20fc69bac4b4826cbbc74ad`;
+- two independent real-PostgreSQL secure-expectation tests failed on their
+  first run and on two unchanged focused reruns each (`3/3` stable);
+- `VE-P5-SUITES-FR-001` proves the same approved Suite Grant creates a second
+  root Suite attempt when only the idempotency key changes;
+- `VE-P5-SUITES-FR-002` proves persisted successful step summaries without
+  Evidence can become a succeeded Suite and aggregate Result with zero
+  Evidence references;
+- both new production Findings are blocking Medium; Critical and High counts
+  are zero;
+- the unchanged candidate Suite control file passes `10/10`;
+- the exact review-owned PostgreSQL Compose project has zero
+  container/network/volume residue after cleanup; and
+- no production file changed, main remains unchanged, and no delivery action
+  occurred.
+
+The seven-boundary focused matrix fails Suite/Grant attempt authority, step
+transition/injection, Suite/step consistency, fresh-Grant retry fencing, and
+aggregate Evidence integrity. Exact review-owned cleanup and production Git
+invariance pass. Full budget, cancellation-race, runtime invariance, migration
+roundtrip, historical regression, Web/E2E, Chaos, broad Docker, Security, Eval,
+coverage, and aggregate gates remain unverified.
+
+Final `make verify` is **NOT RUN** with exit `N/A` because the blocker stop
+condition applies. Historical implementer aggregate results are not promoted
+to independent evidence.
+
+The next eligible milestone is a narrow remediation that enforces one root
+Suite attempt per approved Grant and exact legal step/Evidence binding before
+successful aggregation, followed by a fresh independent focused re-review.
+
+Detailed independent artifacts:
+
+- [`docs/exec-plans/phase-5-validation-suites-focused-review.md`](../exec-plans/phase-5-validation-suites-focused-review.md)
+- [`docs/security/audits/phase-5-validation-suites-focused-review.md`](../security/audits/phase-5-validation-suites-focused-review.md)
+- [`docs/evidence/phase-5-validation-suites-focused-review-verification.md`](../evidence/phase-5-validation-suites-focused-review-verification.md)
 
 ## Phase 5 independent single-finding re-audit decision
 

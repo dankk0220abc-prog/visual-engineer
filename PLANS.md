@@ -53,14 +53,19 @@ Every plan under `docs/exec-plans/` contains:
 - `BLOCKED`: cannot proceed inside the current safety or environment boundary.
 
 The active plan is
+[`docs/exec-plans/phase-5-validation-suites-focused-review.md`](docs/exec-plans/phase-5-validation-suites-focused-review.md).
+The independent focused review of the second Phase 5 slice is complete as
+FAIL. Two real-PostgreSQL secure-expectation tests independently establish
+blocking Medium Findings: one approved Suite Grant can create a second root
+Suite attempt under a new idempotency key, and injected successful step
+summaries can become a successful aggregate with zero Evidence references.
+The contractually gated final aggregate and PASS sealing were not run.
+Remediation and a fresh independent focused re-review are required.
+
+The second-slice implementation plan remains at
 [`docs/exec-plans/phase-5-governed-validation-suites.md`](docs/exec-plans/phase-5-governed-validation-suites.md).
-This second Phase 5 slice composes the sealed fixed-Profile execution unit into
-one system-owned, immutable, fixture-only multi-step Suite with deterministic
-serial dispatch, aggregate budgets/evidence, cancellation, and one bounded
-retry. It does not weaken the first-slice command, sandbox, Grant, Permit,
-Attempt, Lease, cleanup, or invariance boundaries. It excludes LLMs, Agents
-SDK, external providers, credentials, Customer 0, arbitrary commands, package
-installation, Git delivery, and deployment.
+Its implementer evidence is historical and does not override the independent
+FAIL decision.
 
 The sealed first-slice plan remains at
 [`docs/exec-plans/phase-5-governed-validation-execution.md`](docs/exec-plans/phase-5-governed-validation-execution.md);
