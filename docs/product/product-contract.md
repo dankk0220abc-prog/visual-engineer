@@ -57,7 +57,7 @@ There is no executable Deployment Pack runtime. Repository content can narrow
 future work but cannot elevate permission, expand a Runner Envelope, or bypass
 approval.
 
-## Implemented through the Phase 6 first vertical slice
+## Implemented through the Phase 6 second vertical slice
 
 The current product provides:
 
@@ -108,6 +108,15 @@ The current product provides:
   discard, interruption recovery, and source-integrity evidence; and
 - Repository, Execution Grant, Workspace, typed-tool, diff, checkpoint,
   rollback, discard, and Timeline browser surfaces.
+- one immutable, separately decided Delivery Authorization over the exact
+  fresh/approved/ready Review generation and Workspace Checkpoint;
+- one canonical local-delivery manifest with bounded diff preview, explicit
+  zero-remote fields, exact browser confirmation, and keyed dispatch;
+- durable terminal Dispatch history with one concurrent winner, a maximum of
+  three linear attempts, cancellation, stable failure reason, and safe retry
+  only under the unchanged authority/manifest; and
+- one deterministic fixture-only local ref/commit with Runner-recomputed
+  manifest, Permit fencing, attributable proof, and source/remote invariance.
 
 The plan source is always `deterministic_policy`, and
 `execution_available` is always `false`.
@@ -125,7 +134,7 @@ CreativeDeploy is not an external enterprise customer. This case provides no
 adoption, time-saving, quality-improvement, financial, production-usage, or
 production-deployment evidence.
 
-## Intended V1 beyond the current Phase 5 slice
+## Intended V1 beyond the current Phase 6 second slice
 
 V1 is not complete until a separately authorized system can:
 
@@ -136,10 +145,10 @@ V1 is not complete until a separately authorized system can:
   Delivery Authorization; and
 - perform an explicitly allowed push or pull-request action.
 
-These are future requirements, not first-slice Phase 6 capabilities. The
+These are future requirements, not second-slice Phase 6 capabilities. The
 Review Package/Decision/Readiness workflow still never grants Git or
-deployment authority; only the separate Delivery Authorization grants one
-local fixture commit.
+deployment authority; only the separate Delivery Authorization plus exact
+manifest confirmation grants one local fixture commit lifecycle.
 
 ## Quality attributes
 

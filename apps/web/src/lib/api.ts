@@ -204,6 +204,10 @@ type DeliveryAuthorizationDispatchOperation = OperationAt<
   "/api/v1/delivery-authorizations/{authorization_id}/dispatch",
   "post"
 >;
+type DeliveryPreviewOperation = OperationAt<
+  "/api/v1/delivery-authorizations/{authorization_id}/preview",
+  "get"
+>;
 
 export type Task = JsonResponse<TaskDetailOperation, 200>;
 export type CreateTaskInput = JsonRequest<TaskCreateOperation>;
@@ -317,6 +321,9 @@ export type CreateDeliveryAuthorizationInput =
   JsonRequest<DeliveryAuthorizationCreateOperation>;
 export type DeliveryAuthorizationDecisionInput =
   JsonRequest<DeliveryAuthorizationDecisionOperation>;
+export type DeliveryDispatchInput =
+  JsonRequest<DeliveryAuthorizationDispatchOperation>;
+export type DeliveryPreview = JsonResponse<DeliveryPreviewOperation, 200>;
 
 export type HealthCheck = "live" | "ready";
 export type RepositoryKind = CreateTaskInput extends {
@@ -1157,6 +1164,8 @@ export async function decideDeliveryAuthorization(
 
 export async function dispatchLocalDelivery(
   authorizationId: string,
+  input: DeliveryDispatchInput,
+  idempotencyKey: string,
 ): Promise<DeliveryAuthorization> {
   const { data } = await request<
     JsonResponse<DeliveryAuthorizationDispatchOperation, 200>
@@ -1164,8 +1173,23 @@ export async function dispatchLocalDelivery(
     `/api/v1/delivery-authorizations/${encodeURIComponent(authorizationId)}/dispatch`,
     {
       method: "POST",
-      headers: { "X-Request-ID": crypto.randomUUID() },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
     },
+  );
+  return data;
+}
+
+export async function getDeliveryPreview(
+  authorizationId: string,
+): Promise<DeliveryPreview> {
+  const { data } = await request<DeliveryPreview>(
+    `/api/v1/delivery-authorizations/${encodeURIComponent(authorizationId)}/preview`,
+    { cache: "no-store" },
   );
   return data;
 }

@@ -12,11 +12,13 @@ from visual_engineer_runner_protocol import (
     ControlledWaitJobSpec,
     DeliveryAuthorizationPolicy,
     DiagnosticResult,
+    LocalDeliveryManifest,
     PermissionEnvelope,
     SideEffectPermit,
     WorkspaceOperation,
     canonical_json_bytes,
     compute_delivery_authorization_policy_hash,
+    compute_local_delivery_manifest_digest,
     compute_permission_policy_hash,
     compute_side_effect_permit_digest,
     permission_policy_hash_matches,
@@ -251,6 +253,34 @@ def test_delivery_authority_is_local_only_derived_and_tamper_evident() -> None:
         )
         != policy.policy_hash
     )
+
+    manifest_values: dict[str, object] = {
+        "delivery_authorization_id": authorization_id,
+        "workspace_id": workspace_id,
+        "checkpoint_id": values["checkpoint_id"],
+        "checkpoint_fingerprint": values["checkpoint_fingerprint"],
+        "checkpoint_diff_hash": values["checkpoint_diff_hash"],
+        "source_revision": values["source_revision"],
+        "branch_ref": values["branch_ref"],
+        "commit_message": values["commit_message"],
+        "changed_paths": ["sandbox/lifecycle.txt"],
+        "changed_file_count": 1,
+        "total_diff_bytes": 128,
+        "manifest_digest": "0" * 64,
+    }
+    manifest = LocalDeliveryManifest.model_validate(manifest_values)
+    manifest.manifest_digest = compute_local_delivery_manifest_digest(manifest)
+    assert compute_local_delivery_manifest_digest(manifest) == manifest.manifest_digest
+    assert (
+        compute_local_delivery_manifest_digest(
+            manifest.model_copy(update={"changed_paths": ["sandbox/other.txt"]})
+        )
+        != manifest.manifest_digest
+    )
+    with pytest.raises(ValidationError):
+        LocalDeliveryManifest.model_validate(
+            {**manifest.model_dump(mode="json"), "remote_access": True}
+        )
 
     with pytest.raises(ValidationError):
         DeliveryAuthorizationPolicy.model_validate({**values, "remote_access": True})

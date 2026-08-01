@@ -12,7 +12,8 @@ files, and container state are treated as untrusted at their boundaries.
 The model does not claim hostile multi-tenant isolation or production
 hardening. Phase 4 adds only one read-only synthetic source, a no-source-Git
 snapshot adapter, and a Runner-owned Workspace. Phase 6 adds one separately
-authorized local ref/commit only in Runner-owned Git metadata. No LLM,
+authorized local ref/commit only in Runner-owned Git metadata; the second
+slice adds immutable manifest confirmation and bounded Dispatch recovery. No LLM,
 CreativeDeploy, source write, shell, target command, Docker socket, public
 network, remote Git, deployment, or external integration exists.
 
@@ -22,6 +23,8 @@ network, remote Git, deployment, or external integration exists.
 - Runner identity and liveness;
 - immutable Permission Envelopes and policy hashes;
 - Job/Attempt state, lease fencing identity, cancellation, and retry budget;
+- Delivery manifest, keyed Dispatch identity, linear retry history, and final
+  LocalDelivery proof;
 - Side-effect Permit authority, state, expiry, and revocation ordering;
 - Runner-local Workspace ownership HMAC key and authenticated local evidence;
 - typed results and RunnerJobEvent evidence;
@@ -53,6 +56,9 @@ network, remote Git, deployment, or external integration exists.
 | Repository/customer data exposure                          | Opaque local Handle for exact synthetic read-only bind only; no parent/customer/CreativeDeploy mount; Control Plane sees no path                                                                                                          | Real repositories require a new audit and authority             |
 | Source-configured helper or extra object enters authority  | No Git process targets source; bounded no-follow loose/pack parser computes only the exact authorized closure; exact managed Runner-only Git configuration                                                                                | Narrow ordinary Git layout only; unusual layouts denied         |
 | Replacement ref reinterprets an approved object ID         | Empty-template mirror, detached exact `HEAD`, no packed/replace refs, command/environment replacement disabling, exact manifest equality, and only bounded fixed-name delivery refs with a single approved parent and exact union closure | Existing legacy mirrors fail closed and require manual recovery |
+| Double dispatch or non-linear delivery retry               | Authorization row lock, request hash, unique active Dispatch, exact replay, immutable attempt/lineage trigger, three-attempt budget, and no retry after LocalDelivery                                                                     | Multi-user authorization remains future                         |
+| Preview becomes stale before Git mutation                  | Dispatch rederives exact manifest; claim/Permit revalidate authority; Runner independently recomputes current manifest immediately before fixed plumbing                                                                                  | Local transport and database administrator remain trusted       |
+| Revoked Grant is reused for delivery recovery              | Preview marks inactive; dispatch, claim/lease, Permit, and result acceptance all recheck original implementation Grant status/revocation/expiry                                                                                           | Already consumed Permit retains its bounded window              |
 | DB/Web lateral access                                      | Runner joins only internal `runner-control`; it has no DB/Web network or published port                                                                                                                                                   | Production network policy and egress proxy                      |
 | Public egress                                              | Docker internal network leaves only the API peer reachable                                                                                                                                                                                | Host-level Docker/network compromise remains out of scope       |
 | Container privilege escalation                             | Non-root, read-only rootfs, all capabilities dropped, no-new-privileges, no Docker/SSH mount, tmpfs `/tmp`                                                                                                                                | A container alone is not a hostile-code sandbox                 |
@@ -130,6 +136,17 @@ network, remote Git, deployment, or external integration exists.
     validates stable loose-ref bytes, exact single-parent source lineage, and
     the exact union of approved source plus delivery object closures; arbitrary
     or replacement refs and unreachable objects remain denied.
+29. Dispatch requires exact confirmation of the current canonical manifest
+    digest and one keyed request; changed-payload replay and concurrent losers
+    create no second Job, Dispatch, Permit, ref, or proof.
+30. A Delivery retry must name the latest failed/cancelled Dispatch, retain the
+    same immutable Authorization/manifest, remain within attempt three, and
+    have no successful LocalDelivery.
+31. Every delivery Job, Permit operation digest, Runner result, terminal
+    Dispatch, AuditEvent, and Web proof binds Dispatch ID, attempt number, and
+    manifest digest.
+32. Revocation, expiry, Review/Checkpoint drift, manifest mismatch, invalid
+    lineage, or exhausted budget fails closed before a new Git side effect.
 
 ## Verification
 

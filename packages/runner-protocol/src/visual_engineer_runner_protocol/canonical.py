@@ -90,6 +90,20 @@ def compute_local_delivery_result_digest(value: BaseModel | dict[str, Any]) -> s
     ).hexdigest()
 
 
+def compute_local_delivery_manifest_digest(value: BaseModel | dict[str, Any]) -> str:
+    payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
+    payload.pop("manifest_digest", None)
+    return hashlib.sha256(
+        b"visual-engineer.local-delivery-manifest.v1\x00" + canonical_json_bytes(payload)
+    ).hexdigest()
+
+
+def local_delivery_manifest_digest_matches(
+    value: BaseModel | dict[str, Any], expected: str
+) -> bool:
+    return hmac.compare_digest(compute_local_delivery_manifest_digest(value), expected)
+
+
 def _validation_digest(domain: str, value: BaseModel | dict[str, Any] | list[Any]) -> str:
     payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
     return hashlib.sha256(

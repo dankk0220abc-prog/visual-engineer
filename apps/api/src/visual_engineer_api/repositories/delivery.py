@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from visual_engineer_api.models.delivery import (
     DeliveryAuthorization,
     DeliveryAuthorizationDecision,
+    DeliveryDispatch,
     LocalDelivery,
 )
 from visual_engineer_api.models.runner import RunnerJob
@@ -17,7 +18,9 @@ class DeliveryRepository:
 
     def add(
         self,
-        value: DeliveryAuthorization | DeliveryAuthorizationDecision | LocalDelivery,
+        value: (
+            DeliveryAuthorization | DeliveryAuthorizationDecision | DeliveryDispatch | LocalDelivery
+        ),
     ) -> None:
         self._session.add(value)
 
@@ -108,6 +111,54 @@ class DeliveryRepository:
         if lock:
             statement = statement.with_for_update()
         return self._session.scalar(statement)
+
+    def dispatch(
+        self,
+        dispatch_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> DeliveryDispatch | None:
+        statement = select(DeliveryDispatch).where(DeliveryDispatch.id == dispatch_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def dispatch_by_idempotency(
+        self,
+        key: str,
+        *,
+        lock: bool = False,
+    ) -> DeliveryDispatch | None:
+        statement = select(DeliveryDispatch).where(DeliveryDispatch.idempotency_key == key)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def dispatch_by_job(
+        self,
+        job_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> DeliveryDispatch | None:
+        statement = select(DeliveryDispatch).where(DeliveryDispatch.runner_job_id == job_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def dispatches(
+        self,
+        authorization_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> list[DeliveryDispatch]:
+        statement = (
+            select(DeliveryDispatch)
+            .where(DeliveryDispatch.delivery_authorization_id == authorization_id)
+            .order_by(DeliveryDispatch.attempt_number.asc())
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return list(self._session.scalars(statement))
 
     def job(self, authorization_id: uuid.UUID, *, lock: bool = False) -> RunnerJob | None:
         statement = (

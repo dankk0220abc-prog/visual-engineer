@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
 from visual_engineer_api.schemas.runner import RunnerJobResponse
+from visual_engineer_runner_protocol import LocalDeliveryManifest
 
 Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 ObjectId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
@@ -29,6 +30,13 @@ class DeliveryAuthorizationDecisionCreate(BaseModel):
         if self.reason is not None and ("\x00" in self.reason or not self.reason.strip()):
             raise ValueError("reason must be non-blank and contain no NUL characters")
         return self
+
+
+class DeliveryDispatchCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_digest: Digest
+    retry_of_dispatch_id: uuid.UUID | None = None
 
 
 class DeliveryAuthorizationDecisionResponse(BaseModel):
@@ -78,6 +86,33 @@ class LocalDeliveryResponse(BaseModel):
     created_at: datetime
 
 
+class DeliveryDispatchResponse(BaseModel):
+    id: uuid.UUID
+    delivery_authorization_id: uuid.UUID
+    attempt_number: int
+    retry_of_dispatch_id: uuid.UUID | None
+    runner_job_id: uuid.UUID
+    manifest_digest: Digest
+    confirmation_digest: Digest
+    status: Literal["dispatched", "succeeded", "failed", "cancelled"]
+    request_id: str
+    idempotency_request_hash: Digest
+    error_code: str | None
+    created_at: datetime
+    terminal_at: datetime | None
+    job: RunnerJobResponse
+
+
+class DeliveryPreviewResponse(BaseModel):
+    delivery_authorization_id: uuid.UUID
+    manifest: LocalDeliveryManifest
+    diff_artifact: str
+    can_dispatch: bool
+    next_attempt_number: int | None
+    retry_of_dispatch_id: uuid.UUID | None
+    blocking_code: str | None
+
+
 class DeliveryAuthorizationResponse(BaseModel):
     id: uuid.UUID
     authorization_version: Literal[1]
@@ -124,6 +159,7 @@ class DeliveryAuthorizationResponse(BaseModel):
     decision: DeliveryAuthorizationDecisionResponse | None
     job: RunnerJobResponse | None
     delivery: LocalDeliveryResponse | None
+    dispatches: list[DeliveryDispatchResponse]
 
 
 class DeliveryAuthorizationListResponse(BaseModel):

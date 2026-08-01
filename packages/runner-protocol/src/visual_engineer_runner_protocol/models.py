@@ -490,6 +490,54 @@ class DeliveryAuthorizationPolicy(StrictModel):
         return self
 
 
+class LocalDeliveryManifest(StrictModel):
+    manifest_version: Literal[1] = 1
+    delivery_authorization_id: uuid.UUID
+    workspace_id: uuid.UUID
+    checkpoint_id: uuid.UUID
+    checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    checkpoint_diff_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    branch_ref: Annotated[
+        str,
+        StringConstraints(pattern=r"^refs/heads/visual-engineer/[0-9a-f]{32}$"),
+    ]
+    commit_message: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=160,
+            pattern=r"^VisualEngineer: governed local delivery [0-9a-f]{8}$",
+        ),
+    ]
+    changed_paths: list[str] = Field(min_length=1, max_length=100)
+    changed_file_count: int = Field(ge=1, le=100)
+    total_diff_bytes: int = Field(ge=1, le=MAX_WORKSPACE_DIFF_BYTES)
+    local_git_commit_access: Literal[True] = True
+    remote_access: Literal[False] = False
+    push_access: Literal[False] = False
+    pull_request_access: Literal[False] = False
+    tag_access: Literal[False] = False
+    deployment_access: Literal[False] = False
+    source_repository_write_access: Literal[False] = False
+    manifest_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+    @field_validator("changed_paths")
+    @classmethod
+    def validate_manifest_paths(cls, value: list[str]) -> list[str]:
+        normalized = [_validate_relative_policy_value(item, allow_glob=False) for item in value]
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("delivery manifest paths must be unique")
+        return sorted(normalized)
+
+    @model_validator(mode="after")
+    def validate_manifest_counts(self) -> "LocalDeliveryManifest":
+        if self.changed_file_count != len(self.changed_paths):
+            raise ValueError("delivery manifest count must match changed paths")
+        return self
+
+
 class WorkspacePrepareJobSpec(WorkspaceBoundJobSpec):
     kind: Literal[JobKind.WORKSPACE_PREPARE_V1] = JobKind.WORKSPACE_PREPARE_V1
 
@@ -603,6 +651,9 @@ class ValidationExecuteJobSpec(WorkspaceBoundJobSpec):
 class WorkspaceGitCommitJobSpec(WorkspaceBoundJobSpec):
     kind: Literal[JobKind.WORKSPACE_GIT_COMMIT_V1] = JobKind.WORKSPACE_GIT_COMMIT_V1
     delivery_authorization: DeliveryAuthorizationPolicy
+    delivery_dispatch_id: uuid.UUID
+    delivery_attempt_number: int = Field(ge=1, le=3)
+    delivery_manifest: LocalDeliveryManifest
     checkpoint_id: uuid.UUID
     checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
     checkpoint_diff_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
@@ -618,6 +669,14 @@ class WorkspaceGitCommitJobSpec(WorkspaceBoundJobSpec):
             or delivery.checkpoint_diff_hash != self.checkpoint_diff_hash
             or delivery.repository_handle_id != grant.repository_handle_id
             or delivery.source_revision != grant.source_revision
+            or self.delivery_manifest.delivery_authorization_id != delivery.id
+            or self.delivery_manifest.workspace_id != self.workspace_id
+            or self.delivery_manifest.checkpoint_id != self.checkpoint_id
+            or self.delivery_manifest.checkpoint_fingerprint != self.checkpoint_fingerprint
+            or self.delivery_manifest.checkpoint_diff_hash != self.checkpoint_diff_hash
+            or self.delivery_manifest.source_revision != grant.source_revision
+            or self.delivery_manifest.branch_ref != delivery.branch_ref
+            or self.delivery_manifest.commit_message != delivery.commit_message
             or grant.git_delivery_access
             or grant.source_repository_write_access
         ):
@@ -683,6 +742,8 @@ def side_effect_job_binding(spec: WorkspaceJobSpec) -> dict[str, str | None]:
         proposed_digest = hashlib.sha256(
             (
                 f"{spec.delivery_authorization.policy_hash}:"
+                f"{spec.delivery_dispatch_id}:{spec.delivery_attempt_number}:"
+                f"{spec.delivery_manifest.manifest_digest}:"
                 f"{spec.checkpoint_id}:{spec.checkpoint_fingerprint}:"
                 f"{spec.checkpoint_diff_hash}:{spec.delivery_authorization.branch_ref}:"
                 f"{spec.delivery_authorization.commit_message}"
@@ -1186,6 +1247,9 @@ class WorkspaceGitCommitResult(StrictModel):
     kind: Literal[JobKind.WORKSPACE_GIT_COMMIT_V1] = JobKind.WORKSPACE_GIT_COMMIT_V1
     workspace_id: uuid.UUID
     delivery_authorization_id: uuid.UUID
+    delivery_dispatch_id: uuid.UUID
+    delivery_attempt_number: int = Field(ge=1, le=3)
+    delivery_manifest_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
     checkpoint_id: uuid.UUID
     checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
     checkpoint_diff_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]

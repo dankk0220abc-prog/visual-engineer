@@ -38,11 +38,13 @@ from visual_engineer_runner_protocol import (
     ExecutionGrantPolicy,
     FailureCode,
     JobAssignment,
+    LocalDeliveryManifest,
     PermissionEnvelope,
     RepositoryAccess,
     ResultPayload,
     SideEffectPermit,
     SourceStatus,
+    WorkspaceCheckpointPayload,
     WorkspaceDiffJobSpec,
     WorkspaceDiffResult,
     WorkspaceDiscardJobSpec,
@@ -66,6 +68,7 @@ from visual_engineer_runner_protocol import (
     WorkspaceWriteTextResult,
     compute_delivery_authorization_policy_hash,
     compute_execution_grant_policy_hash,
+    compute_local_delivery_manifest_digest,
     compute_local_delivery_result_digest,
     compute_permission_policy_hash,
     compute_side_effect_job_digest,
@@ -312,6 +315,30 @@ def delivery_authorization(
     draft = DeliveryAuthorizationPolicy.model_validate(values)
     values["policy_hash"] = compute_delivery_authorization_policy_hash(draft)
     return DeliveryAuthorizationPolicy.model_validate(values)
+
+
+def delivery_manifest(
+    authorization: DeliveryAuthorizationPolicy,
+    checkpoint: object,
+) -> LocalDeliveryManifest:
+    payload = WorkspaceCheckpointPayload.model_validate(checkpoint)
+    values: dict[str, object] = {
+        "delivery_authorization_id": authorization.id,
+        "workspace_id": authorization.workspace_id,
+        "checkpoint_id": authorization.checkpoint_id,
+        "checkpoint_fingerprint": payload.tree_fingerprint,
+        "checkpoint_diff_hash": payload.diff_hash,
+        "source_revision": authorization.source_revision,
+        "branch_ref": authorization.branch_ref,
+        "commit_message": authorization.commit_message,
+        "changed_paths": payload.changed_paths,
+        "changed_file_count": payload.changed_file_count,
+        "total_diff_bytes": payload.total_diff_bytes,
+        "manifest_digest": "0" * 64,
+    }
+    manifest = LocalDeliveryManifest.model_validate(values)
+    manifest.manifest_digest = compute_local_delivery_manifest_digest(manifest)
+    return manifest
 
 
 def test_workspace_assignment_requires_exact_isolated_repository_access() -> None:
@@ -2539,10 +2566,27 @@ def test_governed_local_commit_is_deterministic_local_only_and_source_invariant(
         workspace_id=workspace_id,
         execution_grant=implementation_grant,
         delivery_authorization=authorization,
+        delivery_dispatch_id=uuid.uuid4(),
+        delivery_attempt_number=1,
+        delivery_manifest=delivery_manifest(authorization, written.checkpoint),
         checkpoint_id=checkpoint_id,
         checkpoint_fingerprint=written.checkpoint.tree_fingerprint,
         checkpoint_diff_hash=written.checkpoint.diff_hash,
     )
+    mismatched_manifest = spec.delivery_manifest.model_copy(
+        update={
+            "total_diff_bytes": spec.delivery_manifest.total_diff_bytes + 1,
+            "manifest_digest": "0" * 64,
+        }
+    )
+    mismatched_manifest.manifest_digest = compute_local_delivery_manifest_digest(
+        mismatched_manifest
+    )
+    mismatched_spec = spec.model_copy(update={"delivery_manifest": mismatched_manifest})
+    with pytest.raises(WorkspaceExecutionError) as manifest_mismatch:
+        execute(manager, mismatched_spec)
+    assert manifest_mismatch.value.code == FailureCode.VALIDATION_CHECKPOINT_MISMATCH
+    assert not (manager._git.mirror_path(HANDLE) / authorization.branch_ref).exists()
     operation_id = uuid.uuid4()
     with pytest.raises(WorkspaceExecutionError) as missing_permit:
         manager.execute(
@@ -2603,6 +2647,20 @@ def test_governed_local_commit_is_deterministic_local_only_and_source_invariant(
     assert replay.commit_oid == delivered.commit_oid
     assert replay.result_digest == delivered.result_digest
 
+    retry_spec = spec.model_copy(
+        update={
+            "delivery_dispatch_id": uuid.uuid4(),
+            "delivery_attempt_number": 2,
+        }
+    )
+    cross_job_retry = execute(manager, retry_spec)
+    assert isinstance(cross_job_retry, WorkspaceGitCommitResult)
+    assert cross_job_retry.commit_oid == delivered.commit_oid
+    assert cross_job_retry.delivery_dispatch_id == retry_spec.delivery_dispatch_id
+    assert cross_job_retry.delivery_attempt_number == 2
+    assert cross_job_retry.delivery_manifest_digest == spec.delivery_manifest.manifest_digest
+    assert cross_job_retry.result_digest != delivered.result_digest
+
     sibling_workspace_id = uuid.uuid4()
     sibling = execute(
         manager,
@@ -2644,6 +2702,9 @@ def test_governed_local_commit_is_deterministic_local_only_and_source_invariant(
         workspace_id=sibling_workspace_id,
         execution_grant=implementation_grant,
         delivery_authorization=second_authorization,
+        delivery_dispatch_id=uuid.uuid4(),
+        delivery_attempt_number=1,
+        delivery_manifest=delivery_manifest(second_authorization, second_written.checkpoint),
         checkpoint_id=second_checkpoint_id,
         checkpoint_fingerprint=second_written.checkpoint.tree_fingerprint,
         checkpoint_diff_hash=second_written.checkpoint.diff_hash,
@@ -2711,6 +2772,9 @@ def test_governed_local_commit_revalidates_managed_state_without_git_mutation(
         workspace_id=workspace_id,
         execution_grant=grant,
         delivery_authorization=authorization,
+        delivery_dispatch_id=uuid.uuid4(),
+        delivery_attempt_number=1,
+        delivery_manifest=delivery_manifest(authorization, written.checkpoint),
         checkpoint_id=authorization.checkpoint_id,
         checkpoint_fingerprint=authorization.checkpoint_fingerprint,
         checkpoint_diff_hash=authorization.checkpoint_diff_hash,

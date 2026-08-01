@@ -5,6 +5,7 @@ import {
   createDeliveryAuthorization,
   decideDeliveryAuthorization,
   dispatchLocalDelivery,
+  getDeliveryPreview,
   listDeliveryAuthorizations,
   listReviewPackages,
   type DeliveryAuthorization,
@@ -20,6 +21,7 @@ vi.mock("@/lib/api", async () => {
     createDeliveryAuthorization: vi.fn(),
     decideDeliveryAuthorization: vi.fn(),
     dispatchLocalDelivery: vi.fn(),
+    getDeliveryPreview: vi.fn(),
     listDeliveryAuthorizations: vi.fn(),
     listReviewPackages: vi.fn(),
   };
@@ -71,13 +73,47 @@ const authorization = {
   decision: null,
   job: null,
   delivery: null,
+  dispatches: [],
 } satisfies DeliveryAuthorization;
+
+const preview = {
+  delivery_authorization_id: authorization.id,
+  manifest: {
+    manifest_version: 1 as const,
+    delivery_authorization_id: authorization.id,
+    workspace_id: authorization.workspace_id,
+    checkpoint_id: authorization.checkpoint_id,
+    checkpoint_fingerprint: authorization.checkpoint_fingerprint,
+    checkpoint_diff_hash: authorization.checkpoint_diff_hash,
+    source_revision: authorization.source_revision,
+    branch_ref: authorization.branch_ref,
+    commit_message: authorization.commit_message,
+    changed_paths: ["sandbox/phase6-delivery.txt"],
+    changed_file_count: 1,
+    total_diff_bytes: 64,
+    local_git_commit_access: true as const,
+    remote_access: false as const,
+    push_access: false as const,
+    pull_request_access: false as const,
+    tag_access: false as const,
+    deployment_access: false as const,
+    source_repository_write_access: false as const,
+    manifest_digest: "b".repeat(64),
+  },
+  diff_artifact:
+    "diff --git a/sandbox/phase6-delivery.txt b/sandbox/phase6-delivery.txt",
+  can_dispatch: true,
+  next_attempt_number: 1,
+  retry_of_dispatch_id: null,
+  blocking_code: null,
+};
 
 describe("DeliveryConsole", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(listReviewPackages).mockResolvedValue([]);
     vi.mocked(listDeliveryAuthorizations).mockResolvedValue([]);
+    vi.mocked(getDeliveryPreview).mockResolvedValue(preview);
   });
 
   it("offers only a fresh approved ready Review as a delivery candidate", async () => {
@@ -178,17 +214,134 @@ describe("DeliveryConsole", () => {
     render(<DeliveryConsole />);
 
     fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Dispatch governed local commit",
+      await screen.findByRole("button", { name: "Review delivery preview" }),
+    );
+    expect(
+      await screen.findByText("Immutable delivery manifest · attempt 1"),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I confirm this exact manifest digest for local-only delivery.",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Dispatch confirmed local delivery",
       }),
     );
     await waitFor(() =>
-      expect(dispatchLocalDelivery).toHaveBeenCalledWith(authorization.id),
+      expect(dispatchLocalDelivery).toHaveBeenCalledWith(
+        authorization.id,
+        {
+          confirmation_digest: preview.manifest.manifest_digest,
+          retry_of_dispatch_id: null,
+        },
+        `delivery-dispatch-v1:${authorization.id}:1:${preview.manifest.manifest_digest}`,
+      ),
     );
     expect(
       await screen.findByText("Local commit created", undefined, {
         timeout: 3_000,
       }),
     ).toBeVisible();
+  });
+
+  it("reuses the preview-scoped idempotency key after an unknown response", async () => {
+    const approved = {
+      ...authorization,
+      status: "approved" as const,
+      decided_at: "2026-07-31T08:01:00Z",
+    };
+    vi.mocked(listDeliveryAuthorizations).mockResolvedValue([approved]);
+    vi.mocked(dispatchLocalDelivery)
+      .mockRejectedValueOnce(new Error("Local response was not observed"))
+      .mockResolvedValue(approved);
+    render(<DeliveryConsole />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Review delivery preview" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("checkbox", {
+        name: "I confirm this exact manifest digest for local-only delivery.",
+      }),
+    );
+    const dispatchButton = screen.getByRole("button", {
+      name: "Dispatch confirmed local delivery",
+    });
+    fireEvent.click(dispatchButton);
+    expect(await screen.findByText("出现未预期的错误。")).toBeVisible();
+    fireEvent.click(dispatchButton);
+
+    await waitFor(() => expect(dispatchLocalDelivery).toHaveBeenCalledTimes(2));
+    const firstKey = vi.mocked(dispatchLocalDelivery).mock.calls[0]?.[2];
+    const secondKey = vi.mocked(dispatchLocalDelivery).mock.calls[1]?.[2];
+    expect(firstKey).toBe(
+      `delivery-dispatch-v1:${authorization.id}:1:${preview.manifest.manifest_digest}`,
+    );
+    expect(secondKey).toBe(firstKey);
+  });
+
+  it("shows terminal history and confirms the exact manifest for safe retry", async () => {
+    const dispatchId = "81000000-0000-4000-8000-000000000001";
+    const failed = {
+      ...authorization,
+      status: "failed",
+      decided_at: "2026-07-31T08:01:00Z",
+      dispatched_at: "2026-07-31T08:02:00Z",
+      terminal_at: "2026-07-31T08:02:01Z",
+      error_code: "workspace_state_invalid",
+      dispatches: [
+        {
+          id: dispatchId,
+          delivery_authorization_id: authorization.id,
+          attempt_number: 1,
+          retry_of_dispatch_id: null,
+          runner_job_id: "82000000-0000-4000-8000-000000000001",
+          manifest_digest: preview.manifest.manifest_digest,
+          confirmation_digest: preview.manifest.manifest_digest,
+          status: "failed",
+          request_id: "request-failed",
+          idempotency_request_hash: "c".repeat(64),
+          error_code: "workspace_state_invalid",
+          created_at: "2026-07-31T08:02:00Z",
+          terminal_at: "2026-07-31T08:02:01Z",
+          job: {},
+        },
+      ],
+    } as unknown as DeliveryAuthorization;
+    const retryPreview = {
+      ...preview,
+      next_attempt_number: 2,
+      retry_of_dispatch_id: dispatchId,
+    };
+    vi.mocked(listDeliveryAuthorizations).mockResolvedValue([failed]);
+    vi.mocked(getDeliveryPreview).mockResolvedValue(retryPreview);
+    vi.mocked(dispatchLocalDelivery).mockResolvedValue(failed);
+    render(<DeliveryConsole />);
+
+    expect(await screen.findByText("workspace_state_invalid")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Review safe retry" }));
+    expect(
+      await screen.findByText("Immutable delivery manifest · attempt 2"),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I confirm this exact manifest digest for local-only delivery.",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry exact local delivery" }),
+    );
+    await waitFor(() =>
+      expect(dispatchLocalDelivery).toHaveBeenCalledWith(
+        authorization.id,
+        {
+          confirmation_digest: preview.manifest.manifest_digest,
+          retry_of_dispatch_id: dispatchId,
+        },
+        `delivery-dispatch-v1:${authorization.id}:2:${preview.manifest.manifest_digest}`,
+      ),
+    );
   });
 });

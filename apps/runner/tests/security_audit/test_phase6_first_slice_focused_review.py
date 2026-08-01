@@ -10,6 +10,7 @@ import pytest
 from apps.runner.tests.test_workspace_tools import (
     _filesystem_snapshot,
     delivery_authorization,
+    delivery_manifest,
     execute,
     execution_grant,
     repository_fixture,
@@ -97,6 +98,9 @@ def test_phase6_delivery_revalidates_managed_mirror_immediately_before_ref_mutat
         workspace_id=workspace_id,
         execution_grant=grant,
         delivery_authorization=authorization,
+        delivery_dispatch_id=uuid.uuid4(),
+        delivery_attempt_number=1,
+        delivery_manifest=delivery_manifest(authorization, written.checkpoint),
         checkpoint_id=authorization.checkpoint_id,
         checkpoint_fingerprint=authorization.checkpoint_fingerprint,
         checkpoint_diff_hash=authorization.checkpoint_diff_hash,

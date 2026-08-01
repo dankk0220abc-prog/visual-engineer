@@ -411,7 +411,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
 
   await page.goto("/deliveries");
   await expect(
-    page.getByRole("heading", { name: "Local Branch & Commit" }),
+    page.getByRole("heading", { name: "Local Delivery Lifecycle" }),
   ).toBeVisible();
   await expect(
     page.getByText(
@@ -458,10 +458,26 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     authorizationCard.getByText("approved", { exact: true }),
   ).toBeVisible({ timeout: 30_000 });
   await authorizationCard
-    .getByRole("button", { name: "Dispatch governed local commit" })
+    .getByRole("button", { name: "Review delivery preview" })
     .click();
   await expect(
-    authorizationCard.getByText("succeeded", { exact: true }),
+    authorizationCard.getByText(/Immutable delivery manifest · attempt 1/),
+  ).toBeVisible();
+  await expect(
+    authorizationCard.getByText(
+      "Local ref only · source write, remote, push, PR, tag and deploy remain denied.",
+    ),
+  ).toBeVisible();
+  await authorizationCard
+    .getByRole("checkbox", {
+      name: "I confirm this exact manifest digest for local-only delivery.",
+    })
+    .check();
+  await authorizationCard
+    .getByRole("button", { name: "Dispatch confirmed local delivery" })
+    .click();
+  await expect(
+    authorizationCard.getByText("succeeded", { exact: true }).first(),
   ).toBeVisible({ timeout: 60_000 });
   await expect(
     authorizationCard.getByText("Local commit created"),

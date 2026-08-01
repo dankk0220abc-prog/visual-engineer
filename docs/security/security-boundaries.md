@@ -14,6 +14,13 @@ source revision/fingerprint, and dual authority before reporting success.
 Source repository bytes and refs are invariants. No remote exists in the
 authority or result schema.
 
+The second slice adds no new Git operation. It binds the existing operation to
+an immutable server-derived manifest, exact local-user digest confirmation,
+keyed `DeliveryDispatch`, linear attempt number, and maximum three-attempt
+budget. Runner independently recomputes that manifest immediately before
+mutation. Failed/cancelled facts remain durable; retry requires the same
+fresh Authorization/manifest and active original implementation Grant.
+
 ## Trust zones
 
 ```mermaid
@@ -55,6 +62,9 @@ not a sandbox for hostile execution.
   decision, version, and `execution_available`.
 - Mutations use explicit transactions, row locks where required, and stable
   idempotency/conflict behavior.
+- Delivery dispatch uses an Authorization row lock, unique keyed request hash,
+  one-active-attempt index, exact retry lineage, and database triggers that
+  reject Job/manifest rebinding or terminal-history mutation.
 - Snapshot update/delete is rejected by a PostgreSQL trigger.
 - Public errors contain stable codes and sanitized messages, not stack traces,
   connection strings, or repository host paths.

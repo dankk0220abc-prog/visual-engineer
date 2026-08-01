@@ -14,6 +14,7 @@ Local Git commit authority is an intersection, never an expansion:
 fresh approved ready Review generation
   + active original Workspace implementation Grant
   + separately approved exact Delivery Authorization
+  + explicit confirmation of the current immutable manifest digest
   + active Runner/Job/Attempt/Lease
   + current git_commit Side-effect Permit
   = one system-derived local ref update
@@ -38,7 +39,7 @@ Level 1 only for the synthetic fixture. Phase 5 implements fixture-only Level
 | 0: Read only             | Fixed metadata and selected committed-object reads inside one exact allowlisted Git root. No target command or write. | **Implemented**  |
 | 1: Isolated write        | Edit exact approved UTF-8 paths in a Runner-owned isolated fixture worktree.                                          | **Fixture only** |
 | 2: Controlled validation | Run a system-owned, versioned fixture Profile or immutable Suite of those Profiles in disposable sandboxes.           | **Fixture only** |
-| 3: Branch and commit     | Create a scoped branch and local commit after gates.                                                                  | Not implemented  |
+| 3: Branch and commit     | Create one system-derived local branch/commit after manifest confirmation, with bounded terminal retry.               | **Fixture only** |
 | 4: Pull request          | Push the approved branch and create/update a PR.                                                                      | Not implemented  |
 
 ## Phase 3 repository-free capabilities

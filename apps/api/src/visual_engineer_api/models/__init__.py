@@ -1,6 +1,7 @@
 from visual_engineer_api.models.delivery import (
     DeliveryAuthorization,
     DeliveryAuthorizationDecision,
+    DeliveryDispatch,
     LocalDelivery,
 )
 from visual_engineer_api.models.review import (
@@ -49,6 +50,7 @@ __all__ = [
     "AuditEvent",
     "DeliveryAuthorization",
     "DeliveryAuthorizationDecision",
+    "DeliveryDispatch",
     "ExecutionGrant",
     "ExecutionGrantDecision",
     "LocalDelivery",

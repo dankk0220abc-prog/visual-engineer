@@ -12,7 +12,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from visual_engineer_api.core.config import Settings, get_settings
-from visual_engineer_api.models.delivery import DeliveryAuthorization, LocalDelivery
+from visual_engineer_api.models.delivery import (
+    DeliveryAuthorization,
+    DeliveryDispatch,
+    LocalDelivery,
+)
 from visual_engineer_api.models.run import AuditEvent
 from visual_engineer_api.models.runner import (
     PermissionEnvelope,
@@ -65,6 +69,7 @@ from visual_engineer_runner_protocol import (
     JobSpec,
     JobState,
     LeaseMutationResponse,
+    LocalDeliveryManifest,
     ProgressEventRequest,
     RegisterRequest,
     RegisterResponse,
@@ -105,6 +110,7 @@ from visual_engineer_runner_protocol import (
     compute_validation_policy_digest,
     delivery_authorization_policy_hash_matches,
     execution_grant_policy_hash_matches,
+    local_delivery_manifest_digest_matches,
     side_effect_job_binding,
     side_effect_permit_digest_matches,
     validate_result_payload,
@@ -336,6 +342,7 @@ class RunnerService:
         spec: WorkspaceJobSpec,
         *,
         request_id: str,
+        commit: bool = True,
     ) -> RunnerJobResponse:
         grant = spec.execution_grant
         if not execution_grant_policy_hash_matches(grant, grant.policy_hash):
@@ -376,9 +383,15 @@ class RunnerService:
                     "Workspace operation is outside the Execution Grant",
                     category="policy",
                 )
-        return self._create_job(spec, request_id=request_id)
+        return self._create_job(spec, request_id=request_id, commit=commit)
 
-    def _create_job(self, spec: JobSpec, *, request_id: str) -> RunnerJobResponse:
+    def _create_job(
+        self,
+        spec: JobSpec,
+        *,
+        request_id: str,
+        commit: bool = True,
+    ) -> RunnerJobResponse:
         now = utc_now()
         job_id = uuid.uuid4()
         envelope_id = uuid.uuid4()
@@ -486,9 +499,10 @@ class RunnerService:
                 "policy_hash": envelope.policy_hash,
             },
         )
-        self._session.commit()
-        self._session.refresh(job)
-        self._log_event("job_created", job_id=job.id)
+        if commit:
+            self._session.commit()
+            self._session.refresh(job)
+            self._log_event("job_created", job_id=job.id)
         return self._job_response(job)
 
     def list_jobs(self) -> list[RunnerJobResponse]:
@@ -1785,7 +1799,9 @@ class RunnerService:
                 category="policy",
             ) from exc
         delivery_authorization: DeliveryAuthorization | None = None
+        delivery_dispatch: DeliveryDispatch | None = None
         stored_delivery_policy: DeliveryAuthorizationPolicy | None = None
+        stored_delivery_manifest: LocalDeliveryManifest | None = None
         delivery_decision = None
         delivery_package = None
         delivery_scope = None
@@ -1803,7 +1819,19 @@ class RunnerService:
                 lock=True,
             )
             if delivery_authorization is not None:
+                delivery_dispatch = self._deliveries.dispatch_by_job(job.id, lock=True)
                 stored_delivery_policy = self._delivery_policy(delivery_authorization)
+                if delivery_dispatch is not None:
+                    try:
+                        stored_delivery_manifest = LocalDeliveryManifest.model_validate(
+                            delivery_dispatch.manifest
+                        )
+                    except ValidationError as exc:
+                        raise RunnerServiceError(
+                            "delivery_manifest_invalid",
+                            "Stored Delivery Dispatch manifest is invalid",
+                            category="policy",
+                        ) from exc
                 delivery_decision = self._deliveries.decision(
                     delivery_authorization.id,
                     lock=True,
@@ -1843,7 +1871,9 @@ class RunnerService:
                 isinstance(stored_spec, WorkspaceGitCommitJobSpec)
                 and (
                     delivery_authorization is None
+                    or delivery_dispatch is None
                     or stored_delivery_policy is None
+                    or stored_delivery_manifest is None
                     or delivery_decision is None
                     or delivery_decision.decision != "approve"
                     or not delivery_decision.local_git_commit_authorized
@@ -1862,6 +1892,19 @@ class RunnerService:
                     or readiness.id != delivery_authorization.readiness_verdict_id
                     or readiness.verdict != "ready"
                     or delivery_authorization.status != "dispatched"
+                    or delivery_dispatch.delivery_authorization_id != delivery_authorization.id
+                    or delivery_dispatch.runner_job_id != job.id
+                    or delivery_dispatch.status != "dispatched"
+                    or delivery_dispatch.attempt_number != stored_spec.delivery_attempt_number
+                    or delivery_dispatch.id != stored_spec.delivery_dispatch_id
+                    or delivery_dispatch.manifest_digest
+                    != stored_spec.delivery_manifest.manifest_digest
+                    or stored_delivery_manifest.model_dump(mode="json")
+                    != stored_spec.delivery_manifest.model_dump(mode="json")
+                    or not local_delivery_manifest_digest_matches(
+                        stored_delivery_manifest,
+                        delivery_dispatch.manifest_digest,
+                    )
                     or delivery_authorization.expires_at <= now
                     or delivery_authorization.workspace_id != workspace.id
                     or delivery_authorization.execution_grant_id != grant.id
@@ -2254,15 +2297,29 @@ class RunnerService:
             result.delivery_authorization_id,
             lock=True,
         )
+        dispatch = self._deliveries.dispatch(result.delivery_dispatch_id, lock=True)
         permit = self._workspaces.get_side_effect_permit(
             result.side_effect_permit_id,
             lock=True,
         )
         if (
             authorization is None
+            or dispatch is None
             or permit is None
             or authorization.id != job.delivery_authorization_id
             or authorization.status != "dispatched"
+            or dispatch.delivery_authorization_id != authorization.id
+            or dispatch.runner_job_id != job.id
+            or dispatch.status != "dispatched"
+            or dispatch.id != stored_spec.delivery_dispatch_id
+            or dispatch.attempt_number != stored_spec.delivery_attempt_number
+            or result.delivery_attempt_number != dispatch.attempt_number
+            or result.delivery_manifest_digest != dispatch.manifest_digest
+            or result.delivery_manifest_digest != stored_spec.delivery_manifest.manifest_digest
+            or not local_delivery_manifest_digest_matches(
+                stored_spec.delivery_manifest,
+                dispatch.manifest_digest,
+            )
             or authorization.expires_at <= now
             or result.workspace_id != authorization.workspace_id
             or result.workspace_id != job.workspace_id
@@ -2332,15 +2389,13 @@ class RunnerService:
             permit.state = "expired"
             permit.terminal_at = now
             if job.kind == JobKind.WORKSPACE_GIT_COMMIT_V1.value:
-                authorization = (
-                    self._deliveries.authorization(job.delivery_authorization_id, lock=True)
-                    if job.delivery_authorization_id is not None
-                    else None
+                self._terminalize_delivery_dispatch(
+                    job,
+                    status="failed",
+                    error_code="side_effect_permit_expired",
+                    request_id=request_id,
+                    now=now,
                 )
-                if authorization is not None and authorization.status == "dispatched":
-                    authorization.status = "failed"
-                    authorization.terminal_at = now
-                    authorization.error_code = "side_effect_permit_expired"
             workspace = self._workspaces.get_workspace(permit.workspace_id, lock=True)
             if workspace is not None and job.kind != JobKind.VALIDATION_EXECUTE_V1.value:
                 workspace.state = "quarantined"
@@ -2704,6 +2759,7 @@ class RunnerService:
                 result.side_effect_permit_id,
                 lock=True,
             )
+            dispatch = self._deliveries.dispatch(result.delivery_dispatch_id, lock=True)
             package = (
                 self._reviews.package(authorization.review_package_id, lock=True)
                 if authorization is not None
@@ -2711,11 +2767,16 @@ class RunnerService:
             )
             if (
                 authorization is None
+                or dispatch is None
                 or permit is None
                 or package is None
                 or authorization.status != "dispatched"
                 or permit.state != "completed"
                 or job.delivery_authorization_id != authorization.id
+                or dispatch.delivery_authorization_id != authorization.id
+                or dispatch.runner_job_id != job.id
+                or dispatch.status != "dispatched"
+                or dispatch.manifest_digest != result.delivery_manifest_digest
             ):
                 raise RunnerServiceError(
                     "local_delivery_result_binding_mismatch",
@@ -2747,6 +2808,9 @@ class RunnerService:
             authorization.status = "succeeded"
             authorization.terminal_at = now
             authorization.error_code = None
+            dispatch.status = "succeeded"
+            dispatch.terminal_at = now
+            dispatch.error_code = None
             self._session.add(
                 AuditEvent(
                     run_id=package.run_id,
@@ -2756,6 +2820,9 @@ class RunnerService:
                     details={
                         "review_package_id": str(package.id),
                         "delivery_authorization_id": str(authorization.id),
+                        "delivery_dispatch_id": str(dispatch.id),
+                        "delivery_attempt_number": dispatch.attempt_number,
+                        "manifest_digest": dispatch.manifest_digest,
                         "runner_job_id": str(job.id),
                         "commit_oid": result.commit_oid,
                         "result_digest": result.result_digest,
@@ -2825,15 +2892,12 @@ class RunnerService:
             workspace.error_message = error_message[:500]
             event_type = "workspace_quarantined"
         elif job.kind == JobKind.WORKSPACE_GIT_COMMIT_V1.value:
-            authorization = (
-                self._deliveries.authorization(job.delivery_authorization_id, lock=True)
-                if job.delivery_authorization_id is not None
-                else None
+            self._terminalize_delivery_dispatch(
+                job,
+                status="failed",
+                error_code=error_code[:64],
+                request_id=request_id,
             )
-            if authorization is not None and authorization.status == "dispatched":
-                authorization.status = "failed"
-                authorization.terminal_at = utc_now()
-                authorization.error_code = error_code[:64]
             workspace.state = "sealed"
             event_type = "tool_denied"
         elif job.kind == JobKind.WORKSPACE_PREPARE_V1.value or error_code not in denial_codes:
@@ -2880,15 +2944,12 @@ class RunnerService:
             workspace.error_message = "Workspace operation was cancelled"
             event_type = "workspace_failed"
         elif job.kind == JobKind.WORKSPACE_GIT_COMMIT_V1.value:
-            authorization = (
-                self._deliveries.authorization(job.delivery_authorization_id, lock=True)
-                if job.delivery_authorization_id is not None
-                else None
+            self._terminalize_delivery_dispatch(
+                job,
+                status="cancelled",
+                error_code="workspace_cancelled",
+                request_id=request_id,
             )
-            if authorization is not None and authorization.status == "dispatched":
-                authorization.status = "cancelled"
-                authorization.terminal_at = utc_now()
-                authorization.error_code = "workspace_cancelled"
             workspace.state = "sealed"
             event_type = "tool_denied"
         else:
@@ -2905,6 +2966,62 @@ class RunnerService:
                 "reason_code": "workspace_cancelled",
                 "state": workspace.state,
             },
+        )
+
+    def _terminalize_delivery_dispatch(
+        self,
+        job: RunnerJob,
+        *,
+        status: str,
+        error_code: str,
+        request_id: str,
+        now: datetime | None = None,
+    ) -> None:
+        if status not in {"failed", "cancelled"}:
+            raise ValueError("delivery dispatch terminal status is invalid")
+        if job.delivery_authorization_id is None:
+            return
+        authorization = self._deliveries.authorization(
+            job.delivery_authorization_id,
+            lock=True,
+        )
+        dispatch = self._deliveries.dispatch_by_job(job.id, lock=True)
+        if (
+            authorization is None
+            or dispatch is None
+            or authorization.status != "dispatched"
+            or dispatch.status != "dispatched"
+        ):
+            return
+        terminal_at = now or utc_now()
+        authorization.status = status
+        authorization.terminal_at = terminal_at
+        authorization.error_code = error_code
+        dispatch.status = status
+        dispatch.terminal_at = terminal_at
+        dispatch.error_code = error_code
+        package = self._reviews.package(authorization.review_package_id, lock=True)
+        if package is None:
+            return
+        self._session.add(
+            AuditEvent(
+                run_id=package.run_id,
+                event_type=f"local_delivery_{status}",
+                actor_type="system",
+                request_id=request_id,
+                details={
+                    "review_package_id": str(package.id),
+                    "delivery_authorization_id": str(authorization.id),
+                    "delivery_dispatch_id": str(dispatch.id),
+                    "delivery_attempt_number": dispatch.attempt_number,
+                    "runner_job_id": str(job.id),
+                    "manifest_digest": dispatch.manifest_digest,
+                    "error_code": error_code,
+                    "remote_access": False,
+                },
+                review_package_id=package.id,
+                review_sequence=self._reviews.next_review_event_sequence(package.id),
+            )
         )
 
     def _create_workspace_checkpoint(

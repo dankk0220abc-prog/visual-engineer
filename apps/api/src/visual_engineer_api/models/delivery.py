@@ -11,8 +11,9 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from visual_engineer_api.db.base import Base
@@ -219,6 +220,93 @@ class DeliveryAuthorizationDecision(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class DeliveryDispatch(Base):
+    __tablename__ = "delivery_dispatches"
+    __table_args__ = (
+        UniqueConstraint(
+            "delivery_authorization_id",
+            "attempt_number",
+            name="uq_delivery_dispatches_authorization_attempt",
+        ),
+        UniqueConstraint("runner_job_id", name="uq_delivery_dispatches_job"),
+        UniqueConstraint("idempotency_key", name="uq_delivery_dispatches_idempotency"),
+        CheckConstraint(
+            "attempt_number BETWEEN 1 AND 3",
+            name="ck_delivery_dispatches_attempt",
+        ),
+        CheckConstraint(
+            "(attempt_number = 1 AND retry_of_dispatch_id IS NULL) OR "
+            "(attempt_number > 1 AND retry_of_dispatch_id IS NOT NULL)",
+            name="ck_delivery_dispatches_retry_shape",
+        ),
+        CheckConstraint(
+            "status IN ('dispatched', 'succeeded', 'failed', 'cancelled')",
+            name="ck_delivery_dispatches_status",
+        ),
+        CheckConstraint(
+            "manifest_digest ~ '^[0-9a-f]{64}$' "
+            "AND confirmation_digest = manifest_digest "
+            "AND idempotency_request_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_delivery_dispatches_digests",
+        ),
+        CheckConstraint(
+            "manifest ->> 'manifest_version' = '1' "
+            "AND manifest ->> 'manifest_digest' = manifest_digest "
+            "AND manifest ->> 'local_git_commit_access' = 'true' "
+            "AND manifest ->> 'remote_access' = 'false' "
+            "AND manifest ->> 'push_access' = 'false' "
+            "AND manifest ->> 'pull_request_access' = 'false' "
+            "AND manifest ->> 'tag_access' = 'false' "
+            "AND manifest ->> 'deployment_access' = 'false' "
+            "AND manifest ->> 'source_repository_write_access' = 'false'",
+            name="ck_delivery_dispatches_manifest_local_only",
+        ),
+        CheckConstraint(
+            "(status = 'dispatched' AND terminal_at IS NULL) OR "
+            "(status IN ('succeeded', 'failed', 'cancelled') AND terminal_at IS NOT NULL)",
+            name="ck_delivery_dispatches_terminal_time",
+        ),
+        Index(
+            "uq_delivery_dispatches_active_authorization",
+            "delivery_authorization_id",
+            unique=True,
+            postgresql_where=text("status = 'dispatched'"),
+        ),
+        Index(
+            "ix_delivery_dispatches_authorization_created",
+            "delivery_authorization_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    delivery_authorization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("delivery_authorizations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    retry_of_dispatch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("delivery_dispatches.id", ondelete="RESTRICT"),
+    )
+    runner_job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("runner_jobs.id", ondelete="RESTRICT"), nullable=False
+    )
+    manifest: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    manifest_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    confirmation_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="dispatched")
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    idempotency_request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class LocalDelivery(Base):

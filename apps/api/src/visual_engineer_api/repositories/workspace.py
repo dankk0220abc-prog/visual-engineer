@@ -255,6 +255,17 @@ class WorkspaceRepository:
             )
         )
 
+    def get_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        lock: bool = False,
+    ) -> WorkspaceCheckpoint | None:
+        statement = select(WorkspaceCheckpoint).where(WorkspaceCheckpoint.id == checkpoint_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
     def next_checkpoint_sequence(self, workspace_id: uuid.UUID) -> int:
         return (
             int(

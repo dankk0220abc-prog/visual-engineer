@@ -1,10 +1,10 @@
 # System Overview
 
-VisualEngineer through the Phase 5 Third Vertical Slice is a local, single-user
-governed planning, fixture-only isolated editing, fixed-Profile validation,
-system-owned multi-step Suite, and immutable final-review/readiness
-foundation. Solid nodes below are implemented. Dashed nodes are future V1
-boundaries.
+VisualEngineer through the Phase 6 Second Vertical Slice is a local,
+single-user governed planning, fixture-only isolated editing, fixed-Profile
+validation, system-owned multi-step Suite, immutable final-review/readiness,
+and confirmed recoverable local-delivery foundation. Solid nodes below are
+implemented. Dashed nodes are future V1 boundaries.
 
 ```mermaid
 flowchart TB
@@ -26,6 +26,8 @@ flowchart TB
     VE["Bounded ValidationEvidence"]
     RP["Immutable Review Package"]
     RD["Review Decision + Readiness"]
+    DM["Immutable delivery manifest + Dispatch history"]
+    LC["Deterministic local ref + commit proof"]
     O["OpenAPI and generated TypeScript"]
 
     H -->|"create Task and Run; revise or decide Plan"| W
@@ -50,6 +52,11 @@ flowchart TB
     VE -->|"trusted ordered manifest"| RP
     H -->|"review and decide"| RD
     RP --> RD
+    RD --> DM
+    H -->|"confirm exact digest / bounded retry"| DM
+    DM --> Q
+    E --> LC
+    LC -->|"terminal proof"| DM
     A -->|"source contract"| O
     O -->|"typed client input"| W
 
@@ -89,6 +96,13 @@ records one local-user Review Decision, and computes one deterministic
 readiness verdict. It displays that Git and deployment authorization are
 always false.
 
+The `/deliveries` surface creates and separately decides one exact Delivery
+Authorization, renders the immutable manifest and bounded diff before
+dispatch, requires explicit digest confirmation, and shows terminal Dispatch
+history, cancellation, error reason, safe retry, Runner evidence, and final
+local commit proof. It has no ref, message, Git command, identity, credential,
+remote, push, PR, tag, or deploy input.
+
 ### API
 
 The API validates requests, preserves request IDs, applies stable error codes,
@@ -102,6 +116,11 @@ verification, derived liveness, revocation, server-side Envelope derivation,
 transactional claim, explicit Job/Attempt transitions, lease renewal,
 cancellation, typed results/events, and lease recovery. It never executes a
 Runner Job.
+
+For delivery lifecycle, the API derives the manifest only from immutable
+Authorization/Checkpoint state, serializes keyed dispatch and linear retry,
+revalidates the original implementation Grant, and atomically creates each
+Dispatch, Runner Job, state transition, and AuditEvent.
 
 ### Local Runner
 
@@ -126,6 +145,12 @@ The Control Plane, not Runner, owns Suite orchestration. It selects immutable
 catalog steps and queues only one existing fixed-Profile child at a time. Each
 child retains an independent Job, Attempt, Lease, Permit, result, Evidence, and
 sandbox. Runner receives no Suite definition or caller-provided step.
+
+For Phase 6, Runner independently recomputes the delivery manifest from the
+current authenticated Workspace immediately before fixed Git plumbing. The
+Job, Permit binding, result, and proof carry Dispatch ID, attempt number, and
+manifest digest. Retry can reproduce only the same deterministic commit/ref;
+it cannot widen authority or access a remote.
 
 ### Repository Scanner
 
@@ -159,12 +184,15 @@ AuditEvent, Runner, PermissionEnvelope, RunnerJob, RunnerJobAttempt,
 RunnerJobEvent, RepositoryHandle, ExecutionGrant/Decision, Workspace/Event,
 Checkpoint, ValidationRun, ValidationStepRun, ValidationEvidence,
 ValidationSuiteRun, ValidationSuiteStepRun, ValidationSuiteResult,
-ReviewPackage/Invalidation, ReviewDecision, and ReleaseReadinessVerdict.
+ReviewPackage/Invalidation, ReviewDecision, ReleaseReadinessVerdict,
+DeliveryAuthorization/Decision, DeliveryDispatch history, and LocalDelivery
+proof.
 Alembic owns schema history. Row locks and uniqueness serialize decisions,
 claims, workspace actions, validation/Suite dispatch, terminal evidence, and
 final review. Database triggers reject Snapshot, PermissionEnvelope, Execution
 Grant policy, Checkpoint, validation evidence, Suite authority, terminal
-aggregate, and governed review mutation.
+aggregate, governed review mutation, Delivery Dispatch authority/lineage
+mutation, and terminal Dispatch rewrites.
 
 ### Contract
 
@@ -336,13 +364,20 @@ sequenceDiagram
     Web->>API: Create pending Delivery Authorization
     API->>DB: Bind exact generation, checkpoint, diff, ref, message
     User->>Web: Separately approve local commit
-    Web->>API: Dispatch exact local-delivery Job
-    API->>DB: Bind implementation Grant plus Delivery Authorization
+    Web->>API: Fetch manifest and bounded diff preview
+    API-->>Web: Exact digest, path closure, zero-remote facts
+    User->>Web: Confirm exact digest
+    Web->>API: Keyed dispatch or latest terminal retry
+    API->>DB: One Dispatch winner + Job + immutable manifest
     Runner->>API: Claim, start, acquire dual-bound Permit
-    Runner->>Workspace: Verify revision, tree, diff, paths, and budgets
+    Runner->>Workspace: Recompute manifest; verify revision/tree/diff/budgets
     Runner->>Workspace: Fixed plumbing creates tree, commit, local ref
-    Runner->>API: Digest-bound local-only proof
-    API->>DB: Terminal Job, Permit, Authorization, LocalDelivery
+    Runner->>API: Dispatch/attempt/manifest-bound local-only proof
+    API->>DB: Terminal Dispatch, Job, Permit, Authorization, LocalDelivery
+    alt failed or cancelled and still fresh; attempts remain
+        User->>Web: Review terminal reason and same manifest
+        User->>Web: Confirm exact bounded retry
+    end
     Note over Workspace: HEAD and file bytes stay unchanged
     Note over API,Runner: No remote, push, PR, tag, or deploy authority
 ```

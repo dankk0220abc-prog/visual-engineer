@@ -5,12 +5,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  cancelRunnerJob,
   createDeliveryAuthorization,
   decideDeliveryAuthorization,
   dispatchLocalDelivery,
+  getDeliveryPreview,
   listDeliveryAuthorizations,
   listReviewPackages,
   type DeliveryAuthorization,
+  type DeliveryPreview,
   type ReviewPackage,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
@@ -39,6 +42,13 @@ function statusTone(status: DeliveryAuthorization["status"]) {
   return "neutral" as const;
 }
 
+function dispatchIdempotencyKey(
+  authorizationId: string,
+  preview: DeliveryPreview,
+): string {
+  return `delivery-dispatch-v1:${authorizationId}:${preview.next_attempt_number}:${preview.manifest.manifest_digest}`;
+}
+
 export function DeliveryConsole() {
   const [packages, setPackages] = useState<ReviewPackage[]>([]);
   const [authorizations, setAuthorizations] = useState<DeliveryAuthorization[]>(
@@ -50,6 +60,8 @@ export function DeliveryConsole() {
   const [rejectionReasons, setRejectionReasons] = useState<
     Record<string, string>
   >({});
+  const [previews, setPreviews] = useState<Record<string, DeliveryPreview>>({});
+  const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(async () => {
     setError("");
@@ -101,7 +113,23 @@ export function DeliveryConsole() {
     setError("");
     try {
       await action();
+      setPreviews({});
+      setConfirmed({});
       await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function loadPreview(authorizationId: string) {
+    setBusy(`preview-${authorizationId}`);
+    setError("");
+    try {
+      const preview = await getDeliveryPreview(authorizationId);
+      setPreviews((current) => ({ ...current, [authorizationId]: preview }));
+      setConfirmed((current) => ({ ...current, [authorizationId]: false }));
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -116,12 +144,12 @@ export function DeliveryConsole() {
           Governed Local Delivery
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Local Branch & Commit
+          Local Delivery Lifecycle
         </h1>
         <p className="mt-3 max-w-4xl text-base leading-7 font-semibold text-slate-800">
           将 fresh、approved、ready 的 Review
-          基线绑定到一次独立的人工交付授权，再由 Runner 在隔离 fixture workspace
-          中创建系统命名的本地分支和单个 commit。
+          基线绑定到一次独立的人工交付授权。派发前必须核对 immutable manifest
+          并确认精确 digest；失败或取消后，只能沿同一 manifest 安全重试。
         </p>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
           该授权永远不包含 source repository 写入、remote、push、PR、tag 或
@@ -217,7 +245,7 @@ export function DeliveryConsole() {
 
           <section className="mt-8">
             <h2 className="text-2xl font-semibold text-slate-950">
-              2. 单独批准并执行本地交付
+              2. 批准、预览、确认与恢复
             </h2>
             {authorizations.length === 0 ? (
               <p className="mt-4 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
@@ -227,6 +255,12 @@ export function DeliveryConsole() {
               <ul className="mt-5 space-y-5">
                 {authorizations.map((authorization) => {
                   const reason = rejectionReasons[authorization.id] ?? "";
+                  const preview = previews[authorization.id];
+                  const canReviewDispatch = [
+                    "approved",
+                    "failed",
+                    "cancelled",
+                  ].includes(authorization.status);
                   return (
                     <li
                       key={authorization.id}
@@ -322,21 +356,212 @@ export function DeliveryConsole() {
                         </div>
                       ) : null}
 
-                      {authorization.status === "approved" ? (
+                      {canReviewDispatch && !preview ? (
                         <button
                           type="button"
                           className="mt-5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white outline-none hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-50"
                           disabled={Boolean(busy)}
+                          onClick={() => void loadPreview(authorization.id)}
+                        >
+                          {busy === `preview-${authorization.id}`
+                            ? "正在生成预览…"
+                            : authorization.status === "approved"
+                              ? "Review delivery preview"
+                              : "Review safe retry"}
+                        </button>
+                      ) : null}
+
+                      {preview ? (
+                        <section className="mt-5 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <h4 className="font-semibold text-slate-950">
+                                Immutable delivery manifest · attempt{" "}
+                                {preview.next_attempt_number ?? "blocked"}
+                              </h4>
+                              <p className="mt-1 font-mono text-xs break-all text-slate-600">
+                                {preview.manifest.manifest_digest}
+                              </p>
+                            </div>
+                            <StatusPill
+                              tone={
+                                preview.can_dispatch ? "positive" : "negative"
+                              }
+                            >
+                              {preview.can_dispatch ? "confirmable" : "blocked"}
+                            </StatusPill>
+                          </div>
+                          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                            <div>
+                              <dt className="font-semibold text-slate-700">
+                                Deterministic Git proof
+                              </dt>
+                              <dd className="mt-1 break-all text-slate-700">
+                                {preview.manifest.branch_ref}
+                              </dd>
+                              <dd className="mt-1 text-slate-600">
+                                {preview.manifest.commit_message}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold text-slate-700">
+                                Exact diff closure
+                              </dt>
+                              <dd className="mt-1 text-slate-700">
+                                {preview.manifest.changed_file_count} file(s) ·{" "}
+                                {preview.manifest.total_diff_bytes} bytes
+                              </dd>
+                              <dd className="mt-1 font-mono text-xs break-all text-slate-600">
+                                {preview.manifest.checkpoint_diff_hash}
+                              </dd>
+                            </div>
+                          </dl>
+                          <ul className="mt-3 list-inside list-disc text-sm text-slate-700">
+                            {preview.manifest.changed_paths.map((path) => (
+                              <li
+                                key={path}
+                                className="font-mono text-xs break-all"
+                              >
+                                {path}
+                              </li>
+                            ))}
+                          </ul>
+                          <pre className="mt-4 max-h-72 overflow-auto rounded-lg bg-slate-950 p-3 text-xs whitespace-pre-wrap text-slate-100">
+                            {preview.diff_artifact}
+                          </pre>
+                          <p className="mt-3 text-sm font-semibold text-emerald-900">
+                            Local ref only · source write, remote, push, PR, tag
+                            and deploy remain denied.
+                          </p>
+                          {preview.blocking_code ? (
+                            <p className="mt-3 text-sm font-semibold text-red-800">
+                              {preview.blocking_code}
+                            </p>
+                          ) : null}
+                          <label className="mt-4 flex items-start gap-2 text-sm font-semibold text-slate-800">
+                            <input
+                              type="checkbox"
+                              checked={confirmed[authorization.id] ?? false}
+                              disabled={!preview.can_dispatch || Boolean(busy)}
+                              onChange={(event) =>
+                                setConfirmed((current) => ({
+                                  ...current,
+                                  [authorization.id]: event.target.checked,
+                                }))
+                              }
+                              className="mt-1"
+                            />
+                            I confirm this exact manifest digest for local-only
+                            delivery.
+                          </label>
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white outline-none hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-50"
+                              disabled={
+                                Boolean(busy) ||
+                                !preview.can_dispatch ||
+                                !confirmed[authorization.id]
+                              }
+                              onClick={() =>
+                                void perform(
+                                  `dispatch-${authorization.id}`,
+                                  () =>
+                                    dispatchLocalDelivery(
+                                      authorization.id,
+                                      {
+                                        confirmation_digest:
+                                          preview.manifest.manifest_digest,
+                                        retry_of_dispatch_id:
+                                          preview.retry_of_dispatch_id,
+                                      },
+                                      dispatchIdempotencyKey(
+                                        authorization.id,
+                                        preview,
+                                      ),
+                                    ),
+                                )
+                              }
+                            >
+                              {busy === `dispatch-${authorization.id}`
+                                ? "正在派发…"
+                                : preview.retry_of_dispatch_id
+                                  ? "Retry exact local delivery"
+                                  : "Dispatch confirmed local delivery"}
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-50"
+                              disabled={Boolean(busy)}
+                              onClick={() => {
+                                setPreviews((current) => {
+                                  const next = { ...current };
+                                  delete next[authorization.id];
+                                  return next;
+                                });
+                              }}
+                            >
+                              Close preview
+                            </button>
+                          </div>
+                        </section>
+                      ) : null}
+
+                      {authorization.status === "dispatched" &&
+                      authorization.job ? (
+                        <button
+                          type="button"
+                          className="mt-5 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-800 outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-50"
+                          disabled={Boolean(busy)}
                           onClick={() =>
-                            void perform(`dispatch-${authorization.id}`, () =>
-                              dispatchLocalDelivery(authorization.id),
+                            void perform(`cancel-${authorization.id}`, () =>
+                              cancelRunnerJob(authorization.job!.id),
                             )
                           }
                         >
-                          {busy === `dispatch-${authorization.id}`
-                            ? "正在派发…"
-                            : "Dispatch governed local commit"}
+                          Cancel active delivery
                         </button>
+                      ) : null}
+
+                      {authorization.dispatches.length > 0 ? (
+                        <section className="mt-5 border-t border-slate-100 pt-5">
+                          <h4 className="font-semibold text-slate-950">
+                            Dispatch history
+                          </h4>
+                          <ol className="mt-3 space-y-3">
+                            {authorization.dispatches.map((dispatch) => (
+                              <li
+                                key={dispatch.id}
+                                className="rounded-lg border border-slate-200 p-3 text-sm"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="font-semibold text-slate-900">
+                                    Attempt {dispatch.attempt_number}
+                                  </span>
+                                  <StatusPill
+                                    tone={statusTone(dispatch.status)}
+                                  >
+                                    {dispatch.status}
+                                  </StatusPill>
+                                </div>
+                                <p className="mt-2 font-mono text-xs break-all text-slate-600">
+                                  manifest {dispatch.manifest_digest}
+                                </p>
+                                {dispatch.error_code ? (
+                                  <p className="mt-2 font-semibold text-red-800">
+                                    {dispatch.error_code}
+                                  </p>
+                                ) : null}
+                                <Link
+                                  href={`/runners/jobs/${dispatch.runner_job_id}`}
+                                  className="mt-2 inline-block font-semibold text-blue-700 underline outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                                >
+                                  Open Runner evidence
+                                </Link>
+                              </li>
+                            ))}
+                          </ol>
+                        </section>
                       ) : null}
 
                       {authorization.delivery ? (

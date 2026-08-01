@@ -267,20 +267,26 @@ Gate approval.
 ## Phase 6 local Git commit job
 
 `workspace_git_commit_v1` is a closed Workspace Job. It carries the existing
-implementation `ExecutionGrantPolicy`, a new immutable
-`DeliveryAuthorizationPolicy`, and the exact Checkpoint ID, tree fingerprint,
-and diff hash. The Permission Envelope declares
+implementation `ExecutionGrantPolicy`, an immutable
+`DeliveryAuthorizationPolicy`, one `DeliveryDispatch` ID and attempt number,
+one canonical `LocalDeliveryManifest`, and the exact Checkpoint ID, tree
+fingerprint, and diff hash. The manifest binds the reviewed changed-path
+closure/count/bytes, source revision, system-derived ref/message, and literal
+false remote/source effects under a canonical digest. The Permission Envelope declares
 `execution_grant_and_delivery_authorization`; shell remains false, repository
 access remains `isolated_workspace`, and network remains
 `control_plane_only`.
 
 The Runner accepts the Job only when its authenticated registry matches the
-implementation Grant and the Delivery policy hash/bindings are exact and
-unexpired. A `git_commit` Side-effect Permit additionally binds the Delivery
-Authorization ID. `WorkspaceGitCommitResult` repeats the authorization,
-Checkpoint, branch, commit/tree/parent IDs, Permit ID, and a canonical result
-digest. All remote/source-write flags are literal false and no command, argv,
-cwd, environment, ref, message, identity, or credential is caller supplied.
+implementation Grant and the Delivery policy/Dispatch/manifest bindings are
+exact and unexpired. Immediately before Git mutation it independently derives
+the current manifest from the authenticated Workspace status and Checkpoint
+evidence and compares the digest. A `git_commit` Side-effect Permit operation
+digest additionally binds the Delivery Authorization, Dispatch, attempt, and
+manifest. `WorkspaceGitCommitResult` repeats those identities plus Checkpoint,
+branch, commit/tree/parent IDs, Permit ID, and a canonical result digest. All
+remote/source-write flags are literal false and no command, argv, cwd,
+environment, ref, message, identity, or credential is caller supplied.
 
 This is a coordinated additive Protocol v1 capability. Older Runners do not
 advertise it, so the Control Plane leaves the Job queued rather than assigning

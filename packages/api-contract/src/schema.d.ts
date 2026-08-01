@@ -73,6 +73,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/delivery-authorizations/{authorization_id}/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Preview Local Delivery */
+    get: operations["preview_local_delivery_api_v1_delivery_authorizations__authorization_id__preview_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/execution-grants": {
     parameters: {
       query?: never;
@@ -1681,6 +1698,8 @@ export interface components {
       deployment_access: false;
       /** Dispatched At */
       dispatched_at: string | null;
+      /** Dispatches */
+      dispatches: components["schemas"]["DeliveryDispatchResponse"][];
       /** Error Code */
       error_code: string | null;
       /**
@@ -1780,6 +1799,58 @@ export interface components {
        */
       workspace_id: string;
     };
+    /** DeliveryDispatchCreate */
+    DeliveryDispatchCreate: {
+      /** Confirmation Digest */
+      confirmation_digest: string;
+      /** Retry Of Dispatch Id */
+      retry_of_dispatch_id?: string | null;
+    };
+    /** DeliveryDispatchResponse */
+    DeliveryDispatchResponse: {
+      /** Attempt Number */
+      attempt_number: number;
+      /** Confirmation Digest */
+      confirmation_digest: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Delivery Authorization Id
+       * Format: uuid
+       */
+      delivery_authorization_id: string;
+      /** Error Code */
+      error_code: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Idempotency Request Hash */
+      idempotency_request_hash: string;
+      job: components["schemas"]["RunnerJobResponse"];
+      /** Manifest Digest */
+      manifest_digest: string;
+      /** Request Id */
+      request_id: string;
+      /** Retry Of Dispatch Id */
+      retry_of_dispatch_id: string | null;
+      /**
+       * Runner Job Id
+       * Format: uuid
+       */
+      runner_job_id: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "dispatched" | "succeeded" | "failed" | "cancelled";
+      /** Terminal At */
+      terminal_at: string | null;
+    };
     /**
      * DeliveryPackage
      * @enum {string}
@@ -1788,6 +1859,25 @@ export interface components {
       | "design_implementation"
       | "design_system_migration"
       | "frontend_quality_remediation";
+    /** DeliveryPreviewResponse */
+    DeliveryPreviewResponse: {
+      /** Blocking Code */
+      blocking_code: string | null;
+      /** Can Dispatch */
+      can_dispatch: boolean;
+      /**
+       * Delivery Authorization Id
+       * Format: uuid
+       */
+      delivery_authorization_id: string;
+      /** Diff Artifact */
+      diff_artifact: string;
+      manifest: components["schemas"]["LocalDeliveryManifest"];
+      /** Next Attempt Number */
+      next_attempt_number: number | null;
+      /** Retry Of Dispatch Id */
+      retry_of_dispatch_id: string | null;
+    };
     /** DiagnosticResult */
     DiagnosticResult: {
       /** Architecture */
@@ -2461,6 +2551,90 @@ export interface components {
       /** Leased Until */
       leased_until: string | null;
       state: components["schemas"]["JobState"];
+    };
+    /** LocalDeliveryManifest */
+    LocalDeliveryManifest: {
+      /** Branch Ref */
+      branch_ref: string;
+      /** Changed File Count */
+      changed_file_count: number;
+      /** Changed Paths */
+      changed_paths: string[];
+      /** Checkpoint Diff Hash */
+      checkpoint_diff_hash: string;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /** Commit Message */
+      commit_message: string;
+      /**
+       * Delivery Authorization Id
+       * Format: uuid
+       */
+      delivery_authorization_id: string;
+      /**
+       * Deployment Access
+       * @default false
+       * @constant
+       */
+      deployment_access: false;
+      /**
+       * Local Git Commit Access
+       * @default true
+       * @constant
+       */
+      local_git_commit_access: true;
+      /** Manifest Digest */
+      manifest_digest: string;
+      /**
+       * Manifest Version
+       * @default 1
+       * @constant
+       */
+      manifest_version: 1;
+      /**
+       * Pull Request Access
+       * @default false
+       * @constant
+       */
+      pull_request_access: false;
+      /**
+       * Push Access
+       * @default false
+       * @constant
+       */
+      push_access: false;
+      /**
+       * Remote Access
+       * @default false
+       * @constant
+       */
+      remote_access: false;
+      /**
+       * Source Repository Write Access
+       * @default false
+       * @constant
+       */
+      source_repository_write_access: false;
+      /** Source Revision */
+      source_revision: string;
+      /**
+       * Tag Access
+       * @default false
+       * @constant
+       */
+      tag_access: false;
+      /** Total Diff Bytes */
+      total_diff_bytes: number;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
     };
     /** LocalDeliveryResponse */
     LocalDeliveryResponse: {
@@ -5143,7 +5317,15 @@ export interface components {
        * Format: uuid
        */
       checkpoint_id: string;
+      /** Delivery Attempt Number */
+      delivery_attempt_number: number;
       delivery_authorization: components["schemas"]["DeliveryAuthorizationPolicy"];
+      /**
+       * Delivery Dispatch Id
+       * Format: uuid
+       */
+      delivery_dispatch_id: string;
+      delivery_manifest: components["schemas"]["LocalDeliveryManifest"];
       execution_grant: components["schemas"]["ExecutionGrantPolicy"];
       /**
        * @description discriminator enum property added by openapi-typescript
@@ -5171,11 +5353,20 @@ export interface components {
       checkpoint_id: string;
       /** Commit Oid */
       commit_oid: string;
+      /** Delivery Attempt Number */
+      delivery_attempt_number: number;
       /**
        * Delivery Authorization Id
        * Format: uuid
        */
       delivery_authorization_id: string;
+      /**
+       * Delivery Dispatch Id
+       * Format: uuid
+       */
+      delivery_dispatch_id: string;
+      /** Delivery Manifest Digest */
+      delivery_manifest_digest: string;
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
@@ -5856,6 +6047,61 @@ export interface operations {
   dispatch_local_delivery_api_v1_delivery_authorizations__authorization_id__dispatch_post: {
     parameters: {
       query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        authorization_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliveryDispatchCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeliveryAuthorizationResponse"];
+        };
+      };
+      /** @description Delivery resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery state or freshness conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  preview_local_delivery_api_v1_delivery_authorizations__authorization_id__preview_get: {
+    parameters: {
+      query?: never;
       header?: never;
       path: {
         authorization_id: string;
@@ -5870,7 +6116,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["DeliveryAuthorizationResponse"];
+          "application/json": components["schemas"]["DeliveryPreviewResponse"];
         };
       };
       /** @description Delivery resource not found */

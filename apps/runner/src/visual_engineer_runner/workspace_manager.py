@@ -33,6 +33,7 @@ from visual_engineer_runner.validation_executor import (
 )
 from visual_engineer_runner_protocol import (
     FailureCode,
+    LocalDeliveryManifest,
     RepositoryRegistrationRequest,
     ResultPayload,
     SideEffectPermit,
@@ -60,6 +61,7 @@ from visual_engineer_runner_protocol import (
     WorkspaceStatusResult,
     WorkspaceWriteTextJobSpec,
     WorkspaceWriteTextResult,
+    compute_local_delivery_manifest_digest,
     compute_local_delivery_result_digest,
     compute_side_effect_job_digest,
     delivery_authorization_policy_hash_matches,
@@ -359,6 +361,24 @@ class WorkspaceManager:
                 or checkpoint.diff_hash != spec.checkpoint_diff_hash
             ):
                 raise WorkspaceExecutionError(FailureCode.VALIDATION_CHECKPOINT_MISMATCH)
+            manifest = LocalDeliveryManifest(
+                manifest_version=1,
+                delivery_authorization_id=spec.delivery_authorization.id,
+                workspace_id=spec.workspace_id,
+                checkpoint_id=spec.checkpoint_id,
+                checkpoint_fingerprint=checkpoint.tree_fingerprint,
+                checkpoint_diff_hash=checkpoint.diff_hash,
+                source_revision=spec.execution_grant.source_revision,
+                branch_ref=spec.delivery_authorization.branch_ref,
+                commit_message=spec.delivery_authorization.commit_message,
+                changed_paths=checkpoint.changed_paths,
+                changed_file_count=checkpoint.changed_file_count,
+                total_diff_bytes=checkpoint.total_diff_bytes,
+                manifest_digest="0" * 64,
+            )
+            manifest.manifest_digest = compute_local_delivery_manifest_digest(manifest)
+            if manifest.model_dump(mode="json") != spec.delivery_manifest.model_dump(mode="json"):
+                raise WorkspaceExecutionError(FailureCode.VALIDATION_CHECKPOINT_MISMATCH)
             # execute() holds the manager lock across the managed-mirror and
             # Workspace revalidation, this authority refresh, object creation,
             # and the ref update.
@@ -382,6 +402,9 @@ class WorkspaceManager:
             commit_result = WorkspaceGitCommitResult(
                 workspace_id=spec.workspace_id,
                 delivery_authorization_id=spec.delivery_authorization.id,
+                delivery_dispatch_id=spec.delivery_dispatch_id,
+                delivery_attempt_number=spec.delivery_attempt_number,
+                delivery_manifest_digest=manifest.manifest_digest,
                 checkpoint_id=spec.checkpoint_id,
                 checkpoint_fingerprint=spec.checkpoint_fingerprint,
                 checkpoint_diff_hash=spec.checkpoint_diff_hash,

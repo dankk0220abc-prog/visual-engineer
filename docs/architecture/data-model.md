@@ -270,6 +270,11 @@ erDiagram
     REVIEW_PACKAGE ||--o| REVIEW_PACKAGE_INVALIDATION : "first stale fence"
     REVIEW_PACKAGE ||--o| REVIEW_DECISION : "one final outcome"
     REVIEW_PACKAGE ||--o| RELEASE_READINESS_VERDICT : "deterministic snapshot"
+    REVIEW_PACKAGE ||--o| DELIVERY_AUTHORIZATION : "exact ready generation"
+    DELIVERY_AUTHORIZATION ||--o| DELIVERY_AUTHORIZATION_DECISION : "separate decision"
+    DELIVERY_AUTHORIZATION ||--o{ DELIVERY_DISPATCH : "linear attempts"
+    DELIVERY_DISPATCH ||--|| RUNNER_JOB : "one execution"
+    DELIVERY_AUTHORIZATION ||--o| LOCAL_DELIVERY : "final proof"
 ```
 
 ## ReviewPackage, ReviewDecision, and ReleaseReadinessVerdict
@@ -346,15 +351,25 @@ tree/diff digests, server-derived branch ref/message, expiry, and explicit
 false remote/source-write fields.
 
 `DeliveryAuthorizationDecision` is one immutable keyed local-user approve or
-reasoned reject outcome. `LocalDelivery` is one immutable terminal proof
+reasoned reject outcome. `DeliveryDispatch` is one immutable attempt identity
+plus a single dispatched-to-terminal transition. It stores attempt number,
+optional exact prior-attempt lineage, one Runner Job, canonical manifest JSON
+and digest, exact confirmation digest, keyed request hash, request ID, terminal
+status/reason, and timestamps. Uniqueness and partial indexes enforce one
+attempt number, Job, idempotency identity, and active Dispatch per
+Authorization. Database triggers enforce linear lineage, exact Job/manifest
+bindings, authority immutability, and append-only terminal facts.
+
+`LocalDelivery` is one immutable terminal proof
 binding Job, Attempt, completed Side-effect Permit, Workspace, Checkpoint,
 branch, commit/tree/parent object IDs, and result digest. PostgreSQL checks and
 triggers reject authority escalation, rebinding, mutation, deletion, and
 invalid state transitions.
 
 Phase 6 adds reversible revision
-`20260731_0013_add_governed_local_delivery`. It is additive and contains no
-data deletion.
+`20260731_0013_add_governed_local_delivery`. The second slice adds reversible
+revision `20260801_0014_add_delivery_lifecycle`, including Dispatch history and
+retry-aware guards. Both are additive and contain no data deletion.
 
 ## Future entities
 

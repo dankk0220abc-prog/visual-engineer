@@ -829,6 +829,13 @@
             ],
             "title": "Dispatched At"
           },
+          "dispatches": {
+            "items": {
+              "$ref": "#/components/schemas/DeliveryDispatchResponse"
+            },
+            "title": "Dispatches",
+            "type": "array"
+          },
           "error_code": {
             "anyOf": [
               {
@@ -1006,9 +1013,143 @@
           "error_code",
           "decision",
           "job",
-          "delivery"
+          "delivery",
+          "dispatches"
         ],
         "title": "DeliveryAuthorizationResponse",
+        "type": "object"
+      },
+      "DeliveryDispatchCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmation_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Confirmation Digest",
+            "type": "string"
+          },
+          "retry_of_dispatch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of Dispatch Id"
+          }
+        },
+        "required": ["confirmation_digest"],
+        "title": "DeliveryDispatchCreate",
+        "type": "object"
+      },
+      "DeliveryDispatchResponse": {
+        "properties": {
+          "attempt_number": {
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "confirmation_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Confirmation Digest",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "delivery_authorization_id": {
+            "format": "uuid",
+            "title": "Delivery Authorization Id",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "idempotency_request_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Idempotency Request Hash",
+            "type": "string"
+          },
+          "job": {
+            "$ref": "#/components/schemas/RunnerJobResponse"
+          },
+          "manifest_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifest Digest",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retry_of_dispatch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of Dispatch Id"
+          },
+          "runner_job_id": {
+            "format": "uuid",
+            "title": "Runner Job Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": ["dispatched", "succeeded", "failed", "cancelled"],
+            "title": "Status",
+            "type": "string"
+          },
+          "terminal_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal At"
+          }
+        },
+        "required": [
+          "id",
+          "delivery_authorization_id",
+          "attempt_number",
+          "retry_of_dispatch_id",
+          "runner_job_id",
+          "manifest_digest",
+          "confirmation_digest",
+          "status",
+          "request_id",
+          "idempotency_request_hash",
+          "error_code",
+          "created_at",
+          "terminal_at",
+          "job"
+        ],
+        "title": "DeliveryDispatchResponse",
         "type": "object"
       },
       "DeliveryPackage": {
@@ -1019,6 +1160,71 @@
         ],
         "title": "DeliveryPackage",
         "type": "string"
+      },
+      "DeliveryPreviewResponse": {
+        "properties": {
+          "blocking_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocking Code"
+          },
+          "can_dispatch": {
+            "title": "Can Dispatch",
+            "type": "boolean"
+          },
+          "delivery_authorization_id": {
+            "format": "uuid",
+            "title": "Delivery Authorization Id",
+            "type": "string"
+          },
+          "diff_artifact": {
+            "title": "Diff Artifact",
+            "type": "string"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/LocalDeliveryManifest"
+          },
+          "next_attempt_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt Number"
+          },
+          "retry_of_dispatch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of Dispatch Id"
+          }
+        },
+        "required": [
+          "delivery_authorization_id",
+          "manifest",
+          "diff_artifact",
+          "can_dispatch",
+          "next_attempt_number",
+          "retry_of_dispatch_id",
+          "blocking_code"
+        ],
+        "title": "DeliveryPreviewResponse",
+        "type": "object"
       },
       "DiagnosticResult": {
         "additionalProperties": false,
@@ -2463,6 +2669,143 @@
           "cancel_requested"
         ],
         "title": "LeaseMutationResponse",
+        "type": "object"
+      },
+      "LocalDeliveryManifest": {
+        "additionalProperties": false,
+        "properties": {
+          "branch_ref": {
+            "pattern": "^refs/heads/visual-engineer/[0-9a-f]{32}$",
+            "title": "Branch Ref",
+            "type": "string"
+          },
+          "changed_file_count": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Changed File Count",
+            "type": "integer"
+          },
+          "changed_paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Changed Paths",
+            "type": "array"
+          },
+          "checkpoint_diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Diff Hash",
+            "type": "string"
+          },
+          "checkpoint_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Fingerprint",
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "format": "uuid",
+            "title": "Checkpoint Id",
+            "type": "string"
+          },
+          "commit_message": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^VisualEngineer: governed local delivery [0-9a-f]{8}$",
+            "title": "Commit Message",
+            "type": "string"
+          },
+          "delivery_authorization_id": {
+            "format": "uuid",
+            "title": "Delivery Authorization Id",
+            "type": "string"
+          },
+          "deployment_access": {
+            "const": false,
+            "default": false,
+            "title": "Deployment Access",
+            "type": "boolean"
+          },
+          "local_git_commit_access": {
+            "const": true,
+            "default": true,
+            "title": "Local Git Commit Access",
+            "type": "boolean"
+          },
+          "manifest_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifest Digest",
+            "type": "string"
+          },
+          "manifest_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Manifest Version",
+            "type": "integer"
+          },
+          "pull_request_access": {
+            "const": false,
+            "default": false,
+            "title": "Pull Request Access",
+            "type": "boolean"
+          },
+          "push_access": {
+            "const": false,
+            "default": false,
+            "title": "Push Access",
+            "type": "boolean"
+          },
+          "remote_access": {
+            "const": false,
+            "default": false,
+            "title": "Remote Access",
+            "type": "boolean"
+          },
+          "source_repository_write_access": {
+            "const": false,
+            "default": false,
+            "title": "Source Repository Write Access",
+            "type": "boolean"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "tag_access": {
+            "const": false,
+            "default": false,
+            "title": "Tag Access",
+            "type": "boolean"
+          },
+          "total_diff_bytes": {
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Total Diff Bytes",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "delivery_authorization_id",
+          "workspace_id",
+          "checkpoint_id",
+          "checkpoint_fingerprint",
+          "checkpoint_diff_hash",
+          "source_revision",
+          "branch_ref",
+          "commit_message",
+          "changed_paths",
+          "changed_file_count",
+          "total_diff_bytes",
+          "manifest_digest"
+        ],
+        "title": "LocalDeliveryManifest",
         "type": "object"
       },
       "LocalDeliveryResponse": {
@@ -8357,8 +8700,22 @@
             "title": "Checkpoint Id",
             "type": "string"
           },
+          "delivery_attempt_number": {
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Delivery Attempt Number",
+            "type": "integer"
+          },
           "delivery_authorization": {
             "$ref": "#/components/schemas/DeliveryAuthorizationPolicy"
+          },
+          "delivery_dispatch_id": {
+            "format": "uuid",
+            "title": "Delivery Dispatch Id",
+            "type": "string"
+          },
+          "delivery_manifest": {
+            "$ref": "#/components/schemas/LocalDeliveryManifest"
           },
           "execution_grant": {
             "$ref": "#/components/schemas/ExecutionGrantPolicy"
@@ -8379,6 +8736,9 @@
           "workspace_id",
           "execution_grant",
           "delivery_authorization",
+          "delivery_dispatch_id",
+          "delivery_attempt_number",
+          "delivery_manifest",
           "checkpoint_id",
           "checkpoint_fingerprint",
           "checkpoint_diff_hash"
@@ -8414,9 +8774,25 @@
             "title": "Commit Oid",
             "type": "string"
           },
+          "delivery_attempt_number": {
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Delivery Attempt Number",
+            "type": "integer"
+          },
           "delivery_authorization_id": {
             "format": "uuid",
             "title": "Delivery Authorization Id",
+            "type": "string"
+          },
+          "delivery_dispatch_id": {
+            "format": "uuid",
+            "title": "Delivery Dispatch Id",
+            "type": "string"
+          },
+          "delivery_manifest_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Delivery Manifest Digest",
             "type": "string"
           },
           "kind": {
@@ -8454,6 +8830,9 @@
         "required": [
           "workspace_id",
           "delivery_authorization_id",
+          "delivery_dispatch_id",
+          "delivery_attempt_number",
+          "delivery_manifest_digest",
           "checkpoint_id",
           "checkpoint_fingerprint",
           "checkpoint_diff_hash",
@@ -9688,8 +10067,29 @@
               "title": "Authorization Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryDispatchCreate"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -9733,6 +10133,67 @@
           }
         },
         "summary": "Dispatch Local Delivery",
+        "tags": ["governed local delivery"]
+      }
+    },
+    "/api/v1/delivery-authorizations/{authorization_id}/preview": {
+      "get": {
+        "operationId": "preview_local_delivery_api_v1_delivery_authorizations__authorization_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "authorization_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Authorization Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery state or freshness conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery policy denied the request"
+          }
+        },
+        "summary": "Preview Local Delivery",
         "tags": ["governed local delivery"]
       }
     },

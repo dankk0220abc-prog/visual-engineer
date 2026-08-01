@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import NoReturn
@@ -13,6 +14,7 @@ from visual_engineer_api.core.config import Settings, get_settings
 from visual_engineer_api.models.delivery import (
     DeliveryAuthorization,
     DeliveryAuthorizationDecision,
+    DeliveryDispatch,
 )
 from visual_engineer_api.models.review import (
     ReleaseReadinessVerdict,
@@ -35,6 +37,9 @@ from visual_engineer_api.schemas.delivery import (
     DeliveryAuthorizationDecisionResponse,
     DeliveryAuthorizationListResponse,
     DeliveryAuthorizationResponse,
+    DeliveryDispatchCreate,
+    DeliveryDispatchResponse,
+    DeliveryPreviewResponse,
     LocalDeliveryResponse,
 )
 from visual_engineer_api.services.review import ReviewService, ReviewServiceError
@@ -42,11 +47,14 @@ from visual_engineer_api.services.runner import RunnerService, RunnerServiceErro
 from visual_engineer_runner_protocol import (
     DeliveryAuthorizationPolicy,
     ExecutionGrantPolicy,
+    LocalDeliveryManifest,
     WorkspaceGitCommitJobSpec,
     canonical_json_bytes,
     compute_delivery_authorization_policy_hash,
     compute_execution_grant_policy_hash,
+    compute_local_delivery_manifest_digest,
     delivery_authorization_policy_hash_matches,
+    local_delivery_manifest_digest_matches,
 )
 
 
@@ -335,17 +343,33 @@ class DeliveryService:
     def dispatch(
         self,
         authorization_id: uuid.UUID,
+        payload: DeliveryDispatchCreate,
         *,
+        idempotency_key: str,
         request_id: str,
     ) -> DeliveryAuthorizationResponse:
         authorization = self._required(authorization_id, lock=True)
-        existing_job = self._deliveries.job(authorization.id, lock=True)
-        if existing_job is not None:
+        request_hash = self._digest(
+            {
+                "delivery_authorization_id": str(authorization.id),
+                **payload.model_dump(mode="json"),
+            }
+        )
+        replay = self._deliveries.dispatch_by_idempotency(idempotency_key, lock=True)
+        if replay is not None:
+            if (
+                replay.delivery_authorization_id != authorization.id
+                or replay.idempotency_request_hash != request_hash
+            ):
+                self._conflict(
+                    "delivery_dispatch_idempotency_conflict",
+                    "Idempotency-Key is associated with another Delivery Dispatch",
+                )
             return self._response(authorization)
         decision = self._deliveries.decision(authorization.id, lock=True)
         now = datetime.now(UTC)
         if (
-            authorization.status != "approved"
+            authorization.status not in {"approved", "failed", "cancelled"}
             or decision is None
             or decision.decision != "approve"
             or not decision.local_git_commit_authorized
@@ -354,6 +378,37 @@ class DeliveryService:
                 "delivery_authorization_not_approved",
                 "Local delivery requires one approved Delivery Authorization",
             )
+        if self._deliveries.local_delivery(authorization.id, lock=True) is not None:
+            self._conflict(
+                "local_delivery_already_succeeded",
+                "A successful Local Delivery cannot be dispatched again",
+            )
+        dispatches = self._deliveries.dispatches(authorization.id, lock=True)
+        latest = dispatches[-1] if dispatches else None
+        if authorization.status == "approved":
+            if latest is not None or payload.retry_of_dispatch_id is not None:
+                self._conflict(
+                    "delivery_retry_lineage_invalid",
+                    "The first Delivery Dispatch cannot claim retry lineage",
+                )
+            attempt_number = 1
+        else:
+            if (
+                latest is None
+                or latest.status not in {"failed", "cancelled"}
+                or latest.status != authorization.status
+                or payload.retry_of_dispatch_id != latest.id
+            ):
+                self._conflict(
+                    "delivery_retry_lineage_invalid",
+                    "Retry must name the latest failed or cancelled Delivery Dispatch",
+                )
+            attempt_number = latest.attempt_number + 1
+            if attempt_number > 3:
+                self._conflict(
+                    "delivery_dispatch_budget_exhausted",
+                    "Delivery Dispatch retry budget is exhausted",
+                )
         if authorization.expires_at <= now:
             self._mark_stale(authorization, "delivery_authorization_expired", now)
             self._session.commit()
@@ -362,28 +417,52 @@ class DeliveryService:
                 "Delivery Authorization expired before dispatch",
             )
         self._assert_authorization_ready(authorization, request_id=request_id)
+        checkpoint = self._workspaces.get_checkpoint(authorization.checkpoint_id, lock=True)
+        if checkpoint is None:
+            self._conflict(
+                "delivery_checkpoint_missing",
+                "The exact Delivery Checkpoint is missing",
+            )
+        manifest = self._manifest(authorization, checkpoint)
+        if not hmac.compare_digest(payload.confirmation_digest, manifest.manifest_digest):
+            self._conflict(
+                "delivery_confirmation_mismatch",
+                "Delivery confirmation does not match the current immutable manifest",
+            )
         grant = self._workspaces.get_grant(authorization.execution_grant_id, lock=True)
         handle = self._workspaces.get_repository_handle(
             authorization.repository_handle_id,
             lock=True,
         )
-        if grant is None or handle is None:
+        if (
+            grant is None
+            or handle is None
+            or grant.status != "approved"
+            or grant.revocation_requested_at is not None
+            or grant.expires_at <= now
+        ):
             self._conflict(
-                "delivery_execution_authority_missing",
-                "Delivery execution authority is missing",
+                "delivery_execution_authority_inactive",
+                "Delivery execution authority is revoked, expired, or missing",
             )
         execution_policy = self._execution_policy(grant, handle)
         delivery_policy = self._delivery_policy(authorization)
+        dispatch_id = uuid.uuid4()
         spec = WorkspaceGitCommitJobSpec(
             workspace_id=authorization.workspace_id,
             execution_grant=execution_policy,
             delivery_authorization=delivery_policy,
+            delivery_dispatch_id=dispatch_id,
+            delivery_attempt_number=attempt_number,
+            delivery_manifest=manifest,
             checkpoint_id=authorization.checkpoint_id,
             checkpoint_fingerprint=authorization.checkpoint_fingerprint,
             checkpoint_diff_hash=authorization.checkpoint_diff_hash,
         )
         authorization.status = "dispatched"
         authorization.dispatched_at = now
+        authorization.terminal_at = None
+        authorization.error_code = None
         self._audit(
             self._package_run_id(authorization.review_package_id),
             authorization.review_package_id,
@@ -392,20 +471,117 @@ class DeliveryService:
             actor_type="system",
             details={
                 "delivery_authorization_id": str(authorization.id),
+                "delivery_dispatch_id": str(dispatch_id),
+                "delivery_attempt_number": attempt_number,
+                "manifest_digest": manifest.manifest_digest,
                 "workspace_id": str(authorization.workspace_id),
                 "checkpoint_id": str(authorization.checkpoint_id),
                 "remote_access": False,
             },
         )
         try:
-            RunnerService(self._session, self._settings).create_workspace_job(
+            job = RunnerService(self._session, self._settings).create_workspace_job(
                 spec,
                 request_id=request_id,
+                commit=False,
             )
+            self._deliveries.add(
+                DeliveryDispatch(
+                    id=dispatch_id,
+                    delivery_authorization_id=authorization.id,
+                    attempt_number=attempt_number,
+                    retry_of_dispatch_id=payload.retry_of_dispatch_id,
+                    runner_job_id=job.id,
+                    manifest=manifest.model_dump(mode="json"),
+                    manifest_digest=manifest.manifest_digest,
+                    confirmation_digest=payload.confirmation_digest,
+                    status="dispatched",
+                    request_id=request_id,
+                    idempotency_key=idempotency_key,
+                    idempotency_request_hash=request_hash,
+                    created_at=now,
+                )
+            )
+            self._session.commit()
         except RunnerServiceError as exc:
             self._session.rollback()
             raise DeliveryServiceError(exc.code, exc.message, category=exc.category) from exc
+        except DBAPIError as exc:
+            self._session.rollback()
+            winner = self._deliveries.dispatch_by_idempotency(idempotency_key)
+            if (
+                winner is not None
+                and winner.delivery_authorization_id == authorization.id
+                and winner.idempotency_request_hash == request_hash
+            ):
+                return self._response(self._required(authorization.id))
+            raise DeliveryServiceError(
+                "delivery_dispatch_conflict",
+                "A concurrent Delivery Dispatch won",
+                category="conflict",
+            ) from exc
         return self._response(self._required(authorization.id))
+
+    def preview(self, authorization_id: uuid.UUID) -> DeliveryPreviewResponse:
+        authorization = self._required(authorization_id)
+        checkpoint = self._workspaces.get_checkpoint(authorization.checkpoint_id)
+        grant = self._workspaces.get_grant(authorization.execution_grant_id)
+        if checkpoint is None:
+            self._conflict(
+                "delivery_checkpoint_missing",
+                "The exact Delivery Checkpoint is missing",
+            )
+        manifest = self._manifest(authorization, checkpoint)
+        dispatches = self._deliveries.dispatches(authorization.id)
+        latest = dispatches[-1] if dispatches else None
+        blocking_code: str | None = None
+        can_dispatch = True
+        now = datetime.now(UTC)
+        if authorization.status not in {"approved", "failed", "cancelled"}:
+            can_dispatch = False
+            blocking_code = "delivery_authorization_not_dispatchable"
+        elif authorization.status in {"failed", "cancelled"} and (
+            latest is None or latest.status != authorization.status
+        ):
+            can_dispatch = False
+            blocking_code = "delivery_retry_lineage_invalid"
+        elif authorization.status == "approved" and latest is not None:
+            can_dispatch = False
+            blocking_code = "delivery_retry_lineage_invalid"
+        elif authorization.expires_at <= now:
+            can_dispatch = False
+            blocking_code = "delivery_authorization_expired"
+        elif (
+            grant is None
+            or grant.status != "approved"
+            or grant.revocation_requested_at is not None
+            or grant.expires_at <= now
+        ):
+            can_dispatch = False
+            blocking_code = "delivery_execution_authority_inactive"
+        elif self._deliveries.local_delivery(authorization.id) is not None:
+            can_dispatch = False
+            blocking_code = "local_delivery_already_succeeded"
+        elif latest is not None and latest.attempt_number >= 3:
+            can_dispatch = False
+            blocking_code = "delivery_dispatch_budget_exhausted"
+        next_attempt_number = (
+            (latest.attempt_number + 1 if latest is not None else 1) if can_dispatch else None
+        )
+        retry_of_dispatch_id = (
+            latest.id
+            if can_dispatch and latest is not None and latest.status in {"failed", "cancelled"}
+            else None
+        )
+        return DeliveryPreviewResponse(
+            delivery_authorization_id=authorization.id,
+            manifest=manifest,
+            diff_artifact=checkpoint.diff_artifact,
+            can_dispatch=can_dispatch,
+            next_attempt_number=next_attempt_number,
+            retry_of_dispatch_id=retry_of_dispatch_id,
+            blocking_code=blocking_code,
+        )
 
     def list(self) -> DeliveryAuthorizationListResponse:
         items = [self._response(item) for item in self._deliveries.list_authorizations()]
@@ -426,7 +602,7 @@ class DeliveryService:
                 request_id=request_id,
             )
         except DeliveryServiceError as exc:
-            if authorization.status in {"pending", "approved"}:
+            if authorization.status in {"pending", "approved", "failed", "cancelled"}:
                 self._mark_stale(authorization, exc.code, datetime.now(UTC))
                 self._session.commit()
             raise
@@ -586,6 +762,7 @@ class DeliveryService:
         decision = self._deliveries.decision(authorization.id)
         local_delivery = self._deliveries.local_delivery(authorization.id)
         job = self._deliveries.job(authorization.id)
+        dispatches = self._deliveries.dispatches(authorization.id)
         return DeliveryAuthorizationResponse(
             id=authorization.id,
             authorization_version=authorization.authorization_version,
@@ -635,7 +812,76 @@ class DeliveryService:
                 if local_delivery is not None
                 else None
             ),
+            dispatches=[self._dispatch_response(item) for item in dispatches],
         )
+
+    def _dispatch_response(self, dispatch: DeliveryDispatch) -> DeliveryDispatchResponse:
+        return DeliveryDispatchResponse(
+            id=dispatch.id,
+            delivery_authorization_id=dispatch.delivery_authorization_id,
+            attempt_number=dispatch.attempt_number,
+            retry_of_dispatch_id=dispatch.retry_of_dispatch_id,
+            runner_job_id=dispatch.runner_job_id,
+            manifest_digest=dispatch.manifest_digest,
+            confirmation_digest=dispatch.confirmation_digest,
+            status=dispatch.status,
+            request_id=dispatch.request_id,
+            idempotency_request_hash=dispatch.idempotency_request_hash,
+            error_code=dispatch.error_code,
+            created_at=dispatch.created_at,
+            terminal_at=dispatch.terminal_at,
+            job=RunnerService(self._session, self._settings).get_job(dispatch.runner_job_id),
+        )
+
+    @staticmethod
+    def _manifest(
+        authorization: DeliveryAuthorization,
+        checkpoint: WorkspaceCheckpoint,
+    ) -> LocalDeliveryManifest:
+        diff_bytes = checkpoint.diff_artifact.encode("utf-8")
+        if (
+            checkpoint.workspace_id != authorization.workspace_id
+            or checkpoint.id != authorization.checkpoint_id
+            or checkpoint.source_revision != authorization.source_revision
+            or checkpoint.tree_fingerprint != authorization.checkpoint_fingerprint
+            or checkpoint.diff_hash != authorization.checkpoint_diff_hash
+            or hashlib.sha256(diff_bytes).hexdigest() != checkpoint.diff_hash
+            or len(diff_bytes) != checkpoint.total_diff_bytes
+            or checkpoint.changed_file_count != len(checkpoint.changed_paths)
+            or checkpoint.changed_file_count < 1
+            or checkpoint.total_diff_bytes < 1
+        ):
+            raise DeliveryServiceError(
+                "delivery_manifest_invalid",
+                "The stored Delivery Checkpoint cannot produce an exact manifest",
+                category="policy",
+            )
+        manifest = LocalDeliveryManifest(
+            manifest_version=1,
+            delivery_authorization_id=authorization.id,
+            workspace_id=authorization.workspace_id,
+            checkpoint_id=authorization.checkpoint_id,
+            checkpoint_fingerprint=authorization.checkpoint_fingerprint,
+            checkpoint_diff_hash=authorization.checkpoint_diff_hash,
+            source_revision=authorization.source_revision,
+            branch_ref=authorization.branch_ref,
+            commit_message=authorization.commit_message,
+            changed_paths=checkpoint.changed_paths,
+            changed_file_count=checkpoint.changed_file_count,
+            total_diff_bytes=checkpoint.total_diff_bytes,
+            manifest_digest="0" * 64,
+        )
+        manifest.manifest_digest = compute_local_delivery_manifest_digest(manifest)
+        if not local_delivery_manifest_digest_matches(
+            manifest,
+            manifest.manifest_digest,
+        ):
+            raise DeliveryServiceError(
+                "delivery_manifest_invalid",
+                "Delivery manifest digest validation failed",
+                category="policy",
+            )
+        return manifest
 
     def _audit(
         self,

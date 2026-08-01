@@ -43,12 +43,20 @@ stateDiagram-v2
     dispatched --> failed: typed failure
     dispatched --> cancelled: fenced cancellation
     dispatched --> stale: authority invalidated
+    failed --> dispatched: exact latest-attempt retry; budget remains
+    cancelled --> dispatched: exact latest-attempt retry; budget remains
+    failed --> stale: evidence or authority changed
+    cancelled --> stale: evidence or authority changed
 ```
 
 Review approval and `ready` are eligibility facts only. They do not enter this
 state machine or dispatch Git. Rejected/stale states create no Job or Permit.
-Every dispatched terminal path also terminalizes its Side-effect Permit and
-the bound local-delivery state; only `succeeded` stores `LocalDelivery`.
+Every dispatched terminal path also terminalizes its Side-effect Permit,
+`DeliveryDispatch`, and bound Authorization state; only `succeeded` stores
+`LocalDelivery`. A keyed Dispatch replay returns the same attempt. A retry is
+a new Job/Dispatch only after the latest failed/cancelled attempt, with exact
+lineage, the same manifest, active authority, no LocalDelivery, and a maximum
+attempt number of three.
 
 ## State meanings
 

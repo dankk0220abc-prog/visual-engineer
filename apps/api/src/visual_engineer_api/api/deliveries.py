@@ -10,6 +10,8 @@ from visual_engineer_api.schemas.delivery import (
     DeliveryAuthorizationDecisionCreate,
     DeliveryAuthorizationListResponse,
     DeliveryAuthorizationResponse,
+    DeliveryDispatchCreate,
+    DeliveryPreviewResponse,
 )
 from visual_engineer_api.schemas.error import ErrorResponse
 from visual_engineer_api.services.delivery import DeliveryService, DeliveryServiceError
@@ -103,6 +105,21 @@ def get_delivery_authorization(
         _raise_service_error(exc)
 
 
+@router.get(
+    "/delivery-authorizations/{authorization_id}/preview",
+    response_model=DeliveryPreviewResponse,
+    responses=DELIVERY_ERRORS,
+)
+def preview_local_delivery(
+    authorization_id: uuid.UUID,
+    db: DatabaseSession,
+) -> DeliveryPreviewResponse:
+    try:
+        return DeliveryService(db).preview(authorization_id)
+    except DeliveryServiceError as exc:
+        _raise_service_error(exc)
+
+
 @router.post(
     "/delivery-authorizations/{authorization_id}/decisions",
     response_model=DeliveryAuthorizationResponse,
@@ -133,12 +150,16 @@ def decide_delivery_authorization(
 )
 def dispatch_local_delivery(
     authorization_id: uuid.UUID,
+    payload: DeliveryDispatchCreate,
     request: Request,
     db: DatabaseSession,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=255)],
 ) -> DeliveryAuthorizationResponse:
     try:
         return DeliveryService(db).dispatch(
             authorization_id,
+            payload,
+            idempotency_key=_idempotency_key(idempotency_key),
             request_id=_request_id(request),
         )
     except DeliveryServiceError as exc:

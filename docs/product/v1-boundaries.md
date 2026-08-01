@@ -7,7 +7,7 @@ and Frontend Quality Remediation work for governed frontend teams. V1 is not a
 promise of arbitrary language, repository, backend, infrastructure, or general
 software-engineering support.
 
-## Implemented Foundation through Phase 6 First Vertical Slice
+## Implemented Foundation through Phase 6 Second Vertical Slice
 
 - Task create/list/detail with bounded validation and idempotency.
 - Level 0 `read_only` Run creation and durable state.
@@ -59,6 +59,11 @@ software-engineering support.
 - One closed `workspace_git_commit_v1` Runner Job with dual implementation
   Grant plus Delivery Authorization, a short-lived Side-effect Permit, fixed
   Git plumbing, durable local-commit proof, and source/remote invariance.
+- A canonical immutable manifest and bounded diff preview, exact digest
+  confirmation, keyed one-winner dispatch, durable terminal attempt history,
+  cancellation, and at most three same-manifest linear attempts.
+- Browser-visible attempt/error/recovery state and attributable Runner proof;
+  revoked or expired implementation authority fails closed before retry.
 
 ## Reserved V1 seams
 
@@ -85,7 +90,7 @@ for future typed tool schemas and runtime authorization.
   recovery.
 - Broader source-control providers and governed release workflows.
 
-## Explicitly out of scope in the Phase 6 first slice
+## Explicitly out of scope in the Phase 6 second slice
 
 - Any LLM API or OpenAI Agents SDK.
 - Generic shell or target-repository command execution.

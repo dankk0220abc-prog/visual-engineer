@@ -1,53 +1,50 @@
 # Project Status
 
-- Phase: Phase 6 First Vertical Slice — Governed Local Git Delivery
+- Phase: Phase 6 Second Vertical Slice — Governed Local Delivery Lifecycle
 - Overall status:
-  `PHASE_6_FIRST_SLICE_FINAL_GATE_PASS_SEALED_AWAITING_EXPLICIT_LOCAL_FF_AUTHORIZATION`
-- Governance qualifier: INDEPENDENT FINAL GATE PASS AND LOCAL SEAL ONLY; NOT
-  MAIN INTEGRATION, REMOTE DELIVERY, PUSH, PR, TAG, DEPLOY, OR LATER-PHASE
-  AUTHORIZATION
+  `PHASE_6_SECOND_SLICE_IMPLEMENTATION_COMPLETE_READY_FOR_INDEPENDENT_FOCUSED_REVIEW`
+- Governance qualifier: IMPLEMENTER CANDIDATE ONLY; NOT INDEPENDENT PASS,
+  SEALING, MAIN INTEGRATION, REMOTE DELIVERY, OR THIRD-SLICE AUTHORIZATION
 - Last updated: 2026-08-01
-- Current main / Phase 6 base:
-  `962b72ec92329de929ca5f9381b5324a68a18dde`
-- Final reviewed candidate:
-  `1267788e607c96feb84fa27b3b6c934033cb33c3`
-- Final independent branch: `codex/audit-phase-6-first-slice-final`
-- Final independent plan:
-  [`docs/exec-plans/phase-6-first-slice-final-gate.md`](../exec-plans/phase-6-first-slice-final-gate.md)
-- Final independent evidence:
-  [`docs/evidence/phase-6-first-slice-final-gate-verification.md`](../evidence/phase-6-first-slice-final-gate-verification.md)
-- Local sealing subject: `chore: seal phase 6 governed local delivery`
-- Local sealing hash: reported in the post-commit handoff
-- Phase 6 scope: one immutable, separately decided Delivery Authorization
-  over an exact fresh/approved/ready Review generation, one Side-effect
-  Permit, and one system-derived local ref/commit in the Runner-owned fixture
-  Workspace.
-- Phase 6 explicit denials: source-repository write, user-supplied Git input,
+- Current main / Phase 6 Second Slice base:
+  `79fa63f5d911a9e13ad388f270fdd18bf9084d22`
+- Implementation branch:
+  `feat/phase-6-governed-local-delivery-lifecycle`
+- Implementation candidate: reported in the post-commit handoff
+- Active plan:
+  [`docs/exec-plans/phase-6-governed-local-delivery-lifecycle.md`](../exec-plans/phase-6-governed-local-delivery-lifecycle.md)
+- Evidence:
+  [`docs/evidence/phase-6-governed-local-delivery-lifecycle-verification.md`](../evidence/phase-6-governed-local-delivery-lifecycle-verification.md)
+- ADR:
+  [`ADR 0020`](../adr/0020-governed-local-delivery-lifecycle.md)
+- Operator runbook:
+  [`local-delivery-lifecycle.md`](../runbooks/local-delivery-lifecycle.md)
+- Scope: immutable server-derived manifest and bounded diff preview, exact
+  digest confirmation, keyed one-winner dispatch, durable attempt history,
+  at most three linear attempts, terminal reason, cancellation, and safe retry
+  of the same deterministic fixture-only local commit.
+- Durable authority chain: fresh approved ready Review + active original
+  implementation Grant + approved Delivery Authorization + exact manifest
+  confirmation + active Runner/Job/Attempt/Lease + current `git_commit` Permit.
+- Explicit denials: source-repository write, arbitrary/user-supplied Git,
   remote, push, PR, tag, deploy, real repositories, CreativeDeploy, Customer
-  0, credentials, LLM/Agents SDK/Provider, auth, and multi-tenancy.
-- `VE-P6-FSR-001`: **PASS**. Unexpected post-prepare loose refs, packed refs,
-  and replacement metadata all return `workspace_state_invalid` before Git
-  object/ref mutation, with no new object, delivery ref, temporary index, or
-  lock.
-- Phase 6 final verification: focused Runner/Protocol `70`, independent
-  Security Audit `25`, PostgreSQL Phase 6 API `4`, Web `3`, focused browser
-  `2`, Security `7 + 120 + 20`, repair `95 + 14`, Migration, contracts,
-  format, lint, typecheck, build, source invariance, and cleanup pass.
-- Exactly one complete `make verify`: exit `0`, including Python `306`, Web
-  `53`, Playwright `16`, Workspace Chaos, Security/Eval, and final
-  `git diff --check`.
-- Workspace Chaos: two prepare attempts, four write attempts, three stale
-  leases fenced, zero budget replay/discard residue/post-revocation side
-  effects, and unchanged source/`.git` fingerprints.
-- Auditor production and test changes: none. Historical focused-review FAIL
-  evidence remains preserved.
-- Final Docker cleanup: audit-owned containers, networks, volumes, and images
-  are all zero; existing development services remain running.
-- Phase 6 next action: only an explicit user authorization may fast-forward
-  local `main` to the sealing commit. No remote or later-phase action is
-  implied.
+  0, credentials, LLM/Agents SDK/Provider, authentication, and multi-tenancy.
+- Focused verification: Runner/Protocol `110`, final PostgreSQL lifecycle `10`,
+  Web `55`, focused real Chromium `1` twice,
+  migration roundtrip, contracts, format, lint, typecheck, Docker build,
+  desktop/narrow manual browser evidence, zero browser console errors, source
+  invariance, and task-owned Docker cleanup pass.
+- Aggregate: exactly one `make verify` recorded `309 passed` and stopped on one
+  unchanged Phase 5 same-key Suite concurrency deadlock, exit `2`; the exact
+  test passed `1/1` in an isolated real-PostgreSQL rerun. No Phase 5 code or
+  authority changed and the aggregate was not repeated.
+- First-slice independent review, sealing, and local-main integration remain
+  preserved historical facts and were not reopened.
+- Next action: independent focused review of manifest integrity, dispatch
+  concurrency/idempotency, retry lineage/budget, revocation fencing,
+  deterministic ref replay, source invariance, and zero-remote proof.
 
-`PHASE 6 FIRST SLICE FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
+`PHASE 6 SECOND SLICE IMPLEMENTATION COMPLETE — READY FOR INDEPENDENT FOCUSED REVIEW`
 
 ## Preserved Phase 5 completion
 
