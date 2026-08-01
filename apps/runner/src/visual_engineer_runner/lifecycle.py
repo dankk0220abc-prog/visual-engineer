@@ -222,14 +222,34 @@ class RunnerLifecycle:
                 WorkspaceGitCommitJobSpec,
             ),
         ):
-            side_effect_permit = await self._client.acquire_side_effect_permit(
-                assignment.job_id,
-                SideEffectPermitAcquireRequest(
-                    **identity,
-                    job_digest=compute_side_effect_job_digest(assignment.job),
-                ),
-                credential.token,
-            )
+            try:
+                side_effect_permit = await self._client.acquire_side_effect_permit(
+                    assignment.job_id,
+                    SideEffectPermitAcquireRequest(
+                        **identity,
+                        job_digest=compute_side_effect_job_digest(assignment.job),
+                    ),
+                    credential.token,
+                )
+            except ControlPlaneError as exc:
+                if not (
+                    isinstance(assignment.job, WorkspaceGitCommitJobSpec)
+                    and exc.code == "stale_lease"
+                ):
+                    raise
+                refreshed = await self._client.renew(
+                    assignment.job_id,
+                    RenewRequest(**identity),
+                    credential.token,
+                )
+                if not refreshed.cancel_requested:
+                    raise
+                await self._client.cancelled(
+                    assignment.job_id,
+                    CancelledRequest(**identity),
+                    credential.token,
+                )
+                return
             if (
                 side_effect_permit.runner_id != credential.runner_id
                 or side_effect_permit.job_id != assignment.job_id

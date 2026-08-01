@@ -58,6 +58,14 @@ a new Job/Dispatch only after the latest failed/cancelled attempt, with exact
 lineage, the same manifest, active authority, no LocalDelivery, and a maximum
 attempt number of three.
 
+For `workspace_git_commit_v1`, user cancellation may enter
+`cancel_requested` only before the exact Git Permit is consumed. Job row
+locking serializes cancellation with Permit acquisition. A committed consumed
+Permit is mutation ownership: later cancellation returns the existing
+`runner_job_terminal` conflict and cannot create a cancelled terminal fact.
+When cancellation wins, the later Permit request returns `stale_lease`; Runner
+refreshes the cancellation, acknowledges it, and never starts Git execution.
+
 ## State meanings
 
 | State                    | Meaning                                                   | Exit gate                                |

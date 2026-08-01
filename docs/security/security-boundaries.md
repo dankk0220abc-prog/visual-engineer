@@ -21,6 +21,16 @@ budget. Runner independently recomputes that manifest immediately before
 mutation. Failed/cancelled facts remain durable; retry requires the same
 fresh Authorization/manifest and active original implementation Grant.
 
+Cancellation and Git mutation use the locked Runner Job plus the exact
+Attempt-bound `git_commit` Permit as one PostgreSQL arbitration boundary. If
+cancellation commits first, the Permit acquisition rereads the locked
+Job/Attempt/Dispatch/Authorization state and fails before Runner Git execution.
+If Permit acquisition commits first, the consumed Permit owns the bounded Git
+mutation and user cancellation returns the existing terminal conflict without
+changing Job, Attempt, Dispatch, or Authorization state. Grant revocation waits
+in `revoke_requested` for that Permit to terminalize instead of converting an
+owned mutation into cancellation.
+
 ## Trust zones
 
 ```mermaid

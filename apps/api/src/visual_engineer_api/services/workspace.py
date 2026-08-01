@@ -34,7 +34,7 @@ from visual_engineer_api.schemas.workspace import (
     WorkspaceResponse,
     WorkspaceWriteTextAction,
 )
-from visual_engineer_api.services.runner import RunnerService
+from visual_engineer_api.services.runner import RunnerService, RunnerServiceError
 from visual_engineer_runner_protocol import (
     ExecutionGrantPolicy,
     JobKind,
@@ -783,12 +783,20 @@ class WorkspaceService:
         runner_service = RunnerService(self._session)
         for job in active_jobs:
             if job.state not in {"cancelled", "succeeded", "failed"}:
-                job.error_code = "execution_grant_inactive"
-                job.error_message = "Execution Grant revocation cancelled the Workspace Job"
-                runner_service.cancel_job(
-                    job.id,
-                    request_id=f"{request_id[:96]}-grant-revoke",
-                )
+                try:
+                    runner_service.cancel_job(
+                        job.id,
+                        request_id=f"{request_id[:96]}-grant-revoke",
+                    )
+                except RunnerServiceError as exc:
+                    if not (
+                        job.kind == JobKind.WORKSPACE_GIT_COMMIT_V1.value
+                        and exc.code == "runner_job_terminal"
+                    ):
+                        raise
+                else:
+                    job.error_code = "execution_grant_inactive"
+                    job.error_message = "Execution Grant revocation cancelled the Workspace Job"
         self._advance_grant_revocation(grant)
         self._session.commit()
         return self._grant_response(grant)

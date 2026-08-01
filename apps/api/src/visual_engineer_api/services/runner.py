@@ -1471,6 +1471,16 @@ class RunnerService:
             self._conflict("runner_job_terminal", "A terminal Runner Job cannot be cancelled")
 
         now = utc_now()
+        attempt = (
+            self._runners.get_attempt(job.active_attempt_id, lock=True)
+            if job.active_attempt_id is not None
+            else None
+        )
+        if attempt is not None and self._active_git_mutation_permit(job, attempt.id) is not None:
+            self._conflict(
+                "runner_job_terminal",
+                "Local Git mutation ownership is already active; cancellation is too late",
+            )
         if job.state == "queued":
             transition_job(job, "cancelled")
             job.completed_at = now
@@ -1478,11 +1488,6 @@ class RunnerService:
                 self._workspace_job_cancelled(job, request_id=request_id)
         else:
             transition_job(job, "cancel_requested")
-        attempt = (
-            self._runners.get_attempt(job.active_attempt_id)
-            if job.active_attempt_id is not None
-            else None
-        )
         self._event(
             EventType.CANCEL_REQUESTED,
             request_id=request_id,
@@ -1494,6 +1499,37 @@ class RunnerService:
         self._session.commit()
         self._log_event("cancel_requested", job_id=job.id)
         return self._job_response(job)
+
+    def _active_git_mutation_permit(
+        self,
+        job: RunnerJob,
+        attempt_id: uuid.UUID,
+    ) -> PersistedSideEffectPermit | None:
+        if job.kind != JobKind.WORKSPACE_GIT_COMMIT_V1.value:
+            return None
+        try:
+            stored_spec = JOB_SPEC_ADAPTER.validate_python({"kind": job.kind, **job.parameters})
+        except ValidationError as exc:
+            raise RunnerServiceError(
+                "stored_job_spec_invalid",
+                "Stored Runner Job specification is invalid",
+                category="internal",
+            ) from exc
+        if not isinstance(stored_spec, WorkspaceGitCommitJobSpec):
+            raise RunnerServiceError(
+                "stored_job_spec_invalid",
+                "Stored Git mutation Job specification is invalid",
+                category="internal",
+            )
+        permit = self._workspaces.side_effect_permit_for_attempt(
+            job.id,
+            attempt_id,
+            compute_side_effect_job_digest(stored_spec),
+            lock=True,
+        )
+        if permit is None or permit.operation != WorkspaceOperation.GIT_COMMIT.value:
+            return None
+        return permit if permit.state == SideEffectPermitState.CONSUMED.value else None
 
     def reap_expired(self, *, request_id: str = "lease-reaper") -> dict[str, int]:
         acquired = bool(

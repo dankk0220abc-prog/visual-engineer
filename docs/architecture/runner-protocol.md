@@ -288,6 +288,15 @@ branch, commit/tree/parent IDs, Permit ID, and a canonical result digest. All
 remote/source-write flags are literal false and no command, argv, cwd,
 environment, ref, message, identity, or credential is caller supplied.
 
+Permit acquisition is also the authoritative cancel-vs-mutation ownership
+point. It locks and rereads the Job, Attempt, Dispatch, Authorization, Grant,
+Workspace, and existing Permit before returning authority. A cancel committed
+before that transaction makes acquisition fail with `stale_lease`, after which
+Runner refreshes and acknowledges cancellation without invoking the Git
+executor. Once the consumed Permit commits, user cancellation returns the
+existing `runner_job_terminal` conflict and cannot overwrite the eventual
+success or governed failure/reconciliation state with `cancelled`.
+
 This is a coordinated additive Protocol v1 capability. Older Runners do not
 advertise it, so the Control Plane leaves the Job queued rather than assigning
 it to an incapable Runner.
