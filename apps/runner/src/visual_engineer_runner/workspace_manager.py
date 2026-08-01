@@ -340,6 +340,17 @@ class WorkspaceManager:
         if isinstance(spec, WorkspaceGitCommitJobSpec):
             if permit is None:
                 raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_REQUIRED)
+            self._git.revalidate_local_delivery_mirror(
+                spec.execution_grant.repository_opaque_handle,
+                repository,
+                spec.execution_grant.source_revision,
+                permit_expires_at=permit.expires_at,
+            )
+            filesystem.verify_root_identity(
+                registry.workspace_device,
+                registry.workspace_inode,
+            )
+            self._validate_ownership_manifest(spec, registry, filesystem)
             status = self._authorized_status(spec, filesystem)
             checkpoint = self._checkpoint(spec, filesystem, status)
             if (
@@ -348,6 +359,17 @@ class WorkspaceManager:
                 or checkpoint.diff_hash != spec.checkpoint_diff_hash
             ):
                 raise WorkspaceExecutionError(FailureCode.VALIDATION_CHECKPOINT_MISMATCH)
+            # execute() holds the manager lock across the managed-mirror and
+            # Workspace revalidation, this authority refresh, object creation,
+            # and the ref update.
+            self._validate_grant(spec, operation)
+            self._validate_registry(spec, registry)
+            permit = self._require_side_effect_permit(
+                spec,
+                operation_id=operation_id,
+                permit=permit,
+                registry=registry,
+            )
             delivery = self._git.create_local_commit(
                 workspace,
                 source_revision=spec.execution_grant.source_revision,

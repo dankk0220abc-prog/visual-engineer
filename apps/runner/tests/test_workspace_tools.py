@@ -2667,6 +2667,81 @@ def test_governed_local_commit_is_deterministic_local_only_and_source_invariant(
     assert git(source, "for-each-ref", "--format=%(refname) %(objectname)") == source_refs_before
 
 
+@pytest.mark.parametrize(
+    "tamper_kind",
+    ["arbitrary-loose-ref", "packed-ref", "replacement-metadata"],
+)
+def test_governed_local_commit_revalidates_managed_state_without_git_mutation(
+    tmp_path: Path,
+    tamper_kind: str,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    source_before = _filesystem_snapshot(source)
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    workspace_id = uuid.uuid4()
+    grant = execution_grant(revision)
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=workspace_id,
+            execution_grant=grant,
+        ),
+    )
+    written = execute(
+        manager,
+        WorkspaceWriteTextJobSpec(
+            workspace_id=workspace_id,
+            execution_grant=grant,
+            mode=WorkspaceWriteMode.REPLACE,
+            relative_path="sandbox/tracked.txt",
+            content="pre-commit revalidation\n",
+            expected_sha256=hashlib.sha256(b"original\n").hexdigest(),
+        ),
+    )
+    assert isinstance(written, WorkspaceWriteTextResult)
+    authorization = delivery_authorization(
+        grant,
+        workspace_id=workspace_id,
+        checkpoint_id=uuid.uuid4(),
+        checkpoint_fingerprint=written.checkpoint.tree_fingerprint,
+        checkpoint_diff_hash=written.checkpoint.diff_hash,
+    )
+    spec = WorkspaceGitCommitJobSpec(
+        workspace_id=workspace_id,
+        execution_grant=grant,
+        delivery_authorization=authorization,
+        checkpoint_id=authorization.checkpoint_id,
+        checkpoint_fingerprint=authorization.checkpoint_fingerprint,
+        checkpoint_diff_hash=authorization.checkpoint_diff_hash,
+    )
+    mirror = manager._git.mirror_path(HANDLE)
+    if tamper_kind == "arbitrary-loose-ref":
+        (mirror / "refs" / "heads" / "unmanaged").write_text(
+            revision + "\n",
+            encoding="ascii",
+        )
+    elif tamper_kind == "packed-ref":
+        (mirror / "packed-refs").write_text(
+            f"{revision} refs/heads/unmanaged\n",
+            encoding="ascii",
+        )
+    else:
+        replacement = mirror / "refs" / "replace" / revision
+        replacement.parent.mkdir()
+        replacement.write_text(revision + "\n", encoding="ascii")
+    tampered_mirror = _filesystem_snapshot(mirror)
+
+    with pytest.raises(WorkspaceExecutionError) as rejected:
+        execute(manager, spec)
+
+    assert rejected.value.code == FailureCode.WORKSPACE_STATE_INVALID
+    assert _filesystem_snapshot(mirror) == tampered_mirror
+    assert _filesystem_snapshot(source) == source_before
+    assert not (mirror / authorization.branch_ref).exists()
+    assert not list(settings.registry_root.glob(".delivery-index-*"))
+
+
 def test_governed_local_ref_tampering_and_ref_budget_fail_closed(tmp_path: Path) -> None:
     source, revision = repository_fixture(tmp_path)
     settings = runner_settings(tmp_path, source).model_copy(

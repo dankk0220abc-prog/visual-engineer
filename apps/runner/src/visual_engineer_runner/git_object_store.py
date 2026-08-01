@@ -201,6 +201,20 @@ class SourceObjectClosure:
         self._validate_destination(destination, closure, require_complete=True)
         self.validate_source_unchanged()
 
+    def validate_materialized(
+        self,
+        destination: Path,
+        closure: dict[str, ObjectRecord],
+        *,
+        require_fresh: Callable[[], None],
+    ) -> None:
+        """Validate an exact materialized closure without repairing it."""
+
+        require_fresh()
+        self._validate_destination(destination, closure, require_complete=True)
+        require_fresh()
+        self.validate_source_unchanged()
+
     def checkout_manifest(
         self,
         root_object_id: str,

@@ -982,6 +982,93 @@ class GitOperations:
             source_revision=source_revision,
         )
 
+    def revalidate_local_delivery_mirror(
+        self,
+        opaque_handle: str,
+        repository: LocalRepositoryConfig,
+        source_revision: str,
+        *,
+        permit_expires_at: datetime,
+    ) -> None:
+        _require_fresh_permit(permit_expires_at)
+        metadata = self.inspect_source(repository)
+        if metadata.current_revision != source_revision:
+            raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
+        mirror = self.mirror_path(opaque_handle)
+        if mirror.is_symlink() or not mirror.is_dir():
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        try:
+            local_delivery_roots = self._validate_managed_mirror(
+                mirror,
+                object_id_hex_length=len(source_revision),
+                source_revision=source_revision,
+            )
+        except GitOperationError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+
+        def require_fresh() -> None:
+            _require_fresh_permit(permit_expires_at)
+
+        limits = self._object_limits()
+        try:
+            source_reader = SourceObjectClosure(
+                self._source_git_directory(self._validate_source_path(repository.path)),
+                object_id_hex_length=len(source_revision),
+                limits=limits,
+            )
+            closure = source_reader.collect(
+                source_revision,
+                require_fresh=require_fresh,
+            )
+        except SourceObjectError as exc:
+            raise GitOperationError(exc.code) from exc
+        if local_delivery_roots:
+            try:
+                local_reader = SourceObjectClosure(
+                    mirror,
+                    object_id_hex_length=len(source_revision),
+                    limits=limits,
+                )
+                for root in local_delivery_roots:
+                    closure.update(
+                        local_reader.collect(
+                            root,
+                            require_fresh=require_fresh,
+                        )
+                    )
+            except SourceObjectError as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        try:
+            source_reader.validate_materialized(
+                mirror / "objects",
+                closure,
+                require_fresh=require_fresh,
+            )
+        except SourceObjectError as exc:
+            code = (
+                FailureCode.WORKSPACE_STATE_INVALID
+                if exc.code
+                in {
+                    FailureCode.MIRROR_BUDGET_EXCEEDED,
+                    FailureCode.WORKSPACE_STATE_INVALID,
+                }
+                else exc.code
+            )
+            raise GitOperationError(code) from exc
+        if self.inspect_source(repository) != metadata:
+            raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
+        try:
+            revalidated_roots = self._validate_managed_mirror(
+                mirror,
+                object_id_hex_length=len(source_revision),
+                source_revision=source_revision,
+            )
+        except GitOperationError as exc:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        if revalidated_roots != local_delivery_roots:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        _require_fresh_permit(permit_expires_at)
+
     def _validate_managed_head(self, mirror: Path, source_revision: str) -> None:
         expected = (source_revision + "\n").encode("ascii")
         path = mirror / "HEAD"
@@ -1193,17 +1280,7 @@ class GitOperations:
             reader = SourceObjectClosure(
                 source_git,
                 object_id_hex_length=len(source_revision),
-                limits=ObjectLimits(
-                    max_objects=self._settings.mirror_max_object_files,
-                    max_bytes=self._settings.mirror_max_object_bytes,
-                    max_single_object_bytes=self._settings.mirror_max_single_object_bytes,
-                    max_pack_files=self._settings.mirror_max_pack_files,
-                    max_delta_depth=self._settings.mirror_max_delta_depth,
-                    max_tree_depth=self._settings.mirror_max_tree_depth,
-                    max_tree_entries=self._settings.mirror_max_tree_entries,
-                    max_references=self._settings.mirror_max_object_references,
-                    max_graph_depth=self._settings.mirror_max_graph_depth,
-                ),
+                limits=self._object_limits(),
             )
 
             def require_fresh() -> None:
@@ -1219,17 +1296,7 @@ class GitOperations:
                     local_reader = SourceObjectClosure(
                         destination.parent,
                         object_id_hex_length=len(source_revision),
-                        limits=ObjectLimits(
-                            max_objects=self._settings.mirror_max_object_files,
-                            max_bytes=self._settings.mirror_max_object_bytes,
-                            max_single_object_bytes=self._settings.mirror_max_single_object_bytes,
-                            max_pack_files=self._settings.mirror_max_pack_files,
-                            max_delta_depth=self._settings.mirror_max_delta_depth,
-                            max_tree_depth=self._settings.mirror_max_tree_depth,
-                            max_tree_entries=self._settings.mirror_max_tree_entries,
-                            max_references=self._settings.mirror_max_object_references,
-                            max_graph_depth=self._settings.mirror_max_graph_depth,
-                        ),
+                        limits=self._object_limits(),
                     )
                     local_closure: dict[str, ObjectRecord] = {}
                     for root in local_delivery_roots:
@@ -1255,6 +1322,19 @@ class GitOperations:
             return checkout_manifest
         except SourceObjectError as exc:
             raise GitOperationError(exc.code) from exc
+
+    def _object_limits(self) -> ObjectLimits:
+        return ObjectLimits(
+            max_objects=self._settings.mirror_max_object_files,
+            max_bytes=self._settings.mirror_max_object_bytes,
+            max_single_object_bytes=self._settings.mirror_max_single_object_bytes,
+            max_pack_files=self._settings.mirror_max_pack_files,
+            max_delta_depth=self._settings.mirror_max_delta_depth,
+            max_tree_depth=self._settings.mirror_max_tree_depth,
+            max_tree_entries=self._settings.mirror_max_tree_entries,
+            max_references=self._settings.mirror_max_object_references,
+            max_graph_depth=self._settings.mirror_max_graph_depth,
+        )
 
     def _workspace_checkout_manifest(
         self,
