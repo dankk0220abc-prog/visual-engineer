@@ -2,42 +2,50 @@
 
 - Phase: Phase 7 First Vertical Slice — Governed AI Planning with
   Deterministic Provider
-- Overall status: `IMPLEMENTATION_CANDIDATE_READY_FOR_INDEPENDENT_FOCUSED_REVIEW`
-- Governance qualifier: IMPLEMENTER CANDIDATE ONLY; INDEPENDENT FOCUSED REVIEW
-  NOT YET RUN; NO REAL PROVIDER, API KEY, REMOTE GIT, OR DEPLOYMENT AUTHORITY
-- Last updated: 2026-08-01
+- Overall status: `FINAL_GATE_PASS_SEALING_PREPARED`
+- Governance qualifier: INDEPENDENT FINAL GATE PASS; FIXTURE-ONLY LOCAL SEAL;
+  MAIN FAST-FORWARD REQUIRES EXPLICIT USER AUTHORIZATION
+- Last updated: 2026-08-02
 - Current local `main`: `9c282e91a42a87ea553171d5aa55a0f77564bb14`
-- Candidate branch: `codex/phase-7-governed-ai-planning-first-slice`
-- Candidate checkpoint: created as the final implementation step; exact hash
-  is reported in the post-commit handoff.
-- Plan:
-  [`phase-7-governed-ai-planning-first-slice.md`](../exec-plans/phase-7-governed-ai-planning-first-slice.md)
+- Reviewed candidate: `8003c835284343be8c4046f868ec6d1f66369cef`
+- Final audit branch: `codex/audit-governed-ai-planning-final-20260802`
+- Final-gate Plan:
+  [`phase-7-governed-ai-planning-first-slice-final-gate.md`](../exec-plans/phase-7-governed-ai-planning-first-slice-final-gate.md)
 - ADR: [`ADR 0021`](../adr/0021-governed-ai-plan-handoff.md)
-- Evidence:
-  [`phase-7-governed-ai-planning-first-slice-verification.md`](../evidence/phase-7-governed-ai-planning-first-slice-verification.md)
+- Final-gate Evidence:
+  [`phase-7-governed-ai-planning-first-slice-final-gate-verification.md`](../evidence/phase-7-governed-ai-planning-first-slice-final-gate-verification.md)
+- Final audit:
+  [`phase-7-governed-ai-planning-first-slice-final-gate.md`](../security/audits/phase-7-governed-ai-planning-first-slice-final-gate.md)
 - Scope: bounded committed-Snapshot context, versioned Prompt, strict typed
-  Provider request/response, deterministic fake replay, immutable Trace and
-  system Eval, freshness, human approve/reject, and authority-free Plan
-  handoff.
-- Current focused results: AI PostgreSQL/Eval `13/13`, Web `60/60`, targeted
-  Playwright desktop/narrow `4/4`, generated contracts, Python/TypeScript
-  typecheck, lint, Web build, and deterministic dataset validation pass.
-- First browser attempt preserved two distinct defects: one ambiguous test
-  locator and one real keyboard-focus failure on the bounded scroll region.
-  Both were corrected; the rebuilt-image rerun passes axe and overflow checks.
+  Provider request/response, exact generation and repository-fact grounding,
+  deterministic fake replay, twelve system-owned Evals, freshness, human
+  approve/reject, and authority-free Plan handoff.
+- Finding: `VE-P7-AIP-FR-001 PASS`; the permanent consistent-tamper regression
+  fails binding and grounding while replay remains deterministic.
+- Independent focused results: original Finding `1/1`, complete AI
+  Eval/PostgreSQL `34/34`, prompt-injection scanner `1/1`, Web blocked state
+  `1/1`, desktop+narrow real stack `2/2`, Eval manifest `94` cases, secret
+  scan, source invariance, format, lint, typecheck, and diff checks PASS.
 - Explicit denials: real Provider SDK/network/key/billing, CreativeDeploy,
   Customer 0, real repository, broader Runner permission, arbitrary shell,
   Execution Grant auto-issue, Review/Delivery auto-approval, remote Git, push,
   PR, merge, tag, and deployment.
-- Aggregate record: the sole complete `make verify` reached Python `330/330`
-  and Web `60/60`, then exited `2` at Web function coverage `69.89% < 70%`.
-  The corrected focused coverage is `71.42%`; the unexecuted tail subsequently
-  passed target-by-target, including full Playwright `20/20`, security,
-  Migration, chaos, Eval, and source invariance. The aggregate was not rerun.
-- Next action: independently review the exact checkpoint, then run a fresh
-  aggregate Final Gate. Do not treat implementer evidence as review approval.
+- Fresh aggregate: exactly one `make verify`, exit `0`; Python `351/351` at
+  `84.32%` coverage, Web `61/61` at `71.49%` function coverage, Playwright
+  `20/20`, Migration, Security, Workspace Chaos, Eval, source invariance, and
+  final diff PASS.
+- Docker cleanup: all focused and aggregate project containers, networks, and
+  volumes are zero; unique focused image tags removed; pre-existing aggregate
+  image-tag namespaces retained.
+- Reviewer scope: only final-gate Evidence, ExecPlan, audit report, and this
+  Project Status changed; production code, existing tests, and historical FAIL
+  artifacts remain unchanged.
+- Sealing subject: `chore: seal governed ai planning first slice`; exact hash
+  is reported in the post-commit handoff.
+- Next action: wait for explicit user authorization before any local
+  fast-forward of `main`.
 
-`PHASE 7 GOVERNED AI PLANNING FIRST SLICE — IMPLEMENTATION CANDIDATE`
+`GOVERNED AI PLANNING FIRST SLICE FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
 
 ## Preserved Phase 6 completion
 
