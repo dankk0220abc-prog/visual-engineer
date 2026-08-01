@@ -1,6 +1,6 @@
 # System Overview
 
-VisualEngineer through the Phase 6 Second Vertical Slice is a local,
+VisualEngineer through the Phase 7 first-slice candidate is a local,
 single-user governed planning, fixture-only isolated editing, fixed-Profile
 validation, system-owned multi-step Suite, immutable final-review/readiness,
 and confirmed recoverable local-delivery foundation. Solid nodes below are
@@ -15,6 +15,9 @@ flowchart TB
     S["Repository Scanner"]
     R["Exact allowlisted Git repository (read-only)"]
     P["Deterministic Plan Generator"]
+    AP["Governed AI Plan Orchestrator"]
+    FP["Deterministic fake Provider"]
+    AE["System-owned AI Eval"]
     Q["Runner Registry / Queue / Lease Policy"]
     LR["Independent Local Runner"]
     E["Closed Typed Executors"]
@@ -36,6 +39,11 @@ flowchart TB
     A -->|"Level 0 scan request"| S
     S -->|"fixed Git reads of HEAD objects"| R
     A -->|"Task + Snapshot + package"| P
+    A -->|"redacted bounded context + versioned Prompt"| AP
+    AP -->|"strict typed request; no network or key"| FP
+    FP -->|"strict typed Plan proposal"| AE
+    AE -->|"Eval evidence + decision eligibility"| AP
+    AP -->|"Prompt, Trace, Eval, request/response"| D
     A -->|"durable jobs, envelopes, attempts"| Q
     Q --> D
     LR -->|"outbound protocol v1"| Q
@@ -83,6 +91,12 @@ Job/Attempt state, progress, cancellation, results, and RunnerJobEvent
 Timeline. It owns no database, filesystem, Git, Docker, shell, Runner
 credential, or target-repository access.
 
+The Run surface also creates and renders one governed AI Plan request. It
+shows the structured Plan, context references, Prompt version/digests,
+redactions, Provider Trace, system-owned Eval results, freshness, terminal
+states, and human approve/reject controls at desktop and narrow widths. It
+contains no API-key, model, network, free-form operation, or execution control.
+
 The `/validations` surface lists the fixed Profiles and one immutable Suite,
 derives a pending validation-only Grant from an exact eligible Workspace
 Checkpoint, preserves a separate human approve/reject decision, creates/
@@ -110,6 +124,14 @@ owns Run and Plan state policy, coordinates repository scanning, generates
 deterministic plans, serializes final decisions, writes sanitized audit
 events, and exports OpenAPI. Routes delegate to typed services and
 repositories.
+
+For governed AI planning, the API selects only structured committed-Snapshot
+facts and manifest references within fixed byte/count budgets, redacts the
+untrusted requirement, binds a versioned Prompt, invokes the deterministic
+fake through the model-neutral Provider protocol, validates the closed Plan
+schema/digest, runs independent Eval, persists immutable evidence, and
+serializes the human handoff decision. It performs no Provider network call
+and has no credential input.
 
 The API also owns Runner bootstrap authentication, digest-only credential
 verification, derived liveness, revocation, server-side Envelope derivation,

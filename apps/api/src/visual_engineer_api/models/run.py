@@ -116,7 +116,10 @@ class Plan(Base):
             "status IN ('draft', 'awaiting_approval', 'approved', 'rejected', 'superseded')",
             name="ck_plans_status",
         ),
-        CheckConstraint("source = 'deterministic_policy'", name="ck_plans_source"),
+        CheckConstraint(
+            "source IN ('deterministic_policy', 'governed_ai')",
+            name="ck_plans_source",
+        ),
         CheckConstraint(
             "delivery_package IN ('design_implementation', 'design_system_migration', "
             "'frontend_quality_remediation')",

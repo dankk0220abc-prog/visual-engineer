@@ -24,22 +24,20 @@ a repository profile, customer constraints, allowed future validation,
 design-system context, acceptance criteria, test strategy, and project
 playbook. Phase 4 implements one fixture-only isolated-workspace path. Phase 5
 adds system-owned fixed validation, immutable multi-step Suites, and governed
-final review. The first Phase 6 slice adds only a separately approved,
-fixture-only local branch and commit; arbitrary target commands and every
+final review. Phase 6 adds a separately approved, fixture-only local branch
+and commit lifecycle. The Phase 7 first slice adds model-neutral governed AI
+planning through a deterministic fake Provider; real model calls and every
 remote delivery integration remain future capabilities.
 
 ## Current state
 
-The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
-read-only repository intelligence, Phase 3 browser-orchestrated Local Runner,
-a completed Phase 4 Runner-owned isolated Workspace against the synthetic
-adversarial fixture, and completed Phase 5 validation/review slices in local
-`main` at `962b72ec92329de929ca5f9381b5324a68a18dde`. The active work is
-**Phase 6 First Vertical Slice — Governed Local Git Delivery** on
-`feat/phase-6-governed-local-delivery`. It is implementer work pending
-independent review with the final aggregate Gate still open on a Workspace
-Chaos recovery timing instability; it is not a Gate PASS, seal, main
-integration, remote delivery, or authorization for later Phase 6 work.
+Local `main` at `9c282e91a42a87ea553171d5aa55a0f77564bb14`
+contains the completed Phase 0-6 first and second slices. The active candidate
+is **Phase 7 First Vertical Slice — Governed AI Planning with Deterministic
+Provider** on `codex/phase-7-governed-ai-planning-first-slice`. It is a
+fixture-only implementation candidate pending independent focused review; it
+is not a real-Provider authorization, production claim, seal, or main
+integration.
 
 A local user can independently approve a narrow Execution Grant, prepare an
 exact detached workspace, use closed UTF-8 file tools, inspect bounded
@@ -55,6 +53,13 @@ The implemented target is:
 - a fixed-command, no-shell repository scanner with allowlist, secret,
   symlink, submodule, LFS, byte-budget, and timeout controls;
 - deterministic plan generation and Foundation policy validation;
+- a closed model-neutral planning Provider protocol, deterministic fixture
+  replay, versioned Prompt registry, bounded redacted context manifest,
+  structured AI Plan schema, attempt Trace, synthetic non-billable usage/cost,
+  and system-owned deterministic Eval evidence;
+- a revision-bound AI Plan request state machine with stale fencing,
+  idempotent replay, concurrent one-winner human approve/reject, and an
+  authority-free handoff to the existing governed Plan chain;
 - revision, stale-version, idempotency, and concurrent final-decision guards;
 - a pure versioned Runner Protocol with immutable canonical-hash Permission
   Envelopes;
@@ -116,15 +121,16 @@ The implemented target is:
 - concrete product, architecture, permission, security, and evaluation
   documents.
 
-Explicitly not implemented: OpenAI Agents SDK, LLM calls, Agent Trace, general
-shell, arbitrary target-repository commands, package lifecycle or installation, any
+Explicitly not implemented: any real model SDK, network model call, API key,
+model-specific evaluation or billing, general shell, arbitrary
+target-repository commands, package lifecycle or installation, any
 CreativeDeploy workspace/write, source-repository write, binary/delete/rename
 tools, remote push/PR/tag/deploy delivery, remote CI evidence, automated visual
 comparison or repair, authentication, multi-tenancy, public hosting, or
 production deployment.
 
 CreativeDeploy is internal Customer 0 and Design Partner 0. It is not in scope
-for this Phase 6 slice: it must not be accessed, mounted, read, written,
+for this Phase 7 slice: it must not be accessed, mounted, read, written,
 tested, built, or used as verification evidence. Historical Phase 2 documents
 describe a separately authorized read-only path, but that does not authorize
 this branch. CreativeDeploy is not an external enterprise customer and

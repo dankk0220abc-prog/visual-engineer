@@ -55,6 +55,31 @@ type AuditListOperation = OperationAt<
   "/api/v1/runs/{run_id}/audit-events",
   "get"
 >;
+type AIPlanCreateOperation = OperationAt<
+  "/api/v1/runs/{run_id}/ai-plan-requests",
+  "post"
+>;
+type AIPlanListOperation = OperationAt<
+  "/api/v1/runs/{run_id}/ai-plan-requests",
+  "get"
+>;
+type AIPlanDetailOperation = OperationAt<
+  "/api/v1/ai-plan-requests/{ai_plan_request_id}",
+  "get"
+>;
+type AIPlanFreshnessOperation = OperationAt<
+  "/api/v1/ai-plan-requests/{ai_plan_request_id}/freshness",
+  "post"
+>;
+type AIPlanCancelOperation = OperationAt<
+  "/api/v1/ai-plan-requests/{ai_plan_request_id}/cancel",
+  "post"
+>;
+type AIPlanDecisionOperation = OperationAt<
+  "/api/v1/ai-plan-requests/{ai_plan_request_id}/decisions",
+  "post"
+>;
+type AIProviderListOperation = OperationAt<"/api/v1/ai-providers", "get">;
 type RunnerListOperation = OperationAt<"/api/v1/runners", "get">;
 type RunnerDetailOperation = OperationAt<"/api/v1/runners/{runner_id}", "get">;
 type RunnerRevokeOperation = OperationAt<
@@ -227,6 +252,14 @@ type CreatedPlan = JsonResponse<PlanCreateOperation, 201>;
 type RevisedPlan = JsonResponse<PlanRevisionOperation, 201>;
 type PlanListPayload = JsonResponse<PlanListOperation, 200>;
 export type ApprovalDecision = JsonResponse<PlanDecisionOperation, 201>;
+export type AIPlanRequest = JsonResponse<AIPlanDetailOperation, 200>;
+export type CreateAIPlanRequestInput = JsonRequest<AIPlanCreateOperation>;
+export type AIPlanDecisionInput = JsonRequest<AIPlanDecisionOperation>;
+export type AIPlanDecision = JsonResponse<AIPlanDecisionOperation, 201>;
+type CreatedAIPlanRequest = JsonResponse<AIPlanCreateOperation, 201>;
+type AIPlanListPayload = JsonResponse<AIPlanListOperation, 200>;
+type AIProviderListPayload = JsonResponse<AIProviderListOperation, 200>;
+export type AIProvider = AIProviderListPayload["items"][number];
 type AuditListPayload = JsonResponse<AuditListOperation, 200>;
 export type AuditEvent = AuditListPayload extends {
   items: Array<infer Item>;
@@ -617,6 +650,84 @@ export async function listAuditEvents(runId: string): Promise<AuditEvent[]> {
     { cache: "no-store" },
   );
   return data.items;
+}
+
+export async function listAIProviders(): Promise<AIProvider[]> {
+  const { data } = await request<AIProviderListPayload>(
+    "/api/v1/ai-providers",
+    {
+      cache: "no-store",
+    },
+  );
+  return data.items;
+}
+
+export async function listAIPlanRequests(
+  runId: string,
+): Promise<AIPlanRequest[]> {
+  const { data } = await request<AIPlanListPayload>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/ai-plan-requests`,
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function createAIPlanRequest(
+  runId: string,
+  input: CreateAIPlanRequestInput,
+  idempotencyKey: string,
+): Promise<AIPlanRequest> {
+  const { data } = await request<CreatedAIPlanRequest>(
+    `/api/v1/runs/${encodeURIComponent(runId)}/ai-plan-requests`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return data as AIPlanRequest;
+}
+
+export async function refreshAIPlanFreshness(
+  aiPlanRequestId: string,
+): Promise<AIPlanRequest> {
+  const { data } = await request<JsonResponse<AIPlanFreshnessOperation, 200>>(
+    `/api/v1/ai-plan-requests/${encodeURIComponent(aiPlanRequestId)}/freshness`,
+    { method: "POST", headers: { "X-Request-ID": crypto.randomUUID() } },
+  );
+  return data;
+}
+
+export async function cancelAIPlanRequest(
+  aiPlanRequestId: string,
+): Promise<AIPlanRequest> {
+  const { data } = await request<JsonResponse<AIPlanCancelOperation, 200>>(
+    `/api/v1/ai-plan-requests/${encodeURIComponent(aiPlanRequestId)}/cancel`,
+    { method: "POST", headers: { "X-Request-ID": crypto.randomUUID() } },
+  );
+  return data;
+}
+
+export async function decideAIPlanRequest(
+  aiPlanRequestId: string,
+  input: AIPlanDecisionInput,
+): Promise<AIPlanDecision> {
+  const { data } = await request<AIPlanDecision>(
+    `/api/v1/ai-plan-requests/${encodeURIComponent(aiPlanRequestId)}/decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return data;
 }
 
 export async function cancelRun(runId: string, reason?: string): Promise<Run> {

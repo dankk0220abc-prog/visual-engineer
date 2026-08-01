@@ -1,5 +1,26 @@
 # Security Boundaries
 
+## Phase 7 governed AI planning boundary
+
+The first AI slice has a model-neutral Provider protocol but installs only one
+deterministic fake. Its capability record fixes deterministic replay,
+structured output, no network, no credential, bounded context/output, and
+synthetic non-billable accounting. No Provider SDK, API key, or remote call is
+present.
+
+The Prompt receives a redacted requirement and bounded structured committed-
+Snapshot facts/manifest references only. It receives no repository blob text,
+dirty or untracked content, sensitive path, secret match, shell, Git, network,
+or permission field. The response must pass a closed typed schema, exact
+digest, reference/fact/operation/budget/leakage/freshness/replay/injection and
+authority Eval owned by system policy. Provider self-evaluation cannot make a
+request approvable.
+
+Human approval is serialized after a fresh repository rescan. It creates only
+an approved `Plan` with `execution_available = false`; every later Grant,
+Review, Delivery, Git, and deployment decision remains separate. Trace, Eval,
+decision, and request bindings are append-only or write-once in PostgreSQL.
+
 ## Phase 6 local Git boundary
 
 Phase 6 adds Git mutation only inside Runner-owned mirror metadata. The API

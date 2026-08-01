@@ -6,6 +6,10 @@ from sqlalchemy import engine_from_config, pool
 from visual_engineer_api.core.config import get_settings
 from visual_engineer_api.db.base import Base
 from visual_engineer_api.models import (  # noqa: F401
+    AIEvalResult,
+    AIPlanDecision,
+    AIPlanRequest,
+    AIProviderTrace,
     ApprovalDecision,
     AuditEvent,
     ExecutionGrant,

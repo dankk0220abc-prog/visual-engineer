@@ -4,6 +4,91 @@
  */
 
 export interface paths {
+  "/api/v1/ai-plan-requests/{ai_plan_request_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get structured Plan, Prompt, context, Trace, Eval, and decision evidence */
+    get: operations["get_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/ai-plan-requests/{ai_plan_request_id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Cancel a non-terminal governed AI Plan request */
+    post: operations["cancel_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__cancel_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/ai-plan-requests/{ai_plan_request_id}/decisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Approve or reject a fresh evaluated AI Plan without issuing authority */
+    post: operations["decide_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__decisions_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/ai-plan-requests/{ai_plan_request_id}/freshness": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Revalidate exact repository revision and fence a stale AI Plan */
+    post: operations["refresh_ai_plan_freshness_api_v1_ai_plan_requests__ai_plan_request_id__freshness_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/ai-providers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List installed model-neutral planning Provider capabilities */
+    get: operations["list_ai_providers_api_v1_ai_providers_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/delivery-authorizations": {
     parameters: {
       query?: never;
@@ -620,6 +705,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/runs/{run_id}/ai-plan-requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List governed AI Plan requests for a Run */
+    get: operations["list_ai_plan_requests_api_v1_runs__run_id__ai_plan_requests_get"];
+    put?: never;
+    /** Generate and independently evaluate one governed deterministic AI Plan */
+    post: operations["create_ai_plan_request_api_v1_runs__run_id__ai_plan_requests_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/runs/{run_id}/audit-events": {
     parameters: {
       query?: never;
@@ -1226,6 +1329,340 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** AIEvalResultResponse */
+    AIEvalResultResponse: {
+      /**
+       * Ai Plan Request Id
+       * Format: uuid
+       */
+      ai_plan_request_id: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Eval Id */
+      eval_id: string;
+      /**
+       * Evaluator Trust
+       * @constant
+       */
+      evaluator_trust: "system_policy";
+      /** Evaluator Version */
+      evaluator_version: string;
+      /** Evidence */
+      evidence: {
+        [key: string]: unknown;
+      };
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Passed */
+      passed: boolean;
+      /**
+       * Severity
+       * @constant
+       */
+      severity: "blocking";
+      /** Summary */
+      summary: string;
+    };
+    /** AIPlanContract */
+    AIPlanContract: {
+      /** Acceptance Criteria */
+      acceptance_criteria: components["schemas"]["AcceptanceCriterion"][];
+      /** Assumptions */
+      assumptions: string[];
+      authority_boundary: components["schemas"]["AuthorityBoundary"];
+      /** Context References */
+      context_references: string[];
+      /** Deterministic Digest */
+      deterministic_digest: string;
+      /** Expected Changes */
+      expected_changes: components["schemas"]["ExpectedChange"][];
+      prompt: components["schemas"]["PromptBinding"];
+      /** Proposed Operations */
+      proposed_operations: (
+        | components["schemas"]["WorkspaceTextCreateOperation"]
+        | components["schemas"]["WorkspaceTextReplaceOperation"]
+        | components["schemas"]["ValidationSuiteOperation"]
+      )[];
+      provider: components["schemas"]["ProviderCapabilityMetadata"];
+      /** Repository Findings */
+      repository_findings: components["schemas"]["RepositoryFinding"][];
+      /** Requirement Summary */
+      requirement_summary: string;
+      /** Risks */
+      risks: components["schemas"]["PlanRisk"][];
+      /**
+       * Schema Version
+       * @default 1
+       * @constant
+       */
+      schema_version: 1;
+      /** Unresolved Questions */
+      unresolved_questions: string[];
+      /** Validation Suites */
+      validation_suites: components["schemas"]["ValidationSuiteProposal"][];
+    };
+    /** AIPlanDecisionCreate */
+    AIPlanDecisionCreate: {
+      /** Comment */
+      comment?: string | null;
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: "approve" | "reject";
+    };
+    /** AIPlanDecisionResponse */
+    AIPlanDecisionResponse: {
+      /**
+       * Actor Type
+       * @constant
+       */
+      actor_type: "local_user";
+      /**
+       * Ai Plan Request Id
+       * Format: uuid
+       */
+      ai_plan_request_id: string;
+      /** Comment */
+      comment: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: "approve" | "reject";
+      /** Handoff Plan Id */
+      handoff_plan_id: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Request Id */
+      request_id: string;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+    };
+    /** AIPlanGenerationRequest */
+    AIPlanGenerationRequest: {
+      /**
+       * Authority Ceiling
+       * @default plan_proposal_only
+       * @constant
+       */
+      authority_ceiling: "plan_proposal_only";
+      context_budget: components["schemas"]["ContextBudget"];
+      /** Context Manifest */
+      context_manifest: components["schemas"]["ContextManifestEntry"][];
+      delivery_package: components["schemas"]["DeliveryPackage"];
+      /** Malicious Instruction Signals */
+      malicious_instruction_signals: string[];
+      prompt: components["schemas"]["PromptBinding"];
+      /**
+       * Protocol Version
+       * @default 1
+       * @constant
+       */
+      protocol_version: 1;
+      repository: components["schemas"]["RepositoryBinding"];
+      repository_facts: components["schemas"]["RepositoryFacts"];
+      /** Requirement */
+      requirement: string;
+      /** Requirement Was Redacted */
+      requirement_was_redacted: boolean;
+    };
+    /** AIPlanRequestCreate */
+    AIPlanRequestCreate: {
+      delivery_package: components["schemas"]["DeliveryPackage"];
+    };
+    /** AIPlanRequestListResponse */
+    AIPlanRequestListResponse: {
+      /** Items */
+      items: components["schemas"]["AIPlanRequestResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** AIPlanRequestResponse */
+    AIPlanRequestResponse: {
+      /** Context Bytes */
+      context_bytes: number;
+      /** Context Digest */
+      context_digest: string;
+      /** Context Excluded Count */
+      context_excluded_count: number;
+      /** Context Manifest */
+      context_manifest: components["schemas"]["ContextManifestEntry"][];
+      /** Context Reference Count */
+      context_reference_count: number;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      decision: components["schemas"]["AIPlanDecisionResponse"] | null;
+      delivery_package: components["schemas"]["DeliveryPackage"];
+      /** Deterministic Digest */
+      deterministic_digest: string | null;
+      /** Error Category */
+      error_category: string | null;
+      /** Error Code */
+      error_code: string | null;
+      /** Error Message */
+      error_message: string | null;
+      /** Eval Results */
+      eval_results: components["schemas"]["AIEvalResultResponse"][];
+      /** Handoff Plan Id */
+      handoff_plan_id: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      plan: components["schemas"]["AIPlanContract"] | null;
+      /** Prompt Digest */
+      prompt_digest: string;
+      /** Prompt Payload */
+      prompt_payload: {
+        [key: string]: unknown;
+      };
+      /** Prompt Template Id */
+      prompt_template_id: string;
+      /** Prompt Version */
+      prompt_version: string;
+      /** Provider Id */
+      provider_id: string;
+      provider_metadata: components["schemas"]["ProviderCapabilityMetadata"];
+      /** Redaction Record */
+      redaction_record: {
+        [key: string]: unknown;
+      }[];
+      /** Request Digest */
+      request_digest: string;
+      request_payload: components["schemas"]["AIPlanGenerationRequest"];
+      /** Retry Count */
+      retry_count: number;
+      /**
+       * Run Id
+       * Format: uuid
+       */
+      run_id: string;
+      /** Snapshot Fingerprint */
+      snapshot_fingerprint: string;
+      /** Source Revision */
+      source_revision: string;
+      status: components["schemas"]["AIPlanRequestStatus"];
+      /** Traces */
+      traces: components["schemas"]["AIProviderTraceResponse"][];
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /**
+     * AIPlanRequestStatus
+     * @enum {string}
+     */
+    AIPlanRequestStatus:
+      | "requested"
+      | "generating"
+      | "generated"
+      | "rejected"
+      | "approved"
+      | "failed"
+      | "cancelled"
+      | "stale";
+    /** AIProviderListResponse */
+    AIProviderListResponse: {
+      /** Items */
+      items: components["schemas"]["ProviderCapabilityMetadata"][];
+      /** Total */
+      total: number;
+    };
+    /** AIProviderTraceResponse */
+    AIProviderTraceResponse: {
+      /**
+       * Ai Plan Request Id
+       * Format: uuid
+       */
+      ai_plan_request_id: string;
+      /** Attempt Number */
+      attempt_number: number;
+      /**
+       * Completed At
+       * Format: date-time
+       */
+      completed_at: string;
+      /**
+       * Cost Basis
+       * @constant
+       */
+      cost_basis: "synthetic_not_billable";
+      /** Cost Estimate Microunits */
+      cost_estimate_microunits: number;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Error Category */
+      error_category: string | null;
+      /** Error Code */
+      error_code: string | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Input Tokens */
+      input_tokens: number;
+      /** Latency Ms */
+      latency_ms: number;
+      /** Output Tokens */
+      output_tokens: number;
+      /** Provider Id */
+      provider_id: string;
+      provider_metadata: components["schemas"]["ProviderCapabilityMetadata"];
+      /** Redactions */
+      redactions: {
+        [key: string]: unknown;
+      }[];
+      /** Request Digest */
+      request_digest: string;
+      /** Response Digest */
+      response_digest: string | null;
+      /** Retryable */
+      retryable: boolean;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "succeeded" | "failed" | "timeout" | "cancelled";
+      /** Total Tokens */
+      total_tokens: number;
+    };
+    /** AcceptanceCriterion */
+    AcceptanceCriterion: {
+      /** Criterion Id */
+      criterion_id: string;
+      /** Statement */
+      statement: string;
+      /** Validation Suite Ids */
+      validation_suite_ids: string[];
+    };
     /** ActiveJobSummary */
     ActiveJobSummary: {
       /**
@@ -1306,6 +1743,57 @@ export interface components {
        * Format: uuid
        */
       run_id: string;
+    };
+    /** AuthorityBoundary */
+    AuthorityBoundary: {
+      /**
+       * Delivery Authorization Issued
+       * @default false
+       * @constant
+       */
+      delivery_authorization_issued: false;
+      /**
+       * Execution Grant Issued
+       * @default false
+       * @constant
+       */
+      execution_grant_issued: false;
+      /**
+       * Git Or Deployment Authority
+       * @default false
+       * @constant
+       */
+      git_or_deployment_authority: false;
+      /**
+       * Provider Can Approve
+       * @default false
+       * @constant
+       */
+      provider_can_approve: false;
+      /**
+       * Review Approval Issued
+       * @default false
+       * @constant
+       */
+      review_approval_issued: false;
+    };
+    /** BrowserValidation */
+    BrowserValidation: {
+      /**
+       * Check
+       * @enum {string}
+       */
+      check: "responsive" | "accessibility" | "visual_review";
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "browser_check";
+      /**
+       * Viewport
+       * @enum {string}
+       */
+      viewport: "desktop" | "narrow" | "both";
     };
     /** BrowserValidationStep */
     BrowserValidationStep: {
@@ -1413,6 +1901,45 @@ export interface components {
        * Format: uuid
        */
       runner_id: string;
+    };
+    /** ContextBudget */
+    ContextBudget: {
+      /** Max Context Bytes */
+      max_context_bytes: number;
+      /** Max References */
+      max_references: number;
+    };
+    /** ContextManifestEntry */
+    ContextManifestEntry: {
+      /** Content Sha256 */
+      content_sha256?: string | null;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind:
+        | "repository_revision"
+        | "language"
+        | "framework"
+        | "package_manager"
+        | "repository_file"
+        | "repository_instruction"
+        | "test_surface"
+        | "design_system_signal"
+        | "available_validation";
+      /**
+       * Provenance
+       * @enum {string}
+       */
+      provenance: "committed_head_structured_extraction" | "git_head_manifest";
+      /** Reference Id */
+      reference_id: string;
+      /** Relative Path */
+      relative_path?: string | null;
+      /** Source Revision */
+      source_revision: string;
+      /** Summary */
+      summary: string;
     };
     /** ControlledWaitJobSpec */
     ControlledWaitJobSpec: {
@@ -2347,6 +2874,20 @@ export interface components {
       | "revoke_requested"
       | "revoked"
       | "expired";
+    /** ExpectedChange */
+    ExpectedChange: {
+      /**
+       * Change Type
+       * @enum {string}
+       */
+      change_type: "create" | "modify";
+      /** Component */
+      component: string;
+      /** Rationale */
+      rationale: string;
+      /** Relative Path */
+      relative_path: string;
+    };
     /** FailRequest */
     FailRequest: {
       /**
@@ -2718,6 +3259,16 @@ export interface components {
        */
       workspace_id: string;
     };
+    /** MakeTargetValidation */
+    MakeTargetValidation: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "make_target";
+      /** Target */
+      target: string;
+    };
     /** MakeTargetValidationStep */
     MakeTargetValidationStep: {
       /**
@@ -2733,6 +3284,18 @@ export interface components {
      * @enum {string}
      */
     NetworkPolicy: "control_plane_only";
+    /** PackageScriptValidation */
+    PackageScriptValidation: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "package_script";
+      /** Script */
+      script: string;
+      /** Workspace */
+      workspace: string;
+    };
     /** PackageScriptValidationStep */
     PackageScriptValidationStep: {
       /**
@@ -2926,9 +3489,9 @@ export interface components {
       snapshot_fingerprint: string;
       /**
        * Source
-       * @constant
+       * @enum {string}
        */
-      source: "deterministic_policy";
+      source: "deterministic_policy" | "governed_ai";
       status: components["schemas"]["PlanStatus"];
       /** Stop Conditions */
       stop_conditions: string[];
@@ -2958,6 +3521,20 @@ export interface components {
       proposed_change_scope?: string[] | null;
       /** Stop Conditions */
       stop_conditions?: string[] | null;
+    };
+    /** PlanRisk */
+    PlanRisk: {
+      /** Mitigation */
+      mitigation: string;
+      /** Risk Id */
+      risk_id: string;
+      /**
+       * Severity
+       * @enum {string}
+       */
+      severity: "low" | "medium" | "high";
+      /** Summary */
+      summary: string;
     };
     /**
      * PlanStatus
@@ -2998,6 +3575,58 @@ export interface components {
       runner_id: string;
       /** Sequence */
       sequence: number;
+    };
+    /** PromptBinding */
+    PromptBinding: {
+      /** Digest */
+      digest: string;
+      /** Template Id */
+      template_id: string;
+      /** Version */
+      version: string;
+    };
+    /** ProviderCapabilityMetadata */
+    ProviderCapabilityMetadata: {
+      /**
+       * Billing Basis
+       * @constant
+       */
+      billing_basis: "synthetic_not_billable";
+      /**
+       * Credentials Required
+       * @constant
+       */
+      credentials_required: false;
+      /**
+       * Deterministic
+       * @constant
+       */
+      deterministic: true;
+      /**
+       * Fixture Replay
+       * @constant
+       */
+      fixture_replay: true;
+      /** Implementation Version */
+      implementation_version: string;
+      /** Max Context Bytes */
+      max_context_bytes: number;
+      /** Max Output Bytes */
+      max_output_bytes: number;
+      /** Model Label */
+      model_label: string;
+      /**
+       * Network Access
+       * @constant
+       */
+      network_access: false;
+      /** Provider Id */
+      provider_id: string;
+      /**
+       * Structured Output
+       * @constant
+       */
+      structured_output: true;
     };
     /** RegisterRequest */
     RegisterRequest: {
@@ -3133,6 +3762,71 @@ export interface components {
      * @enum {string}
      */
     RepositoryAccess: "none" | "isolated_workspace";
+    /** RepositoryBinding */
+    RepositoryBinding: {
+      /** Scan Policy Version */
+      scan_policy_version: string;
+      /** Scanner Version */
+      scanner_version: string;
+      /** Snapshot Fingerprint */
+      snapshot_fingerprint: string;
+      /** Source Revision */
+      source_revision: string;
+    };
+    /** RepositoryFacts */
+    RepositoryFacts: {
+      /** Frameworks */
+      frameworks?: string[];
+      /** Languages */
+      languages?: string[];
+      /** Package Manager */
+      package_manager?: string | null;
+      /**
+       * Repository Is Dirty
+       * @default false
+       */
+      repository_is_dirty: boolean;
+      /** Safety Finding Rule Counts */
+      safety_finding_rule_counts?: {
+        [key: string]: number;
+      };
+      /**
+       * Selected File Count
+       * @default 0
+       */
+      selected_file_count: number;
+      /**
+       * Skipped File Count
+       * @default 0
+       */
+      skipped_file_count: number;
+      /**
+       * Tracked File Count
+       * @default 0
+       */
+      tracked_file_count: number;
+    };
+    /** RepositoryFinding */
+    RepositoryFinding: {
+      /** Context Reference Ids */
+      context_reference_ids: string[];
+      /** Finding Id */
+      finding_id: string;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind:
+        | "repository_revision"
+        | "language"
+        | "framework"
+        | "package_manager"
+        | "test_surface"
+        | "design_system_signal"
+        | "instruction_risk";
+      /** Summary */
+      summary: string;
+    };
     /** RepositoryHandleListResponse */
     RepositoryHandleListResponse: {
       /** Items */
@@ -3264,6 +3958,19 @@ export interface components {
        * @constant
        */
       status: "available";
+    };
+    /** RepositoryStatusValidation */
+    RepositoryStatusValidation: {
+      /**
+       * Expected
+       * @constant
+       */
+      expected: "approved_scope_only";
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "repository_status_check";
     };
     /** RepositoryStatusValidationStep */
     RepositoryStatusValidationStep: {
@@ -4674,6 +5381,37 @@ export interface components {
       /** Total */
       total: number;
     };
+    /** ValidationSuiteOperation */
+    ValidationSuiteOperation: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "validation_suite_v1";
+      /** Suite Id */
+      suite_id: string;
+      /** Suite Version */
+      suite_version: number;
+    };
+    /** ValidationSuiteProposal */
+    ValidationSuiteProposal: {
+      /** Checks */
+      checks: (
+        | components["schemas"]["PackageScriptValidation"]
+        | components["schemas"]["MakeTargetValidation"]
+        | components["schemas"]["BrowserValidation"]
+        | components["schemas"]["RepositoryStatusValidation"]
+      )[];
+      /** Name */
+      name: string;
+      /**
+       * Required
+       * @constant
+       */
+      required: true;
+      /** Suite Id */
+      suite_id: string;
+    };
     /** ValidationSuiteResponse */
     ValidationSuiteResponse: {
       /**
@@ -5759,6 +6497,32 @@ export interface components {
        */
       workspace_id: string;
     };
+    /** WorkspaceTextCreateOperation */
+    WorkspaceTextCreateOperation: {
+      /** Intent */
+      intent: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_text_create_v1";
+      /** Relative Path */
+      relative_path: string;
+    };
+    /** WorkspaceTextReplaceOperation */
+    WorkspaceTextReplaceOperation: {
+      /** Expected Content Sha256 */
+      expected_content_sha256: string;
+      /** Intent */
+      intent: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_text_replace_v1";
+      /** Relative Path */
+      relative_path: string;
+    };
     /**
      * WorkspaceWriteMode
      * @enum {string}
@@ -5840,6 +6604,235 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  get_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ai_plan_request_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIPlanRequestResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  cancel_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__cancel_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ai_plan_request_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIPlanRequestResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  decide_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__decisions_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ai_plan_request_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AIPlanDecisionCreate"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIPlanDecisionResponse"];
+        };
+      };
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIPlanDecisionResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  refresh_ai_plan_freshness_api_v1_ai_plan_requests__ai_plan_request_id__freshness_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ai_plan_request_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIPlanRequestResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_ai_providers_api_v1_ai_providers_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIProviderListResponse"];
+        };
+      };
+    };
+  };
   list_delivery_authorizations_api_v1_delivery_authorizations_get: {
     parameters: {
       query?: never;
@@ -8218,6 +9211,119 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RunResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_ai_plan_requests_api_v1_runs__run_id__ai_plan_requests_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIPlanRequestListResponse"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_ai_plan_request_api_v1_runs__run_id__ai_plan_requests_post: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AIPlanRequestCreate"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIPlanRequestResponse"];
+        };
+      };
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIPlanRequestResponse"];
         };
       };
       /** @description Resource not found */

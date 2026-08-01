@@ -1,58 +1,52 @@
 # Project Status
 
-- Phase: Phase 6 Second Vertical Slice — Governed Local Delivery Lifecycle
-- Overall status:
-  `PHASE_6_SECOND_SLICE_FINAL_GATE_PASS_SEALED_AWAITING_EXPLICIT_USER_AUTHORIZATION_FOR_LOCAL_FAST_FORWARD_MAIN`
-- Governance qualifier: INDEPENDENT CANCEL-MUTATION FINDING PASS AND LOCAL
-  SEALING ONLY; `main` NOT MOVED; NO REMOTE DELIVERY OR THIRD-SLICE
-  AUTHORIZATION
+- Phase: Phase 7 First Vertical Slice — Governed AI Planning with
+  Deterministic Provider
+- Overall status: `IMPLEMENTATION_CANDIDATE_READY_FOR_INDEPENDENT_FOCUSED_REVIEW`
+- Governance qualifier: IMPLEMENTER CANDIDATE ONLY; INDEPENDENT FOCUSED REVIEW
+  NOT YET RUN; NO REAL PROVIDER, API KEY, REMOTE GIT, OR DEPLOYMENT AUTHORITY
 - Last updated: 2026-08-01
-- Current local `main`:
-  `79fa63f5d911a9e13ad388f270fdd18bf9084d22`
-- Independently reviewed candidate:
-  `fd132832b394927b7d00c188a895bf7b5b5e6ce4`
-- Final independent branch:
-  `codex/audit-phase-6-second-slice-cancel-mutation-final-rereview`
-- Final independent plan:
-  [`docs/exec-plans/phase-6-second-slice-cancel-mutation-final-rereview.md`](../exec-plans/phase-6-second-slice-cancel-mutation-final-rereview.md)
-- Final independent evidence:
-  [`docs/evidence/phase-6-second-slice-cancel-mutation-final-rereview-verification.md`](../evidence/phase-6-second-slice-cancel-mutation-final-rereview-verification.md)
-- Sealing subject: `chore: seal phase 6 governed delivery lifecycle`
-- Sealing hash: reported in the post-commit handoff
-- ADR:
-  [`ADR 0020`](../adr/0020-governed-local-delivery-lifecycle.md)
-- Operator runbook:
-  [`local-delivery-lifecycle.md`](../runbooks/local-delivery-lifecycle.md)
-- Scope: immutable server-derived manifest and bounded diff preview, exact
-  digest confirmation, keyed one-winner dispatch, durable attempt history,
-  at most three linear attempts, terminal reason, cancellation, and safe retry
-  of the same deterministic fixture-only local commit.
-- Durable authority chain: fresh approved ready Review + active original
-  implementation Grant + approved Delivery Authorization + exact manifest
-  confirmation + active Runner/Job/Attempt/Lease + current `git_commit` Permit.
-- Explicit denials: source-repository write, arbitrary/user-supplied Git,
-  remote, push, PR, tag, deploy, real repositories, CreativeDeploy, Customer
-  0, credentials, LLM/Agents SDK/Provider, authentication, and multi-tenancy.
-- Final focused verification: Runner cancel-first `1`, PostgreSQL arbitration
-  `4`, Phase 6 lifecycle `10`, related PostgreSQL lifecycle `11`,
-  Runner/Protocol/real Git `12`, related Security `10`, static security,
-  format, lint, typecheck, source invariance, and diff checks pass.
-- Aggregate: exactly one final-gate `make verify` passes exit `0`: Python
-  `317`, Web `55`, Playwright `16`, Security/repair/Workspace/Runner/Review
-  gates, migration, build, Eval, source invariance, Workspace Chaos, and final
-  diff check all pass.
-- Known Phase 5 same-key deadlock did not appear; no candidate/main comparator,
-  aggregate retry, timeout/retry/lock change, or Phase 5 edit occurred.
-- Docker cleanup: task-owned test-db/E2E/Chaos containers, networks, volumes,
-  and five exact aggregate-created image tags are zero; pre-existing services
-  remained running.
-- Auditor modified no production code, generated files, migrations, or tests.
-- First-slice independent review, sealing, and local-main integration remain
-  preserved historical facts and were not reopened.
-- Next action: only an explicit user authorization may permit a local pure
-  fast-forward of `main` to the final sealing commit.
+- Current local `main`: `9c282e91a42a87ea553171d5aa55a0f77564bb14`
+- Candidate branch: `codex/phase-7-governed-ai-planning-first-slice`
+- Candidate checkpoint: created as the final implementation step; exact hash
+  is reported in the post-commit handoff.
+- Plan:
+  [`phase-7-governed-ai-planning-first-slice.md`](../exec-plans/phase-7-governed-ai-planning-first-slice.md)
+- ADR: [`ADR 0021`](../adr/0021-governed-ai-plan-handoff.md)
+- Evidence:
+  [`phase-7-governed-ai-planning-first-slice-verification.md`](../evidence/phase-7-governed-ai-planning-first-slice-verification.md)
+- Scope: bounded committed-Snapshot context, versioned Prompt, strict typed
+  Provider request/response, deterministic fake replay, immutable Trace and
+  system Eval, freshness, human approve/reject, and authority-free Plan
+  handoff.
+- Current focused results: AI PostgreSQL/Eval `13/13`, Web `60/60`, targeted
+  Playwright desktop/narrow `4/4`, generated contracts, Python/TypeScript
+  typecheck, lint, Web build, and deterministic dataset validation pass.
+- First browser attempt preserved two distinct defects: one ambiguous test
+  locator and one real keyboard-focus failure on the bounded scroll region.
+  Both were corrected; the rebuilt-image rerun passes axe and overflow checks.
+- Explicit denials: real Provider SDK/network/key/billing, CreativeDeploy,
+  Customer 0, real repository, broader Runner permission, arbitrary shell,
+  Execution Grant auto-issue, Review/Delivery auto-approval, remote Git, push,
+  PR, merge, tag, and deployment.
+- Aggregate record: the sole complete `make verify` reached Python `330/330`
+  and Web `60/60`, then exited `2` at Web function coverage `69.89% < 70%`.
+  The corrected focused coverage is `71.42%`; the unexecuted tail subsequently
+  passed target-by-target, including full Playwright `20/20`, security,
+  Migration, chaos, Eval, and source invariance. The aggregate was not rerun.
+- Next action: independently review the exact checkpoint, then run a fresh
+  aggregate Final Gate. Do not treat implementer evidence as review approval.
 
-`PHASE 6 SECOND SLICE FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
+`PHASE 7 GOVERNED AI PLANNING FIRST SLICE — IMPLEMENTATION CANDIDATE`
+
+## Preserved Phase 6 completion
+
+Phase 0-6 First and Second Slices are integrated in local `main` at
+`9c282e91a42a87ea553171d5aa55a0f77564bb14`. The Phase 6 final seal is
+`chore: seal phase 6 governed delivery lifecycle`, with parent candidate
+`fd132832b394927b7d00c188a895bf7b5b5e6ce4`. Historical independent evidence,
+findings, remediation, and final-gate PASS remain preserved and are not
+reopened or counted as Phase 7 review.
 
 ## Preserved Phase 5 completion
 

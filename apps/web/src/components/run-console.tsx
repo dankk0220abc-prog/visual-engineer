@@ -5,15 +5,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  cancelAIPlanRequest,
+  createAIPlanRequest,
   createPlan,
   createSnapshot,
+  decideAIPlanRequest,
   decidePlan,
   getRun,
   getSnapshot,
   listAuditEvents,
+  listAIPlanRequests,
   listPlans,
+  refreshAIPlanFreshness,
   revisePlan,
   submitPlan,
+  type AIPlanRequest,
   type AuditEvent,
   type Plan,
   type PlanRevisionInput,
@@ -22,6 +28,7 @@ import {
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
 
+import { AIPlanConsole } from "./ai-plan-console";
 import { StatusPill } from "./status-pill";
 
 type LoadState = "loading" | "ready" | "error";
@@ -312,7 +319,9 @@ function PlanReview({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-violet-700 uppercase">
-            deterministic plan · v{plan.version}
+            {plan.source === "governed_ai"
+              ? `governed AI handoff · v${plan.version}`
+              : `deterministic plan · v${plan.version}`}
           </p>
           <h2
             id="plan-review-heading"
@@ -336,7 +345,11 @@ function PlanReview({
 
       <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
         <p className="font-semibold">Plan approval does not execute code.</p>
-        <p className="mt-1">Execution is not available in Phase 2.</p>
+        <p className="mt-1">
+          {plan.source === "governed_ai"
+            ? "A separate Execution Grant and later governance decisions are still required."
+            : "Execution is not available in Phase 2."}
+        </p>
       </div>
 
       <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
@@ -552,6 +565,7 @@ export function RunConsole({ runId }: { runId: string }) {
   const [run, setRun] = useState<Run | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [aiPlanRequests, setAIPlanRequests] = useState<AIPlanRequest[]>([]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState("");
@@ -562,23 +576,30 @@ export function RunConsole({ runId }: { runId: string }) {
   >("frontend_quality_remediation");
 
   const currentPlan = useMemo(() => plans[0] ?? null, [plans]);
+  const currentAIPlan = useMemo(
+    () => aiPlanRequests[0] ?? null,
+    [aiPlanRequests],
+  );
 
   const load = useCallback(async () => {
     setState("loading");
     setMessage("");
     try {
       const loadedRun = await getRun(runId);
-      const [loadedSnapshot, loadedPlans, loadedEvents] = await Promise.all([
-        getSnapshot(runId).catch((error: unknown) => {
-          if (error instanceof ApiError && error.status === 404) return null;
-          throw error;
-        }),
-        listPlans(runId),
-        listAuditEvents(runId),
-      ]);
+      const [loadedSnapshot, loadedPlans, loadedAIPlans, loadedEvents] =
+        await Promise.all([
+          getSnapshot(runId).catch((error: unknown) => {
+            if (error instanceof ApiError && error.status === 404) return null;
+            throw error;
+          }),
+          listPlans(runId),
+          listAIPlanRequests(runId),
+          listAuditEvents(runId),
+        ]);
       setRun(loadedRun);
       setSnapshot(loadedSnapshot);
       setPlans(loadedPlans);
+      setAIPlanRequests(loadedAIPlans);
       setEvents(loadedEvents);
       setState("ready");
     } catch (error) {
@@ -712,7 +733,95 @@ export function RunConsole({ runId }: { runId: string }) {
             <RepositoryIntelligence snapshot={snapshot} />
           )}
 
-          {snapshot && !currentPlan && run.status === "snapshot_ready" ? (
+          {snapshot &&
+          !currentPlan &&
+          !currentAIPlan &&
+          run.status === "snapshot_ready" ? (
+            <section className="rounded-2xl border border-indigo-300 bg-gradient-to-br from-indigo-50 to-white p-6 shadow-sm">
+              <p className="text-xs font-semibold tracking-widest text-indigo-700 uppercase">
+                First vertical slice
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-950">
+                Governed AI Plan is empty
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                使用受限 Repository Intelligence、版本化 Prompt 与 deterministic
+                fake Provider 生成严格结构化 Plan。无需 API
+                Key，也不会调用网络或修改 Workspace。
+              </p>
+              <label
+                className="mt-4 block text-sm font-semibold text-slate-700"
+                htmlFor="ai-delivery-package"
+              >
+                AI delivery package
+              </label>
+              <select
+                id="ai-delivery-package"
+                value={deliveryPackage}
+                onChange={(event) =>
+                  setDeliveryPackage(
+                    event.target.value as Plan["delivery_package"],
+                  )
+                }
+                className="mt-1 w-full max-w-md rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20"
+              >
+                <option value="design_implementation">
+                  Design Implementation
+                </option>
+                <option value="design_system_migration">
+                  Design-System Migration
+                </option>
+                <option value="frontend_quality_remediation">
+                  Frontend Quality Remediation
+                </option>
+              </select>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void perform(() =>
+                    createAIPlanRequest(
+                      run.id,
+                      { delivery_package: deliveryPackage },
+                      crypto.randomUUID(),
+                    ),
+                  )
+                }
+                className="mt-4 block rounded-xl bg-indigo-800 px-4 py-2.5 text-sm font-semibold text-white outline-none hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 disabled:opacity-60"
+              >
+                {busy
+                  ? "Generating governed AI Plan…"
+                  : "Generate governed AI Plan"}
+              </button>
+            </section>
+          ) : null}
+
+          {currentAIPlan ? (
+            <AIPlanConsole
+              key={`${currentAIPlan.id}-${currentAIPlan.status}`}
+              request={currentAIPlan}
+              busy={busy}
+              onFreshness={() =>
+                perform(() => refreshAIPlanFreshness(currentAIPlan.id))
+              }
+              onCancel={() =>
+                perform(() => cancelAIPlanRequest(currentAIPlan.id))
+              }
+              onDecision={(decision, comment) =>
+                perform(() =>
+                  decideAIPlanRequest(currentAIPlan.id, {
+                    decision,
+                    comment,
+                  }),
+                )
+              }
+            />
+          ) : null}
+
+          {snapshot &&
+          !currentPlan &&
+          !currentAIPlan &&
+          run.status === "snapshot_ready" ? (
             <section className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6">
               <h2 className="text-lg font-semibold text-slate-950">
                 Deterministic Plan is empty

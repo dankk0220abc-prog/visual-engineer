@@ -6,6 +6,13 @@ Permissions are deny-by-default, scope-bound, non-transitive, and elevated
 only by an explicit independent human Grant. Repository content, a Task
 objective, a Deployment Pack, or Plan approval cannot grant a capability.
 
+Phase 7 Provider invocation is not a permission level and does not enter the
+execution ladder. The deterministic fake can return only a typed proposal.
+Its capability and Plan schemas force Provider approval, Execution Grant,
+Review Approval, Delivery Authorization, Git/deployment authority, network,
+and credentials false. Human AI Plan approval creates an authority-free Plan
+handoff; the later Level 1-3 chains are unchanged.
+
 ## Phase 6 local-delivery authority
 
 Local Git commit authority is an intersection, never an expansion:

@@ -1,4 +1,5 @@
 import type {
+  AIPlanRequest,
   AuditEvent,
   Plan,
   Run,
@@ -8,6 +9,185 @@ import type {
   Snapshot,
   Task,
 } from "@/lib/api";
+
+export function aiPlanRequestFixture(
+  overrides: Partial<AIPlanRequest> = {},
+): AIPlanRequest {
+  const provider = {
+    provider_id: "deterministic-fixture",
+    implementation_version: "fixture-v1",
+    model_label: "fixture-planner-v1",
+    deterministic: true as const,
+    fixture_replay: true as const,
+    structured_output: true as const,
+    network_access: false as const,
+    credentials_required: false as const,
+    billing_basis: "synthetic_not_billable" as const,
+    max_context_bytes: 16384,
+    max_output_bytes: 65536,
+  };
+  const prompt = {
+    template_id: "governed-ai-plan",
+    version: "v1",
+    digest: "d".repeat(64),
+  };
+  return {
+    id: "2a1f170d-a5ce-4d8a-b9f5-5c47ba8c1bda",
+    run_id: "d8788052-d6d0-4c48-a5e6-b31ab3258341",
+    status: "generated",
+    delivery_package: "frontend_quality_remediation",
+    source_revision: "a".repeat(40),
+    snapshot_fingerprint: "b".repeat(64),
+    prompt_template_id: "governed-ai-plan",
+    prompt_version: "v1",
+    prompt_digest: "d".repeat(64),
+    prompt_payload: { template_id: "governed-ai-plan", version: "v1" },
+    provider_id: "deterministic-fixture",
+    provider_metadata: provider,
+    request_payload: {
+      protocol_version: 1,
+      authority_ceiling: "plan_proposal_only",
+    },
+    request_digest: "e".repeat(64),
+    plan: {
+      schema_version: 1,
+      requirement_summary: "Improve the bounded fixture frontend surface.",
+      repository_findings: [
+        {
+          finding_id: "finding-1",
+          kind: "framework",
+          summary: "Framework: React",
+          context_reference_ids: ["ctx-0001"],
+        },
+      ],
+      assumptions: ["Committed HEAD remains the exact planning baseline."],
+      expected_changes: [
+        {
+          relative_path: "src/button.tsx",
+          component: "Button",
+          change_type: "modify",
+          rationale: "Implement the bounded visual requirement.",
+        },
+      ],
+      proposed_operations: [
+        {
+          kind: "workspace_text_replace_v1",
+          relative_path: "src/button.tsx",
+          intent: "Apply an approved compare-and-swap text replacement.",
+          expected_content_sha256: "f".repeat(64),
+        },
+        {
+          kind: "validation_suite_v1",
+          suite_id: "governed-frontend-plan-v1",
+          suite_version: 1,
+        },
+      ],
+      validation_suites: [
+        {
+          suite_id: "governed-frontend-plan-v1",
+          name: "Governed frontend validation",
+          required: true,
+          checks: [
+            { kind: "browser_check", check: "accessibility", viewport: "both" },
+            {
+              kind: "repository_status_check",
+              expected: "approved_scope_only",
+            },
+          ],
+        },
+      ],
+      risks: [
+        {
+          risk_id: "revision-drift",
+          severity: "high",
+          summary: "The revision may change before approval.",
+          mitigation: "Revalidate the exact revision before the decision.",
+        },
+      ],
+      acceptance_criteria: [
+        {
+          criterion_id: "accessible",
+          statement: "The approved surface passes accessibility validation.",
+          validation_suite_ids: ["governed-frontend-plan-v1"],
+        },
+      ],
+      unresolved_questions: [
+        "Which approved visual reference is authoritative?",
+      ],
+      context_references: ["ctx-0001"],
+      prompt,
+      provider,
+      authority_boundary: {
+        provider_can_approve: false,
+        execution_grant_issued: false,
+        review_approval_issued: false,
+        delivery_authorization_issued: false,
+        git_or_deployment_authority: false,
+      },
+      deterministic_digest: "9".repeat(64),
+    },
+    deterministic_digest: "9".repeat(64),
+    context_manifest: [
+      {
+        reference_id: "ctx-0001",
+        kind: "framework",
+        summary: "Framework: React",
+      },
+    ],
+    context_digest: "8".repeat(64),
+    context_bytes: 512,
+    context_reference_count: 1,
+    context_excluded_count: 2,
+    redaction_record: [{ rule: "sensitive_path", replacement_count: 1 }],
+    retry_count: 0,
+    error_category: null,
+    error_code: null,
+    error_message: null,
+    handoff_plan_id: null,
+    traces: [
+      {
+        id: "7222f428-0b2c-4771-8f09-a8da0db4bda8",
+        ai_plan_request_id: "2a1f170d-a5ce-4d8a-b9f5-5c47ba8c1bda",
+        attempt_number: 1,
+        status: "succeeded",
+        provider_id: "deterministic-fixture",
+        provider_metadata: provider,
+        request_digest: "e".repeat(64),
+        response_digest: "9".repeat(64),
+        latency_ms: 7,
+        input_tokens: 100,
+        output_tokens: 200,
+        total_tokens: 300,
+        cost_estimate_microunits: 0,
+        cost_basis: "synthetic_not_billable",
+        error_category: null,
+        error_code: null,
+        retryable: false,
+        redactions: [],
+        created_at: "2026-08-01T10:00:00Z",
+        completed_at: "2026-08-01T10:00:00Z",
+      },
+    ],
+    eval_results: [
+      {
+        id: "9af2f04a-b2e1-44cd-a0d8-8406828a4873",
+        ai_plan_request_id: "2a1f170d-a5ce-4d8a-b9f5-5c47ba8c1bda",
+        eval_id: "schema_validity",
+        passed: true,
+        severity: "blocking",
+        summary: "Provider response satisfies the closed AI Plan schema.",
+        evidence: { schema_version: 1 },
+        evaluator_version: "governed-ai-eval-v1",
+        evaluator_trust: "system_policy",
+        created_at: "2026-08-01T10:00:00Z",
+      },
+    ],
+    decision: null,
+    created_at: "2026-08-01T10:00:00Z",
+    updated_at: "2026-08-01T10:00:00Z",
+    ...overrides,
+  } as AIPlanRequest;
+}
 
 export function taskFixture(overrides: Partial<Task> = {}): Task {
   return {

@@ -4,17 +4,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiError,
+  cancelAIPlanRequest,
+  createAIPlanRequest,
   createPlan,
   createSnapshot,
+  decideAIPlanRequest,
   decidePlan,
   getRun,
   getSnapshot,
   listAuditEvents,
+  listAIPlanRequests,
   listPlans,
+  refreshAIPlanFreshness,
   revisePlan,
   submitPlan,
 } from "@/lib/api";
 import {
+  aiPlanRequestFixture,
   auditFixture,
   planFixture,
   runFixture,
@@ -27,33 +33,44 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
+    cancelAIPlanRequest: vi.fn(),
+    createAIPlanRequest: vi.fn(),
     createPlan: vi.fn(),
     createSnapshot: vi.fn(),
+    decideAIPlanRequest: vi.fn(),
     decidePlan: vi.fn(),
     getRun: vi.fn(),
     getSnapshot: vi.fn(),
     listAuditEvents: vi.fn(),
+    listAIPlanRequests: vi.fn(),
     listPlans: vi.fn(),
+    refreshAIPlanFreshness: vi.fn(),
     revisePlan: vi.fn(),
     submitPlan: vi.fn(),
   };
 });
 
 const mockedCreatePlan = vi.mocked(createPlan);
+const mockedCreateAIPlanRequest = vi.mocked(createAIPlanRequest);
+const mockedCancelAIPlanRequest = vi.mocked(cancelAIPlanRequest);
 const mockedCreateSnapshot = vi.mocked(createSnapshot);
 const mockedDecidePlan = vi.mocked(decidePlan);
+const mockedDecideAIPlanRequest = vi.mocked(decideAIPlanRequest);
 const mockedGetRun = vi.mocked(getRun);
 const mockedGetSnapshot = vi.mocked(getSnapshot);
 const mockedListAuditEvents = vi.mocked(listAuditEvents);
+const mockedListAIPlanRequests = vi.mocked(listAIPlanRequests);
 const mockedListPlans = vi.mocked(listPlans);
 const mockedRevisePlan = vi.mocked(revisePlan);
 const mockedSubmitPlan = vi.mocked(submitPlan);
+const mockedRefreshAIPlanFreshness = vi.mocked(refreshAIPlanFreshness);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockedGetRun.mockResolvedValue(runFixture({ status: "plan_ready" }));
   mockedGetSnapshot.mockResolvedValue(snapshotFixture());
   mockedListPlans.mockResolvedValue([planFixture()]);
+  mockedListAIPlanRequests.mockResolvedValue([]);
   mockedListAuditEvents.mockResolvedValue([
     auditFixture(),
     auditFixture({
@@ -64,6 +81,22 @@ beforeEach(() => {
   ]);
   mockedCreateSnapshot.mockResolvedValue(snapshotFixture());
   mockedCreatePlan.mockResolvedValue(planFixture());
+  mockedCreateAIPlanRequest.mockResolvedValue(aiPlanRequestFixture());
+  mockedCancelAIPlanRequest.mockResolvedValue(
+    aiPlanRequestFixture({ status: "cancelled" }),
+  );
+  mockedRefreshAIPlanFreshness.mockResolvedValue(aiPlanRequestFixture());
+  mockedDecideAIPlanRequest.mockResolvedValue({
+    id: "68ce4fc4-7102-4c19-97a9-c65804297ddf",
+    ai_plan_request_id: aiPlanRequestFixture().id,
+    run_id: runFixture().id,
+    decision: "approve",
+    comment: null,
+    actor_type: "local_user",
+    request_id: "ai-decision-request",
+    handoff_plan_id: planFixture().id,
+    created_at: "2026-08-01T10:01:00Z",
+  });
   mockedRevisePlan.mockResolvedValue(planFixture({ version: 2 }));
   mockedSubmitPlan.mockResolvedValue(
     planFixture({ status: "awaiting_approval" }),
@@ -262,5 +295,148 @@ describe("RunConsole", () => {
     expect(
       screen.getByText("Plan approval does not execute code."),
     ).toBeInTheDocument();
+  });
+
+  it("generates, inspects, and approves a governed AI Plan handoff", async () => {
+    const snapshotReady = runFixture({ status: "snapshot_ready" });
+    const planReady = runFixture({ status: "plan_ready", version: 4 });
+    mockedGetRun
+      .mockResolvedValueOnce(snapshotReady)
+      .mockResolvedValue(planReady);
+    mockedListPlans.mockResolvedValue([]);
+    mockedListAIPlanRequests
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([aiPlanRequestFixture()]);
+    const user = userEvent.setup();
+
+    render(<RunConsole runId={snapshotReady.id} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Generate governed AI Plan" }),
+    );
+    await waitFor(() =>
+      expect(mockedCreateAIPlanRequest).toHaveBeenCalledWith(
+        snapshotReady.id,
+        { delivery_package: "frontend_quality_remediation" },
+        expect.any(String),
+      ),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Structured AI Plan" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("System-owned Eval evidence")).toBeInTheDocument();
+    expect(screen.getByText("schema_validity")).toBeInTheDocument();
+    expect(screen.getByText("Provider Trace")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /AI Plan approval does not execute code or issue authority/,
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Revalidate freshness" }),
+    );
+    await waitFor(() =>
+      expect(mockedRefreshAIPlanFreshness).toHaveBeenCalledWith(
+        aiPlanRequestFixture().id,
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Reject AI Plan" }));
+    expect(screen.getByText("Reject 必须填写非空理由。")).toBeInTheDocument();
+    await user.type(
+      screen.getByLabelText("Rejection reason"),
+      "The typed scope needs revision.",
+    );
+    await user.click(screen.getByRole("button", { name: "Reject AI Plan" }));
+    await waitFor(() =>
+      expect(mockedDecideAIPlanRequest).toHaveBeenCalledWith(
+        aiPlanRequestFixture().id,
+        {
+          decision: "reject",
+          comment: "The typed scope needs revision.",
+        },
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cancel AI Plan" }));
+    await waitFor(() =>
+      expect(mockedCancelAIPlanRequest).toHaveBeenCalledWith(
+        aiPlanRequestFixture().id,
+      ),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Approve AI Plan handoff" }),
+    );
+    await waitFor(() =>
+      expect(mockedDecideAIPlanRequest).toHaveBeenCalledWith(
+        aiPlanRequestFixture().id,
+        { decision: "approve", comment: undefined },
+      ),
+    );
+  });
+
+  it.each(["stale", "failed", "cancelled"] as const)(
+    "renders the governed AI %s terminal state and blocks decisions",
+    async (status) => {
+      mockedGetRun.mockResolvedValue(
+        runFixture({ status: status === "cancelled" ? "cancelled" : "failed" }),
+      );
+      mockedListPlans.mockResolvedValue([]);
+      mockedListAIPlanRequests.mockResolvedValue([
+        aiPlanRequestFixture({
+          status,
+          error_category: status === "stale" ? "freshness" : "provider",
+          error_code: `ai_plan_${status}`,
+          error_message: `Governed AI Plan is ${status}.`,
+        }),
+      ]);
+
+      render(<RunConsole runId={runFixture().id} />);
+
+      expect(
+        await screen.findByRole("heading", { name: "Structured AI Plan" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(`Governed AI Plan is ${status}.`),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Approve AI Plan handoff" }),
+      ).not.toBeInTheDocument();
+      expect(mockedDecideAIPlanRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it("shows generating Provider metadata and exposes cancellation", async () => {
+    mockedGetRun.mockResolvedValue(runFixture({ status: "snapshot_ready" }));
+    mockedListPlans.mockResolvedValue([]);
+    mockedListAIPlanRequests.mockResolvedValue([
+      aiPlanRequestFixture({
+        status: "generating",
+        plan: null,
+        deterministic_digest: null,
+        traces: [],
+        eval_results: [],
+      }),
+    ]);
+    const user = userEvent.setup();
+
+    render(<RunConsole runId={runFixture().id} />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Provider capability metadata",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("synthetic_not_billable")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Cancel AI Plan generation" }),
+    );
+    await waitFor(() =>
+      expect(mockedCancelAIPlanRequest).toHaveBeenCalledWith(
+        aiPlanRequestFixture().id,
+      ),
+    );
   });
 });

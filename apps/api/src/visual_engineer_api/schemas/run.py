@@ -202,7 +202,7 @@ class PlanResponse(BaseModel):
     run_id: uuid.UUID
     version: int
     status: PlanStatus
-    source: Literal["deterministic_policy"]
+    source: Literal["deterministic_policy", "governed_ai"]
     snapshot_fingerprint: str
     delivery_package: DeliveryPackage
     objective_summary: str

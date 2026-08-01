@@ -2,7 +2,8 @@
 
 PostgreSQL and Alembic are authoritative for all implemented durable state.
 Timestamps are timezone-aware UTC. API enums and database checks enforce the
-Phase 2 planning, Phase 3 Runner, and Phase 4 workspace boundaries
+Phase 2 planning, Phase 3 Runner, Phase 4 workspace, and Phase 7 governed AI
+planning boundaries
 independently.
 
 ## Task
@@ -49,7 +50,7 @@ both update and delete.
 
 Each Plan has a Run-scoped positive version and one of `draft`,
 `awaiting_approval`, `approved`, `rejected`, or `superseded`. Database checks
-fix `source` to `deterministic_policy`, limit delivery package, and force
+fix `source` to `deterministic_policy` or `governed_ai`, limit delivery package, and force
 `execution_available = false`.
 
 Plan content includes the bound Snapshot fingerprint, objective and repository
@@ -65,6 +66,22 @@ outcome, local-user actor, optional bounded comment, request ID, and timestamp.
 A unique Plan constraint permits one final row. A database check requires a
 non-blank rejection reason. The service verifies that Run/Plan identities and
 latest-version state agree before insertion.
+
+## AIPlanRequest, AIProviderTrace, AIEvalResult, and AIPlanDecision
+
+`AIPlanRequest` is a one-per-Run Provider lifecycle aggregate. Immutable
+bindings cover delivery package, revision, Snapshot, Prompt, Provider
+capabilities, request/context digests and payloads, budgets, redactions, and
+idempotency. Its only legal transitions are the closed Phase 7 state machine;
+response/digest become write-once, and deletion is rejected in PostgreSQL.
+
+`AIProviderTrace` stores one append-only row per bounded attempt: Provider
+metadata, request/response digest, status, latency, deterministic token fields,
+zero synthetic cost, retry/error classification, and redaction record.
+`AIEvalResult` stores one append-only system-policy result per required Eval;
+Provider-authored self-evaluation is not accepted. `AIPlanDecision` stores the
+one append-only local-user approve/reject winner and optional approved handoff
+Plan. Database triggers reject update/delete of all three evidence families.
 
 ## AuditEvent
 

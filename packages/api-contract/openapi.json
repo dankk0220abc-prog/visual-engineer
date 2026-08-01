@@ -1,6 +1,860 @@
 {
   "components": {
     "schemas": {
+      "AIEvalResultResponse": {
+        "properties": {
+          "ai_plan_request_id": {
+            "format": "uuid",
+            "title": "Ai Plan Request Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "eval_id": {
+            "title": "Eval Id",
+            "type": "string"
+          },
+          "evaluator_trust": {
+            "const": "system_policy",
+            "title": "Evaluator Trust",
+            "type": "string"
+          },
+          "evaluator_version": {
+            "title": "Evaluator Version",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "severity": {
+            "const": "blocking",
+            "title": "Severity",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ai_plan_request_id",
+          "eval_id",
+          "passed",
+          "severity",
+          "summary",
+          "evidence",
+          "evaluator_version",
+          "evaluator_trust",
+          "created_at"
+        ],
+        "title": "AIEvalResultResponse",
+        "type": "object"
+      },
+      "AIPlanContract": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptance_criteria": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptanceCriterion"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Acceptance Criteria",
+            "type": "array"
+          },
+          "assumptions": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "authority_boundary": {
+            "$ref": "#/components/schemas/AuthorityBoundary"
+          },
+          "context_references": {
+            "items": {
+              "maxLength": 120,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Context References",
+            "type": "array"
+          },
+          "deterministic_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Deterministic Digest",
+            "type": "string"
+          },
+          "expected_changes": {
+            "items": {
+              "$ref": "#/components/schemas/ExpectedChange"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Expected Changes",
+            "type": "array"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PromptBinding"
+          },
+          "proposed_operations": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "validation_suite_v1": "#/components/schemas/ValidationSuiteOperation",
+                  "workspace_text_create_v1": "#/components/schemas/WorkspaceTextCreateOperation",
+                  "workspace_text_replace_v1": "#/components/schemas/WorkspaceTextReplaceOperation"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/WorkspaceTextCreateOperation"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceTextReplaceOperation"
+                },
+                {
+                  "$ref": "#/components/schemas/ValidationSuiteOperation"
+                }
+              ]
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Proposed Operations",
+            "type": "array"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ProviderCapabilityMetadata"
+          },
+          "repository_findings": {
+            "items": {
+              "$ref": "#/components/schemas/RepositoryFinding"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Repository Findings",
+            "type": "array"
+          },
+          "requirement_summary": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Requirement Summary",
+            "type": "string"
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/PlanRisk"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Risks",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "unresolved_questions": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Unresolved Questions",
+            "type": "array"
+          },
+          "validation_suites": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationSuiteProposal"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Validation Suites",
+            "type": "array"
+          }
+        },
+        "required": [
+          "requirement_summary",
+          "repository_findings",
+          "assumptions",
+          "expected_changes",
+          "proposed_operations",
+          "validation_suites",
+          "risks",
+          "acceptance_criteria",
+          "unresolved_questions",
+          "context_references",
+          "prompt",
+          "provider",
+          "authority_boundary",
+          "deterministic_digest"
+        ],
+        "title": "AIPlanContract",
+        "type": "object"
+      },
+      "AIPlanDecisionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decision": {
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": ["decision"],
+        "title": "AIPlanDecisionCreate",
+        "type": "object"
+      },
+      "AIPlanDecisionResponse": {
+        "properties": {
+          "actor_type": {
+            "const": "local_user",
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "ai_plan_request_id": {
+            "format": "uuid",
+            "title": "Ai Plan Request Id",
+            "type": "string"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "type": "string"
+          },
+          "handoff_plan_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handoff Plan Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ai_plan_request_id",
+          "run_id",
+          "decision",
+          "comment",
+          "actor_type",
+          "request_id",
+          "handoff_plan_id",
+          "created_at"
+        ],
+        "title": "AIPlanDecisionResponse",
+        "type": "object"
+      },
+      "AIPlanGenerationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_ceiling": {
+            "const": "plan_proposal_only",
+            "default": "plan_proposal_only",
+            "title": "Authority Ceiling",
+            "type": "string"
+          },
+          "context_budget": {
+            "$ref": "#/components/schemas/ContextBudget"
+          },
+          "context_manifest": {
+            "items": {
+              "$ref": "#/components/schemas/ContextManifestEntry"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Context Manifest",
+            "type": "array"
+          },
+          "delivery_package": {
+            "$ref": "#/components/schemas/DeliveryPackage"
+          },
+          "malicious_instruction_signals": {
+            "items": {
+              "maxLength": 120,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Malicious Instruction Signals",
+            "type": "array"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PromptBinding"
+          },
+          "protocol_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Protocol Version",
+            "type": "integer"
+          },
+          "repository": {
+            "$ref": "#/components/schemas/RepositoryBinding"
+          },
+          "repository_facts": {
+            "$ref": "#/components/schemas/RepositoryFacts"
+          },
+          "requirement": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Requirement",
+            "type": "string"
+          },
+          "requirement_was_redacted": {
+            "title": "Requirement Was Redacted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "delivery_package",
+          "requirement",
+          "requirement_was_redacted",
+          "malicious_instruction_signals",
+          "repository",
+          "repository_facts",
+          "context_manifest",
+          "context_budget",
+          "prompt"
+        ],
+        "title": "AIPlanGenerationRequest",
+        "type": "object"
+      },
+      "AIPlanRequestCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "delivery_package": {
+            "$ref": "#/components/schemas/DeliveryPackage"
+          }
+        },
+        "required": ["delivery_package"],
+        "title": "AIPlanRequestCreate",
+        "type": "object"
+      },
+      "AIPlanRequestListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AIPlanRequestResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "AIPlanRequestListResponse",
+        "type": "object"
+      },
+      "AIPlanRequestResponse": {
+        "properties": {
+          "context_bytes": {
+            "title": "Context Bytes",
+            "type": "integer"
+          },
+          "context_digest": {
+            "title": "Context Digest",
+            "type": "string"
+          },
+          "context_excluded_count": {
+            "title": "Context Excluded Count",
+            "type": "integer"
+          },
+          "context_manifest": {
+            "items": {
+              "$ref": "#/components/schemas/ContextManifestEntry"
+            },
+            "title": "Context Manifest",
+            "type": "array"
+          },
+          "context_reference_count": {
+            "title": "Context Reference Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AIPlanDecisionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery_package": {
+            "$ref": "#/components/schemas/DeliveryPackage"
+          },
+          "deterministic_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deterministic Digest"
+          },
+          "error_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Category"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "eval_results": {
+            "items": {
+              "$ref": "#/components/schemas/AIEvalResultResponse"
+            },
+            "title": "Eval Results",
+            "type": "array"
+          },
+          "handoff_plan_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handoff Plan Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AIPlanContract"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_digest": {
+            "title": "Prompt Digest",
+            "type": "string"
+          },
+          "prompt_payload": {
+            "additionalProperties": true,
+            "title": "Prompt Payload",
+            "type": "object"
+          },
+          "prompt_template_id": {
+            "title": "Prompt Template Id",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "provider_metadata": {
+            "$ref": "#/components/schemas/ProviderCapabilityMetadata"
+          },
+          "redaction_record": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Redaction Record",
+            "type": "array"
+          },
+          "request_digest": {
+            "title": "Request Digest",
+            "type": "string"
+          },
+          "request_payload": {
+            "$ref": "#/components/schemas/AIPlanGenerationRequest"
+          },
+          "retry_count": {
+            "title": "Retry Count",
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "snapshot_fingerprint": {
+            "title": "Snapshot Fingerprint",
+            "type": "string"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AIPlanRequestStatus"
+          },
+          "traces": {
+            "items": {
+              "$ref": "#/components/schemas/AIProviderTraceResponse"
+            },
+            "title": "Traces",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "status",
+          "delivery_package",
+          "source_revision",
+          "snapshot_fingerprint",
+          "prompt_template_id",
+          "prompt_version",
+          "prompt_digest",
+          "prompt_payload",
+          "provider_id",
+          "provider_metadata",
+          "request_payload",
+          "request_digest",
+          "plan",
+          "deterministic_digest",
+          "context_manifest",
+          "context_digest",
+          "context_bytes",
+          "context_reference_count",
+          "context_excluded_count",
+          "redaction_record",
+          "retry_count",
+          "error_category",
+          "error_code",
+          "error_message",
+          "handoff_plan_id",
+          "traces",
+          "eval_results",
+          "decision",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AIPlanRequestResponse",
+        "type": "object"
+      },
+      "AIPlanRequestStatus": {
+        "enum": [
+          "requested",
+          "generating",
+          "generated",
+          "rejected",
+          "approved",
+          "failed",
+          "cancelled",
+          "stale"
+        ],
+        "title": "AIPlanRequestStatus",
+        "type": "string"
+      },
+      "AIProviderListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderCapabilityMetadata"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "AIProviderListResponse",
+        "type": "object"
+      },
+      "AIProviderTraceResponse": {
+        "properties": {
+          "ai_plan_request_id": {
+            "format": "uuid",
+            "title": "Ai Plan Request Id",
+            "type": "string"
+          },
+          "attempt_number": {
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "cost_basis": {
+            "const": "synthetic_not_billable",
+            "title": "Cost Basis",
+            "type": "string"
+          },
+          "cost_estimate_microunits": {
+            "title": "Cost Estimate Microunits",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Category"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "number"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "provider_metadata": {
+            "$ref": "#/components/schemas/ProviderCapabilityMetadata"
+          },
+          "redactions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Redactions",
+            "type": "array"
+          },
+          "request_digest": {
+            "title": "Request Digest",
+            "type": "string"
+          },
+          "response_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Digest"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": ["succeeded", "failed", "timeout", "cancelled"],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_tokens": {
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ai_plan_request_id",
+          "attempt_number",
+          "status",
+          "provider_id",
+          "provider_metadata",
+          "request_digest",
+          "response_digest",
+          "latency_ms",
+          "input_tokens",
+          "output_tokens",
+          "total_tokens",
+          "cost_estimate_microunits",
+          "cost_basis",
+          "error_category",
+          "error_code",
+          "retryable",
+          "redactions",
+          "created_at",
+          "completed_at"
+        ],
+        "title": "AIProviderTraceResponse",
+        "type": "object"
+      },
+      "AcceptanceCriterion": {
+        "additionalProperties": false,
+        "properties": {
+          "criterion_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Criterion Id",
+            "type": "string"
+          },
+          "statement": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          },
+          "validation_suite_ids": {
+            "items": {
+              "maxLength": 120,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Validation Suite Ids",
+            "type": "array"
+          }
+        },
+        "required": ["criterion_id", "statement", "validation_suite_ids"],
+        "title": "AcceptanceCriterion",
+        "type": "object"
+      },
       "ActiveJobSummary": {
         "properties": {
           "id": {
@@ -142,6 +996,66 @@
           "created_at"
         ],
         "title": "AuditEventResponse",
+        "type": "object"
+      },
+      "AuthorityBoundary": {
+        "additionalProperties": false,
+        "properties": {
+          "delivery_authorization_issued": {
+            "const": false,
+            "default": false,
+            "title": "Delivery Authorization Issued",
+            "type": "boolean"
+          },
+          "execution_grant_issued": {
+            "const": false,
+            "default": false,
+            "title": "Execution Grant Issued",
+            "type": "boolean"
+          },
+          "git_or_deployment_authority": {
+            "const": false,
+            "default": false,
+            "title": "Git Or Deployment Authority",
+            "type": "boolean"
+          },
+          "provider_can_approve": {
+            "const": false,
+            "default": false,
+            "title": "Provider Can Approve",
+            "type": "boolean"
+          },
+          "review_approval_issued": {
+            "const": false,
+            "default": false,
+            "title": "Review Approval Issued",
+            "type": "boolean"
+          }
+        },
+        "title": "AuthorityBoundary",
+        "type": "object"
+      },
+      "BrowserValidation": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "enum": ["responsive", "accessibility", "visual_review"],
+            "title": "Check",
+            "type": "string"
+          },
+          "kind": {
+            "const": "browser_check",
+            "title": "Kind",
+            "type": "string"
+          },
+          "viewport": {
+            "enum": ["desktop", "narrow", "both"],
+            "title": "Viewport",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "check", "viewport"],
+        "title": "BrowserValidation",
         "type": "object"
       },
       "BrowserValidationStep": {
@@ -330,6 +1244,104 @@
         },
         "required": ["runner_id", "attempt_id", "lease_id", "result"],
         "title": "CompleteRequest",
+        "type": "object"
+      },
+      "ContextBudget": {
+        "additionalProperties": false,
+        "properties": {
+          "max_context_bytes": {
+            "maximum": 262144.0,
+            "minimum": 1024.0,
+            "title": "Max Context Bytes",
+            "type": "integer"
+          },
+          "max_references": {
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Max References",
+            "type": "integer"
+          }
+        },
+        "required": ["max_context_bytes", "max_references"],
+        "title": "ContextBudget",
+        "type": "object"
+      },
+      "ContextManifestEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "content_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "kind": {
+            "enum": [
+              "repository_revision",
+              "language",
+              "framework",
+              "package_manager",
+              "repository_file",
+              "repository_instruction",
+              "test_surface",
+              "design_system_signal",
+              "available_validation"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "provenance": {
+            "enum": [
+              "committed_head_structured_extraction",
+              "git_head_manifest"
+            ],
+            "title": "Provenance",
+            "type": "string"
+          },
+          "reference_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Reference Id",
+            "type": "string"
+          },
+          "relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Path"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference_id",
+          "kind",
+          "summary",
+          "provenance",
+          "source_revision"
+        ],
+        "title": "ContextManifestEntry",
         "type": "object"
       },
       "ControlledWaitJobSpec": {
@@ -2313,6 +3325,35 @@
         "title": "ExecutionGrantStatus",
         "type": "string"
       },
+      "ExpectedChange": {
+        "additionalProperties": false,
+        "properties": {
+          "change_type": {
+            "enum": ["create", "modify"],
+            "title": "Change Type",
+            "type": "string"
+          },
+          "component": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Component",
+            "type": "string"
+          },
+          "rationale": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          }
+        },
+        "required": ["relative_path", "component", "change_type", "rationale"],
+        "title": "ExpectedChange",
+        "type": "object"
+      },
       "FailRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2935,6 +3976,26 @@
         "title": "LocalDeliveryResponse",
         "type": "object"
       },
+      "MakeTargetValidation": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "make_target",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "target"],
+        "title": "MakeTargetValidation",
+        "type": "object"
+      },
       "MakeTargetValidationStep": {
         "additionalProperties": false,
         "properties": {
@@ -2958,6 +4019,32 @@
         "enum": ["control_plane_only"],
         "title": "NetworkPolicy",
         "type": "string"
+      },
+      "PackageScriptValidation": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "package_script",
+            "title": "Kind",
+            "type": "string"
+          },
+          "script": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Script",
+            "type": "string"
+          },
+          "workspace": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Workspace",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "workspace", "script"],
+        "title": "PackageScriptValidation",
+        "type": "object"
       },
       "PackageScriptValidationStep": {
         "additionalProperties": false,
@@ -3332,7 +4419,7 @@
             "type": "string"
           },
           "source": {
-            "const": "deterministic_policy",
+            "enum": ["deterministic_policy", "governed_ai"],
             "title": "Source",
             "type": "string"
           },
@@ -3533,6 +4620,38 @@
         "title": "PlanRevisionCreate",
         "type": "object"
       },
+      "PlanRisk": {
+        "additionalProperties": false,
+        "properties": {
+          "mitigation": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Mitigation",
+            "type": "string"
+          },
+          "risk_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Risk Id",
+            "type": "string"
+          },
+          "severity": {
+            "enum": ["low", "medium", "high"],
+            "title": "Severity",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": ["risk_id", "severity", "summary", "mitigation"],
+        "title": "PlanRisk",
+        "type": "object"
+      },
       "PlanStatus": {
         "enum": [
           "draft",
@@ -3595,6 +4714,116 @@
           "progress_percent"
         ],
         "title": "ProgressEventRequest",
+        "type": "object"
+      },
+      "PromptBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Digest",
+            "type": "string"
+          },
+          "template_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Template Id",
+            "type": "string"
+          },
+          "version": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": ["template_id", "version", "digest"],
+        "title": "PromptBinding",
+        "type": "object"
+      },
+      "ProviderCapabilityMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "billing_basis": {
+            "const": "synthetic_not_billable",
+            "title": "Billing Basis",
+            "type": "string"
+          },
+          "credentials_required": {
+            "const": false,
+            "title": "Credentials Required",
+            "type": "boolean"
+          },
+          "deterministic": {
+            "const": true,
+            "title": "Deterministic",
+            "type": "boolean"
+          },
+          "fixture_replay": {
+            "const": true,
+            "title": "Fixture Replay",
+            "type": "boolean"
+          },
+          "implementation_version": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Implementation Version",
+            "type": "string"
+          },
+          "max_context_bytes": {
+            "maximum": 262144.0,
+            "minimum": 1024.0,
+            "title": "Max Context Bytes",
+            "type": "integer"
+          },
+          "max_output_bytes": {
+            "maximum": 262144.0,
+            "minimum": 1024.0,
+            "title": "Max Output Bytes",
+            "type": "integer"
+          },
+          "model_label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Model Label",
+            "type": "string"
+          },
+          "network_access": {
+            "const": false,
+            "title": "Network Access",
+            "type": "boolean"
+          },
+          "provider_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "structured_output": {
+            "const": true,
+            "title": "Structured Output",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider_id",
+          "implementation_version",
+          "model_label",
+          "deterministic",
+          "fixture_replay",
+          "structured_output",
+          "network_access",
+          "credentials_required",
+          "billing_basis",
+          "max_context_bytes",
+          "max_output_bytes"
+        ],
+        "title": "ProviderCapabilityMetadata",
         "type": "object"
       },
       "RegisterRequest": {
@@ -3827,6 +5056,165 @@
         "enum": ["none", "isolated_workspace"],
         "title": "RepositoryAccess",
         "type": "string"
+      },
+      "RepositoryBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "scan_policy_version": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Scan Policy Version",
+            "type": "string"
+          },
+          "scanner_version": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Scanner Version",
+            "type": "string"
+          },
+          "snapshot_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshot Fingerprint",
+            "type": "string"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_revision",
+          "snapshot_fingerprint",
+          "scanner_version",
+          "scan_policy_version"
+        ],
+        "title": "RepositoryBinding",
+        "type": "object"
+      },
+      "RepositoryFacts": {
+        "additionalProperties": false,
+        "properties": {
+          "frameworks": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Frameworks",
+            "type": "array"
+          },
+          "languages": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Languages",
+            "type": "array"
+          },
+          "package_manager": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Manager"
+          },
+          "repository_is_dirty": {
+            "default": false,
+            "title": "Repository Is Dirty",
+            "type": "boolean"
+          },
+          "safety_finding_rule_counts": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9._-]*$": {
+                "type": "integer"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 120,
+              "minLength": 1
+            },
+            "title": "Safety Finding Rule Counts",
+            "type": "object"
+          },
+          "selected_file_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Selected File Count",
+            "type": "integer"
+          },
+          "skipped_file_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Skipped File Count",
+            "type": "integer"
+          },
+          "tracked_file_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Tracked File Count",
+            "type": "integer"
+          }
+        },
+        "title": "RepositoryFacts",
+        "type": "object"
+      },
+      "RepositoryFinding": {
+        "additionalProperties": false,
+        "properties": {
+          "context_reference_ids": {
+            "items": {
+              "maxLength": 120,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Context Reference Ids",
+            "type": "array"
+          },
+          "finding_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "repository_revision",
+              "language",
+              "framework",
+              "package_manager",
+              "test_surface",
+              "design_system_signal",
+              "instruction_risk"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": ["finding_id", "kind", "summary", "context_reference_ids"],
+        "title": "RepositoryFinding",
+        "type": "object"
       },
       "RepositoryHandleListResponse": {
         "properties": {
@@ -4104,6 +5492,24 @@
           "last_verified_at"
         ],
         "title": "RepositoryRegistrationResponse",
+        "type": "object"
+      },
+      "RepositoryStatusValidation": {
+        "additionalProperties": false,
+        "properties": {
+          "expected": {
+            "const": "approved_scope_only",
+            "title": "Expected",
+            "type": "string"
+          },
+          "kind": {
+            "const": "repository_status_check",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "expected"],
+        "title": "RepositoryStatusValidation",
         "type": "object"
       },
       "RepositoryStatusValidationStep": {
@@ -7315,6 +8721,89 @@
         "title": "ValidationSuiteListResponse",
         "type": "object"
       },
+      "ValidationSuiteOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "validation_suite_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "suite_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Suite Id",
+            "type": "string"
+          },
+          "suite_version": {
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Suite Version",
+            "type": "integer"
+          }
+        },
+        "required": ["kind", "suite_id", "suite_version"],
+        "title": "ValidationSuiteOperation",
+        "type": "object"
+      },
+      "ValidationSuiteProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "browser_check": "#/components/schemas/BrowserValidation",
+                  "make_target": "#/components/schemas/MakeTargetValidation",
+                  "package_script": "#/components/schemas/PackageScriptValidation",
+                  "repository_status_check": "#/components/schemas/RepositoryStatusValidation"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/PackageScriptValidation"
+                },
+                {
+                  "$ref": "#/components/schemas/MakeTargetValidation"
+                },
+                {
+                  "$ref": "#/components/schemas/BrowserValidation"
+                },
+                {
+                  "$ref": "#/components/schemas/RepositoryStatusValidation"
+                }
+              ]
+            },
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Checks",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "required": {
+            "const": true,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "suite_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Suite Id",
+            "type": "string"
+          }
+        },
+        "required": ["suite_id", "name", "required", "checks"],
+        "title": "ValidationSuiteProposal",
+        "type": "object"
+      },
       "ValidationSuiteResponse": {
         "properties": {
           "artifact_content_transfer": {
@@ -9599,6 +11088,62 @@
         "title": "WorkspaceStatusResult",
         "type": "object"
       },
+      "WorkspaceTextCreateOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "intent": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Intent",
+            "type": "string"
+          },
+          "kind": {
+            "const": "workspace_text_create_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "relative_path", "intent"],
+        "title": "WorkspaceTextCreateOperation",
+        "type": "object"
+      },
+      "WorkspaceTextReplaceOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_content_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Content Sha256",
+            "type": "string"
+          },
+          "intent": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Intent",
+            "type": "string"
+          },
+          "kind": {
+            "const": "workspace_text_replace_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "relative_path",
+          "intent",
+          "expected_content_sha256"
+        ],
+        "title": "WorkspaceTextReplaceOperation",
+        "type": "object"
+      },
       "WorkspaceWriteMode": {
         "enum": ["create", "replace"],
         "title": "WorkspaceWriteMode",
@@ -9786,12 +11331,295 @@
     }
   },
   "info": {
-    "description": "Phase 6 Control Plane API for governed planning, isolated fixture workspaces, fixed-profile Validation, immutable Review, and separately authorized local fixture delivery. Review approval alone never authorizes a Git operation.",
+    "description": "Phase 7 Control Plane API for governed deterministic Provider planning, isolated fixture workspaces, fixed-profile Validation, immutable Review, and separately authorized local fixture delivery. Plan approval never issues an Execution Grant, Review Approval, Delivery Authorization, or Git authority.",
     "title": "VisualEngineer API",
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/ai-plan-requests/{ai_plan_request_id}": {
+      "get": {
+        "operationId": "get_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ai_plan_request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Ai Plan Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIPlanRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Get structured Plan, Prompt, context, Trace, Eval, and decision evidence",
+        "tags": ["governed AI planning"]
+      }
+    },
+    "/api/v1/ai-plan-requests/{ai_plan_request_id}/cancel": {
+      "post": {
+        "operationId": "cancel_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ai_plan_request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Ai Plan Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIPlanRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Cancel a non-terminal governed AI Plan request",
+        "tags": ["governed AI planning"]
+      }
+    },
+    "/api/v1/ai-plan-requests/{ai_plan_request_id}/decisions": {
+      "post": {
+        "operationId": "decide_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ai_plan_request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Ai Plan Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIPlanDecisionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIPlanDecisionResponse"
+                }
+              }
+            },
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIPlanDecisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Approve or reject a fresh evaluated AI Plan without issuing authority",
+        "tags": ["governed AI planning"]
+      }
+    },
+    "/api/v1/ai-plan-requests/{ai_plan_request_id}/freshness": {
+      "post": {
+        "operationId": "refresh_ai_plan_freshness_api_v1_ai_plan_requests__ai_plan_request_id__freshness_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ai_plan_request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Ai Plan Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIPlanRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Revalidate exact repository revision and fence a stale AI Plan",
+        "tags": ["governed AI planning"]
+      }
+    },
+    "/api/v1/ai-providers": {
+      "get": {
+        "operationId": "list_ai_providers_api_v1_ai_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIProviderListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List installed model-neutral planning Provider capabilities",
+        "tags": ["governed AI planning"]
+      }
+    },
     "/api/v1/delivery-authorizations": {
       "get": {
         "operationId": "list_delivery_authorizations_api_v1_delivery_authorizations_get",
@@ -12907,6 +14735,157 @@
         },
         "summary": "Get a durable Run",
         "tags": ["repository intelligence"]
+      }
+    },
+    "/api/v1/runs/{run_id}/ai-plan-requests": {
+      "get": {
+        "operationId": "list_ai_plan_requests_api_v1_runs__run_id__ai_plan_requests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIPlanRequestListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "List governed AI Plan requests for a Run",
+        "tags": ["governed AI planning"]
+      },
+      "post": {
+        "operationId": "create_ai_plan_request_api_v1_runs__run_id__ai_plan_requests_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIPlanRequestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIPlanRequestResponse"
+                }
+              }
+            },
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIPlanRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Generate and independently evaluate one governed deterministic AI Plan",
+        "tags": ["governed AI planning"]
       }
     },
     "/api/v1/runs/{run_id}/audit-events": {

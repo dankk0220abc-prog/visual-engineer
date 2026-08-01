@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from starlette.responses import Response
 
+from visual_engineer_api.api.ai_planning import router as ai_planning_router
 from visual_engineer_api.api.deliveries import router as deliveries_router
 from visual_engineer_api.api.health import router as health_router
 from visual_engineer_api.api.reviews import router as reviews_router
@@ -96,11 +97,12 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="VisualEngineer API",
-        version="0.6.0",
+        version="0.7.0",
         description=(
-            "Phase 6 Control Plane API for governed planning, isolated fixture workspaces, "
-            "fixed-profile Validation, immutable Review, and separately authorized local "
-            "fixture delivery. Review approval alone never authorizes a Git operation."
+            "Phase 7 Control Plane API for governed deterministic Provider planning, "
+            "isolated fixture workspaces, fixed-profile Validation, immutable Review, and "
+            "separately authorized local fixture delivery. Plan approval never issues an "
+            "Execution Grant, Review Approval, Delivery Authorization, or Git authority."
         ),
         lifespan=lifespan,
     )
@@ -213,6 +215,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(ai_planning_router)
     app.include_router(deliveries_router)
     app.include_router(tasks_router)
     app.include_router(runs_router)

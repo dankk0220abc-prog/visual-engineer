@@ -29,6 +29,31 @@ stateDiagram-v2
 `approved`, `rejected`, `failed`, and `cancelled` are terminal in Phase 2.
 There is intentionally no `executing` transition.
 
+## Phase 7 governed AI Plan request lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> requested
+    requested --> generating: persist exact Prompt/context/request binding
+    generating --> generated: schema + digest + all system Eval pass
+    generating --> failed: Provider, schema, or Eval failure
+    requested --> cancelled: explicit cancellation
+    generating --> cancelled: cancellation token wins
+    generated --> cancelled: human cancels before decision
+    generated --> stale: revision or Snapshot drift
+    generated --> approved: fresh one-winner human approval
+    generated --> rejected: reasoned one-winner human rejection
+```
+
+`approved`, `rejected`, `failed`, `cancelled`, and `stale` are terminal. The
+request binds one exact source revision, Snapshot fingerprint, Prompt digest,
+context digest, Provider capability record, request digest, and deterministic
+response digest. Replay is keyed and exact. Approval row-locks the request,
+revalidates freshness and all mandatory system Eval rows, and creates only one
+existing `Plan` handoff plus human decisions. It never creates an Execution
+Grant, Workspace, Review Approval, Delivery Authorization, Job, Permit, Git
+effect, or deployment.
+
 ## Phase 6 Delivery Authorization lifecycle
 
 ```mermaid
@@ -115,8 +140,8 @@ awaiting Plan may be decided. An approved Run cannot create another version.
 - `permission_level` is always `read_only`.
 - `snapshot_mode` is always `git_head`.
 - One successful immutable Snapshot exists at most once per Run.
-- Every Plan binds that Snapshot fingerprint and has
-  `source = deterministic_policy`.
+- Every Plan binds that Snapshot fingerprint and has source
+  `deterministic_policy` or `governed_ai`.
 - `execution_available` is always false at both API and database boundaries.
 - Rejection requires a non-blank reason.
 - Every material transition appends a sanitized AuditEvent with request ID.

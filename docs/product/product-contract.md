@@ -4,8 +4,8 @@
 
 VisualEngineer is a governed AI design-engineering and delivery system for
 enterprise frontend teams. Its V1 destination is a human-controlled path from
-a bounded frontend request to an evidence-backed change. The current Phase 6
-product still stops at one synthetic fixture: after governed planning,
+a bounded frontend request to an evidence-backed change. The Phase 7 first
+slice still stops at one synthetic fixture: after governed planning,
 isolated implementation, fixed validation, and immutable final review, a
 separate local-user decision can authorize exactly one system-derived local
 branch and commit inside the Runner-owned Workspace. It cannot execute
@@ -57,7 +57,7 @@ There is no executable Deployment Pack runtime. Repository content can narrow
 future work but cannot elevate permission, expand a Runner Envelope, or bypass
 approval.
 
-## Implemented through the Phase 6 second vertical slice
+## Implemented through the Phase 7 first vertical-slice candidate
 
 The current product provides:
 
@@ -72,6 +72,20 @@ The current product provides:
 - deny-by-name and deny-by-content handling for sensitive material;
 - symlink, submodule, LFS, binary, and dependency-tree non-execution controls;
 - prompt-injection provenance as `untrusted_repository_content`;
+- a model-neutral planning Provider interface with explicit deterministic,
+  structured-output, replay, network, credential, context, output, and billing
+  capability metadata;
+- one deterministic fake Provider with timeout, cancellation, bounded retry,
+  stable error classification, and exact fixture replay;
+- a closed typed AI Plan request/response contract, versioned Prompt/digest,
+  redacted bounded context manifest, immutable Trace and system-owned Eval
+  evidence, synthetic usage/cost metadata, and deterministic digest;
+- a revision- and Snapshot-bound `requested -> generating -> generated`
+  lifecycle with failed/cancelled/stale terminals and one human approve/reject
+  winner;
+- approved AI Plan handoff to an existing `Plan` with
+  `execution_available = false`, without creating an Execution Grant, Review
+  Approval, Delivery Authorization, Workspace, Git effect, or deployment;
 - deterministic, fingerprint-bound plan generation with typed display-only
   validation steps;
 - human-editable plan revisions within a bounded field allowlist;
@@ -118,8 +132,9 @@ The current product provides:
 - one deterministic fixture-only local ref/commit with Runner-recomputed
   manifest, Permit fencing, attributable proof, and source/remote invariance.
 
-The plan source is always `deterministic_policy`, and
-`execution_available` is always `false`.
+The Plan source is `deterministic_policy` or the independently evaluated and
+human-approved `governed_ai` provenance. `execution_available` remains always
+`false`.
 
 ## Customer 0
 
@@ -134,18 +149,20 @@ CreativeDeploy is not an external enterprise customer. This case provides no
 adoption, time-saving, quality-improvement, financial, production-usage, or
 production-deployment evidence.
 
-## Intended V1 beyond the current Phase 6 second slice
+## Intended V1 beyond the Phase 7 first slice
 
 V1 is not complete until a separately authorized system can:
 
 - safely extend a separately authorized workspace beyond the synthetic fixture;
+- invoke a separately authorized real Provider with credential isolation,
+  network policy, production observability, and model-specific validation;
 - execute separately approved closed validation commands without a shell;
 - show attributable tool and browser-validation evidence;
 - obtain a distinct remote Git authorization beyond the current local-only
   Delivery Authorization; and
 - perform an explicitly allowed push or pull-request action.
 
-These are future requirements, not second-slice Phase 6 capabilities. The
+These are future requirements, not Phase 7 first-slice capabilities. The
 Review Package/Decision/Readiness workflow still never grants Git or
 deployment authority; only the separate Delivery Authorization plus exact
 manifest confirmation grants one local fixture commit lifecycle.
@@ -163,16 +180,18 @@ manifest confirmation grants one local fixture commit lifecycle.
   trips, adversarial fixtures, and real browser flows.
 - **Usability:** explicit state and permission labels, actionable conflicts,
   responsive layout, keyboard operation, visible focus, and accessible names.
-- **Cost control:** deterministic preprocessing, bounded file selection, and no
-  LLM for programmatically decidable work.
+- **Cost control:** deterministic preprocessing, bounded context selection,
+  synthetic non-billable fixture accounting, and no real model call in this
+  slice.
 
 ## Outcome metrics and non-claims
 
 Future deployments may measure time to pull request, verification pass rate,
 interventions, rollback success, accessibility findings, cost, acceptance, and
-adoption. Phase 6 has no production baseline or outcome metric.
+adoption. Phase 7 has no production baseline, real Provider bill, or outcome
+metric.
 
-The repository does not demonstrate an LLM/Agents SDK runtime, production
+The repository does not demonstrate a real model/Agents SDK runtime, production
 security, multi-user isolation, real customer-repository execution,
 CreativeDeploy writes, target command/test execution, Git/pull-request
 remote delivery, remote CI success, automatic repair, external-customer adoption, or

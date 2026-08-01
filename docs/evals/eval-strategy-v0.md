@@ -3,9 +3,10 @@
 ## Purpose
 
 Evaluation asks whether VisualEngineer is correct, safe, governed, and
-reproducible, not whether it emits plausible text. Phase 4 has no LLM,
-production dataset, Agent score, or leaderboard. Plan generation and all
-current eval expectations are deterministic.
+reproducible, not whether it emits plausible text. Phase 7 uses only a
+deterministic fake Provider: there is no real model, production dataset, Agent
+score, or leaderboard. All current Eval expectations are deterministic and
+system-owned.
 
 ## Layers
 
@@ -33,6 +34,10 @@ current eval expectations are deterministic.
 11. **Validation Suites:** immutable catalog/order, step injection denial,
     serial child fencing, cancellation/timeout/retry races, exact aggregate
     budgets, Evidence reuse/aggregation, cleanup, and invariance.
+12. **Governed AI planning:** strict schema/digest, context references and
+    budgets, repository-fact grounding, typed-operation allowlist, leakage,
+    freshness, deterministic replay, malicious requirements, and approval
+    boundary separation.
 
 ## Versioned datasets
 
@@ -79,6 +84,14 @@ partial failure and fresh-Grant retry, successful-Evidence reuse without
 recharge, cancellation and completion race, Suite timeout cleanup, child
 timeout/recovery fail-fast, and exact/+1 combined output. The dataset stores
 expected behavior only and every case maps to a current executable test.
+
+`evals/datasets/governed-ai-planning-v0.1.jsonl` maps eleven deterministic
+cases: schema validity, unsupported file reference, hallucinated repository
+fact, forbidden operation, secret/context leakage, over-budget context,
+missing acceptance criteria, stale revision, deterministic replay, malicious
+requirement/prompt injection, and approval-boundary bypass. Each maps to an
+executable test; Eval output comes from trusted system policy, not the fake
+Provider.
 
 ## Failure taxonomy
 
@@ -157,9 +170,9 @@ canonical/source invariance, project-filtered zero residue, and a final
 `make verify`. Passing implementer checks does not declare the independent
 focused Security Gate.
 
-## Future model evaluation
+## Future real-model evaluation
 
-Only after an LLM is deliberately introduced should evaluation add held-out
+Only after a real model is separately authorized should evaluation add held-out
 repositories, instruction-following and unsupported-claim measures, token/
 latency/cost, blinded expert review, design fidelity, bounded repair, rollback,
 and approval-to-PR metrics. Results must include evaluator and dataset version,

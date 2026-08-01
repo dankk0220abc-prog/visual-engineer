@@ -1,3 +1,9 @@
+from visual_engineer_api.models.ai_planning import (
+    AIEvalResult,
+    AIPlanDecision,
+    AIPlanRequest,
+    AIProviderTrace,
+)
 from visual_engineer_api.models.delivery import (
     DeliveryAuthorization,
     DeliveryAuthorizationDecision,
@@ -46,6 +52,10 @@ from visual_engineer_api.models.workspace import (
 )
 
 __all__ = [
+    "AIEvalResult",
+    "AIPlanDecision",
+    "AIPlanRequest",
+    "AIProviderTrace",
     "ApprovalDecision",
     "AuditEvent",
     "DeliveryAuthorization",

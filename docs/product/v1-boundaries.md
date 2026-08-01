@@ -7,7 +7,7 @@ and Frontend Quality Remediation work for governed frontend teams. V1 is not a
 promise of arbitrary language, repository, backend, infrastructure, or general
 software-engineering support.
 
-## Implemented Foundation through Phase 6 Second Vertical Slice
+## Implemented Foundation through the Phase 7 first-slice candidate
 
 - Task create/list/detail with bounded validation and idempotency.
 - Level 0 `read_only` Run creation and durable state.
@@ -18,6 +18,15 @@ software-engineering support.
 - Bounded selected-file facts, sensitive-file denial, and dirty/untracked path
   metadata without working-tree content reads.
 - Stable Snapshot fingerprint from normalized committed inputs.
+- Model-neutral deterministic Provider protocol and capability metadata with
+  no network, credential, SDK, or billable call.
+- Versioned Prompt registry, redacted structured request, bounded context
+  manifest, immutable attempt Trace, synthetic usage/cost, and eleven
+  system-owned deterministic Eval results.
+- Strict typed AI Plan response, exact digest/replay, revision freshness,
+  terminal state presentation, and one-winner human approve/reject handoff.
+- AI Plan approval creates only an approved existing Plan record; it creates
+  no Execution Grant, Review Approval, Delivery Authorization, or effect.
 - `deterministic_policy` plan generation with no LLM.
 - Typed display-only validation steps and `execution_available = false`.
 - Editable plan revision, latest-plan submission, rejection reason,
@@ -69,8 +78,8 @@ software-engineering support.
 
 These remain deliberate future seams, not placeholder capabilities:
 
-- an LLM/Agents SDK planning runtime;
-- model invocation and model-specific evaluation;
+- a real-model/Agents SDK planning runtime;
+- network model invocation, API-key isolation, and model-specific evaluation;
 - non-fixture isolated workspaces;
 - controlled target-repository install/build/test/lint/browser commands;
 - remote Git authorization, push, and pull request;
@@ -90,9 +99,9 @@ for future typed tool schemas and runtime authorization.
   recovery.
 - Broader source-control providers and governed release workflows.
 
-## Explicitly out of scope in the Phase 6 second slice
+## Explicitly out of scope in the Phase 7 first slice
 
-- Any LLM API or OpenAI Agents SDK.
+- Any real model API/SDK, Provider network call, API key, or real bill.
 - Generic shell or target-repository command execution.
 - Reading dirty, untracked, sensitive, or symlink-target file content from the
   working tree.
@@ -110,8 +119,8 @@ for future typed tool schemas and runtime authorization.
 ## Boundary test
 
 If a proposed change requires a real repository, source write, target command,
-credential, LLM, remote integration, remote Git, or an effect caused by Plan
-or Review approval alone, it is outside this Phase 6 slice. Each requires a
+credential, real model, remote integration, remote Git, or an effect caused by
+Plan or Review approval alone, it is outside this Phase 7 slice. Each requires a
 new reviewed milestone and explicit authority. The fixture's implementation
 Grant, validation Grant, Review Decision, and opaque handle cannot be reused
 to authorize it.

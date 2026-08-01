@@ -8,6 +8,7 @@ RUNNER_DATASET = "runner-protocol-v0.1.jsonl"
 WORKSPACE_DATASET = "workspace-tools-v0.1.jsonl"
 VALIDATION_SUITE_DATASET = "validation-suites-v0.1.jsonl"
 REVIEW_READINESS_DATASET = "review-readiness-v0.1.jsonl"
+GOVERNED_AI_DATASET = "governed-ai-planning-v0.1.jsonl"
 RUNNER_FAILURE_CATEGORIES = {
     "authentication",
     "concurrency",
@@ -53,6 +54,19 @@ REVIEW_READINESS_FAILURE_CATEGORIES = {
     "idempotency",
     "immutability",
     "none",
+    "stale",
+}
+GOVERNED_AI_FAILURE_CATEGORIES = {
+    "acceptance",
+    "approval",
+    "budget",
+    "grounding",
+    "injection",
+    "operation",
+    "reference",
+    "replay",
+    "schema",
+    "secret",
     "stale",
 }
 
@@ -148,6 +162,15 @@ def main() -> None:
                     dataset_version="review-readiness-v0.1",
                     failure_categories=REVIEW_READINESS_FAILURE_CATEGORIES,
                     label="Review Readiness",
+                )
+            elif dataset.name == GOVERNED_AI_DATASET:
+                validate_mapped_case(
+                    dataset,
+                    line_number,
+                    value,
+                    dataset_version="governed-ai-planning-v0.1",
+                    failure_categories=GOVERNED_AI_FAILURE_CATEGORIES,
+                    label="Governed AI Planning",
                 )
             if "case_id" in value:
                 required = {"case_id", "category", "input", "expected"}
