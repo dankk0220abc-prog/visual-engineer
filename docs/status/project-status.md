@@ -2,19 +2,23 @@
 
 - Phase: Phase 6 Second Vertical Slice — Governed Local Delivery Lifecycle
 - Overall status:
-  `PHASE_6_SECOND_SLICE_IMPLEMENTATION_COMPLETE_READY_FOR_INDEPENDENT_FOCUSED_REVIEW`
-- Governance qualifier: IMPLEMENTER CANDIDATE ONLY; NOT INDEPENDENT PASS,
-  SEALING, MAIN INTEGRATION, REMOTE DELIVERY, OR THIRD-SLICE AUTHORIZATION
+  `PHASE_6_SECOND_SLICE_FINAL_GATE_PASS_SEALED_AWAITING_EXPLICIT_USER_AUTHORIZATION_FOR_LOCAL_FAST_FORWARD_MAIN`
+- Governance qualifier: INDEPENDENT CANCEL-MUTATION FINDING PASS AND LOCAL
+  SEALING ONLY; `main` NOT MOVED; NO REMOTE DELIVERY OR THIRD-SLICE
+  AUTHORIZATION
 - Last updated: 2026-08-01
-- Current main / Phase 6 Second Slice base:
+- Current local `main`:
   `79fa63f5d911a9e13ad388f270fdd18bf9084d22`
-- Implementation branch:
-  `feat/phase-6-governed-local-delivery-lifecycle`
-- Implementation candidate: reported in the post-commit handoff
-- Active plan:
-  [`docs/exec-plans/phase-6-governed-local-delivery-lifecycle.md`](../exec-plans/phase-6-governed-local-delivery-lifecycle.md)
-- Evidence:
-  [`docs/evidence/phase-6-governed-local-delivery-lifecycle-verification.md`](../evidence/phase-6-governed-local-delivery-lifecycle-verification.md)
+- Independently reviewed candidate:
+  `fd132832b394927b7d00c188a895bf7b5b5e6ce4`
+- Final independent branch:
+  `codex/audit-phase-6-second-slice-cancel-mutation-final-rereview`
+- Final independent plan:
+  [`docs/exec-plans/phase-6-second-slice-cancel-mutation-final-rereview.md`](../exec-plans/phase-6-second-slice-cancel-mutation-final-rereview.md)
+- Final independent evidence:
+  [`docs/evidence/phase-6-second-slice-cancel-mutation-final-rereview-verification.md`](../evidence/phase-6-second-slice-cancel-mutation-final-rereview-verification.md)
+- Sealing subject: `chore: seal phase 6 governed delivery lifecycle`
+- Sealing hash: reported in the post-commit handoff
 - ADR:
   [`ADR 0020`](../adr/0020-governed-local-delivery-lifecycle.md)
 - Operator runbook:
@@ -29,22 +33,26 @@
 - Explicit denials: source-repository write, arbitrary/user-supplied Git,
   remote, push, PR, tag, deploy, real repositories, CreativeDeploy, Customer
   0, credentials, LLM/Agents SDK/Provider, authentication, and multi-tenancy.
-- Focused verification: Runner/Protocol `110`, final PostgreSQL lifecycle `10`,
-  Web `55`, focused real Chromium `1` twice,
-  migration roundtrip, contracts, format, lint, typecheck, Docker build,
-  desktop/narrow manual browser evidence, zero browser console errors, source
-  invariance, and task-owned Docker cleanup pass.
-- Aggregate: exactly one `make verify` recorded `309 passed` and stopped on one
-  unchanged Phase 5 same-key Suite concurrency deadlock, exit `2`; the exact
-  test passed `1/1` in an isolated real-PostgreSQL rerun. No Phase 5 code or
-  authority changed and the aggregate was not repeated.
+- Final focused verification: Runner cancel-first `1`, PostgreSQL arbitration
+  `4`, Phase 6 lifecycle `10`, related PostgreSQL lifecycle `11`,
+  Runner/Protocol/real Git `12`, related Security `10`, static security,
+  format, lint, typecheck, source invariance, and diff checks pass.
+- Aggregate: exactly one final-gate `make verify` passes exit `0`: Python
+  `317`, Web `55`, Playwright `16`, Security/repair/Workspace/Runner/Review
+  gates, migration, build, Eval, source invariance, Workspace Chaos, and final
+  diff check all pass.
+- Known Phase 5 same-key deadlock did not appear; no candidate/main comparator,
+  aggregate retry, timeout/retry/lock change, or Phase 5 edit occurred.
+- Docker cleanup: task-owned test-db/E2E/Chaos containers, networks, volumes,
+  and five exact aggregate-created image tags are zero; pre-existing services
+  remained running.
+- Auditor modified no production code, generated files, migrations, or tests.
 - First-slice independent review, sealing, and local-main integration remain
   preserved historical facts and were not reopened.
-- Next action: independent focused review of manifest integrity, dispatch
-  concurrency/idempotency, retry lineage/budget, revocation fencing,
-  deterministic ref replay, source invariance, and zero-remote proof.
+- Next action: only an explicit user authorization may permit a local pure
+  fast-forward of `main` to the final sealing commit.
 
-`PHASE 6 SECOND SLICE IMPLEMENTATION COMPLETE — READY FOR INDEPENDENT FOCUSED REVIEW`
+`PHASE 6 SECOND SLICE FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
 
 ## Preserved Phase 5 completion
 
