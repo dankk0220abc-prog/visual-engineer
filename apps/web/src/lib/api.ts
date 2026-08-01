@@ -184,6 +184,26 @@ type ReleaseReadinessOperation = OperationAt<
   "/api/v1/review-packages/{package_id}/readiness",
   "post"
 >;
+type DeliveryAuthorizationListOperation = OperationAt<
+  "/api/v1/delivery-authorizations",
+  "get"
+>;
+type DeliveryAuthorizationCreateOperation = OperationAt<
+  "/api/v1/delivery-authorizations",
+  "post"
+>;
+type DeliveryAuthorizationDetailOperation = OperationAt<
+  "/api/v1/delivery-authorizations/{authorization_id}",
+  "get"
+>;
+type DeliveryAuthorizationDecisionOperation = OperationAt<
+  "/api/v1/delivery-authorizations/{authorization_id}/decisions",
+  "post"
+>;
+type DeliveryAuthorizationDispatchOperation = OperationAt<
+  "/api/v1/delivery-authorizations/{authorization_id}/dispatch",
+  "post"
+>;
 
 export type Task = JsonResponse<TaskDetailOperation, 200>;
 export type CreateTaskInput = JsonRequest<TaskCreateOperation>;
@@ -285,6 +305,18 @@ export type ReviewPackage = JsonResponse<ReviewPackageDetailOperation, 200>;
 export type CreateReviewPackageInput =
   JsonRequest<ReviewPackageCreateOperation>;
 export type ReviewDecisionInput = JsonRequest<ReviewDecisionOperation>;
+type DeliveryAuthorizationListPayload = JsonResponse<
+  DeliveryAuthorizationListOperation,
+  200
+>;
+export type DeliveryAuthorization = JsonResponse<
+  DeliveryAuthorizationDetailOperation,
+  200
+>;
+export type CreateDeliveryAuthorizationInput =
+  JsonRequest<DeliveryAuthorizationCreateOperation>;
+export type DeliveryAuthorizationDecisionInput =
+  JsonRequest<DeliveryAuthorizationDecisionOperation>;
 
 export type HealthCheck = "live" | "ready";
 export type RepositoryKind = CreateTaskInput extends {
@@ -1065,6 +1097,71 @@ export async function evaluateReleaseReadiness(
 ): Promise<ReviewPackage> {
   const { data } = await request<JsonResponse<ReleaseReadinessOperation, 200>>(
     `/api/v1/review-packages/${encodeURIComponent(packageId)}/readiness`,
+    {
+      method: "POST",
+      headers: { "X-Request-ID": crypto.randomUUID() },
+    },
+  );
+  return data;
+}
+
+export async function listDeliveryAuthorizations(): Promise<
+  DeliveryAuthorization[]
+> {
+  const { data } = await request<DeliveryAuthorizationListPayload>(
+    "/api/v1/delivery-authorizations",
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function createDeliveryAuthorization(
+  input: CreateDeliveryAuthorizationInput,
+  idempotencyKey: string,
+): Promise<DeliveryAuthorization> {
+  const { data } = await request<
+    JsonResponse<DeliveryAuthorizationCreateOperation, 201>
+  >("/api/v1/delivery-authorizations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function decideDeliveryAuthorization(
+  authorizationId: string,
+  input: DeliveryAuthorizationDecisionInput,
+  idempotencyKey: string,
+): Promise<DeliveryAuthorization> {
+  const { data } = await request<
+    JsonResponse<DeliveryAuthorizationDecisionOperation, 200>
+  >(
+    `/api/v1/delivery-authorizations/${encodeURIComponent(authorizationId)}/decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        "X-Request-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  return data;
+}
+
+export async function dispatchLocalDelivery(
+  authorizationId: string,
+): Promise<DeliveryAuthorization> {
+  const { data } = await request<
+    JsonResponse<DeliveryAuthorizationDispatchOperation, 200>
+  >(
+    `/api/v1/delivery-authorizations/${encodeURIComponent(authorizationId)}/dispatch`,
     {
       method: "POST",
       headers: { "X-Request-ID": crypto.randomUUID() },

@@ -10,11 +10,13 @@ from visual_engineer_runner_protocol import (
     VALIDATION_SUITE_CATALOG,
     Capability,
     ControlledWaitJobSpec,
+    DeliveryAuthorizationPolicy,
     DiagnosticResult,
     PermissionEnvelope,
     SideEffectPermit,
     WorkspaceOperation,
     canonical_json_bytes,
+    compute_delivery_authorization_policy_hash,
     compute_permission_policy_hash,
     compute_side_effect_permit_digest,
     permission_policy_hash_matches,
@@ -201,3 +203,91 @@ def test_side_effect_permit_canonical_digest_is_stable_and_tamper_evident() -> N
                 "consumed_at": values["expires_at"],
             }
         )
+
+
+def test_delivery_authority_is_local_only_derived_and_tamper_evident() -> None:
+    workspace_id = uuid.uuid4()
+    authorization_id = uuid.uuid4()
+    issued_at = datetime(2026, 7, 31, 9, 0, tzinfo=UTC)
+    values: dict[str, object] = {
+        "id": authorization_id,
+        "review_package_id": uuid.uuid4(),
+        "review_decision_id": uuid.uuid4(),
+        "readiness_verdict_id": uuid.uuid4(),
+        "freshness_generation": 1,
+        "package_digest": "1" * 64,
+        "decision_digest": "2" * 64,
+        "readiness_digest": "3" * 64,
+        "workspace_id": workspace_id,
+        "checkpoint_id": uuid.uuid4(),
+        "checkpoint_fingerprint": "4" * 64,
+        "checkpoint_diff_hash": "5" * 64,
+        "repository_handle_id": uuid.uuid4(),
+        "source_revision": "6" * 40,
+        "branch_ref": f"refs/heads/visual-engineer/{workspace_id.hex}",
+        "commit_message": (f"VisualEngineer: governed local delivery {authorization_id.hex[:8]}"),
+        "commit_timestamp": issued_at,
+        "expires_at": issued_at + timedelta(minutes=5),
+        "policy_hash": "0" * 64,
+    }
+    draft = DeliveryAuthorizationPolicy.model_validate(values)
+    values["policy_hash"] = compute_delivery_authorization_policy_hash(draft)
+    policy = DeliveryAuthorizationPolicy.model_validate(values)
+
+    assert compute_delivery_authorization_policy_hash(policy) == policy.policy_hash
+    for field in (
+        "remote_access",
+        "push_access",
+        "pull_request_access",
+        "tag_access",
+        "deployment_access",
+        "source_repository_write_access",
+    ):
+        assert getattr(policy, field) is False
+    assert policy.local_git_commit_access is True
+    assert (
+        compute_delivery_authorization_policy_hash(
+            policy.model_copy(update={"checkpoint_diff_hash": "7" * 64})
+        )
+        != policy.policy_hash
+    )
+
+    with pytest.raises(ValidationError):
+        DeliveryAuthorizationPolicy.model_validate({**values, "remote_access": True})
+    with pytest.raises(ValidationError):
+        DeliveryAuthorizationPolicy.model_validate(
+            {**values, "branch_ref": "refs/heads/user-controlled"}
+        )
+    with pytest.raises(ValidationError):
+        DeliveryAuthorizationPolicy.model_validate(
+            {**values, "commit_message": "git push origin main"}
+        )
+
+    permit_values = {
+        "id": uuid.uuid4(),
+        "sequence": 1,
+        "runner_id": uuid.uuid4(),
+        "job_id": uuid.uuid4(),
+        "attempt_id": uuid.uuid4(),
+        "lease_id": uuid.uuid4(),
+        "grant_id": uuid.uuid4(),
+        "workspace_id": workspace_id,
+        "repository_handle_id": policy.repository_handle_id,
+        "operation": WorkspaceOperation.GIT_COMMIT,
+        "expected_current": policy.checkpoint_fingerprint,
+        "proposed_digest": "8" * 64,
+        "job_digest": "9" * 64,
+        "operation_digest": "a" * 64,
+        "policy_hash": "b" * 64,
+        "source_revision": policy.source_revision,
+        "issued_at": issued_at,
+        "consumed_at": issued_at,
+        "expires_at": issued_at + timedelta(seconds=5),
+        "state": "consumed",
+    }
+    with pytest.raises(ValidationError):
+        SideEffectPermit.model_validate(permit_values)
+    permit_values["delivery_authorization_id"] = authorization_id
+    assert (
+        SideEffectPermit.model_validate(permit_values).delivery_authorization_id == authorization_id
+    )

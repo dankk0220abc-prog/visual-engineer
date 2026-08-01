@@ -20,7 +20,7 @@ from visual_engineer_api.models.review import (
 )
 from visual_engineer_api.models.run import AuditEvent
 from visual_engineer_api.models.validation import ValidationSuiteResult, ValidationSuiteRun
-from visual_engineer_api.models.workspace import WorkspaceCheckpoint
+from visual_engineer_api.models.workspace import RepositoryHandle, Workspace, WorkspaceCheckpoint
 from visual_engineer_api.repositories.review import ReviewRepository
 from visual_engineer_api.schemas.review import (
     ReleaseReadinessVerdictResponse,
@@ -265,6 +265,77 @@ class ReviewService:
 
     def get(self, package_id: uuid.UUID) -> ReviewPackageResponse:
         return self._response(self._required_package(package_id))
+
+    def require_delivery_ready(
+        self,
+        package_id: uuid.UUID,
+        *,
+        request_id: str,
+    ) -> tuple[
+        ReviewPackage,
+        ReviewDecision,
+        ReleaseReadinessVerdict,
+        Workspace,
+        WorkspaceCheckpoint,
+        RepositoryHandle,
+    ]:
+        package = self._required_package_with_revision_authority(package_id)
+        stale_reason, observed = self._freshness_reason(package, lock_context=True)
+        if stale_reason is not None:
+            self._record_invalidation(
+                package,
+                reason_code=stale_reason,
+                observed_value=observed,
+                request_id=request_id,
+            )
+            self._conflict(
+                "stale_review_package",
+                "Only a fresh Review Package can authorize local delivery",
+            )
+        decision = self._reviews.decision(package.id, lock=True)
+        readiness = self._reviews.readiness(package.id, lock=True)
+        scope = self._reviews.freshness_state_by_id(package.freshness_state_id, lock=True)
+        context = self._reviews.suite_context(package.suite_run_id, lock=True)
+        if (
+            decision is None
+            or readiness is None
+            or scope is None
+            or context is None
+            or decision.decision != "approve"
+            or readiness.verdict != "ready"
+            or readiness.freshness_generation != package.freshness_generation
+            or scope.generation != package.freshness_generation
+            or decision.package_digest != package.package_digest
+            or readiness.package_digest != package.package_digest
+            or readiness.decision_digest != decision.decision_digest
+            or decision.git_authorization
+            or decision.deployment_authorization
+            or readiness.git_authorization
+            or readiness.deployment_authorization
+        ):
+            self._conflict(
+                "delivery_readiness_required",
+                "Local delivery requires the exact fresh approved ready Review",
+            )
+        self._verify_package_integrity(package)
+        _suite_run, _suite_result, workspace, checkpoint, handle = context
+        if (
+            workspace.id != package.workspace_id
+            or workspace.state != "sealed"
+            or workspace.current_tree_hash != package.checkpoint_fingerprint
+            or checkpoint.id != package.checkpoint_id
+            or checkpoint.workspace_id != workspace.id
+            or checkpoint.tree_fingerprint != package.checkpoint_fingerprint
+            or checkpoint.diff_hash != package.checkpoint_diff_hash
+            or handle.id != package.repository_handle_id
+            or handle.status != "available"
+            or handle.current_revision != package.source_revision
+        ):
+            self._conflict(
+                "delivery_baseline_mismatch",
+                "Review Workspace, Checkpoint, or Repository baseline is no longer deliverable",
+            )
+        return package, decision, readiness, workspace, checkpoint, handle
 
     def decide(
         self,

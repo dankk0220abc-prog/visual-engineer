@@ -63,12 +63,17 @@ objects, and source dirty/untracked bytes do not join the closure.
 Only the validated closure is materialized as mode-0600 Runner-owned loose
 objects under new inodes; source zlib bytes are not blindly copied and no
 source alternate is created. Existing mirror config, object format,
-indirection paths, packs, loose objects, top-level metadata, exact detached
-`HEAD`, and empty loose/packed ref namespace must already match the managed
-identity and exact closure before reuse. New mirrors use an explicitly empty
-template rather than host or source metadata. All Git subprocesses then
-operate only on Runner-owned state. The adapter invokes one fixed Git
-executable with argument arrays, `--no-replace-objects`,
+indirection paths, packs, loose objects, top-level metadata, and exact
+detached `HEAD` must already match the managed identity before reuse. Packed
+refs, replacement refs, tags, and arbitrary heads remain forbidden. Phase 6
+permits only a bounded loose
+`refs/heads/visual-engineer/<workspace-id-hex>` namespace; every target must
+be a single-parent commit over the exact approved source revision, and mirror
+objects must equal the union of the source closure and all accepted delivery
+closures. New mirrors use an explicitly empty template rather than host or
+source metadata. All Git subprocesses then operate only on Runner-owned
+state. The adapter invokes one fixed Git executable with argument arrays,
+`--no-replace-objects`,
 `GIT_NO_REPLACE_OBJECTS=1`, and
 `shell=False`, a managed environment/configuration, process-group timeouts,
 bounded streaming output, and disabled prompts, hooks, filters, fsmonitor,

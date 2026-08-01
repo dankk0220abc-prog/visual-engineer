@@ -50,6 +50,20 @@ def execution_grant_policy_hash_matches(value: BaseModel | dict[str, Any], expec
     return hmac.compare_digest(compute_execution_grant_policy_hash(value), expected)
 
 
+def compute_delivery_authorization_policy_hash(value: BaseModel | dict[str, Any]) -> str:
+    payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
+    payload.pop("policy_hash", None)
+    return hashlib.sha256(
+        b"visual-engineer.delivery-authorization.v1\x00" + canonical_json_bytes(payload)
+    ).hexdigest()
+
+
+def delivery_authorization_policy_hash_matches(
+    value: BaseModel | dict[str, Any], expected: str
+) -> bool:
+    return hmac.compare_digest(compute_delivery_authorization_policy_hash(value), expected)
+
+
 def compute_side_effect_job_digest(value: BaseModel | dict[str, Any]) -> str:
     payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
     return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
@@ -59,11 +73,21 @@ def compute_side_effect_permit_digest(value: BaseModel | dict[str, Any]) -> str:
     payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
     for field in ("operation_digest", "idempotent_replay"):
         payload.pop(field, None)
+    if payload.get("delivery_authorization_id") is None:
+        payload.pop("delivery_authorization_id", None)
     return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
 
 def side_effect_permit_digest_matches(value: BaseModel | dict[str, Any], expected: str) -> bool:
     return hmac.compare_digest(compute_side_effect_permit_digest(value), expected)
+
+
+def compute_local_delivery_result_digest(value: BaseModel | dict[str, Any]) -> str:
+    payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
+    payload.pop("result_digest", None)
+    return hashlib.sha256(
+        b"visual-engineer.local-delivery-result.v1\x00" + canonical_json_bytes(payload)
+    ).hexdigest()
 
 
 def _validation_digest(domain: str, value: BaseModel | dict[str, Any] | list[Any]) -> str:

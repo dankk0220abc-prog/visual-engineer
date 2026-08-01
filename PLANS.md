@@ -1,5 +1,17 @@
 # ExecPlan Standard
 
+The active Phase 6 implementation record is
+[`docs/exec-plans/phase-6-governed-local-delivery.md`](docs/exec-plans/phase-6-governed-local-delivery.md).
+It defines the first safe Phase 6 slice as a separately approved,
+fixture-only local branch and commit in the existing Runner-owned Workspace.
+It does not authorize a remote, push, pull request, tag, deploy, source
+repository write, real repository, Customer 0, CreativeDeploy, LLM, model
+Provider, API key, authentication, or multi-tenancy. Its current evidence is
+implementer evidence: every Phase 6-focused gate passes, while the final
+single-run aggregate remains open on a pre-existing Workspace Chaos recovery
+timing instability. The candidate is ready for independent focused review
+with that aggregate limitation explicit.
+
 An ExecPlan is a living implementation record for work that spans multiple
 components, has meaningful risk, or cannot be completed and verified in one
 small edit. It must let a new engineer resume safely without relying on chat

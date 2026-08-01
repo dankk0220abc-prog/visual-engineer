@@ -1,3 +1,8 @@
+from visual_engineer_api.models.delivery import (
+    DeliveryAuthorization,
+    DeliveryAuthorizationDecision,
+    LocalDelivery,
+)
 from visual_engineer_api.models.review import (
     ReleaseReadinessVerdict,
     ReviewBlockerFinding,
@@ -42,8 +47,11 @@ from visual_engineer_api.models.workspace import (
 __all__ = [
     "ApprovalDecision",
     "AuditEvent",
+    "DeliveryAuthorization",
+    "DeliveryAuthorizationDecision",
     "ExecutionGrant",
     "ExecutionGrantDecision",
+    "LocalDelivery",
     "PermissionEnvelope",
     "Plan",
     "ReleaseReadinessVerdict",

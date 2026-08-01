@@ -23,26 +23,23 @@ deterministic-plan, approval, and audit boundaries. A Deployment Pack supplies
 a repository profile, customer constraints, allowed future validation,
 design-system context, acceptance criteria, test strategy, and project
 playbook. Phase 4 implements one fixture-only isolated-workspace path. Phase 5
-adds only system-owned fixed validation Profiles and immutable multi-step
-Suites against that trusted synthetic fixture; arbitrary target commands and
-delivery integrations remain future capabilities.
+adds system-owned fixed validation, immutable multi-step Suites, and governed
+final review. The first Phase 6 slice adds only a separately approved,
+fixture-only local branch and commit; arbitrary target commands and every
+remote delivery integration remain future capabilities.
 
 ## Current state
 
 The repository implements the Phase 0 + Phase 1 Foundation, Phase 2 governed
 read-only repository intelligence, Phase 3 browser-orchestrated Local Runner,
 a completed Phase 4 Runner-owned isolated Workspace against the synthetic
-adversarial fixture, and two sealed Phase 5 slices. The second slice completed
-independent focused re-audit and was integrated into local `main` by pure
-fast-forward at `50dcc05ce48d042882bcdf199ae1bee662a83af6`. The active work is
-**Phase 5 Third Vertical Slice — Governed Final Review & Release Readiness**,
-whose independent focused review recorded five blocking Medium Findings. The
-active targeted-remediation branch adds freshness-generation, canonical
-digest, append-only audit, keyed Decision, and zero-blocker readiness
-enforcement and is intended for a fresh independent focused re-review. This is
-not an independent decision, Gate PASS, seal, or main integration. Historical
-focused-review FAIL, remediation, and sealing records remain preserved. No
-later Phase 5 slice or Phase 6 work is authorized.
+adversarial fixture, and completed Phase 5 validation/review slices in local
+`main` at `962b72ec92329de929ca5f9381b5324a68a18dde`. The active work is
+**Phase 6 First Vertical Slice — Governed Local Git Delivery** on
+`feat/phase-6-governed-local-delivery`. It is implementer work pending
+independent review with the final aggregate Gate still open on a Workspace
+Chaos recovery timing instability; it is not a Gate PASS, seal, main
+integration, remote delivery, or authorization for later Phase 6 work.
 
 A local user can independently approve a narrow Execution Grant, prepare an
 exact detached workspace, use closed UTF-8 file tools, inspect bounded
@@ -105,6 +102,9 @@ The implemented target is:
   counts, and a PostgreSQL-recomputed deterministic Release Readiness Verdict;
 - explicit false Git and deployment authorization throughout Review Package,
   Decision, readiness, API, database, and browser surfaces;
+- separate immutable local Delivery Authorization/Decision, dual-bound
+  Side-effect Permit, fixed Runner Git plumbing, and one durable fixture-only
+  local branch/commit proof with source and remote invariance;
 - browser Runner registry, dispatch, Job detail, progress, result, cancellation,
   offline/retry evidence, and Timeline;
 - generated OpenAPI-to-TypeScript contract artifacts;
@@ -119,12 +119,12 @@ The implemented target is:
 Explicitly not implemented: OpenAI Agents SDK, LLM calls, Agent Trace, general
 shell, arbitrary target-repository commands, package lifecycle or installation, any
 CreativeDeploy workspace/write, source-repository write, binary/delete/rename
-tools, Git commit/push/PR delivery, remote CI evidence, automated visual
+tools, remote push/PR/tag/deploy delivery, remote CI evidence, automated visual
 comparison or repair, authentication, multi-tenancy, public hosting, or
 production deployment.
 
 CreativeDeploy is internal Customer 0 and Design Partner 0. It is not in scope
-for Phase 4 or this repair: it must not be accessed, mounted, read, written,
+for this Phase 6 slice: it must not be accessed, mounted, read, written,
 tested, built, or used as verification evidence. Historical Phase 2 documents
 describe a separately authorized read-only path, but that does not authorize
 this branch. CreativeDeploy is not an external enterprise customer and

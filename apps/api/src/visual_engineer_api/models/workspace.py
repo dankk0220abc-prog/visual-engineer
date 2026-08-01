@@ -487,7 +487,8 @@ class SideEffectPermit(Base):
         UniqueConstraint("operation_digest", name="uq_side_effect_permits_operation_digest"),
         CheckConstraint("sequence >= 1", name="ck_side_effect_permits_sequence"),
         CheckConstraint(
-            "operation IN ('prepare', 'write_text', 'rollback', 'discard', 'validate')",
+            "operation IN ('prepare', 'write_text', 'rollback', 'discard', 'validate', "
+            "'git_commit')",
             name="ck_side_effect_permits_operation",
         ),
         CheckConstraint(
@@ -498,6 +499,11 @@ class SideEffectPermit(Base):
             "(operation = 'write_text' AND relative_path IS NOT NULL) OR "
             "(operation <> 'write_text' AND relative_path IS NULL)",
             name="ck_side_effect_permits_path_scope",
+        ),
+        CheckConstraint(
+            "(operation = 'git_commit' AND delivery_authorization_id IS NOT NULL) OR "
+            "(operation <> 'git_commit' AND delivery_authorization_id IS NULL)",
+            name="ck_side_effect_permits_delivery_binding",
         ),
         CheckConstraint(
             "expected_current IN ('absent', 'workspace_absent') "
@@ -550,6 +556,10 @@ class SideEffectPermit(Base):
         UUID(as_uuid=True),
         ForeignKey("execution_grants.id", ondelete="RESTRICT"),
         nullable=False,
+    )
+    delivery_authorization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("delivery_authorizations.id", ondelete="RESTRICT"),
     )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False

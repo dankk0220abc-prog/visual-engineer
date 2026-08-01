@@ -31,6 +31,7 @@ from visual_engineer_runner_protocol import (
     ValidationExecuteJobSpec,
     WorkspaceBoundJobSpec,
     WorkspaceDiscardJobSpec,
+    WorkspaceGitCommitJobSpec,
     WorkspacePrepareJobSpec,
     WorkspaceRollbackJobSpec,
     WorkspaceWriteTextJobSpec,
@@ -54,6 +55,7 @@ WORKSPACE_CAPABILITIES = [
     Capability.WORKSPACE_ROLLBACK_V1,
     Capability.WORKSPACE_DISCARD_V1,
     Capability.VALIDATION_EXECUTE_V1,
+    Capability.WORKSPACE_GIT_COMMIT_V1,
 ]
 
 
@@ -217,6 +219,7 @@ class RunnerLifecycle:
                 WorkspaceRollbackJobSpec,
                 WorkspaceDiscardJobSpec,
                 ValidationExecuteJobSpec,
+                WorkspaceGitCommitJobSpec,
             ),
         ):
             side_effect_permit = await self._client.acquire_side_effect_permit(
@@ -235,6 +238,11 @@ class RunnerLifecycle:
                 or side_effect_permit.workspace_id != assignment.job.workspace_id
                 or side_effect_permit.grant_id != assignment.job.execution_grant.id
                 or side_effect_permit.policy_hash != assignment.job.execution_grant.policy_hash
+                or (
+                    isinstance(assignment.job, WorkspaceGitCommitJobSpec)
+                    and side_effect_permit.delivery_authorization_id
+                    != assignment.job.delivery_authorization.id
+                )
             ):
                 raise ValueError("Side-effect Permit binding is inconsistent")
 

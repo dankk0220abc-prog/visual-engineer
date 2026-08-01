@@ -45,7 +45,9 @@ def db_session(database_url: str) -> Generator[Session, None, None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE TABLE release_readiness_verdicts, review_decisions, "
+                "TRUNCATE TABLE local_deliveries, delivery_authorization_decisions, "
+                "delivery_authorizations, "
+                "release_readiness_verdicts, review_decisions, "
                 "review_package_invalidations, review_packages, "
                 "review_blocker_findings, review_freshness_states, "
                 "validation_suite_results, validation_suite_step_runs, "

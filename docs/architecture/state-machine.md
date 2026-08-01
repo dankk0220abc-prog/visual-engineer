@@ -29,6 +29,27 @@ stateDiagram-v2
 `approved`, `rejected`, `failed`, and `cancelled` are terminal in Phase 2.
 There is intentionally no `executing` transition.
 
+## Phase 6 Delivery Authorization lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> approved: separate local-user approve
+    pending --> rejected: reasoned reject
+    pending --> stale: evidence or authority changed
+    approved --> dispatched: explicit dispatch
+    approved --> stale: evidence or authority changed
+    dispatched --> succeeded: exact commit proof accepted
+    dispatched --> failed: typed failure
+    dispatched --> cancelled: fenced cancellation
+    dispatched --> stale: authority invalidated
+```
+
+Review approval and `ready` are eligibility facts only. They do not enter this
+state machine or dispatch Git. Rejected/stale states create no Job or Permit.
+Every dispatched terminal path also terminalizes its Side-effect Permit and
+the bound local-delivery state; only `succeeded` stores `LocalDelivery`.
+
 ## State meanings
 
 | State                    | Meaning                                                   | Exit gate                                |

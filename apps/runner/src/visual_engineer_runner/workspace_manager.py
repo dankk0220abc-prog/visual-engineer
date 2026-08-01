@@ -42,6 +42,8 @@ from visual_engineer_runner_protocol import (
     WorkspaceDiffResult,
     WorkspaceDiscardJobSpec,
     WorkspaceDiscardResult,
+    WorkspaceGitCommitJobSpec,
+    WorkspaceGitCommitResult,
     WorkspaceJobSpec,
     WorkspaceListJobSpec,
     WorkspaceListResult,
@@ -58,7 +60,9 @@ from visual_engineer_runner_protocol import (
     WorkspaceStatusResult,
     WorkspaceWriteTextJobSpec,
     WorkspaceWriteTextResult,
+    compute_local_delivery_result_digest,
     compute_side_effect_job_digest,
+    delivery_authorization_policy_hash_matches,
     execution_grant_policy_hash_matches,
     side_effect_job_binding,
     side_effect_permit_digest_matches,
@@ -239,6 +243,7 @@ class WorkspaceManager:
                 WorkspaceRollbackJobSpec,
                 WorkspaceDiscardJobSpec,
                 ValidationExecuteJobSpec,
+                WorkspaceGitCommitJobSpec,
             ),
         ):
             permit = self._require_side_effect_permit(
@@ -332,6 +337,42 @@ class WorkspaceManager:
                 filesystem=filesystem,
                 canonical_workspace=workspace,
             )
+        if isinstance(spec, WorkspaceGitCommitJobSpec):
+            if permit is None:
+                raise WorkspaceExecutionError(FailureCode.SIDE_EFFECT_PERMIT_REQUIRED)
+            status = self._authorized_status(spec, filesystem)
+            checkpoint = self._checkpoint(spec, filesystem, status)
+            if (
+                registry.current_tree_hash != spec.checkpoint_fingerprint
+                or checkpoint.tree_fingerprint != spec.checkpoint_fingerprint
+                or checkpoint.diff_hash != spec.checkpoint_diff_hash
+            ):
+                raise WorkspaceExecutionError(FailureCode.VALIDATION_CHECKPOINT_MISMATCH)
+            delivery = self._git.create_local_commit(
+                workspace,
+                source_revision=spec.execution_grant.source_revision,
+                branch_ref=spec.delivery_authorization.branch_ref,
+                commit_message=spec.delivery_authorization.commit_message,
+                commit_timestamp=spec.delivery_authorization.commit_timestamp,
+                status=status,
+                permit_expires_at=permit.expires_at,
+            )
+            commit_result = WorkspaceGitCommitResult(
+                workspace_id=spec.workspace_id,
+                delivery_authorization_id=spec.delivery_authorization.id,
+                checkpoint_id=spec.checkpoint_id,
+                checkpoint_fingerprint=spec.checkpoint_fingerprint,
+                checkpoint_diff_hash=spec.checkpoint_diff_hash,
+                branch_ref=delivery.branch_ref,
+                commit_oid=delivery.commit_oid,
+                tree_oid=delivery.tree_oid,
+                parent_oid=delivery.parent_oid,
+                result_digest="0" * 64,
+                side_effect_permit_id=permit.id,
+            )
+            commit_result.result_digest = compute_local_delivery_result_digest(commit_result)
+            self._cache_result(registry, operation_id, commit_result)
+            return commit_result
         if isinstance(spec, WorkspaceListJobSpec):
             return self._list(spec, filesystem)
         if isinstance(spec, WorkspaceReadTextJobSpec):
@@ -897,7 +938,10 @@ class WorkspaceManager:
             raise WorkspaceExecutionError(FailureCode.ENVELOPE_HASH_MISMATCH)
         if grant.expires_at <= datetime.now(UTC):
             raise WorkspaceExecutionError(FailureCode.ENVELOPE_EXPIRED)
-        if operation not in grant.allowed_operations:
+        if operation not in grant.allowed_operations and not isinstance(
+            spec,
+            WorkspaceGitCommitJobSpec,
+        ):
             raise WorkspaceExecutionError(FailureCode.POLICY_DENIED)
         if (
             grant.network_policy != "none"
@@ -906,6 +950,23 @@ class WorkspaceManager:
             or grant.source_repository_write_access
         ):
             raise WorkspaceExecutionError(FailureCode.POLICY_DENIED)
+        if isinstance(spec, WorkspaceGitCommitJobSpec):
+            delivery = spec.delivery_authorization
+            if (
+                not delivery_authorization_policy_hash_matches(
+                    delivery,
+                    delivery.policy_hash,
+                )
+                or delivery.expires_at <= datetime.now(UTC)
+                or not delivery.local_git_commit_access
+                or delivery.remote_access
+                or delivery.push_access
+                or delivery.pull_request_access
+                or delivery.tag_access
+                or delivery.deployment_access
+                or delivery.source_repository_write_access
+            ):
+                raise WorkspaceExecutionError(FailureCode.POLICY_DENIED)
 
     def _validate_registry(
         self,
@@ -914,14 +975,28 @@ class WorkspaceManager:
     ) -> None:
         grant = spec.execution_grant
         if isinstance(spec, ValidationExecuteJobSpec):
+            checkpoint_id = spec.checkpoint_id
+            checkpoint_fingerprint = spec.checkpoint_fingerprint
             if (
                 registry.workspace_id != spec.workspace_id
                 or grant.validation_workspace_id != registry.workspace_id
-                or grant.validation_checkpoint_id != spec.checkpoint_id
-                or registry.current_tree_hash != spec.checkpoint_fingerprint
+                or grant.validation_checkpoint_id != checkpoint_id
+                or registry.current_tree_hash != checkpoint_fingerprint
                 or registry.repository_handle_id != grant.repository_handle_id
                 or registry.repository_opaque_handle != grant.repository_opaque_handle
                 or registry.source_revision != grant.source_revision
+            ):
+                raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
+            return
+        if isinstance(spec, WorkspaceGitCommitJobSpec):
+            if (
+                registry.workspace_id != spec.workspace_id
+                or registry.grant_id != grant.id
+                or registry.repository_handle_id != grant.repository_handle_id
+                or registry.repository_opaque_handle != grant.repository_opaque_handle
+                or registry.policy_hash != grant.policy_hash
+                or registry.source_revision != grant.source_revision
+                or registry.current_tree_hash != spec.checkpoint_fingerprint
             ):
                 raise WorkspaceExecutionError(FailureCode.WORKSPACE_QUARANTINED)
             return
@@ -953,6 +1028,12 @@ class WorkspaceManager:
         if (
             permit.job_id != operation_id
             or permit.grant_id != spec.execution_grant.id
+            or permit.delivery_authorization_id
+            != (
+                spec.delivery_authorization.id
+                if isinstance(spec, WorkspaceGitCommitJobSpec)
+                else None
+            )
             or permit.workspace_id != spec.workspace_id
             or permit.repository_handle_id != spec.execution_grant.repository_handle_id
             or permit.policy_hash != spec.execution_grant.policy_hash
@@ -1384,6 +1465,8 @@ def _operation_for_spec(spec: WorkspaceJobSpec) -> WorkspaceOperation:
         return WorkspaceOperation.DISCARD
     if isinstance(spec, ValidationExecuteJobSpec):
         return WorkspaceOperation.VALIDATE
+    if isinstance(spec, WorkspaceGitCommitJobSpec):
+        return WorkspaceOperation.GIT_COMMIT
     raise WorkspaceExecutionError(FailureCode.UNSUPPORTED_CAPABILITY)
 
 
@@ -1420,16 +1503,22 @@ def _rebind_cached_permit(
             WorkspaceWriteTextResult,
             WorkspaceRollbackResult,
             WorkspaceDiscardResult,
+            WorkspaceGitCommitResult,
         ),
     ):
         return result
     payload = result.model_dump(mode="json")
     payload["side_effect_permit_id"] = str(permit.id)
+    if isinstance(result, WorkspaceGitCommitResult):
+        payload["result_digest"] = "0" * 64
     checkpoint = payload.get("checkpoint")
     if isinstance(checkpoint, dict):
         checkpoint["side_effect_permit_id"] = str(permit.id)
     try:
-        return _RESULT_ADAPTER.validate_python(payload)
+        rebound = _RESULT_ADAPTER.validate_python(payload)
+        if isinstance(rebound, WorkspaceGitCommitResult):
+            rebound.result_digest = compute_local_delivery_result_digest(rebound)
+        return rebound
     except ValidationError as exc:
         raise WorkspaceExecutionError(FailureCode.WORKSPACE_STATE_INVALID) from exc
 

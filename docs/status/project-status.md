@@ -1,15 +1,48 @@
 # Project Status
 
-- Phase: Phase 5 Third Vertical Slice — Governed Final Review & Release
-  Readiness
+- Phase: Phase 6 First Vertical Slice — Governed Local Git Delivery
 - Overall status:
-  `PHASE_5_THIRD_SLICE_FINAL_GATE_PASS_SEALED_AWAITING_EXPLICIT_USER_AUTHORIZATION_FOR_LOCAL_FAST_FORWARD_MAIN`
-- Governance qualifier: INDEPENDENT `VE-P5-REVIEW-RR-001` PASS; ONE COMPLETE
-  AGGREGATE PASS; LOCAL SEAL ONLY; MAIN UNCHANGED; NO REMOTE, PUSH, PULL
-  REQUEST, TAG, DEPLOYMENT, DELIVERY, OR PHASE 6 AUTHORIZATION
+  `PHASE_6_LOCAL_DELIVERY_IMPLEMENTED_FOCUSED_VERIFIED_AGGREGATE_GATE_OPEN`
+- Governance qualifier: IMPLEMENTER WORK ONLY; NOT AN INDEPENDENT SECURITY
+  GATE, SEALING, MAIN INTEGRATION, REMOTE DELIVERY, OR LATER-PHASE
+  AUTHORIZATION
 - Last updated: 2026-07-31
-- Current main / Third Slice base:
-  `50dcc05ce48d042882bcdf199ae1bee662a83af6`
+- Current main / Phase 6 base:
+  `962b72ec92329de929ca5f9381b5324a68a18dde`
+- Current Phase 6 branch: `feat/phase-6-governed-local-delivery`
+- Current Phase 6 plan:
+  [`docs/exec-plans/phase-6-governed-local-delivery.md`](../exec-plans/phase-6-governed-local-delivery.md)
+- Current Phase 6 evidence:
+  [`docs/evidence/phase-6-governed-local-delivery-verification.md`](../evidence/phase-6-governed-local-delivery-verification.md)
+- Phase 6 scope: one immutable, separately decided Delivery Authorization
+  over an exact fresh/approved/ready Review generation, one Side-effect
+  Permit, and one system-derived local ref/commit in the Runner-owned fixture
+  Workspace.
+- Phase 6 explicit denials: source-repository write, user-supplied Git input,
+  remote, push, PR, tag, deploy, real repositories, CreativeDeploy, Customer
+  0, credentials, LLM/Agents SDK/Provider, auth, and multi-tenancy.
+- Phase 6 verification: 300 Python/API/Runner/Protocol tests, 53 Web tests, 16
+  desktop+narrow E2E tests, migration base/head/base/head, source invariance,
+  real PostgreSQL security checks, build, contracts, static checks, and
+  cleanup passed. The post-review `make verify` attempts reached Workspace
+  Chaos after all preceding gates, then exited `2`; one exact isolated Chaos
+  run passed and four attempts failed at recovery with `envelope_expired`,
+  `retry_exhausted`, or a failed prepare. No TTL, lease, attempts, authority,
+  or timeout was widened. The final aggregate Gate therefore remains open.
+- Phase 6 implementer evidence:
+  [`docs/evidence/phase-6-governed-local-delivery-verification.md`](../evidence/phase-6-governed-local-delivery-verification.md)
+- Phase 6 next gate: independent focused security review of dual authority,
+  Side-effect Permit fencing, fixed Git plumbing, managed local-ref/object
+  closure, replay, source invariance, and zero-remote behavior, followed by a
+  stable single-run aggregate Gate.
+
+## Preserved Phase 5 completion
+
+Phase 0–5 are integrated in local `main` at
+`962b72ec92329de929ca5f9381b5324a68a18dde`. The historical Phase 5
+independent reviews, remediation records, and local seals below remain
+unchanged and do not count as Phase 6 approval.
+
 - Final independent re-review branch:
   `audit/phase-5-review-revision-freshness-final-rereview`
 - Final independent re-review candidate:

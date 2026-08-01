@@ -4,12 +4,13 @@
 
 VisualEngineer is a governed AI design-engineering and delivery system for
 enterprise frontend teams. Its V1 destination is a human-controlled path from
-a bounded frontend request to an evidence-backed change. The current Phase 4
-product stops at one synthetic fixture: it can complete the governed Phase 2
-planning flow, orchestrate the Phase 3 repository-free Jobs, and separately
-authorize closed text-file operations in a Runner-owned exact-revision fixture
-Workspace. It cannot execute target commands, access CreativeDeploy, write a
-source repository, or deliver Git.
+a bounded frontend request to an evidence-backed change. The current Phase 6
+product still stops at one synthetic fixture: after governed planning,
+isolated implementation, fixed validation, and immutable final review, a
+separate local-user decision can authorize exactly one system-derived local
+branch and commit inside the Runner-owned Workspace. It cannot execute
+arbitrary target commands, access CreativeDeploy, write a source repository,
+or perform any remote Git or deployment action.
 
 The system must distinguish facts, policy, decisions, and future intent. A
 stored locator is not authorization, repository text is not an instruction,
@@ -56,7 +57,7 @@ There is no executable Deployment Pack runtime. Repository content can narrow
 future work but cannot elevate permission, expand a Runner Envelope, or bypass
 approval.
 
-## Implemented through Phase 4
+## Implemented through the Phase 6 first vertical slice
 
 The current product provides:
 
@@ -131,13 +132,14 @@ V1 is not complete until a separately authorized system can:
 - safely extend a separately authorized workspace beyond the synthetic fixture;
 - execute separately approved closed validation commands without a shell;
 - show attributable tool and browser-validation evidence;
-- obtain a distinct Git-authorizing final delivery approval beyond the current
-  governance-only Review Decision; and
-- perform an explicitly allowed branch, commit, or pull-request action.
+- obtain a distinct remote Git authorization beyond the current local-only
+  Delivery Authorization; and
+- perform an explicitly allowed push or pull-request action.
 
-These are future requirements, not Third Slice capabilities. The current
-Review Package/Decision/Readiness workflow never grants Git or deployment
-authority.
+These are future requirements, not first-slice Phase 6 capabilities. The
+Review Package/Decision/Readiness workflow still never grants Git or
+deployment authority; only the separate Delivery Authorization grants one
+local fixture commit.
 
 ## Quality attributes
 
@@ -159,12 +161,12 @@ authority.
 
 Future deployments may measure time to pull request, verification pass rate,
 interventions, rollback success, accessibility findings, cost, acceptance, and
-adoption. Phase 4 has no production baseline or outcome metric.
+adoption. Phase 6 has no production baseline or outcome metric.
 
 The repository does not demonstrate an LLM/Agents SDK runtime, production
 security, multi-user isolation, real customer-repository execution,
 CreativeDeploy writes, target command/test execution, Git/pull-request
-delivery, remote CI success, automatic repair, external-customer adoption, or
+remote delivery, remote CI success, automatic repair, external-customer adoption, or
 production deployment. The current Local Runner is a narrow fixture-only
 typed execution plane, not an autonomous coding Agent.
 

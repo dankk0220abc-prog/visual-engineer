@@ -62,7 +62,8 @@ class PermissionEnvelope(Base):
         UniqueConstraint("job_id", name="uq_permission_envelopes_job_id"),
         CheckConstraint("envelope_version = 1", name="ck_permission_envelopes_version"),
         CheckConstraint(
-            "authorization_source IN ('local_user_job_dispatch', 'execution_grant')",
+            "authorization_source IN ('local_user_job_dispatch', 'execution_grant', "
+            "'execution_grant_and_delivery_authorization')",
             name="ck_permission_envelopes_authorization_source",
         ),
         CheckConstraint(
@@ -71,7 +72,8 @@ class PermissionEnvelope(Base):
         ),
         CheckConstraint(
             "(authorization_source = 'local_user_job_dispatch' AND repository_access = 'none') "
-            "OR (authorization_source = 'execution_grant' "
+            "OR (authorization_source IN "
+            "('execution_grant', 'execution_grant_and_delivery_authorization') "
             "AND repository_access = 'isolated_workspace')",
             name="ck_permission_envelopes_authority_repository",
         ),
@@ -131,7 +133,8 @@ class RunnerJob(Base):
             "kind IN ('system_diagnostic_v1', 'controlled_wait_v1', "
             "'workspace_prepare_v1', 'workspace_list_v1', 'workspace_read_text_v1', "
             "'workspace_write_text_v1', 'workspace_status_v1', 'workspace_diff_v1', "
-            "'workspace_rollback_v1', 'workspace_discard_v1', 'validation_execute_v1')",
+            "'workspace_rollback_v1', 'workspace_discard_v1', 'validation_execute_v1', "
+            "'workspace_git_commit_v1')",
             name="ck_runner_jobs_kind",
         ),
         CheckConstraint(
@@ -157,6 +160,11 @@ class RunnerJob(Base):
             "AND source_revision IS NOT NULL AND execution_policy_hash IS NOT NULL)",
             name="ck_runner_jobs_workspace_binding",
         ),
+        CheckConstraint(
+            "(kind = 'workspace_git_commit_v1' AND delivery_authorization_id IS NOT NULL) "
+            "OR (kind <> 'workspace_git_commit_v1' AND delivery_authorization_id IS NULL)",
+            name="ck_runner_jobs_delivery_binding",
+        ),
         UniqueConstraint(
             "permission_envelope_id",
             name="uq_runner_jobs_permission_envelope_id",
@@ -180,6 +188,10 @@ class RunnerJob(Base):
     execution_grant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("execution_grants.id", ondelete="RESTRICT"),
+    )
+    delivery_authorization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("delivery_authorizations.id", ondelete="RESTRICT"),
     )
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE")

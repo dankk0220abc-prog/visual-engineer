@@ -86,6 +86,7 @@ class RunnerJobResponse(BaseModel):
     requested_by: str
     parameters: dict[str, Any]
     execution_grant_id: uuid.UUID | None
+    delivery_authorization_id: uuid.UUID | None
     workspace_id: uuid.UUID | None
     repository_handle_id: uuid.UUID | None
     source_revision: str | None

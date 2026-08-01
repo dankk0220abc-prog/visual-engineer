@@ -263,3 +263,25 @@ Phase 4 and the sealed first Phase 5 slice are complete in local `main`. The
 second-slice protocol/catalog extension remains an implementation checkpoint
 pending independent focused read-only review; it is not a Phase 5 Security
 Gate approval.
+
+## Phase 6 local Git commit job
+
+`workspace_git_commit_v1` is a closed Workspace Job. It carries the existing
+implementation `ExecutionGrantPolicy`, a new immutable
+`DeliveryAuthorizationPolicy`, and the exact Checkpoint ID, tree fingerprint,
+and diff hash. The Permission Envelope declares
+`execution_grant_and_delivery_authorization`; shell remains false, repository
+access remains `isolated_workspace`, and network remains
+`control_plane_only`.
+
+The Runner accepts the Job only when its authenticated registry matches the
+implementation Grant and the Delivery policy hash/bindings are exact and
+unexpired. A `git_commit` Side-effect Permit additionally binds the Delivery
+Authorization ID. `WorkspaceGitCommitResult` repeats the authorization,
+Checkpoint, branch, commit/tree/parent IDs, Permit ID, and a canonical result
+digest. All remote/source-write flags are literal false and no command, argv,
+cwd, environment, ref, message, identity, or credential is caller supplied.
+
+This is a coordinated additive Protocol v1 capability. Older Runners do not
+advertise it, so the Control Plane leaves the Job queued rather than assigning
+it to an incapable Runner.

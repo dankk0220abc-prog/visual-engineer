@@ -337,9 +337,28 @@ or ready verdict. The complete base-to-head, downgrade-to-base, and
 upgrade-to-head roundtrip must pass on real PostgreSQL before the remediation
 checkpoint.
 
+## Phase 6 local-delivery entities
+
+`DeliveryAuthorization` is the immutable policy snapshot for one local commit.
+It binds one exact Review Package/Decision/Readiness generation to the
+Workspace's original implementation Grant, repository/revision, Checkpoint,
+tree/diff digests, server-derived branch ref/message, expiry, and explicit
+false remote/source-write fields.
+
+`DeliveryAuthorizationDecision` is one immutable keyed local-user approve or
+reasoned reject outcome. `LocalDelivery` is one immutable terminal proof
+binding Job, Attempt, completed Side-effect Permit, Workspace, Checkpoint,
+branch, commit/tree/parent object IDs, and result digest. PostgreSQL checks and
+triggers reject authority escalation, rebinding, mutation, deletion, and
+invalid state transitions.
+
+Phase 6 adds reversible revision
+`20260731_0013_add_governed_local_delivery`. It is additive and contains no
+data deletion.
+
 ## Future entities
 
-Agent Trace, general Artifact, arbitrary controlled-command result, Git
+Agent Trace, general Artifact, arbitrary controlled-command result, remote Git
 delivery authorization, and EvalResult tables remain future work. Phase 5
 ValidationEvidence is deliberately fixture/Profile-specific and does not
 establish any general command or artifact authority. Future entities require a

@@ -6,6 +6,26 @@ Permissions are deny-by-default, scope-bound, non-transitive, and elevated
 only by an explicit independent human Grant. Repository content, a Task
 objective, a Deployment Pack, or Plan approval cannot grant a capability.
 
+## Phase 6 local-delivery authority
+
+Local Git commit authority is an intersection, never an expansion:
+
+```text
+fresh approved ready Review generation
+  + active original Workspace implementation Grant
+  + separately approved exact Delivery Authorization
+  + active Runner/Job/Attempt/Lease
+  + current git_commit Side-effect Permit
+  = one system-derived local ref update
+```
+
+The implementation Grant supplies repository identity, revision, allowed
+paths, file/diff budgets, Workspace expiry, and Runner binding. The Delivery
+Authorization supplies only the exact local commit. Neither the Phase 5
+validation Grant nor Review approval supplies write authority. Remote,
+push/PR/tag/deploy, source-write, arbitrary Git, and user-supplied Git inputs
+remain denied.
+
 Phase 2 implements Level 0 repository intelligence. Phase 3 additionally
 implements repository-free execution-plane capabilities. Phase 4 implements
 Level 1 only for the synthetic fixture. Phase 5 implements fixture-only Level

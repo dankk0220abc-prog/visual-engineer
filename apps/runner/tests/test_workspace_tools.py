@@ -34,6 +34,7 @@ from visual_engineer_runner.safe_fs import (
 from visual_engineer_runner.workspace_manager import WorkspaceExecutionError, WorkspaceManager
 from visual_engineer_runner_protocol import (
     Capability,
+    DeliveryAuthorizationPolicy,
     ExecutionGrantPolicy,
     FailureCode,
     JobAssignment,
@@ -46,6 +47,8 @@ from visual_engineer_runner_protocol import (
     WorkspaceDiffResult,
     WorkspaceDiscardJobSpec,
     WorkspaceDiscardResult,
+    WorkspaceGitCommitJobSpec,
+    WorkspaceGitCommitResult,
     WorkspaceJobSpec,
     WorkspaceListJobSpec,
     WorkspaceListResult,
@@ -61,7 +64,9 @@ from visual_engineer_runner_protocol import (
     WorkspaceWriteMode,
     WorkspaceWriteTextJobSpec,
     WorkspaceWriteTextResult,
+    compute_delivery_authorization_policy_hash,
     compute_execution_grant_policy_hash,
+    compute_local_delivery_result_digest,
     compute_permission_policy_hash,
     compute_side_effect_job_digest,
     compute_side_effect_permit_digest,
@@ -216,6 +221,7 @@ def execute(
             WorkspaceWriteTextJobSpec,
             WorkspaceRollbackJobSpec,
             WorkspaceDiscardJobSpec,
+            WorkspaceGitCommitJobSpec,
         ),
     ):
         permit = side_effect_permit(manager, spec, resolved_operation_id)
@@ -250,6 +256,9 @@ def side_effect_permit(
         "attempt_id": uuid.uuid5(operation_id, "attempt"),
         "lease_id": uuid.uuid5(operation_id, "lease"),
         "grant_id": spec.execution_grant.id,
+        "delivery_authorization_id": (
+            spec.delivery_authorization.id if isinstance(spec, WorkspaceGitCommitJobSpec) else None
+        ),
         "workspace_id": spec.workspace_id,
         "repository_handle_id": spec.execution_grant.repository_handle_id,
         "operation": binding["operation"],
@@ -267,6 +276,42 @@ def side_effect_permit(
     }
     values["operation_digest"] = compute_side_effect_permit_digest(values)
     return SideEffectPermit.model_validate(values)
+
+
+def delivery_authorization(
+    grant: ExecutionGrantPolicy,
+    *,
+    workspace_id: uuid.UUID,
+    checkpoint_id: uuid.UUID,
+    checkpoint_fingerprint: str,
+    checkpoint_diff_hash: str,
+) -> DeliveryAuthorizationPolicy:
+    authorization_id = uuid.uuid4()
+    now = datetime.now(UTC)
+    values: dict[str, object] = {
+        "id": authorization_id,
+        "review_package_id": uuid.uuid4(),
+        "review_decision_id": uuid.uuid4(),
+        "readiness_verdict_id": uuid.uuid4(),
+        "freshness_generation": 1,
+        "package_digest": "1" * 64,
+        "decision_digest": "2" * 64,
+        "readiness_digest": "3" * 64,
+        "workspace_id": workspace_id,
+        "checkpoint_id": checkpoint_id,
+        "checkpoint_fingerprint": checkpoint_fingerprint,
+        "checkpoint_diff_hash": checkpoint_diff_hash,
+        "repository_handle_id": grant.repository_handle_id,
+        "source_revision": grant.source_revision,
+        "branch_ref": f"refs/heads/visual-engineer/{workspace_id.hex}",
+        "commit_message": (f"VisualEngineer: governed local delivery {authorization_id.hex[:8]}"),
+        "commit_timestamp": now,
+        "expires_at": now + timedelta(minutes=5),
+        "policy_hash": "0" * 64,
+    }
+    draft = DeliveryAuthorizationPolicy.model_validate(values)
+    values["policy_hash"] = compute_delivery_authorization_policy_hash(draft)
+    return DeliveryAuthorizationPolicy.model_validate(values)
 
 
 def test_workspace_assignment_requires_exact_isolated_repository_access() -> None:
@@ -2453,6 +2498,242 @@ def test_git_group_termination_failure_has_stable_typed_result(
         except (ProcessLookupError, PermissionError):
             pass
         process.wait(timeout=1)
+
+
+def test_governed_local_commit_is_deterministic_local_only_and_source_invariant(
+    tmp_path: Path,
+) -> None:
+    source, revision = repository_fixture(tmp_path)
+    source_before = _filesystem_snapshot(source)
+    source_refs_before = git(source, "for-each-ref", "--format=%(refname) %(objectname)")
+    settings = runner_settings(tmp_path, source)
+    manager = WorkspaceManager(settings)
+    workspace_id = uuid.uuid4()
+    implementation_grant = execution_grant(revision)
+    prepare = WorkspacePrepareJobSpec(
+        workspace_id=workspace_id,
+        execution_grant=implementation_grant,
+    )
+    prepared = execute(manager, prepare)
+    assert isinstance(prepared, WorkspacePrepareResult)
+
+    write = WorkspaceWriteTextJobSpec(
+        workspace_id=workspace_id,
+        execution_grant=implementation_grant,
+        mode=WorkspaceWriteMode.REPLACE,
+        relative_path="sandbox/tracked.txt",
+        content="governed local delivery\n",
+        expected_sha256=hashlib.sha256(b"original\n").hexdigest(),
+    )
+    written = execute(manager, write)
+    assert isinstance(written, WorkspaceWriteTextResult)
+    checkpoint_id = uuid.uuid4()
+    authorization = delivery_authorization(
+        implementation_grant,
+        workspace_id=workspace_id,
+        checkpoint_id=checkpoint_id,
+        checkpoint_fingerprint=written.checkpoint.tree_fingerprint,
+        checkpoint_diff_hash=written.checkpoint.diff_hash,
+    )
+    spec = WorkspaceGitCommitJobSpec(
+        workspace_id=workspace_id,
+        execution_grant=implementation_grant,
+        delivery_authorization=authorization,
+        checkpoint_id=checkpoint_id,
+        checkpoint_fingerprint=written.checkpoint.tree_fingerprint,
+        checkpoint_diff_hash=written.checkpoint.diff_hash,
+    )
+    operation_id = uuid.uuid4()
+    with pytest.raises(WorkspaceExecutionError) as missing_permit:
+        manager.execute(
+            spec,
+            operation_id=operation_id,
+            cancel_event=threading.Event(),
+            side_effect_permit=None,
+        )
+    assert missing_permit.value.code == FailureCode.SIDE_EFFECT_PERMIT_REQUIRED
+
+    permit = side_effect_permit(manager, spec, operation_id)
+    delivered = manager.execute(
+        spec,
+        operation_id=operation_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=permit,
+    )
+    assert isinstance(delivered, WorkspaceGitCommitResult)
+    assert delivered.delivery_authorization_id == authorization.id
+    assert delivered.branch_ref == authorization.branch_ref
+    assert delivered.parent_oid == revision
+    assert delivered.checkpoint_fingerprint == written.checkpoint.tree_fingerprint
+    assert delivered.checkpoint_diff_hash == written.checkpoint.diff_hash
+    assert delivered.result_digest == compute_local_delivery_result_digest(delivered)
+    workspace = manager._git.workspace_path(workspace_id)
+    assert git(workspace, "rev-parse", authorization.branch_ref) == delivered.commit_oid
+    assert git(workspace, "rev-parse", f"{delivered.commit_oid}^") == revision
+    assert git(workspace, "show", "-s", "--format=%s", delivered.commit_oid) == (
+        authorization.commit_message
+    )
+    assert git(workspace, "rev-parse", "HEAD") == revision
+    source_branch = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            authorization.branch_ref,
+        ],
+        check=False,
+        capture_output=True,
+    )
+    assert source_branch.returncode == 1
+    assert source_branch.stdout == b""
+    assert _filesystem_snapshot(source) == source_before
+    assert git(source, "for-each-ref", "--format=%(refname) %(objectname)") == source_refs_before
+    assert not list(settings.registry_root.glob(".delivery-index-*"))
+
+    replay = manager.execute(
+        spec,
+        operation_id=operation_id,
+        cancel_event=threading.Event(),
+        side_effect_permit=permit,
+    )
+    assert isinstance(replay, WorkspaceGitCommitResult)
+    assert replay.commit_oid == delivered.commit_oid
+    assert replay.result_digest == delivered.result_digest
+
+    sibling_workspace_id = uuid.uuid4()
+    sibling = execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=sibling_workspace_id,
+            execution_grant=implementation_grant,
+        ),
+    )
+    assert isinstance(sibling, WorkspacePrepareResult)
+    assert manager._git.workspace_path(sibling_workspace_id).is_dir()
+    assert (
+        git(
+            manager._git.mirror_path(HANDLE),
+            "rev-parse",
+            authorization.branch_ref,
+        )
+        == delivered.commit_oid
+    )
+
+    second_write = WorkspaceWriteTextJobSpec(
+        workspace_id=sibling_workspace_id,
+        execution_grant=implementation_grant,
+        mode=WorkspaceWriteMode.REPLACE,
+        relative_path="sandbox/tracked.txt",
+        content="second governed local delivery\n",
+        expected_sha256=hashlib.sha256(b"original\n").hexdigest(),
+    )
+    second_written = execute(manager, second_write)
+    assert isinstance(second_written, WorkspaceWriteTextResult)
+    second_checkpoint_id = uuid.uuid4()
+    second_authorization = delivery_authorization(
+        implementation_grant,
+        workspace_id=sibling_workspace_id,
+        checkpoint_id=second_checkpoint_id,
+        checkpoint_fingerprint=second_written.checkpoint.tree_fingerprint,
+        checkpoint_diff_hash=second_written.checkpoint.diff_hash,
+    )
+    second_spec = WorkspaceGitCommitJobSpec(
+        workspace_id=sibling_workspace_id,
+        execution_grant=implementation_grant,
+        delivery_authorization=second_authorization,
+        checkpoint_id=second_checkpoint_id,
+        checkpoint_fingerprint=second_written.checkpoint.tree_fingerprint,
+        checkpoint_diff_hash=second_written.checkpoint.diff_hash,
+    )
+    second_delivered = execute(manager, second_spec)
+    assert isinstance(second_delivered, WorkspaceGitCommitResult)
+    assert second_delivered.commit_oid != delivered.commit_oid
+
+    after_two_deliveries = execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=uuid.uuid4(),
+            execution_grant=implementation_grant,
+        ),
+    )
+    assert isinstance(after_two_deliveries, WorkspacePrepareResult)
+    mirror = manager._git.mirror_path(HANDLE)
+    assert git(mirror, "rev-parse", authorization.branch_ref) == delivered.commit_oid
+    assert git(mirror, "rev-parse", second_authorization.branch_ref) == second_delivered.commit_oid
+    assert _filesystem_snapshot(source) == source_before
+    assert git(source, "for-each-ref", "--format=%(refname) %(objectname)") == source_refs_before
+
+
+def test_governed_local_ref_tampering_and_ref_budget_fail_closed(tmp_path: Path) -> None:
+    source, revision = repository_fixture(tmp_path)
+    settings = runner_settings(tmp_path, source).model_copy(
+        update={"mirror_max_local_delivery_refs": 1}
+    )
+    manager = WorkspaceManager(settings)
+    grant = execution_grant(revision)
+    workspace_id = uuid.uuid4()
+    execute(
+        manager,
+        WorkspacePrepareJobSpec(
+            workspace_id=workspace_id,
+            execution_grant=grant,
+        ),
+    )
+    mirror = manager._git.mirror_path(HANDLE)
+    namespace = mirror / "refs" / "heads" / "visual-engineer"
+    namespace.mkdir()
+    unauthorized_name = uuid.uuid4().hex
+    unauthorized_ref = namespace / unauthorized_name
+    unauthorized_ref.write_text(revision + "\n", encoding="ascii")
+    source_before = _filesystem_snapshot(source)
+
+    with pytest.raises(WorkspaceExecutionError) as invalid_parent:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=uuid.uuid4(),
+                execution_grant=grant,
+            ),
+        )
+    assert invalid_parent.value.code == FailureCode.WORKSPACE_STATE_INVALID
+    assert _filesystem_snapshot(source) == source_before
+
+    unauthorized_ref.unlink()
+    child_tree = git(source, "rev-parse", f"{revision}^{{tree}}")
+    child_commit = (
+        manager._git._run(
+            [
+                "-C",
+                os.fspath(mirror),
+                "commit-tree",
+                child_tree,
+                "-p",
+                revision,
+                "-m",
+                "bounded local ref fixture",
+            ],
+            failure=FailureCode.WORKSPACE_STATE_INVALID,
+            commit_timestamp=datetime.now(UTC),
+        )
+        .decode("ascii", "strict")
+        .strip()
+    )
+    for index in range(2):
+        (namespace / f"{index:032x}").write_text(child_commit + "\n", encoding="ascii")
+
+    with pytest.raises(WorkspaceExecutionError) as budget:
+        execute(
+            manager,
+            WorkspacePrepareJobSpec(
+                workspace_id=uuid.uuid4(),
+                execution_grant=grant,
+            ),
+        )
+    assert budget.value.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+    assert _filesystem_snapshot(source) == source_before
 
 
 def _filesystem_snapshot(root: Path) -> list[tuple[str, int, int, str]]:

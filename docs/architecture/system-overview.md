@@ -320,3 +320,29 @@ Compose is a local development and verification environment, not a production
 deployment. Authentication, secrets management, tenant isolation, backups,
 high availability, hardened networking, remote CI evidence, and production
 operations remain unimplemented.
+
+## Phase 6 governed local-delivery sequence
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web
+    participant API
+    participant DB as PostgreSQL
+    participant Runner
+    participant Workspace as Runner-owned fixture Workspace
+
+    User->>Web: Select fresh approved ready Review
+    Web->>API: Create pending Delivery Authorization
+    API->>DB: Bind exact generation, checkpoint, diff, ref, message
+    User->>Web: Separately approve local commit
+    Web->>API: Dispatch exact local-delivery Job
+    API->>DB: Bind implementation Grant plus Delivery Authorization
+    Runner->>API: Claim, start, acquire dual-bound Permit
+    Runner->>Workspace: Verify revision, tree, diff, paths, and budgets
+    Runner->>Workspace: Fixed plumbing creates tree, commit, local ref
+    Runner->>API: Digest-bound local-only proof
+    API->>DB: Terminal Job, Permit, Authorization, LocalDelivery
+    Note over Workspace: HEAD and file bytes stay unchanged
+    Note over API,Runner: No remote, push, PR, tag, or deploy authority
+```

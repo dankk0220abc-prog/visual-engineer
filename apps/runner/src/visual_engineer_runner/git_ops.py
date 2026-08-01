@@ -3,6 +3,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import os
+import re
 import selectors
 import signal
 import stat
@@ -18,6 +19,7 @@ from visual_engineer_runner.config import LocalRepositoryConfig, RunnerSettings
 from visual_engineer_runner.git_object_store import (
     CheckoutManifestEntry,
     ObjectLimits,
+    ObjectRecord,
     SourceObjectClosure,
     SourceObjectError,
 )
@@ -59,6 +61,14 @@ class CheckoutProof:
     expected_manifest_digest: str
     actual_manifest_digest: str
     entry_count: int
+
+
+@dataclass(frozen=True)
+class LocalCommitProof:
+    branch_ref: str
+    commit_oid: str
+    tree_oid: str
+    parent_oid: str
 
 
 @dataclass(frozen=True)
@@ -161,10 +171,11 @@ class GitOperations:
             raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
         mirror = self.mirror_path(opaque_handle)
         created_mirror = False
+        local_delivery_roots: tuple[str, ...] = ()
         if mirror.exists() or mirror.is_symlink():
             if mirror.is_symlink() or not mirror.is_dir():
                 raise GitOperationError(FailureCode.WORKSPACE_IDENTITY_MISMATCH)
-            self._validate_managed_mirror(
+            local_delivery_roots = self._validate_managed_mirror(
                 mirror,
                 object_id_hex_length=len(source_revision),
                 source_revision=source_revision,
@@ -212,6 +223,7 @@ class GitOperations:
             self._source_git_directory(self._validate_source_path(repository.path)),
             mirror / "objects",
             source_revision=source_revision,
+            local_delivery_roots=local_delivery_roots,
             permit_expires_at=permit_expires_at,
         )
         if self.inspect_source(repository) != metadata:
@@ -469,6 +481,266 @@ class GitOperations:
             permit_expires_at=permit_expires_at,
         )
 
+    def create_local_commit(
+        self,
+        workspace: Path,
+        *,
+        source_revision: str,
+        branch_ref: str,
+        commit_message: str,
+        commit_timestamp: datetime,
+        status: list[GitStatusEntry],
+        permit_expires_at: datetime,
+    ) -> LocalCommitProof:
+        self._require_workspace(workspace)
+        _require_fresh_permit(permit_expires_at)
+        if (
+            not re.fullmatch(r"refs/heads/visual-engineer/[0-9a-f]{32}", branch_ref)
+            or "\x00" in commit_message
+            or not re.fullmatch(
+                r"VisualEngineer: governed local delivery [0-9a-f]{8}",
+                commit_message,
+            )
+            or commit_timestamp.tzinfo is None
+            or commit_timestamp.utcoffset() is None
+        ):
+            raise GitOperationError(FailureCode.POLICY_DENIED)
+        if not status:
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        allowed_statuses = {
+            WorkspaceStatusCode.MODIFIED,
+            WorkspaceStatusCode.DELETED,
+            WorkspaceStatusCode.UNTRACKED,
+        }
+        if any(entry.status not in allowed_statuses for entry in status):
+            raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+        actual_head = (
+            self._run(
+                ["-C", os.fspath(workspace), "rev-parse", "--verify", "HEAD^{commit}"],
+                failure=FailureCode.WORKSPACE_STATE_INVALID,
+                permit_expires_at=permit_expires_at,
+            )
+            .decode("ascii", "strict")
+            .strip()
+        )
+        if actual_head != source_revision:
+            raise GitOperationError(FailureCode.SOURCE_REVISION_MISMATCH)
+        existing_ref = (
+            self._run(
+                [
+                    "-C",
+                    os.fspath(workspace),
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    f"{branch_ref}^{{commit}}",
+                ],
+                failure=FailureCode.WORKSPACE_STATE_INVALID,
+                allowed_returncodes=frozenset({0, 1}),
+                permit_expires_at=permit_expires_at,
+            )
+            .decode("ascii", "strict")
+            .strip()
+        )
+        index_path = self._settings.registry_root / f".delivery-index-{uuid.uuid4().hex}"
+        lock_path = Path(f"{index_path}.lock")
+        try:
+            self._run(
+                ["-C", os.fspath(workspace), "read-tree", source_revision],
+                failure=FailureCode.WORKSPACE_STATE_INVALID,
+                permit_expires_at=permit_expires_at,
+                index_file=index_path,
+            )
+            for entry in status:
+                _require_fresh_permit(permit_expires_at)
+                relative_path = _validated_git_path(entry.relative_path)
+                if entry.status == WorkspaceStatusCode.DELETED:
+                    self._run(
+                        [
+                            "-C",
+                            os.fspath(workspace),
+                            "update-index",
+                            "--remove",
+                            "--",
+                            relative_path,
+                        ],
+                        failure=FailureCode.WORKSPACE_STATE_INVALID,
+                        permit_expires_at=permit_expires_at,
+                        index_file=index_path,
+                    )
+                    continue
+                candidate = workspace / PurePosixPath(relative_path)
+                try:
+                    before = os.stat(candidate, follow_symlinks=False)
+                except OSError as exc:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+                if (
+                    not stat.S_ISREG(before.st_mode)
+                    or stat.S_ISLNK(before.st_mode)
+                    or before.st_nlink != 1
+                ):
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                mode = "100644"
+                if entry.status != WorkspaceStatusCode.UNTRACKED:
+                    raw_tree = self._run(
+                        [
+                            "-C",
+                            os.fspath(workspace),
+                            "ls-tree",
+                            "-z",
+                            source_revision,
+                            "--",
+                            relative_path,
+                        ],
+                        failure=FailureCode.WORKSPACE_STATE_INVALID,
+                        permit_expires_at=permit_expires_at,
+                    )
+                    try:
+                        tree_prefix, tree_path = raw_tree.rstrip(b"\0").split(b"\t", 1)
+                        tracked_mode, tracked_type, _tracked_oid = tree_prefix.split(b" ", 2)
+                    except ValueError as exc:
+                        raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+                    if (
+                        tree_path.decode("utf-8", "strict") != relative_path
+                        or tracked_type != b"blob"
+                        or tracked_mode not in {b"100644", b"100755"}
+                    ):
+                        raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                    mode = tracked_mode.decode("ascii")
+                object_id = (
+                    self._run(
+                        [
+                            "-C",
+                            os.fspath(workspace),
+                            "hash-object",
+                            "-w",
+                            "--no-filters",
+                            "--",
+                            relative_path,
+                        ],
+                        failure=FailureCode.WORKSPACE_STATE_INVALID,
+                        permit_expires_at=permit_expires_at,
+                    )
+                    .decode("ascii", "strict")
+                    .strip()
+                )
+                _require_object_id(object_id)
+                try:
+                    after = os.stat(candidate, follow_symlinks=False)
+                except OSError as exc:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+                if _WorkspaceEntrySnapshot.from_stat(before) != _WorkspaceEntrySnapshot.from_stat(
+                    after
+                ):
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                self._run(
+                    [
+                        "-C",
+                        os.fspath(workspace),
+                        "update-index",
+                        "--add",
+                        "--cacheinfo",
+                        f"{mode},{object_id},{relative_path}",
+                    ],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                    permit_expires_at=permit_expires_at,
+                    index_file=index_path,
+                )
+            tree_oid = (
+                self._run(
+                    ["-C", os.fspath(workspace), "write-tree"],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                    permit_expires_at=permit_expires_at,
+                    index_file=index_path,
+                )
+                .decode("ascii", "strict")
+                .strip()
+            )
+            _require_object_id(tree_oid)
+            commit_oid = (
+                self._run(
+                    [
+                        "-C",
+                        os.fspath(workspace),
+                        "commit-tree",
+                        tree_oid,
+                        "-p",
+                        source_revision,
+                        "-m",
+                        commit_message,
+                    ],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                    permit_expires_at=permit_expires_at,
+                    commit_timestamp=commit_timestamp,
+                )
+                .decode("ascii", "strict")
+                .strip()
+            )
+            _require_object_id(commit_oid)
+            _require_fresh_permit(permit_expires_at)
+            if existing_ref:
+                if existing_ref != commit_oid:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            else:
+                self._run(
+                    [
+                        "-C",
+                        os.fspath(workspace),
+                        "update-ref",
+                        branch_ref,
+                        commit_oid,
+                        "0" * len(source_revision),
+                    ],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                    permit_expires_at=permit_expires_at,
+                )
+            verified_commit = (
+                self._run(
+                    ["-C", os.fspath(workspace), "rev-parse", "--verify", branch_ref],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                    permit_expires_at=permit_expires_at,
+                )
+                .decode("ascii", "strict")
+                .strip()
+            )
+            verified_tree = (
+                self._run(
+                    ["-C", os.fspath(workspace), "rev-parse", f"{commit_oid}^{{tree}}"],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                    permit_expires_at=permit_expires_at,
+                )
+                .decode("ascii", "strict")
+                .strip()
+            )
+            verified_parent = (
+                self._run(
+                    ["-C", os.fspath(workspace), "rev-parse", f"{commit_oid}^"],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                    permit_expires_at=permit_expires_at,
+                )
+                .decode("ascii", "strict")
+                .strip()
+            )
+            if (
+                verified_commit != commit_oid
+                or verified_tree != tree_oid
+                or verified_parent != source_revision
+                or self.status(workspace, source_revision) != status
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            return LocalCommitProof(
+                branch_ref=branch_ref,
+                commit_oid=commit_oid,
+                tree_oid=tree_oid,
+                parent_oid=source_revision,
+            )
+        finally:
+            for temporary in (lock_path, index_path):
+                try:
+                    temporary.unlink()
+                except FileNotFoundError:
+                    pass
+
     def discard_worktree(
         self,
         mirror: Path,
@@ -680,7 +952,7 @@ class GitOperations:
         *,
         object_id_hex_length: int,
         source_revision: str,
-    ) -> None:
+    ) -> tuple[str, ...]:
         self._validate_managed_config(
             mirror,
             object_id_hex_length=object_id_hex_length,
@@ -704,7 +976,11 @@ class GitOperations:
             raise
         except OSError as exc:
             raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
-        self._validate_empty_ref_namespace(mirror / "refs")
+        return self._validate_managed_ref_namespace(
+            mirror,
+            object_id_hex_length=object_id_hex_length,
+            source_revision=source_revision,
+        )
 
     def _validate_managed_head(self, mirror: Path, source_revision: str) -> None:
         expected = (source_revision + "\n").encode("ascii")
@@ -734,7 +1010,14 @@ class GitOperations:
         finally:
             os.close(descriptor)
 
-    def _validate_empty_ref_namespace(self, refs: Path) -> None:
+    def _validate_managed_ref_namespace(
+        self,
+        mirror: Path,
+        *,
+        object_id_hex_length: int,
+        source_revision: str,
+    ) -> tuple[str, ...]:
+        refs = mirror / "refs"
         try:
             with os.scandir(refs) as entries:
                 found = {entry.name for entry in entries}
@@ -745,13 +1028,103 @@ class GitOperations:
                 metadata = os.lstat(path)
                 if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
                     raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
-                with os.scandir(path) as entries:
-                    if next(entries, None) is not None:
-                        raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            with os.scandir(refs / "tags") as entries:
+                if next(entries, None) is not None:
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            with os.scandir(refs / "heads") as entries:
+                head_entries = {entry.name for entry in entries}
+            if not head_entries:
+                return ()
+            if head_entries != {"visual-engineer"}:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            namespace = refs / "heads" / "visual-engineer"
+            namespace_metadata = os.lstat(namespace)
+            if not stat.S_ISDIR(namespace_metadata.st_mode) or stat.S_ISLNK(
+                namespace_metadata.st_mode
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            with os.scandir(namespace) as entries:
+                reference_names = sorted(entry.name for entry in entries)
+            if len(reference_names) > self._settings.mirror_max_local_delivery_refs:
+                raise GitOperationError(FailureCode.MIRROR_BUDGET_EXCEEDED)
         except GitOperationError:
             raise
         except OSError as exc:
             raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+        object_ids: list[str] = []
+        for name in reference_names:
+            if re.fullmatch(r"[0-9a-f]{32}", name) is None:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            reference = namespace / name
+            try:
+                descriptor = os.open(
+                    reference,
+                    os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                )
+            except OSError as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+            try:
+                before = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(before.st_mode)
+                    or before.st_nlink != 1
+                    or stat.S_IMODE(before.st_mode) != 0o644
+                    or before.st_size != object_id_hex_length + 1
+                ):
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+                payload = os.read(descriptor, object_id_hex_length + 2)
+                after = os.fstat(descriptor)
+                if _WorkspaceEntrySnapshot.from_stat(before) != _WorkspaceEntrySnapshot.from_stat(
+                    after
+                ):
+                    raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            finally:
+                os.close(descriptor)
+            try:
+                object_id = payload.decode("ascii", "strict").removesuffix("\n")
+            except UnicodeDecodeError as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+            if len(payload) != object_id_hex_length + 1 or not payload.endswith(b"\n"):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            if len(object_id) != object_id_hex_length or any(
+                character not in "0123456789abcdef" for character in object_id
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            branch_ref = f"refs/heads/visual-engineer/{name}"
+            actual = (
+                self._run(
+                    [
+                        "-C",
+                        os.fspath(mirror),
+                        "rev-parse",
+                        "--verify",
+                        f"{branch_ref}^{{commit}}",
+                    ],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                )
+                .decode("ascii", "strict")
+                .strip()
+            )
+            lineage = (
+                self._run(
+                    [
+                        "-C",
+                        os.fspath(mirror),
+                        "rev-list",
+                        "--parents",
+                        "-n",
+                        "1",
+                        object_id,
+                    ],
+                    failure=FailureCode.WORKSPACE_STATE_INVALID,
+                )
+                .decode("ascii", "strict")
+                .strip()
+            )
+            if actual != object_id or lineage != f"{object_id} {source_revision}":
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            object_ids.append(object_id)
+        return tuple(object_ids)
 
     def _validate_managed_config(
         self,
@@ -813,6 +1186,7 @@ class GitOperations:
         destination: Path,
         *,
         source_revision: str,
+        local_delivery_roots: tuple[str, ...],
         permit_expires_at: datetime,
     ) -> tuple[CheckoutManifestEntry, ...]:
         try:
@@ -840,6 +1214,39 @@ class GitOperations:
                 source_revision,
                 require_fresh=require_fresh,
             )
+            if local_delivery_roots:
+                try:
+                    local_reader = SourceObjectClosure(
+                        destination.parent,
+                        object_id_hex_length=len(source_revision),
+                        limits=ObjectLimits(
+                            max_objects=self._settings.mirror_max_object_files,
+                            max_bytes=self._settings.mirror_max_object_bytes,
+                            max_single_object_bytes=self._settings.mirror_max_single_object_bytes,
+                            max_pack_files=self._settings.mirror_max_pack_files,
+                            max_delta_depth=self._settings.mirror_max_delta_depth,
+                            max_tree_depth=self._settings.mirror_max_tree_depth,
+                            max_tree_entries=self._settings.mirror_max_tree_entries,
+                            max_references=self._settings.mirror_max_object_references,
+                            max_graph_depth=self._settings.mirror_max_graph_depth,
+                        ),
+                    )
+                    local_closure: dict[str, ObjectRecord] = {}
+                    for root in local_delivery_roots:
+                        local_closure.update(
+                            local_reader.collect(
+                                root,
+                                require_fresh=require_fresh,
+                            )
+                        )
+                except SourceObjectError as exc:
+                    code = (
+                        exc.code
+                        if exc.code == FailureCode.MIRROR_BUDGET_EXCEEDED
+                        else FailureCode.WORKSPACE_STATE_INVALID
+                    )
+                    raise GitOperationError(code) from exc
+                closure.update(local_closure)
             reader.materialize(
                 destination,
                 closure,
@@ -1146,6 +1553,8 @@ class GitOperations:
         failure: FailureCode,
         allowed_returncodes: frozenset[int] = frozenset({0}),
         permit_expires_at: datetime | None = None,
+        index_file: Path | None = None,
+        commit_timestamp: datetime | None = None,
     ) -> bytes:
         if any("\x00" in argument for argument in arguments):
             raise GitOperationError(FailureCode.PATH_INVALID)
@@ -1180,6 +1589,10 @@ class GitOperations:
             "fetch.fsckObjects=true",
             "-c",
             "transfer.fsckObjects=true",
+            "-c",
+            "commit.gpgSign=false",
+            "-c",
+            "tag.gpgSign=false",
             *arguments,
         ]
         environment = {
@@ -1202,6 +1615,34 @@ class GitOperations:
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
         }
+        if index_file is not None:
+            try:
+                registry_root = self._settings.registry_root.resolve(strict=True)
+                resolved_parent = index_file.parent.resolve(strict=True)
+            except (OSError, RuntimeError) as exc:
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID) from exc
+            if (
+                resolved_parent != registry_root
+                or not index_file.name.startswith(".delivery-index-")
+                or index_file.is_symlink()
+                or (index_file.exists() and not index_file.is_file())
+            ):
+                raise GitOperationError(FailureCode.WORKSPACE_STATE_INVALID)
+            environment["GIT_INDEX_FILE"] = os.fspath(index_file)
+        if commit_timestamp is not None:
+            if commit_timestamp.tzinfo is None or commit_timestamp.utcoffset() is None:
+                raise GitOperationError(FailureCode.POLICY_DENIED)
+            timestamp = str(int(commit_timestamp.timestamp()))
+            environment.update(
+                {
+                    "GIT_AUTHOR_NAME": "VisualEngineer",
+                    "GIT_AUTHOR_EMAIL": "local-delivery@visualengineer.invalid",
+                    "GIT_AUTHOR_DATE": f"@{timestamp} +0000",
+                    "GIT_COMMITTER_NAME": "VisualEngineer",
+                    "GIT_COMMITTER_EMAIL": "local-delivery@visualengineer.invalid",
+                    "GIT_COMMITTER_DATE": f"@{timestamp} +0000",
+                }
+            )
         process: subprocess.Popen[bytes] | None = None
         timeout_seconds = self._settings.git_timeout_seconds
         timeout_failure = FailureCode.WORKSPACE_STATE_INVALID

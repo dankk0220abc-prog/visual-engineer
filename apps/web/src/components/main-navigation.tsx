@@ -11,6 +11,7 @@ const links = [
   { href: "/workspaces", label: "Workspaces" },
   { href: "/validations", label: "Validations" },
   { href: "/reviews", label: "Reviews" },
+  { href: "/deliveries", label: "Deliveries" },
 ];
 
 export function MainNavigation() {

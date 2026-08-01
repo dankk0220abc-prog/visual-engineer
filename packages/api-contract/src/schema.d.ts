@@ -4,6 +4,75 @@
  */
 
 export interface paths {
+  "/api/v1/delivery-authorizations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Delivery Authorizations */
+    get: operations["list_delivery_authorizations_api_v1_delivery_authorizations_get"];
+    put?: never;
+    /** Create Delivery Authorization */
+    post: operations["create_delivery_authorization_api_v1_delivery_authorizations_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/delivery-authorizations/{authorization_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Delivery Authorization */
+    get: operations["get_delivery_authorization_api_v1_delivery_authorizations__authorization_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/delivery-authorizations/{authorization_id}/decisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Decide Delivery Authorization */
+    post: operations["decide_delivery_authorization_api_v1_delivery_authorizations__authorization_id__decisions_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/delivery-authorizations/{authorization_id}/dispatch": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Dispatch Local Delivery */
+    post: operations["dispatch_local_delivery_api_v1_delivery_authorizations__authorization_id__dispatch_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/execution-grants": {
     parameters: {
       query?: never;
@@ -1272,7 +1341,8 @@ export interface components {
       | "workspace_diff_v1"
       | "workspace_rollback_v1"
       | "workspace_discard_v1"
-      | "validation_execute_v1";
+      | "validation_execute_v1"
+      | "workspace_git_commit_v1";
     /** ClaimRequest */
     ClaimRequest: {
       /**
@@ -1319,7 +1389,8 @@ export interface components {
         | components["schemas"]["WorkspaceDiffResult"]
         | components["schemas"]["WorkspaceRollbackResult"]
         | components["schemas"]["WorkspaceDiscardResult"]
-        | components["schemas"]["ValidationExecutionResult"];
+        | components["schemas"]["ValidationExecutionResult"]
+        | components["schemas"]["WorkspaceGitCommitResult"];
       /**
        * Runner Id
        * Format: uuid
@@ -1363,6 +1434,352 @@ export interface components {
      * @enum {string}
      */
     DecisionKind: "approve" | "reject";
+    /** DeliveryAuthorizationCreate */
+    DeliveryAuthorizationCreate: {
+      /**
+       * Review Package Id
+       * Format: uuid
+       */
+      review_package_id: string;
+    };
+    /** DeliveryAuthorizationDecisionCreate */
+    DeliveryAuthorizationDecisionCreate: {
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: "approve" | "reject";
+      /** Reason */
+      reason?: string | null;
+    };
+    /** DeliveryAuthorizationDecisionResponse */
+    DeliveryAuthorizationDecisionResponse: {
+      /**
+       * Actor Type
+       * @constant
+       */
+      actor_type: "local_user";
+      /** Authorization Policy Hash */
+      authorization_policy_hash: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: "approve" | "reject";
+      /** Decision Digest */
+      decision_digest: string;
+      /**
+       * Delivery Authorization Id
+       * Format: uuid
+       */
+      delivery_authorization_id: string;
+      /**
+       * Deployment Access
+       * @constant
+       */
+      deployment_access: false;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Idempotency Key */
+      idempotency_key: string;
+      /** Idempotency Request Hash */
+      idempotency_request_hash: string;
+      /** Local Git Commit Authorized */
+      local_git_commit_authorized: boolean;
+      /**
+       * Pull Request Access
+       * @constant
+       */
+      pull_request_access: false;
+      /**
+       * Push Access
+       * @constant
+       */
+      push_access: false;
+      /** Reason */
+      reason: string | null;
+      /**
+       * Remote Access
+       * @constant
+       */
+      remote_access: false;
+      /** Request Id */
+      request_id: string;
+      /**
+       * Tag Access
+       * @constant
+       */
+      tag_access: false;
+    };
+    /** DeliveryAuthorizationListResponse */
+    DeliveryAuthorizationListResponse: {
+      /** Items */
+      items: components["schemas"]["DeliveryAuthorizationResponse"][];
+      /** Total */
+      total: number;
+    };
+    /** DeliveryAuthorizationPolicy */
+    DeliveryAuthorizationPolicy: {
+      /**
+       * Authorization Version
+       * @default 1
+       * @constant
+       */
+      authorization_version: 1;
+      /** Branch Ref */
+      branch_ref: string;
+      /** Checkpoint Diff Hash */
+      checkpoint_diff_hash: string;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /** Commit Message */
+      commit_message: string;
+      /**
+       * Commit Timestamp
+       * Format: date-time
+       */
+      commit_timestamp: string;
+      /** Decision Digest */
+      decision_digest: string;
+      /**
+       * Deployment Access
+       * @default false
+       * @constant
+       */
+      deployment_access: false;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /** Freshness Generation */
+      freshness_generation: number;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Local Git Commit Access
+       * @default true
+       * @constant
+       */
+      local_git_commit_access: true;
+      /** Package Digest */
+      package_digest: string;
+      /** Policy Hash */
+      policy_hash: string;
+      /**
+       * Pull Request Access
+       * @default false
+       * @constant
+       */
+      pull_request_access: false;
+      /**
+       * Push Access
+       * @default false
+       * @constant
+       */
+      push_access: false;
+      /** Readiness Digest */
+      readiness_digest: string;
+      /**
+       * Readiness Verdict Id
+       * Format: uuid
+       */
+      readiness_verdict_id: string;
+      /**
+       * Remote Access
+       * @default false
+       * @constant
+       */
+      remote_access: false;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /**
+       * Review Decision Id
+       * Format: uuid
+       */
+      review_decision_id: string;
+      /**
+       * Review Package Id
+       * Format: uuid
+       */
+      review_package_id: string;
+      /**
+       * Source Repository Write Access
+       * @default false
+       * @constant
+       */
+      source_repository_write_access: false;
+      /** Source Revision */
+      source_revision: string;
+      /**
+       * Tag Access
+       * @default false
+       * @constant
+       */
+      tag_access: false;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** DeliveryAuthorizationResponse */
+    DeliveryAuthorizationResponse: {
+      /**
+       * Authorization Version
+       * @constant
+       */
+      authorization_version: 1;
+      /** Branch Ref */
+      branch_ref: string;
+      /** Checkpoint Diff Hash */
+      checkpoint_diff_hash: string;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /** Commit Message */
+      commit_message: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Decided At */
+      decided_at: string | null;
+      decision:
+        components["schemas"]["DeliveryAuthorizationDecisionResponse"] | null;
+      /** Decision Digest */
+      decision_digest: string;
+      delivery: components["schemas"]["LocalDeliveryResponse"] | null;
+      /**
+       * Deployment Access
+       * @constant
+       */
+      deployment_access: false;
+      /** Dispatched At */
+      dispatched_at: string | null;
+      /** Error Code */
+      error_code: string | null;
+      /**
+       * Execution Grant Id
+       * Format: uuid
+       */
+      execution_grant_id: string;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /** Freshness Generation */
+      freshness_generation: number;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      job: components["schemas"]["RunnerJobResponse"] | null;
+      /**
+       * Local Git Commit Access
+       * @constant
+       */
+      local_git_commit_access: true;
+      /** Package Digest */
+      package_digest: string;
+      /** Policy Hash */
+      policy_hash: string;
+      /**
+       * Pull Request Access
+       * @constant
+       */
+      pull_request_access: false;
+      /**
+       * Push Access
+       * @constant
+       */
+      push_access: false;
+      /** Readiness Digest */
+      readiness_digest: string;
+      /**
+       * Readiness Verdict Id
+       * Format: uuid
+       */
+      readiness_verdict_id: string;
+      /**
+       * Remote Access
+       * @constant
+       */
+      remote_access: false;
+      /**
+       * Repository Handle Id
+       * Format: uuid
+       */
+      repository_handle_id: string;
+      /**
+       * Review Decision Id
+       * Format: uuid
+       */
+      review_decision_id: string;
+      /**
+       * Review Package Id
+       * Format: uuid
+       */
+      review_package_id: string;
+      /**
+       * Source Repository Write Access
+       * @constant
+       */
+      source_repository_write_access: false;
+      /** Source Revision */
+      source_revision: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status:
+        | "pending"
+        | "approved"
+        | "rejected"
+        | "dispatched"
+        | "succeeded"
+        | "failed"
+        | "cancelled"
+        | "stale";
+      /**
+       * Tag Access
+       * @constant
+       */
+      tag_access: false;
+      /** Terminal At */
+      terminal_at: string | null;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
     /**
      * DeliveryPackage
      * @enum {string}
@@ -1974,7 +2391,8 @@ export interface components {
         | components["schemas"]["WorkspaceDiffJobSpec"]
         | components["schemas"]["WorkspaceRollbackJobSpec"]
         | components["schemas"]["WorkspaceDiscardJobSpec"]
-        | components["schemas"]["ValidationExecuteJobSpec"];
+        | components["schemas"]["ValidationExecuteJobSpec"]
+        | components["schemas"]["WorkspaceGitCommitJobSpec"];
       /**
        * Job Id
        * Format: uuid
@@ -2007,7 +2425,8 @@ export interface components {
       | "workspace_diff_v1"
       | "workspace_rollback_v1"
       | "workspace_discard_v1"
-      | "validation_execute_v1";
+      | "validation_execute_v1"
+      | "workspace_git_commit_v1";
     /**
      * JobState
      * @enum {string}
@@ -2042,6 +2461,88 @@ export interface components {
       /** Leased Until */
       leased_until: string | null;
       state: components["schemas"]["JobState"];
+    };
+    /** LocalDeliveryResponse */
+    LocalDeliveryResponse: {
+      /** Branch Ref */
+      branch_ref: string;
+      /** Checkpoint Diff Hash */
+      checkpoint_diff_hash: string;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /** Commit Oid */
+      commit_oid: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Delivery Authorization Id
+       * Format: uuid
+       */
+      delivery_authorization_id: string;
+      /**
+       * Deployed
+       * @constant
+       */
+      deployed: false;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Parent Oid */
+      parent_oid: string;
+      /**
+       * Pull Request Created
+       * @constant
+       */
+      pull_request_created: false;
+      /**
+       * Pushed
+       * @constant
+       */
+      pushed: false;
+      /**
+       * Remote Access
+       * @constant
+       */
+      remote_access: false;
+      /** Result Digest */
+      result_digest: string;
+      /**
+       * Runner Attempt Id
+       * Format: uuid
+       */
+      runner_attempt_id: string;
+      /**
+       * Runner Job Id
+       * Format: uuid
+       */
+      runner_job_id: string;
+      /**
+       * Side Effect Permit Id
+       * Format: uuid
+       */
+      side_effect_permit_id: string;
+      /**
+       * Tagged
+       * @constant
+       */
+      tagged: false;
+      /** Tree Oid */
+      tree_oid: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
     };
     /** MakeTargetValidationStep */
     MakeTargetValidationStep: {
@@ -2079,7 +2580,10 @@ export interface components {
        * @default local_user_job_dispatch
        * @enum {string}
        */
-      authorization_source: "local_user_job_dispatch" | "execution_grant";
+      authorization_source:
+        | "local_user_job_dispatch"
+        | "execution_grant"
+        | "execution_grant_and_delivery_authorization";
       /**
        * Envelope Version
        * @default 1
@@ -3031,6 +3535,8 @@ export interface components {
        * Format: date-time
        */
       created_at: string;
+      /** Delivery Authorization Id */
+      delivery_authorization_id: string | null;
       /** Error Code */
       error_code: string | null;
       /** Error Message */
@@ -3070,6 +3576,7 @@ export interface components {
             | components["schemas"]["WorkspaceRollbackResult"]
             | components["schemas"]["WorkspaceDiscardResult"]
             | components["schemas"]["ValidationExecutionResult"]
+            | components["schemas"]["WorkspaceGitCommitResult"]
           )
         | null;
       /** Source Revision */
@@ -3148,6 +3655,8 @@ export interface components {
        * Format: date-time
        */
       consumed_at: string;
+      /** Delivery Authorization Id */
+      delivery_authorization_id?: string | null;
       /** Expected Current */
       expected_current: string;
       /**
@@ -4623,6 +5132,72 @@ export interface components {
        */
       workspace_id: string;
     };
+    /** WorkspaceGitCommitJobSpec */
+    WorkspaceGitCommitJobSpec: {
+      /** Checkpoint Diff Hash */
+      checkpoint_diff_hash: string;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      delivery_authorization: components["schemas"]["DeliveryAuthorizationPolicy"];
+      execution_grant: components["schemas"]["ExecutionGrantPolicy"];
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_git_commit_v1";
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
+    /** WorkspaceGitCommitResult */
+    WorkspaceGitCommitResult: {
+      /** Branch Ref */
+      branch_ref: string;
+      /** Checkpoint Diff Hash */
+      checkpoint_diff_hash: string;
+      /** Checkpoint Fingerprint */
+      checkpoint_fingerprint: string;
+      /**
+       * Checkpoint Id
+       * Format: uuid
+       */
+      checkpoint_id: string;
+      /** Commit Oid */
+      commit_oid: string;
+      /**
+       * Delivery Authorization Id
+       * Format: uuid
+       */
+      delivery_authorization_id: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: "workspace_git_commit_v1";
+      /** Parent Oid */
+      parent_oid: string;
+      /** Result Digest */
+      result_digest: string;
+      /**
+       * Side Effect Permit Id
+       * Format: uuid
+       */
+      side_effect_permit_id: string;
+      /** Tree Oid */
+      tree_oid: string;
+      /**
+       * Workspace Id
+       * Format: uuid
+       */
+      workspace_id: string;
+    };
     /** WorkspaceListAction */
     WorkspaceListAction: {
       /**
@@ -4697,7 +5272,8 @@ export interface components {
       | "diff"
       | "rollback"
       | "discard"
-      | "validate";
+      | "validate"
+      | "git_commit";
     /** WorkspacePrepareJobSpec */
     WorkspacePrepareJobSpec: {
       execution_grant: components["schemas"]["ExecutionGrantPolicy"];
@@ -5073,6 +5649,259 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  list_delivery_authorizations_api_v1_delivery_authorizations_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeliveryAuthorizationListResponse"];
+        };
+      };
+      /** @description Delivery resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery state or freshness conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_delivery_authorization_api_v1_delivery_authorizations_post: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliveryAuthorizationCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeliveryAuthorizationResponse"];
+        };
+      };
+      /** @description Delivery resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery state or freshness conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_delivery_authorization_api_v1_delivery_authorizations__authorization_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        authorization_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeliveryAuthorizationResponse"];
+        };
+      };
+      /** @description Delivery resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery state or freshness conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  decide_delivery_authorization_api_v1_delivery_authorizations__authorization_id__decisions_post: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        authorization_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliveryAuthorizationDecisionCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeliveryAuthorizationResponse"];
+        };
+      };
+      /** @description Delivery resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery state or freshness conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  dispatch_local_delivery_api_v1_delivery_authorizations__authorization_id__dispatch_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        authorization_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeliveryAuthorizationResponse"];
+        };
+      };
+      /** @description Delivery resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery state or freshness conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Delivery policy denied the request */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
   list_execution_grants_api_v1_execution_grants_get: {
     parameters: {
       query?: never;

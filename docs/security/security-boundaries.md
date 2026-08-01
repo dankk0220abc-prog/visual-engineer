@@ -1,5 +1,19 @@
 # Security Boundaries
 
+## Phase 6 local Git boundary
+
+Phase 6 adds Git mutation only inside Runner-owned mirror metadata. The API
+derives the ref and message; the Runner disables global/system configuration,
+credentials, protocols, prompts, hooks, signing, filters, replacements, and
+optional locks. It builds an alternate index under the authenticated registry
+root, hashes only authorized regular Workspace files, creates one commit with
+fixed identity/time, and performs one expected-old-OID ref update.
+
+The operation verifies the exact parent, tree, ref, unchanged Workspace status,
+source revision/fingerprint, and dual authority before reporting success.
+Source repository bytes and refs are invariants. No remote exists in the
+authority or result schema.
+
 ## Trust zones
 
 ```mermaid

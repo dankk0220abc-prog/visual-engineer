@@ -202,7 +202,8 @@
           "workspace_diff_v1",
           "workspace_rollback_v1",
           "workspace_discard_v1",
-          "validation_execute_v1"
+          "validation_execute_v1",
+          "workspace_git_commit_v1"
         ],
         "title": "Capability",
         "type": "string"
@@ -271,6 +272,7 @@
                 "validation_execute_v1": "#/components/schemas/ValidationExecutionResult",
                 "workspace_diff_v1": "#/components/schemas/WorkspaceDiffResult",
                 "workspace_discard_v1": "#/components/schemas/WorkspaceDiscardResult",
+                "workspace_git_commit_v1": "#/components/schemas/WorkspaceGitCommitResult",
                 "workspace_list_v1": "#/components/schemas/WorkspaceListResult",
                 "workspace_prepare_v1": "#/components/schemas/WorkspacePrepareResult",
                 "workspace_read_text_v1": "#/components/schemas/WorkspaceReadTextResult",
@@ -313,6 +315,9 @@
               },
               {
                 "$ref": "#/components/schemas/ValidationExecutionResult"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceGitCommitResult"
               }
             ],
             "title": "Result"
@@ -392,6 +397,619 @@
         "enum": ["approve", "reject"],
         "title": "DecisionKind",
         "type": "string"
+      },
+      "DeliveryAuthorizationCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "review_package_id": {
+            "format": "uuid",
+            "title": "Review Package Id",
+            "type": "string"
+          }
+        },
+        "required": ["review_package_id"],
+        "title": "DeliveryAuthorizationCreate",
+        "type": "object"
+      },
+      "DeliveryAuthorizationDecisionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": ["decision"],
+        "title": "DeliveryAuthorizationDecisionCreate",
+        "type": "object"
+      },
+      "DeliveryAuthorizationDecisionResponse": {
+        "properties": {
+          "actor_type": {
+            "const": "local_user",
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "authorization_policy_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Authorization Policy Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "enum": ["approve", "reject"],
+            "title": "Decision",
+            "type": "string"
+          },
+          "decision_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Decision Digest",
+            "type": "string"
+          },
+          "delivery_authorization_id": {
+            "format": "uuid",
+            "title": "Delivery Authorization Id",
+            "type": "string"
+          },
+          "deployment_access": {
+            "const": false,
+            "title": "Deployment Access",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "idempotency_request_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Idempotency Request Hash",
+            "type": "string"
+          },
+          "local_git_commit_authorized": {
+            "title": "Local Git Commit Authorized",
+            "type": "boolean"
+          },
+          "pull_request_access": {
+            "const": false,
+            "title": "Pull Request Access",
+            "type": "boolean"
+          },
+          "push_access": {
+            "const": false,
+            "title": "Push Access",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "remote_access": {
+            "const": false,
+            "title": "Remote Access",
+            "type": "boolean"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "tag_access": {
+            "const": false,
+            "title": "Tag Access",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "delivery_authorization_id",
+          "authorization_policy_hash",
+          "decision",
+          "reason",
+          "actor_type",
+          "request_id",
+          "idempotency_key",
+          "idempotency_request_hash",
+          "decision_digest",
+          "local_git_commit_authorized",
+          "remote_access",
+          "push_access",
+          "pull_request_access",
+          "tag_access",
+          "deployment_access",
+          "created_at"
+        ],
+        "title": "DeliveryAuthorizationDecisionResponse",
+        "type": "object"
+      },
+      "DeliveryAuthorizationListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeliveryAuthorizationResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "DeliveryAuthorizationListResponse",
+        "type": "object"
+      },
+      "DeliveryAuthorizationPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "authorization_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Authorization Version",
+            "type": "integer"
+          },
+          "branch_ref": {
+            "pattern": "^refs/heads/visual-engineer/[0-9a-f]{32}$",
+            "title": "Branch Ref",
+            "type": "string"
+          },
+          "checkpoint_diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Diff Hash",
+            "type": "string"
+          },
+          "checkpoint_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Fingerprint",
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "format": "uuid",
+            "title": "Checkpoint Id",
+            "type": "string"
+          },
+          "commit_message": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^VisualEngineer: governed local delivery [0-9a-f]{8}$",
+            "title": "Commit Message",
+            "type": "string"
+          },
+          "commit_timestamp": {
+            "format": "date-time",
+            "title": "Commit Timestamp",
+            "type": "string"
+          },
+          "decision_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Decision Digest",
+            "type": "string"
+          },
+          "deployment_access": {
+            "const": false,
+            "default": false,
+            "title": "Deployment Access",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "freshness_generation": {
+            "minimum": 1.0,
+            "title": "Freshness Generation",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "local_git_commit_access": {
+            "const": true,
+            "default": true,
+            "title": "Local Git Commit Access",
+            "type": "boolean"
+          },
+          "package_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Package Digest",
+            "type": "string"
+          },
+          "policy_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Hash",
+            "type": "string"
+          },
+          "pull_request_access": {
+            "const": false,
+            "default": false,
+            "title": "Pull Request Access",
+            "type": "boolean"
+          },
+          "push_access": {
+            "const": false,
+            "default": false,
+            "title": "Push Access",
+            "type": "boolean"
+          },
+          "readiness_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Readiness Digest",
+            "type": "string"
+          },
+          "readiness_verdict_id": {
+            "format": "uuid",
+            "title": "Readiness Verdict Id",
+            "type": "string"
+          },
+          "remote_access": {
+            "const": false,
+            "default": false,
+            "title": "Remote Access",
+            "type": "boolean"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "review_decision_id": {
+            "format": "uuid",
+            "title": "Review Decision Id",
+            "type": "string"
+          },
+          "review_package_id": {
+            "format": "uuid",
+            "title": "Review Package Id",
+            "type": "string"
+          },
+          "source_repository_write_access": {
+            "const": false,
+            "default": false,
+            "title": "Source Repository Write Access",
+            "type": "boolean"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "tag_access": {
+            "const": false,
+            "default": false,
+            "title": "Tag Access",
+            "type": "boolean"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "review_package_id",
+          "review_decision_id",
+          "readiness_verdict_id",
+          "freshness_generation",
+          "package_digest",
+          "decision_digest",
+          "readiness_digest",
+          "workspace_id",
+          "checkpoint_id",
+          "checkpoint_fingerprint",
+          "checkpoint_diff_hash",
+          "repository_handle_id",
+          "source_revision",
+          "branch_ref",
+          "commit_message",
+          "commit_timestamp",
+          "expires_at",
+          "policy_hash"
+        ],
+        "title": "DeliveryAuthorizationPolicy",
+        "type": "object"
+      },
+      "DeliveryAuthorizationResponse": {
+        "properties": {
+          "authorization_version": {
+            "const": 1,
+            "title": "Authorization Version",
+            "type": "integer"
+          },
+          "branch_ref": {
+            "title": "Branch Ref",
+            "type": "string"
+          },
+          "checkpoint_diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Diff Hash",
+            "type": "string"
+          },
+          "checkpoint_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Fingerprint",
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "format": "uuid",
+            "title": "Checkpoint Id",
+            "type": "string"
+          },
+          "commit_message": {
+            "title": "Commit Message",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryAuthorizationDecisionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Decision Digest",
+            "type": "string"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalDeliveryResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deployment_access": {
+            "const": false,
+            "title": "Deployment Access",
+            "type": "boolean"
+          },
+          "dispatched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatched At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "execution_grant_id": {
+            "format": "uuid",
+            "title": "Execution Grant Id",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "freshness_generation": {
+            "title": "Freshness Generation",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunnerJobResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "local_git_commit_access": {
+            "const": true,
+            "title": "Local Git Commit Access",
+            "type": "boolean"
+          },
+          "package_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Package Digest",
+            "type": "string"
+          },
+          "policy_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Hash",
+            "type": "string"
+          },
+          "pull_request_access": {
+            "const": false,
+            "title": "Pull Request Access",
+            "type": "boolean"
+          },
+          "push_access": {
+            "const": false,
+            "title": "Push Access",
+            "type": "boolean"
+          },
+          "readiness_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Readiness Digest",
+            "type": "string"
+          },
+          "readiness_verdict_id": {
+            "format": "uuid",
+            "title": "Readiness Verdict Id",
+            "type": "string"
+          },
+          "remote_access": {
+            "const": false,
+            "title": "Remote Access",
+            "type": "boolean"
+          },
+          "repository_handle_id": {
+            "format": "uuid",
+            "title": "Repository Handle Id",
+            "type": "string"
+          },
+          "review_decision_id": {
+            "format": "uuid",
+            "title": "Review Decision Id",
+            "type": "string"
+          },
+          "review_package_id": {
+            "format": "uuid",
+            "title": "Review Package Id",
+            "type": "string"
+          },
+          "source_repository_write_access": {
+            "const": false,
+            "title": "Source Repository Write Access",
+            "type": "boolean"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "dispatched",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "stale"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tag_access": {
+            "const": false,
+            "title": "Tag Access",
+            "type": "boolean"
+          },
+          "terminal_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal At"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "authorization_version",
+          "review_package_id",
+          "review_decision_id",
+          "readiness_verdict_id",
+          "freshness_generation",
+          "package_digest",
+          "decision_digest",
+          "readiness_digest",
+          "execution_grant_id",
+          "workspace_id",
+          "checkpoint_id",
+          "checkpoint_fingerprint",
+          "checkpoint_diff_hash",
+          "repository_handle_id",
+          "source_revision",
+          "branch_ref",
+          "commit_message",
+          "local_git_commit_access",
+          "remote_access",
+          "push_access",
+          "pull_request_access",
+          "tag_access",
+          "deployment_access",
+          "source_repository_write_access",
+          "status",
+          "policy_hash",
+          "created_at",
+          "decided_at",
+          "dispatched_at",
+          "terminal_at",
+          "expires_at",
+          "error_code",
+          "decision",
+          "job",
+          "delivery"
+        ],
+        "title": "DeliveryAuthorizationResponse",
+        "type": "object"
       },
       "DeliveryPackage": {
         "enum": [
@@ -783,7 +1401,7 @@
             "items": {
               "$ref": "#/components/schemas/WorkspaceOperation"
             },
-            "maxItems": 9,
+            "maxItems": 10,
             "minItems": 1,
             "title": "Allowed Operations",
             "type": "array"
@@ -1687,6 +2305,7 @@
                 "validation_execute_v1": "#/components/schemas/ValidationExecuteJobSpec",
                 "workspace_diff_v1": "#/components/schemas/WorkspaceDiffJobSpec",
                 "workspace_discard_v1": "#/components/schemas/WorkspaceDiscardJobSpec",
+                "workspace_git_commit_v1": "#/components/schemas/WorkspaceGitCommitJobSpec",
                 "workspace_list_v1": "#/components/schemas/WorkspaceListJobSpec",
                 "workspace_prepare_v1": "#/components/schemas/WorkspacePrepareJobSpec",
                 "workspace_read_text_v1": "#/components/schemas/WorkspaceReadTextJobSpec",
@@ -1729,6 +2348,9 @@
               },
               {
                 "$ref": "#/components/schemas/ValidationExecuteJobSpec"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceGitCommitJobSpec"
               }
             ],
             "title": "Job"
@@ -1776,7 +2398,8 @@
           "workspace_diff_v1",
           "workspace_rollback_v1",
           "workspace_discard_v1",
-          "validation_execute_v1"
+          "validation_execute_v1",
+          "workspace_git_commit_v1"
         ],
         "title": "JobKind",
         "type": "string"
@@ -1842,6 +2465,133 @@
         "title": "LeaseMutationResponse",
         "type": "object"
       },
+      "LocalDeliveryResponse": {
+        "properties": {
+          "branch_ref": {
+            "title": "Branch Ref",
+            "type": "string"
+          },
+          "checkpoint_diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Diff Hash",
+            "type": "string"
+          },
+          "checkpoint_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Fingerprint",
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "format": "uuid",
+            "title": "Checkpoint Id",
+            "type": "string"
+          },
+          "commit_oid": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Commit Oid",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "delivery_authorization_id": {
+            "format": "uuid",
+            "title": "Delivery Authorization Id",
+            "type": "string"
+          },
+          "deployed": {
+            "const": false,
+            "title": "Deployed",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parent_oid": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Parent Oid",
+            "type": "string"
+          },
+          "pull_request_created": {
+            "const": false,
+            "title": "Pull Request Created",
+            "type": "boolean"
+          },
+          "pushed": {
+            "const": false,
+            "title": "Pushed",
+            "type": "boolean"
+          },
+          "remote_access": {
+            "const": false,
+            "title": "Remote Access",
+            "type": "boolean"
+          },
+          "result_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Result Digest",
+            "type": "string"
+          },
+          "runner_attempt_id": {
+            "format": "uuid",
+            "title": "Runner Attempt Id",
+            "type": "string"
+          },
+          "runner_job_id": {
+            "format": "uuid",
+            "title": "Runner Job Id",
+            "type": "string"
+          },
+          "side_effect_permit_id": {
+            "format": "uuid",
+            "title": "Side Effect Permit Id",
+            "type": "string"
+          },
+          "tagged": {
+            "const": false,
+            "title": "Tagged",
+            "type": "boolean"
+          },
+          "tree_oid": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Tree Oid",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "delivery_authorization_id",
+          "runner_job_id",
+          "runner_attempt_id",
+          "side_effect_permit_id",
+          "workspace_id",
+          "checkpoint_id",
+          "checkpoint_fingerprint",
+          "checkpoint_diff_hash",
+          "branch_ref",
+          "commit_oid",
+          "tree_oid",
+          "parent_oid",
+          "result_digest",
+          "remote_access",
+          "pushed",
+          "pull_request_created",
+          "tagged",
+          "deployed",
+          "created_at"
+        ],
+        "title": "LocalDeliveryResponse",
+        "type": "object"
+      },
       "MakeTargetValidationStep": {
         "additionalProperties": false,
         "properties": {
@@ -1905,7 +2655,11 @@
           },
           "authorization_source": {
             "default": "local_user_job_dispatch",
-            "enum": ["local_user_job_dispatch", "execution_grant"],
+            "enum": [
+              "local_user_job_dispatch",
+              "execution_grant",
+              "execution_grant_and_delivery_authorization"
+            ],
             "title": "Authorization Source",
             "type": "string"
           },
@@ -3951,6 +4705,18 @@
             "title": "Created At",
             "type": "string"
           },
+          "delivery_authorization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Authorization Id"
+          },
           "error_code": {
             "anyOf": [
               {
@@ -4042,6 +4808,7 @@
                     "validation_execute_v1": "#/components/schemas/ValidationExecutionResult",
                     "workspace_diff_v1": "#/components/schemas/WorkspaceDiffResult",
                     "workspace_discard_v1": "#/components/schemas/WorkspaceDiscardResult",
+                    "workspace_git_commit_v1": "#/components/schemas/WorkspaceGitCommitResult",
                     "workspace_list_v1": "#/components/schemas/WorkspaceListResult",
                     "workspace_prepare_v1": "#/components/schemas/WorkspacePrepareResult",
                     "workspace_read_text_v1": "#/components/schemas/WorkspaceReadTextResult",
@@ -4084,6 +4851,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ValidationExecutionResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkspaceGitCommitResult"
                   }
                 ]
               },
@@ -4136,6 +4906,7 @@
           "requested_by",
           "parameters",
           "execution_grant_id",
+          "delivery_authorization_id",
           "workspace_id",
           "repository_handle_id",
           "source_revision",
@@ -4291,6 +5062,18 @@
             "format": "date-time",
             "title": "Consumed At",
             "type": "string"
+          },
+          "delivery_authorization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Authorization Id"
           },
           "expected_current": {
             "maxLength": 64,
@@ -7556,6 +8339,134 @@
         "title": "WorkspaceEventResponse",
         "type": "object"
       },
+      "WorkspaceGitCommitJobSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Diff Hash",
+            "type": "string"
+          },
+          "checkpoint_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Fingerprint",
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "format": "uuid",
+            "title": "Checkpoint Id",
+            "type": "string"
+          },
+          "delivery_authorization": {
+            "$ref": "#/components/schemas/DeliveryAuthorizationPolicy"
+          },
+          "execution_grant": {
+            "$ref": "#/components/schemas/ExecutionGrantPolicy"
+          },
+          "kind": {
+            "const": "workspace_git_commit_v1",
+            "default": "workspace_git_commit_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "execution_grant",
+          "delivery_authorization",
+          "checkpoint_id",
+          "checkpoint_fingerprint",
+          "checkpoint_diff_hash"
+        ],
+        "title": "WorkspaceGitCommitJobSpec",
+        "type": "object"
+      },
+      "WorkspaceGitCommitResult": {
+        "additionalProperties": false,
+        "properties": {
+          "branch_ref": {
+            "pattern": "^refs/heads/visual-engineer/[0-9a-f]{32}$",
+            "title": "Branch Ref",
+            "type": "string"
+          },
+          "checkpoint_diff_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Diff Hash",
+            "type": "string"
+          },
+          "checkpoint_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checkpoint Fingerprint",
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "format": "uuid",
+            "title": "Checkpoint Id",
+            "type": "string"
+          },
+          "commit_oid": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Commit Oid",
+            "type": "string"
+          },
+          "delivery_authorization_id": {
+            "format": "uuid",
+            "title": "Delivery Authorization Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "workspace_git_commit_v1",
+            "default": "workspace_git_commit_v1",
+            "title": "Kind",
+            "type": "string"
+          },
+          "parent_oid": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Parent Oid",
+            "type": "string"
+          },
+          "result_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Result Digest",
+            "type": "string"
+          },
+          "side_effect_permit_id": {
+            "format": "uuid",
+            "title": "Side Effect Permit Id",
+            "type": "string"
+          },
+          "tree_oid": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Tree Oid",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "delivery_authorization_id",
+          "checkpoint_id",
+          "checkpoint_fingerprint",
+          "checkpoint_diff_hash",
+          "branch_ref",
+          "commit_oid",
+          "tree_oid",
+          "parent_oid",
+          "result_digest",
+          "side_effect_permit_id"
+        ],
+        "title": "WorkspaceGitCommitResult",
+        "type": "object"
+      },
       "WorkspaceListAction": {
         "additionalProperties": false,
         "properties": {
@@ -7694,7 +8605,8 @@
           "diff",
           "rollback",
           "discard",
-          "validate"
+          "validate",
+          "git_commit"
         ],
         "title": "WorkspaceOperation",
         "type": "string"
@@ -8495,12 +9407,335 @@
     }
   },
   "info": {
-    "description": "Phase 5 Control Plane API for governed planning, isolated fixture workspaces, and fixed-profile Validation Runs. Plan approval alone never authorizes execution.",
+    "description": "Phase 6 Control Plane API for governed planning, isolated fixture workspaces, fixed-profile Validation, immutable Review, and separately authorized local fixture delivery. Review approval alone never authorizes a Git operation.",
     "title": "VisualEngineer API",
-    "version": "0.5.0"
+    "version": "0.6.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/delivery-authorizations": {
+      "get": {
+        "operationId": "list_delivery_authorizations_api_v1_delivery_authorizations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryAuthorizationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery state or freshness conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery policy denied the request"
+          }
+        },
+        "summary": "List Delivery Authorizations",
+        "tags": ["governed local delivery"]
+      },
+      "post": {
+        "operationId": "create_delivery_authorization_api_v1_delivery_authorizations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryAuthorizationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryAuthorizationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery state or freshness conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery policy denied the request"
+          }
+        },
+        "summary": "Create Delivery Authorization",
+        "tags": ["governed local delivery"]
+      }
+    },
+    "/api/v1/delivery-authorizations/{authorization_id}": {
+      "get": {
+        "operationId": "get_delivery_authorization_api_v1_delivery_authorizations__authorization_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "authorization_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Authorization Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryAuthorizationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery state or freshness conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery policy denied the request"
+          }
+        },
+        "summary": "Get Delivery Authorization",
+        "tags": ["governed local delivery"]
+      }
+    },
+    "/api/v1/delivery-authorizations/{authorization_id}/decisions": {
+      "post": {
+        "operationId": "decide_delivery_authorization_api_v1_delivery_authorizations__authorization_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "authorization_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Authorization Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryAuthorizationDecisionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryAuthorizationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery state or freshness conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery policy denied the request"
+          }
+        },
+        "summary": "Decide Delivery Authorization",
+        "tags": ["governed local delivery"]
+      }
+    },
+    "/api/v1/delivery-authorizations/{authorization_id}/dispatch": {
+      "post": {
+        "operationId": "dispatch_local_delivery_api_v1_delivery_authorizations__authorization_id__dispatch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "authorization_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Authorization Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryAuthorizationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery state or freshness conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Delivery policy denied the request"
+          }
+        },
+        "summary": "Dispatch Local Delivery",
+        "tags": ["governed local delivery"]
+      }
+    },
     "/api/v1/execution-grants": {
       "get": {
         "operationId": "list_execution_grants_api_v1_execution_grants_get",

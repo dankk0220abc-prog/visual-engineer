@@ -114,6 +114,27 @@ async function exactValidationCheckpoint(request: APIRequestContext): Promise<{
   ).toBe("succeeded");
   const workspaceId = requireString(workspace.id, "Workspace ID");
 
+  const write = await apiJson(
+    request,
+    "post",
+    `/api/v1/workspaces/${workspaceId}/actions/write-text`,
+    {
+      mode: "create",
+      relative_path: "sandbox/phase6-delivery.txt",
+      content: "Governed local delivery fixture change.\n",
+      expected_absent: true,
+    },
+  );
+  const writeJob = write.job as JsonObject;
+  expect(
+    (
+      await waitForJob(
+        request,
+        requireString(writeJob.id, "Workspace write Job ID"),
+      )
+    ).state,
+  ).toBe("succeeded");
+
   const diff = await apiJson(
     request,
     "post",
@@ -305,10 +326,10 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
   });
   await expect(
     suiteRunCard.getByText("VE_VALIDATION_PROFILE_PASS"),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(
     suiteRunCard.getByText("VE_VALIDATION_PROFILE_MANIFEST_PASS"),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(
     suiteRunCard.getByText("Aggregate Result: succeeded"),
   ).toBeVisible();
@@ -328,7 +349,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
   ).toBeVisible({ timeout: 30_000 });
   await expect(
     persistedSuite.getByText("VE_VALIDATION_PROFILE_MANIFEST_PASS"),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
 
   await page.goto("/reviews");
   await expect(
@@ -386,6 +407,70 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
   await expect(packageCard.getByText("Release Readiness: ready")).toBeVisible({
     timeout: 30_000,
   });
+  await expectAccessibleAndContained(page);
+
+  await page.goto("/deliveries");
+  await expect(
+    page.getByRole("heading", { name: "Local Branch & Commit" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "该授权永远不包含 source repository 写入、remote、push、PR、tag 或 deploy。Review approval 本身不能触发交付。",
+    ),
+  ).toBeVisible();
+  const deliveryCandidate = page
+    .getByRole("listitem")
+    .filter({ hasText: packageId });
+  const [authorizationResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/api/v1/delivery-authorizations") &&
+        response.ok(),
+    ),
+    deliveryCandidate
+      .getByRole("button", { name: "Create Delivery Authorization" })
+      .click(),
+  ]);
+  const authorizationBody: unknown = await authorizationResponse.json();
+  if (typeof authorizationBody !== "object" || authorizationBody === null) {
+    throw new Error("Delivery Authorization response is invalid");
+  }
+  const authorizationId = requireString(
+    (authorizationBody as JsonObject).id,
+    "Delivery Authorization ID",
+  );
+  const authorizationCard = page
+    .getByRole("listitem")
+    .filter({ hasText: authorizationId });
+  await expect(
+    authorizationCard.getByText(
+      "Local commit only · remote/push/PR/tag/deploy denied",
+    ),
+  ).toBeVisible();
+  await expect(
+    authorizationCard.getByText("pending", { exact: true }),
+  ).toBeVisible();
+  await authorizationCard
+    .getByRole("button", { name: "Approve local commit" })
+    .click();
+  await expect(
+    authorizationCard.getByText("approved", { exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
+  await authorizationCard
+    .getByRole("button", { name: "Dispatch governed local commit" })
+    .click();
+  await expect(
+    authorizationCard.getByText("succeeded", { exact: true }),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(
+    authorizationCard.getByText("Local commit created"),
+  ).toBeVisible();
+  await expect(
+    authorizationCard.getByText(
+      "Source repository unchanged; no remote operation was performed.",
+    ),
+  ).toBeVisible();
   await expectAccessibleAndContained(page);
 
   const revokedSuite = await apiJson(

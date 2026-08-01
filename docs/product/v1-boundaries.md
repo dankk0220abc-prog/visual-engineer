@@ -7,7 +7,7 @@ and Frontend Quality Remediation work for governed frontend teams. V1 is not a
 promise of arbitrary language, repository, backend, infrastructure, or general
 software-engineering support.
 
-## Implemented Foundation through Phase 5 Third Vertical Slice
+## Implemented Foundation through Phase 6 First Vertical Slice
 
 - Task create/list/detail with bounded validation and idempotency.
 - Level 0 `read_only` Run creation and durable state.
@@ -53,6 +53,12 @@ software-engineering support.
   one local-user Review Decision, and deterministic Release Readiness Verdict.
 - Explicit false Git/deployment authorization at package, decision, verdict,
   API, database, and browser boundaries.
+- A separate immutable Delivery Authorization and local-user decision bound to
+  one exact fresh Review generation, Workspace Checkpoint, tree/diff digest,
+  source revision, system-derived branch ref, and fixed commit message.
+- One closed `workspace_git_commit_v1` Runner Job with dual implementation
+  Grant plus Delivery Authorization, a short-lived Side-effect Permit, fixed
+  Git plumbing, durable local-commit proof, and source/remote invariance.
 
 ## Reserved V1 seams
 
@@ -62,8 +68,8 @@ These remain deliberate future seams, not placeholder capabilities:
 - model invocation and model-specific evaluation;
 - non-fixture isolated workspaces;
 - controlled target-repository install/build/test/lint/browser commands;
-- Git-authorizing final-change approval;
-- branch, local commit, remote push, and pull request.
+- remote Git authorization, push, and pull request;
+- tag, merge, release, and deployment workflows.
 
 The current AuditEvent timeline is governance evidence, not a complete Agent
 trace. Current plan string policy is Foundation validation, not a substitute
@@ -79,7 +85,7 @@ for future typed tool schemas and runtime authorization.
   recovery.
 - Broader source-control providers and governed release workflows.
 
-## Explicitly out of scope in Phase 4
+## Explicitly out of scope in the Phase 6 first slice
 
 - Any LLM API or OpenAI Agents SDK.
 - Generic shell or target-repository command execution.
@@ -89,7 +95,7 @@ for future typed tool schemas and runtime authorization.
   commands/tests/builds, or arbitrary cleanup.
 - Any real customer repository mount in Runner; Phase 4 only mounts the
   versioned synthetic fixture read-only.
-- GitHub credentials, clone, push, PR, merge, tag, or deployment.
+- GitHub credentials, clone/fetch, push, PR, merge, tag, or deployment.
 - Automatic approval or treating plan approval as execution authority.
 - Authentication, multi-tenancy, public exposure, or production use.
 - Redis, Celery, Temporal, brokers, Kubernetes, or a gateway.
@@ -99,7 +105,8 @@ for future typed tool schemas and runtime authorization.
 ## Boundary test
 
 If a proposed change requires a real repository, source write, target command,
-credential, LLM, remote integration, Git delivery, or an effect caused by plan
-approval, it is outside Phase 4. Each requires a new reviewed milestone and
-explicit authority. The fixture's Grant and opaque handle cannot be reused to
-authorize it.
+credential, LLM, remote integration, remote Git, or an effect caused by Plan
+or Review approval alone, it is outside this Phase 6 slice. Each requires a
+new reviewed milestone and explicit authority. The fixture's implementation
+Grant, validation Grant, Review Decision, and opaque handle cannot be reused
+to authorize it.

@@ -49,7 +49,7 @@ PLAYWRIGHT_REPOSITORY_ROOT="$PWD" \
 PLAYWRIGHT_COMPOSE_PROJECT_NAME="$PROJECT_NAME" \
 PLAYWRIGHT_E2E_REPOSITORY_PATH="$FIXTURE_REPOSITORY" \
 PLAYWRIGHT_WORKSPACE_FIXTURE_REPOSITORY_PATH="$WORKSPACE_FIXTURE_REPOSITORY" \
-  pnpm --filter @visual-engineer/web exec playwright test
+  pnpm --filter @visual-engineer/web exec playwright test "$@"
 FIXTURE_HEAD_AFTER=$(git -C "$FIXTURE_REPOSITORY" rev-parse HEAD)
 FIXTURE_STATUS_AFTER=$(git -C "$FIXTURE_REPOSITORY" status --porcelain=v1 -uall | git hash-object --stdin)
 WORKSPACE_HEAD_AFTER=$(git -C "$WORKSPACE_FIXTURE_REPOSITORY" rev-parse HEAD)

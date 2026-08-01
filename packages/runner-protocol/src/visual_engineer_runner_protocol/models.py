@@ -63,6 +63,7 @@ class Capability(StrEnum):
     WORKSPACE_ROLLBACK_V1 = "workspace_rollback_v1"
     WORKSPACE_DISCARD_V1 = "workspace_discard_v1"
     VALIDATION_EXECUTE_V1 = "validation_execute_v1"
+    WORKSPACE_GIT_COMMIT_V1 = "workspace_git_commit_v1"
 
 
 class JobKind(StrEnum):
@@ -77,6 +78,7 @@ class JobKind(StrEnum):
     WORKSPACE_ROLLBACK_V1 = "workspace_rollback_v1"
     WORKSPACE_DISCARD_V1 = "workspace_discard_v1"
     VALIDATION_EXECUTE_V1 = "validation_execute_v1"
+    WORKSPACE_GIT_COMMIT_V1 = "workspace_git_commit_v1"
 
 
 class JobState(StrEnum):
@@ -189,6 +191,7 @@ class WorkspaceOperation(StrEnum):
     ROLLBACK = "rollback"
     DISCARD = "discard"
     VALIDATE = "validate"
+    GIT_COMMIT = "git_commit"
 
 
 class WorkspaceWriteMode(StrEnum):
@@ -279,7 +282,7 @@ class ExecutionGrantPolicy(StrictModel):
     ]
     source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
     snapshot_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
-    allowed_operations: list[WorkspaceOperation] = Field(min_length=1, max_length=9)
+    allowed_operations: list[WorkspaceOperation] = Field(min_length=1, max_length=10)
     allowed_paths: list[str] = Field(min_length=1, max_length=20)
     denied_paths: list[str] = Field(min_length=1, max_length=50)
     max_files_changed: int = Field(ge=1, le=100)
@@ -425,6 +428,68 @@ class WorkspaceBoundJobSpec(StrictModel):
     execution_grant: ExecutionGrantPolicy
 
 
+class DeliveryAuthorizationPolicy(StrictModel):
+    id: uuid.UUID
+    authorization_version: Literal[1] = 1
+    review_package_id: uuid.UUID
+    review_decision_id: uuid.UUID
+    readiness_verdict_id: uuid.UUID
+    freshness_generation: int = Field(ge=1)
+    package_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    decision_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    readiness_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    workspace_id: uuid.UUID
+    checkpoint_id: uuid.UUID
+    checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    checkpoint_diff_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    repository_handle_id: uuid.UUID
+    source_revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    branch_ref: Annotated[
+        str,
+        StringConstraints(
+            pattern=r"^refs/heads/visual-engineer/[0-9a-f]{32}$",
+        ),
+    ]
+    commit_message: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=160,
+            pattern=r"^VisualEngineer: governed local delivery [0-9a-f]{8}$",
+        ),
+    ]
+    commit_timestamp: datetime
+    local_git_commit_access: Literal[True] = True
+    remote_access: Literal[False] = False
+    push_access: Literal[False] = False
+    pull_request_access: Literal[False] = False
+    tag_access: Literal[False] = False
+    deployment_access: Literal[False] = False
+    source_repository_write_access: Literal[False] = False
+    expires_at: datetime
+    policy_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+    @field_validator("commit_timestamp", "expires_at")
+    @classmethod
+    def require_delivery_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("delivery authorization timestamps must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def validate_delivery_policy(self) -> "DeliveryAuthorizationPolicy":
+        if self.expires_at <= self.commit_timestamp:
+            raise ValueError("delivery authorization expiry must follow its commit timestamp")
+        expected_ref = f"refs/heads/visual-engineer/{self.workspace_id.hex}"
+        if self.branch_ref != expected_ref:
+            raise ValueError("delivery branch ref must be derived from the exact Workspace")
+        expected_message = f"VisualEngineer: governed local delivery {self.id.hex[:8]}"
+        if self.commit_message != expected_message:
+            raise ValueError("delivery commit message must be server-derived")
+        return self
+
+
 class WorkspacePrepareJobSpec(WorkspaceBoundJobSpec):
     kind: Literal[JobKind.WORKSPACE_PREPARE_V1] = JobKind.WORKSPACE_PREPARE_V1
 
@@ -535,6 +600,31 @@ class ValidationExecuteJobSpec(WorkspaceBoundJobSpec):
         return self
 
 
+class WorkspaceGitCommitJobSpec(WorkspaceBoundJobSpec):
+    kind: Literal[JobKind.WORKSPACE_GIT_COMMIT_V1] = JobKind.WORKSPACE_GIT_COMMIT_V1
+    delivery_authorization: DeliveryAuthorizationPolicy
+    checkpoint_id: uuid.UUID
+    checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    checkpoint_diff_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+    @model_validator(mode="after")
+    def validate_delivery_authority(self) -> "WorkspaceGitCommitJobSpec":
+        delivery = self.delivery_authorization
+        grant = self.execution_grant
+        if (
+            delivery.workspace_id != self.workspace_id
+            or delivery.checkpoint_id != self.checkpoint_id
+            or delivery.checkpoint_fingerprint != self.checkpoint_fingerprint
+            or delivery.checkpoint_diff_hash != self.checkpoint_diff_hash
+            or delivery.repository_handle_id != grant.repository_handle_id
+            or delivery.source_revision != grant.source_revision
+            or grant.git_delivery_access
+            or grant.source_repository_write_access
+        ):
+            raise ValueError("local delivery Job exceeds its exact dual authority")
+        return self
+
+
 WorkspaceJobSpec = (
     WorkspacePrepareJobSpec
     | WorkspaceListJobSpec
@@ -545,6 +635,7 @@ WorkspaceJobSpec = (
     | WorkspaceRollbackJobSpec
     | WorkspaceDiscardJobSpec
     | ValidationExecuteJobSpec
+    | WorkspaceGitCommitJobSpec
 )
 
 
@@ -585,6 +676,18 @@ def side_effect_job_binding(spec: WorkspaceJobSpec) -> dict[str, str | None]:
                 f"{spec.checkpoint_id}:{spec.checkpoint_fingerprint}"
             ).encode("ascii")
         ).hexdigest()
+    elif isinstance(spec, WorkspaceGitCommitJobSpec):
+        operation = WorkspaceOperation.GIT_COMMIT
+        relative_path = None
+        expected_current = spec.checkpoint_fingerprint
+        proposed_digest = hashlib.sha256(
+            (
+                f"{spec.delivery_authorization.policy_hash}:"
+                f"{spec.checkpoint_id}:{spec.checkpoint_fingerprint}:"
+                f"{spec.checkpoint_diff_hash}:{spec.delivery_authorization.branch_ref}:"
+                f"{spec.delivery_authorization.commit_message}"
+            ).encode()
+        ).hexdigest()
     else:
         raise ValueError("Job does not require a side-effect permit")
     return {
@@ -605,9 +708,11 @@ class PermissionEnvelope(StrictModel):
     id: uuid.UUID
     envelope_version: Literal[1] = 1
     job_id: uuid.UUID
-    authorization_source: Literal["local_user_job_dispatch", "execution_grant"] = (
-        "local_user_job_dispatch"
-    )
+    authorization_source: Literal[
+        "local_user_job_dispatch",
+        "execution_grant",
+        "execution_grant_and_delivery_authorization",
+    ] = "local_user_job_dispatch"
     allowed_capabilities: list[Capability] = Field(min_length=1, max_length=12)
     repository_access: RepositoryAccess = RepositoryAccess.NONE
     shell_access: Literal[False] = False
@@ -749,6 +854,7 @@ class SideEffectPermit(StrictModel):
     attempt_id: uuid.UUID
     lease_id: uuid.UUID
     grant_id: uuid.UUID
+    delivery_authorization_id: uuid.UUID | None = None
     workspace_id: uuid.UUID
     repository_handle_id: uuid.UUID
     operation: WorkspaceOperation
@@ -796,6 +902,10 @@ class SideEffectPermit(StrictModel):
                 raise ValueError("write permit requires a relative path")
         elif self.relative_path is not None:
             raise ValueError("Workspace-scoped permit cannot carry a relative path")
+        if (self.operation == WorkspaceOperation.GIT_COMMIT) != (
+            self.delivery_authorization_id is not None
+        ):
+            raise ValueError("Git commit permit requires one Delivery Authorization")
         return self
 
 
@@ -1072,6 +1182,24 @@ class WorkspaceDiscardResult(StrictModel):
     side_effect_permit_id: uuid.UUID
 
 
+class WorkspaceGitCommitResult(StrictModel):
+    kind: Literal[JobKind.WORKSPACE_GIT_COMMIT_V1] = JobKind.WORKSPACE_GIT_COMMIT_V1
+    workspace_id: uuid.UUID
+    delivery_authorization_id: uuid.UUID
+    checkpoint_id: uuid.UUID
+    checkpoint_fingerprint: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    checkpoint_diff_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    branch_ref: Annotated[
+        str,
+        StringConstraints(pattern=r"^refs/heads/visual-engineer/[0-9a-f]{32}$"),
+    ]
+    commit_oid: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    tree_oid: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    parent_oid: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40,64}$")]
+    result_digest: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    side_effect_permit_id: uuid.UUID
+
+
 class ValidationArtifactEvidence(StrictModel):
     relative_path: Annotated[
         str,
@@ -1178,7 +1306,8 @@ ResultPayload = Annotated[
     | WorkspaceDiffResult
     | WorkspaceRollbackResult
     | WorkspaceDiscardResult
-    | ValidationExecutionResult,
+    | ValidationExecutionResult
+    | WorkspaceGitCommitResult,
     Field(discriminator="kind"),
 ]
 

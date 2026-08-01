@@ -32,7 +32,7 @@ class RunnerSettings(BaseSettings):
     control_plane_url: str = "http://api:8000"
     bootstrap_token: SecretStr = SecretStr("")
     display_name: str = Field(default="Local Runner", min_length=1, max_length=120)
-    software_version: str = Field(default="0.5.0", pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+    software_version: str = Field(default="0.6.0", pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
     credential_path: Path = Path("/var/lib/visual-engineer-runner/credentials.json")
     ownership_key_path: Path = Path("/var/lib/visual-engineer-runner/ownership.key")
     repository_handles: dict[str, LocalRepositoryConfig] = Field(default_factory=dict)
@@ -60,6 +60,7 @@ class RunnerSettings(BaseSettings):
     mirror_max_tree_entries: int = Field(default=1_000_000, ge=1, le=10_000_000)
     mirror_max_object_references: int = Field(default=2_000_000, ge=1, le=20_000_000)
     mirror_max_graph_depth: int = Field(default=50_000, ge=1, le=1_000_000)
+    mirror_max_local_delivery_refs: int = Field(default=256, ge=1, le=4096)
     git_termination_grace_seconds: float = Field(default=0.5, ge=0.05, le=5)
     workspace_prepare_delay_ms: int = Field(default=0, ge=0, le=10_000)
     workspace_write_commit_delay_ms: int = Field(default=0, ge=0, le=10_000)
