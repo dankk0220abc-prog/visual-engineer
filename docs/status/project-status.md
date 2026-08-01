@@ -2,18 +2,22 @@
 
 - Phase: Phase 6 First Vertical Slice — Governed Local Git Delivery
 - Overall status:
-  `PHASE_6_LOCAL_DELIVERY_IMPLEMENTED_FOCUSED_VERIFIED_AGGREGATE_GATE_OPEN`
-- Governance qualifier: IMPLEMENTER WORK ONLY; NOT AN INDEPENDENT SECURITY
-  GATE, SEALING, MAIN INTEGRATION, REMOTE DELIVERY, OR LATER-PHASE
+  `PHASE_6_FIRST_SLICE_FINAL_GATE_PASS_SEALED_AWAITING_EXPLICIT_LOCAL_FF_AUTHORIZATION`
+- Governance qualifier: INDEPENDENT FINAL GATE PASS AND LOCAL SEAL ONLY; NOT
+  MAIN INTEGRATION, REMOTE DELIVERY, PUSH, PR, TAG, DEPLOY, OR LATER-PHASE
   AUTHORIZATION
-- Last updated: 2026-07-31
+- Last updated: 2026-08-01
 - Current main / Phase 6 base:
   `962b72ec92329de929ca5f9381b5324a68a18dde`
-- Current Phase 6 branch: `feat/phase-6-governed-local-delivery`
-- Current Phase 6 plan:
-  [`docs/exec-plans/phase-6-governed-local-delivery.md`](../exec-plans/phase-6-governed-local-delivery.md)
-- Current Phase 6 evidence:
-  [`docs/evidence/phase-6-governed-local-delivery-verification.md`](../evidence/phase-6-governed-local-delivery-verification.md)
+- Final reviewed candidate:
+  `1267788e607c96feb84fa27b3b6c934033cb33c3`
+- Final independent branch: `codex/audit-phase-6-first-slice-final`
+- Final independent plan:
+  [`docs/exec-plans/phase-6-first-slice-final-gate.md`](../exec-plans/phase-6-first-slice-final-gate.md)
+- Final independent evidence:
+  [`docs/evidence/phase-6-first-slice-final-gate-verification.md`](../evidence/phase-6-first-slice-final-gate-verification.md)
+- Local sealing subject: `chore: seal phase 6 governed local delivery`
+- Local sealing hash: reported in the post-commit handoff
 - Phase 6 scope: one immutable, separately decided Delivery Authorization
   over an exact fresh/approved/ready Review generation, one Side-effect
   Permit, and one system-derived local ref/commit in the Runner-owned fixture
@@ -21,20 +25,29 @@
 - Phase 6 explicit denials: source-repository write, user-supplied Git input,
   remote, push, PR, tag, deploy, real repositories, CreativeDeploy, Customer
   0, credentials, LLM/Agents SDK/Provider, auth, and multi-tenancy.
-- Phase 6 verification: 300 Python/API/Runner/Protocol tests, 53 Web tests, 16
-  desktop+narrow E2E tests, migration base/head/base/head, source invariance,
-  real PostgreSQL security checks, build, contracts, static checks, and
-  cleanup passed. The post-review `make verify` attempts reached Workspace
-  Chaos after all preceding gates, then exited `2`; one exact isolated Chaos
-  run passed and four attempts failed at recovery with `envelope_expired`,
-  `retry_exhausted`, or a failed prepare. No TTL, lease, attempts, authority,
-  or timeout was widened. The final aggregate Gate therefore remains open.
-- Phase 6 implementer evidence:
-  [`docs/evidence/phase-6-governed-local-delivery-verification.md`](../evidence/phase-6-governed-local-delivery-verification.md)
-- Phase 6 next gate: independent focused security review of dual authority,
-  Side-effect Permit fencing, fixed Git plumbing, managed local-ref/object
-  closure, replay, source invariance, and zero-remote behavior, followed by a
-  stable single-run aggregate Gate.
+- `VE-P6-FSR-001`: **PASS**. Unexpected post-prepare loose refs, packed refs,
+  and replacement metadata all return `workspace_state_invalid` before Git
+  object/ref mutation, with no new object, delivery ref, temporary index, or
+  lock.
+- Phase 6 final verification: focused Runner/Protocol `70`, independent
+  Security Audit `25`, PostgreSQL Phase 6 API `4`, Web `3`, focused browser
+  `2`, Security `7 + 120 + 20`, repair `95 + 14`, Migration, contracts,
+  format, lint, typecheck, build, source invariance, and cleanup pass.
+- Exactly one complete `make verify`: exit `0`, including Python `306`, Web
+  `53`, Playwright `16`, Workspace Chaos, Security/Eval, and final
+  `git diff --check`.
+- Workspace Chaos: two prepare attempts, four write attempts, three stale
+  leases fenced, zero budget replay/discard residue/post-revocation side
+  effects, and unchanged source/`.git` fingerprints.
+- Auditor production and test changes: none. Historical focused-review FAIL
+  evidence remains preserved.
+- Final Docker cleanup: audit-owned containers, networks, volumes, and images
+  are all zero; existing development services remain running.
+- Phase 6 next action: only an explicit user authorization may fast-forward
+  local `main` to the sealing commit. No remote or later-phase action is
+  implied.
+
+`PHASE 6 FIRST SLICE FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
 
 ## Preserved Phase 5 completion
 
