@@ -54,6 +54,11 @@ existing `Plan` handoff plus human decisions. It never creates an Execution
 Grant, Workspace, Review Approval, Delivery Authorization, Job, Permit, Git
 effect, or deployment.
 
+An Eval-failed Provider proposal remains persisted and inspectable with its
+Trace and system-owned Eval evidence, but the request and Run enter `failed`
+and the approval handoff is unavailable. Provider-supplied Eval fields are not
+part of the closed response contract and cannot affect this state.
+
 ## Phase 6 Delivery Authorization lifecycle
 
 ```mermaid

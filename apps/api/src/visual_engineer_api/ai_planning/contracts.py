@@ -132,6 +132,9 @@ class PromptBinding(BaseModel):
     template_id: Identifier
     version: Identifier
     digest: Digest
+    context_manifest_digest: Digest
+    source_revision: Revision
+    snapshot_fingerprint: Digest
 
 
 class RepositoryFacts(BaseModel):
@@ -184,21 +187,40 @@ class AIPlanGenerationRequest(BaseModel):
         return self
 
 
+RepositoryFactKind = Literal[
+    "repository_revision",
+    "language",
+    "framework",
+    "package_manager",
+    "test_surface",
+    "design_system_signal",
+    "instruction_risk",
+]
+
+
+class RepositoryFactBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    reference_id: Identifier
+    semantic_kind: RepositoryFactKind
+    canonical_value: ShortText
+    source_path: str | None = None
+    fact_digest: Digest
+
+    @field_validator("source_path")
+    @classmethod
+    def validate_optional_path(cls, value: str | None) -> str | None:
+        return validate_relative_path(value) if value is not None else None
+
+
 class RepositoryFinding(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     finding_id: Identifier
-    kind: Literal[
-        "repository_revision",
-        "language",
-        "framework",
-        "package_manager",
-        "test_surface",
-        "design_system_signal",
-        "instruction_risk",
-    ]
+    kind: RepositoryFactKind
     summary: ShortText
     context_reference_ids: list[Identifier] = Field(min_length=1, max_length=20)
+    fact_bindings: list[RepositoryFactBinding] = Field(min_length=1, max_length=20)
 
 
 class ExpectedChange(BaseModel):

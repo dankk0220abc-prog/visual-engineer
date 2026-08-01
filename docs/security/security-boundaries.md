@@ -12,9 +12,10 @@ The Prompt receives a redacted requirement and bounded structured committed-
 Snapshot facts/manifest references only. It receives no repository blob text,
 dirty or untracked content, sensitive path, secret match, shell, Git, network,
 or permission field. The response must pass a closed typed schema, exact
-digest, reference/fact/operation/budget/leakage/freshness/replay/injection and
-authority Eval owned by system policy. Provider self-evaluation cannot make a
-request approvable.
+Prompt registry/version/digest, context manifest digest, repository revision/
+Snapshot binding, repository-fact identity/kind/value/source/digest, operation,
+budget, leakage, freshness, replay, injection, and authority Evals owned by
+system policy. Provider self-evaluation cannot make a request approvable.
 
 Human approval is serialized after a fresh repository rescan. It creates only
 an approved `Plan` with `execution_available = false`; every later Grant,

@@ -59,6 +59,7 @@ REVIEW_READINESS_FAILURE_CATEGORIES = {
 GOVERNED_AI_FAILURE_CATEGORIES = {
     "acceptance",
     "approval",
+    "binding",
     "budget",
     "grounding",
     "injection",

@@ -14,10 +14,13 @@ from sqlalchemy.orm import Session
 
 from repository_fixture import create_adversarial_repository, run_git
 from visual_engineer_api.ai_planning.contracts import (
+    AIPlanContract,
     AIPlanGenerationRequest,
     DeliveryPackage,
     ProviderCapabilityMetadata,
+    canonical_digest,
 )
+from visual_engineer_api.ai_planning.evaluator import MANDATORY_EVAL_IDS
 from visual_engineer_api.ai_planning.fake_provider import DeterministicFixtureProvider
 from visual_engineer_api.ai_planning.provider import (
     CancellationToken,
@@ -163,7 +166,7 @@ def test_ai_plan_complete_flow_is_redacted_evaluated_idempotent_and_authority_fr
     assert trace["total_tokens"] == trace["input_tokens"] + trace["output_tokens"]
     assert trace["cost_estimate_microunits"] == 0
     assert trace["cost_basis"] == "synthetic_not_billable"
-    assert len(ai_plan["eval_results"]) == 11
+    assert len(ai_plan["eval_results"]) == len(MANDATORY_EVAL_IDS)
     assert all(item["passed"] for item in ai_plan["eval_results"])
     assert all(item["evaluator_trust"] == "system_policy" for item in ai_plan["eval_results"])
 
@@ -371,7 +374,9 @@ def test_provider_invocation_has_bounded_retry_and_stable_error_categories(
         None,
     ]
     assert db_session.scalar(select(func.count()).select_from(AIProviderTrace)) == 1
-    assert db_session.scalar(select(func.count()).select_from(AIEvalResult)) == 11
+    assert db_session.scalar(select(func.count()).select_from(AIEvalResult)) == len(
+        MANDATORY_EVAL_IDS
+    )
 
 
 class _UnavailableProvider(PlanningProvider):
@@ -424,6 +429,181 @@ class _InvalidResponseProvider(PlanningProvider):
             usage=valid.usage,
             latency_ms=valid.latency_ms,
         )
+
+
+class _DeterministicGroundingMismatchProvider(PlanningProvider):
+    def __init__(self, scenario: str, *, self_report_pass: bool = False) -> None:
+        self._delegate = DeterministicFixtureProvider()
+        self._scenario = scenario
+        self._self_report_pass = self_report_pass
+        self.calls = 0
+
+    @property
+    def capabilities(self) -> ProviderCapabilityMetadata:
+        return self._delegate.capabilities
+
+    def generate(
+        self, request: AIPlanGenerationRequest, cancellation: CancellationToken
+    ) -> ProviderInvocationResult:
+        self.calls += 1
+        valid = self._delegate.generate(request, cancellation)
+        values = AIPlanContract.model_validate(valid.response_payload).model_dump(
+            mode="json", exclude={"deterministic_digest"}
+        )
+        if self._scenario == "prompt_version":
+            values["prompt"]["version"] = "provider-v2"
+        elif self._scenario == "prompt_digest":
+            values["prompt"]["digest"] = "d" * 64
+        elif self._scenario == "context_digest":
+            values["prompt"]["context_manifest_digest"] = "f" * 64
+        elif self._scenario == "repository_binding":
+            values["prompt"]["source_revision"] = "f" * 40
+            values["prompt"]["snapshot_fingerprint"] = "e" * 64
+        else:
+            finding = next(
+                item for item in values["repository_findings"] if item["kind"] == "package_manager"
+            )
+            if self._scenario == "semantic_kind":
+                finding["kind"] = "framework"
+                finding["fact_bindings"][0]["semantic_kind"] = "framework"
+            elif self._scenario == "unknown_reference":
+                finding["context_reference_ids"] = ["ctx-not-present"]
+                finding["fact_bindings"][0]["reference_id"] = "ctx-not-present"
+            elif self._scenario == "source_digest":
+                finding["fact_bindings"][0]["source_path"] = "package.json"
+                finding["fact_bindings"][0]["fact_digest"] = "e" * 64
+            else:
+                raise AssertionError(f"unsupported mismatch scenario {self._scenario}")
+        values["deterministic_digest"] = canonical_digest(values)
+        response_payload = AIPlanContract.model_validate(values).model_dump(mode="json")
+        if self._self_report_pass:
+            response_payload["eval_results"] = [
+                {
+                    "eval_id": "generation_binding_integrity",
+                    "passed": True,
+                    "evaluator_trust": "provider",
+                }
+            ]
+        return ProviderInvocationResult(
+            response_payload=response_payload,
+            usage=valid.usage,
+            latency_ms=valid.latency_ms,
+        )
+
+
+@pytest.mark.parametrize(
+    ("scenario", "failed_eval_id"),
+    [
+        ("prompt_version", "generation_binding_integrity"),
+        ("prompt_digest", "generation_binding_integrity"),
+        ("context_digest", "generation_binding_integrity"),
+        ("repository_binding", "generation_binding_integrity"),
+        ("semantic_kind", "hallucinated_repository_fact"),
+        ("unknown_reference", "hallucinated_repository_fact"),
+        ("source_digest", "hallucinated_repository_fact"),
+    ],
+)
+def test_grounding_failure_is_durable_replay_stable_and_approval_blocking(
+    client: TestClient,
+    db_session: Session,
+    ai_repository: tuple[Path, str, str],
+    scenario: str,
+    failed_eval_id: str,
+) -> None:
+    repository, _, _ = ai_repository
+    _, run, _ = _prepare_snapshot(client, repository, f"grounding-{scenario}")
+    provider = _DeterministicGroundingMismatchProvider(scenario)
+    service = AIPlanningService(db_session, provider=provider)
+
+    failed, replay = service.create_request(
+        uuid.UUID(run["id"]),
+        AIPlanRequestCreate(delivery_package=DeliveryPackage.FRONTEND_QUALITY_REMEDIATION),
+        request_id=f"grounding-{scenario}",
+        idempotency_key=f"grounding-{scenario}",
+    )
+
+    assert replay is False
+    assert failed.status == "failed"
+    assert failed.plan is not None
+    assert failed.error_category == "evaluation"
+    assert failed.error_code == "ai_plan_eval_failed"
+    assert len(failed.traces) == 1
+    assert failed.traces[0].response_digest == canonical_digest(failed.plan)
+    evals = {item.eval_id: item for item in failed.eval_results}
+    assert tuple(item.eval_id for item in failed.eval_results) == tuple(sorted(MANDATORY_EVAL_IDS))
+    assert evals[failed_eval_id].passed is False
+    assert evals["deterministic_replay"].passed is True
+    assert provider.calls == 2
+
+    with pytest.raises(AIPlanningServiceError) as approval:
+        service.decide(
+            failed.id,
+            AIPlanDecisionCreate(decision="approve"),
+            request_id=f"approve-{scenario}",
+        )
+    assert approval.value.code == "ai_plan_not_decidable"
+    assert (
+        db_session.scalar(
+            select(func.count()).select_from(Plan).where(Plan.run_id == uuid.UUID(run["id"]))
+        )
+        == 0
+    )
+
+    replayed, is_replay = service.create_request(
+        uuid.UUID(run["id"]),
+        AIPlanRequestCreate(delivery_package=DeliveryPackage.FRONTEND_QUALITY_REMEDIATION),
+        request_id=f"grounding-{scenario}-replay",
+        idempotency_key=f"grounding-{scenario}",
+    )
+    assert is_replay is True
+    assert replayed.id == failed.id
+    assert replayed.status == "failed"
+    assert replayed.eval_results == failed.eval_results
+    assert replayed.traces == failed.traces
+    assert provider.calls == 2
+    assert db_session.scalar(
+        select(func.count())
+        .select_from(AIEvalResult)
+        .where(AIEvalResult.ai_plan_request_id == failed.id)
+    ) == len(MANDATORY_EVAL_IDS)
+    assert (
+        db_session.scalar(
+            select(func.count())
+            .select_from(AIProviderTrace)
+            .where(AIProviderTrace.ai_plan_request_id == failed.id)
+        )
+        == 1
+    )
+
+
+def test_provider_self_reported_eval_pass_is_rejected_before_system_evidence(
+    client: TestClient,
+    db_session: Session,
+    ai_repository: tuple[Path, str, str],
+) -> None:
+    repository, _, _ = ai_repository
+    _, run, _ = _prepare_snapshot(client, repository, "provider-self-eval")
+    failed, replay = AIPlanningService(
+        db_session,
+        provider=_DeterministicGroundingMismatchProvider("prompt_version", self_report_pass=True),
+    ).create_request(
+        uuid.UUID(run["id"]),
+        AIPlanRequestCreate(delivery_package=DeliveryPackage.FRONTEND_QUALITY_REMEDIATION),
+        request_id="provider-self-eval",
+        idempotency_key="provider-self-eval",
+    )
+
+    assert replay is False
+    assert failed.status == "failed"
+    assert failed.error_code == "provider_schema_invalid"
+    assert failed.plan is None
+    assert failed.eval_results == []
+    assert (
+        db_session.scalar(
+            select(func.count()).select_from(Plan).where(Plan.run_id == uuid.UUID(run["id"]))
+        )
+        == 0
+    )
 
 
 def test_provider_timeout_cancel_and_failed_status_are_explicit(

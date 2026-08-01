@@ -3578,8 +3578,14 @@ export interface components {
     };
     /** PromptBinding */
     PromptBinding: {
+      /** Context Manifest Digest */
+      context_manifest_digest: string;
       /** Digest */
       digest: string;
+      /** Snapshot Fingerprint */
+      snapshot_fingerprint: string;
+      /** Source Revision */
+      source_revision: string;
       /** Template Id */
       template_id: string;
       /** Version */
@@ -3773,6 +3779,29 @@ export interface components {
       /** Source Revision */
       source_revision: string;
     };
+    /** RepositoryFactBinding */
+    RepositoryFactBinding: {
+      /** Canonical Value */
+      canonical_value: string;
+      /** Fact Digest */
+      fact_digest: string;
+      /** Reference Id */
+      reference_id: string;
+      /**
+       * Semantic Kind
+       * @enum {string}
+       */
+      semantic_kind:
+        | "repository_revision"
+        | "language"
+        | "framework"
+        | "package_manager"
+        | "test_surface"
+        | "design_system_signal"
+        | "instruction_risk";
+      /** Source Path */
+      source_path?: string | null;
+    };
     /** RepositoryFacts */
     RepositoryFacts: {
       /** Frameworks */
@@ -3810,6 +3839,8 @@ export interface components {
     RepositoryFinding: {
       /** Context Reference Ids */
       context_reference_ids: string[];
+      /** Fact Bindings */
+      fact_bindings: components["schemas"]["RepositoryFactBinding"][];
       /** Finding Id */
       finding_id: string;
       /**

@@ -17,7 +17,11 @@ from visual_engineer_api.ai_planning.contracts import (
     canonical_json,
     is_sensitive_path,
 )
-from visual_engineer_api.ai_planning.evaluator import EVALUATOR_VERSION, evaluate_plan
+from visual_engineer_api.ai_planning.evaluator import (
+    EVALUATOR_VERSION,
+    MANDATORY_EVAL_IDS,
+    evaluate_plan,
+)
 from visual_engineer_api.ai_planning.fake_provider import DeterministicFixtureProvider
 from visual_engineer_api.ai_planning.prompt_registry import (
     PROMPT_DIGEST,
@@ -389,8 +393,13 @@ class AIPlanningService:
                 f"AI Plan decision requires plan_ready, not {run.status}",
             )
         evals = self._repository.eval_results(ai_request.id)
-        if len(evals) != 11 or any(
-            not item.passed or item.severity != "blocking" for item in evals
+        eval_ids = {item.eval_id for item in evals}
+        if eval_ids != set(MANDATORY_EVAL_IDS) or any(
+            not item.passed
+            or item.severity != "blocking"
+            or item.evaluator_version != EVALUATOR_VERSION
+            or item.evaluator_trust != "system_policy"
+            for item in evals
         ):
             self._conflict(
                 "ai_plan_eval_incomplete",
@@ -799,6 +808,7 @@ class AIPlanningService:
             "package_manager": snapshot.package_manager,
             "safety_finding_rule_counts": _rule_counts(snapshot.safety_findings),
         }
+        context_digest = canonical_digest([item.model_dump(mode="json") for item in selected])
         generation_request = AIPlanGenerationRequest(
             delivery_package=payload.delivery_package,
             requirement=redacted.value,
@@ -817,6 +827,9 @@ class AIPlanningService:
                 template_id=PROMPT_TEMPLATE_ID,
                 version=PROMPT_VERSION,
                 digest=PROMPT_DIGEST,
+                context_manifest_digest=context_digest,
+                source_revision=snapshot.source_revision,
+                snapshot_fingerprint=snapshot.fingerprint,
             ),
         )
         safe_request, structured_redactions = redact_structured_payload(

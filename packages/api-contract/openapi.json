@@ -4719,9 +4719,24 @@
       "PromptBinding": {
         "additionalProperties": false,
         "properties": {
+          "context_manifest_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Context Manifest Digest",
+            "type": "string"
+          },
           "digest": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Digest",
+            "type": "string"
+          },
+          "snapshot_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshot Fingerprint",
+            "type": "string"
+          },
+          "source_revision": {
+            "pattern": "^[0-9a-f]{40,64}$",
+            "title": "Source Revision",
             "type": "string"
           },
           "template_id": {
@@ -4739,7 +4754,14 @@
             "type": "string"
           }
         },
-        "required": ["template_id", "version", "digest"],
+        "required": [
+          "template_id",
+          "version",
+          "digest",
+          "context_manifest_digest",
+          "source_revision",
+          "snapshot_fingerprint"
+        ],
         "title": "PromptBinding",
         "type": "object"
       },
@@ -5094,6 +5116,61 @@
         "title": "RepositoryBinding",
         "type": "object"
       },
+      "RepositoryFactBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "canonical_value": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Canonical Value",
+            "type": "string"
+          },
+          "fact_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Fact Digest",
+            "type": "string"
+          },
+          "reference_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Reference Id",
+            "type": "string"
+          },
+          "semantic_kind": {
+            "enum": [
+              "repository_revision",
+              "language",
+              "framework",
+              "package_manager",
+              "test_surface",
+              "design_system_signal",
+              "instruction_risk"
+            ],
+            "title": "Semantic Kind",
+            "type": "string"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          }
+        },
+        "required": [
+          "reference_id",
+          "semantic_kind",
+          "canonical_value",
+          "fact_digest"
+        ],
+        "title": "RepositoryFactBinding",
+        "type": "object"
+      },
       "RepositoryFacts": {
         "additionalProperties": false,
         "properties": {
@@ -5185,6 +5262,15 @@
             "title": "Context Reference Ids",
             "type": "array"
           },
+          "fact_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/RepositoryFactBinding"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Fact Bindings",
+            "type": "array"
+          },
           "finding_id": {
             "maxLength": 120,
             "minLength": 1,
@@ -5212,7 +5298,13 @@
             "type": "string"
           }
         },
-        "required": ["finding_id", "kind", "summary", "context_reference_ids"],
+        "required": [
+          "finding_id",
+          "kind",
+          "summary",
+          "context_reference_ids",
+          "fact_bindings"
+        ],
         "title": "RepositoryFinding",
         "type": "object"
       },

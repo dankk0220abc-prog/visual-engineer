@@ -30,6 +30,9 @@ export function aiPlanRequestFixture(
     template_id: "governed-ai-plan",
     version: "v1",
     digest: "d".repeat(64),
+    context_manifest_digest: "8".repeat(64),
+    source_revision: "a".repeat(40),
+    snapshot_fingerprint: "b".repeat(64),
   };
   return {
     id: "2a1f170d-a5ce-4d8a-b9f5-5c47ba8c1bda",
@@ -58,6 +61,15 @@ export function aiPlanRequestFixture(
           kind: "framework",
           summary: "Framework: React",
           context_reference_ids: ["ctx-0001"],
+          fact_bindings: [
+            {
+              reference_id: "ctx-0001",
+              semantic_kind: "framework",
+              canonical_value: "Framework: React",
+              source_path: null,
+              fact_digest: "7".repeat(64),
+            },
+          ],
         },
       ],
       assumptions: ["Committed HEAD remains the exact planning baseline."],
@@ -177,7 +189,7 @@ export function aiPlanRequestFixture(
         severity: "blocking",
         summary: "Provider response satisfies the closed AI Plan schema.",
         evidence: { schema_version: 1 },
-        evaluator_version: "governed-ai-eval-v1",
+        evaluator_version: "governed-ai-eval-v2",
         evaluator_trust: "system_policy",
         created_at: "2026-08-01T10:00:00Z",
       },

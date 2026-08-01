@@ -1,5 +1,4 @@
 from pathlib import PurePosixPath
-from typing import Literal
 
 from visual_engineer_api.ai_planning.contracts import (
     AcceptanceCriterion,
@@ -11,6 +10,8 @@ from visual_engineer_api.ai_planning.contracts import (
     PlanRisk,
     ProposedOperation,
     ProviderCapabilityMetadata,
+    RepositoryFactBinding,
+    RepositoryFactKind,
     RepositoryFinding,
     RepositoryStatusValidation,
     ValidationSuiteOperation,
@@ -173,18 +174,7 @@ class DeterministicFixtureProvider(PlanningProvider):
 
     @staticmethod
     def _findings(request: AIPlanGenerationRequest) -> list[RepositoryFinding]:
-        kind_map: dict[
-            str,
-            Literal[
-                "repository_revision",
-                "language",
-                "framework",
-                "package_manager",
-                "test_surface",
-                "design_system_signal",
-                "instruction_risk",
-            ],
-        ] = {
+        kind_map: dict[str, RepositoryFactKind] = {
             "repository_revision": "repository_revision",
             "language": "language",
             "framework": "framework",
@@ -204,6 +194,15 @@ class DeterministicFixtureProvider(PlanningProvider):
                     kind=finding_kind,
                     summary=item.summary,
                     context_reference_ids=[item.reference_id],
+                    fact_bindings=[
+                        RepositoryFactBinding(
+                            reference_id=item.reference_id,
+                            semantic_kind=finding_kind,
+                            canonical_value=item.summary,
+                            source_path=item.relative_path,
+                            fact_digest=canonical_digest(item),
+                        )
+                    ],
                 )
             )
             if len(findings) >= 8:
@@ -216,6 +215,15 @@ class DeterministicFixtureProvider(PlanningProvider):
                     kind="repository_revision",
                     summary=revision.summary,
                     context_reference_ids=[revision.reference_id],
+                    fact_bindings=[
+                        RepositoryFactBinding(
+                            reference_id=revision.reference_id,
+                            semantic_kind="repository_revision",
+                            canonical_value=revision.summary,
+                            source_path=revision.relative_path,
+                            fact_digest=canonical_digest(revision),
+                        )
+                    ],
                 )
             )
         return findings

@@ -85,11 +85,11 @@ recharge, cancellation and completion race, Suite timeout cleanup, child
 timeout/recovery fail-fast, and exact/+1 combined output. The dataset stores
 expected behavior only and every case maps to a current executable test.
 
-`evals/datasets/governed-ai-planning-v0.1.jsonl` maps eleven deterministic
-cases: schema validity, unsupported file reference, hallucinated repository
-fact, forbidden operation, secret/context leakage, over-budget context,
-missing acceptance criteria, stale revision, deterministic replay, malicious
-requirement/prompt injection, and approval-boundary bypass. Each maps to an
+`evals/datasets/governed-ai-planning-v0.1.jsonl` maps twenty deterministic
+cases covering schema validity; exact Prompt/context/revision/Snapshot binding;
+repository-fact identity, kind, value, source, and digest grounding; reference,
+operation, leakage, budget, acceptance, freshness, replay, injection, approval,
+Provider self-evaluation, and decision concurrency boundaries. Each maps to an
 executable test; Eval output comes from trusted system policy, not the fake
 Provider.
 

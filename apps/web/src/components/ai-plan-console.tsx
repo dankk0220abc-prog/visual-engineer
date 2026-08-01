@@ -64,6 +64,9 @@ export function AIPlanConsole({
   const [rejectionReason, setRejectionReason] = useState("");
   const [formError, setFormError] = useState("");
   const plan = request.plan;
+  const blockingEvalFailures = request.eval_results.filter(
+    (result) => result.severity === "blocking" && !result.passed,
+  );
 
   async function reject() {
     const reason = rejectionReason.trim();
@@ -202,6 +205,21 @@ export function AIPlanConsole({
             {request.error_code ?? "AI Plan failed"}
           </p>
           <p className="mt-1">{request.error_message}</p>
+        </div>
+      ) : null}
+
+      {blockingEvalFailures.length ? (
+        <div
+          className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-950"
+          role="alert"
+        >
+          <p className="font-semibold">
+            System-owned Eval failed · approval blocked
+          </p>
+          <p className="mt-1">
+            The proposed Plan remains saved and inspectable, but it cannot enter
+            the approval handoff while any blocking Eval is failed.
+          </p>
         </div>
       ) : null}
 

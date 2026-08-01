@@ -408,6 +408,45 @@ describe("RunConsole", () => {
     },
   );
 
+  it("keeps an Eval-failed Plan inspectable and explicitly blocks approval", async () => {
+    const fixture = aiPlanRequestFixture();
+    mockedGetRun.mockResolvedValue(runFixture({ status: "failed" }));
+    mockedListPlans.mockResolvedValue([]);
+    mockedListAIPlanRequests.mockResolvedValue([
+      aiPlanRequestFixture({
+        status: "failed",
+        error_category: "evaluation",
+        error_code: "ai_plan_eval_failed",
+        error_message: "One or more mandatory AI Plan Evals failed",
+        eval_results: [
+          {
+            ...fixture.eval_results[0],
+            eval_id: "generation_binding_integrity",
+            passed: false,
+            summary:
+              "The response does not match the system-owned generation binding.",
+          },
+        ],
+      }),
+    ]);
+
+    render(<RunConsole runId={runFixture().id} />);
+
+    expect(
+      await screen.findByText("System-owned Eval failed · approval blocked"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Improve the bounded fixture frontend surface."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("generation_binding_integrity"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Approve AI Plan handoff" }),
+    ).not.toBeInTheDocument();
+    expect(mockedDecideAIPlanRequest).not.toHaveBeenCalled();
+  });
+
   it("shows generating Provider metadata and exposes cancellation", async () => {
     mockedGetRun.mockResolvedValue(runFixture({ status: "snapshot_ready" }));
     mockedListPlans.mockResolvedValue([]);

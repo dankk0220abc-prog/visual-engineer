@@ -21,9 +21,10 @@ software-engineering support.
 - Model-neutral deterministic Provider protocol and capability metadata with
   no network, credential, SDK, or billable call.
 - Versioned Prompt registry, redacted structured request, bounded context
-  manifest, immutable attempt Trace, synthetic usage/cost, and eleven
+  manifest, immutable attempt Trace, synthetic usage/cost, and twelve
   system-owned deterministic Eval results.
-- Strict typed AI Plan response, exact digest/replay, revision freshness,
+- Strict typed AI Plan response, exact Prompt/context/revision/Snapshot and
+  repository-fact semantic bindings, exact digest/replay, revision freshness,
   terminal state presentation, and one-winner human approve/reject handoff.
 - AI Plan approval creates only an approved existing Plan record; it creates
   no Execution Grant, Review Approval, Delivery Authorization, or effect.
