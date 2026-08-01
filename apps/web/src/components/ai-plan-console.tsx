@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 import type { AIPlanRequest } from "@/lib/api";
+import { isLocalizedStatus } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
 function TextList({ title, items }: { title: string; items: string[] }) {
+  const t = useTranslations("aiPlan");
   return (
     <section>
       <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
@@ -17,7 +20,7 @@ function TextList({ title, items }: { title: string; items: string[] }) {
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-slate-500">None recorded.</p>
+        <p className="mt-2 text-sm text-slate-500">{t("noneRecorded")}</p>
       )}
     </section>
   );
@@ -25,15 +28,40 @@ function TextList({ title, items }: { title: string; items: string[] }) {
 
 function operationLabel(
   operation: NonNullable<AIPlanRequest["plan"]>["proposed_operations"][number],
+  t: ReturnType<typeof useTranslations>,
 ): string {
   if (operation.kind === "workspace_text_create_v1") {
-    return `Create text · ${operation.relative_path} · ${operation.intent}`;
+    return t("createText", {
+      path: operation.relative_path,
+      intent: operation.intent,
+    });
   }
   if (operation.kind === "workspace_text_replace_v1") {
-    return `CAS replace text · ${operation.relative_path} · ${operation.intent}`;
+    return t("replaceText", {
+      path: operation.relative_path,
+      intent: operation.intent,
+    });
   }
-  return `Validation suite · ${operation.suite_id} v${operation.suite_version}`;
+  return t("validationSuiteOperation", {
+    id: operation.suite_id,
+    version: operation.suite_version,
+  });
 }
+
+const evalLabelKeys: Record<string, string> = {
+  schema_validity: "schemaValidity",
+  generation_binding_integrity: "generationBindingIntegrity",
+  unsupported_file_reference: "unsupportedFileReference",
+  hallucinated_repository_fact: "hallucinatedRepositoryFact",
+  forbidden_operation: "forbiddenOperation",
+  secret_context_leakage: "secretContextLeakage",
+  over_budget_context: "overBudgetContext",
+  missing_acceptance_criteria: "missingAcceptanceCriteria",
+  stale_revision: "staleRevision",
+  deterministic_replay: "deterministicReplay",
+  malicious_requirement_prompt_injection: "maliciousRequirementPromptInjection",
+  approval_boundary_bypass: "approvalBoundaryBypass",
+};
 
 function statusTone(
   status: AIPlanRequest["status"],
@@ -61,6 +89,8 @@ export function AIPlanConsole({
     comment?: string,
   ) => Promise<void>;
 }) {
+  const t = useTranslations("aiPlan");
+  const statusT = useTranslations("common.status");
   const [rejectionReason, setRejectionReason] = useState("");
   const [formError, setFormError] = useState("");
   const plan = request.plan;
@@ -71,7 +101,7 @@ export function AIPlanConsole({
   async function reject() {
     const reason = rejectionReason.trim();
     if (!reason) {
-      setFormError("Reject 必须填写非空理由。");
+      setFormError(t("rejectValidation"));
       return;
     }
     setFormError("");
@@ -86,13 +116,13 @@ export function AIPlanConsole({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-indigo-700 uppercase">
-            Governed AI · deterministic fixture
+            {t("eyebrow")}
           </p>
           <h2
             id="ai-plan-heading"
             className="mt-1 text-xl font-semibold text-slate-950"
           >
-            Structured AI Plan
+            {t("title")}
           </h2>
         </div>
         <StatusPill tone={statusTone(request.status)}>
@@ -101,32 +131,31 @@ export function AIPlanConsole({
       </div>
 
       <div className="mt-5 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm leading-6 text-indigo-950">
-        <p className="font-semibold">
-          AI Plan approval does not execute code or issue authority.
-        </p>
-        <p className="mt-1">
-          Execution Grant、Review Approval 与 Delivery Authorization
-          仍需各自独立的人工决策。
-        </p>
+        <p className="font-semibold">{t("approvalBoundary")}</p>
+        <p className="mt-1">{t("authorityHelp")}</p>
+        <p className="mt-1">{t("outputBoundary")}</p>
       </div>
 
       <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
         {[
-          ["Provider", request.provider_id],
+          [t("provider"), request.provider_id],
           [
-            "Prompt",
+            t("prompt"),
             `${request.prompt_template_id} · ${request.prompt_version}`,
           ],
           [
-            "Context",
-            `${request.context_reference_count} refs · ${request.context_bytes} bytes`,
+            t("context"),
+            t("contextSummary", {
+              count: request.context_reference_count,
+              bytes: request.context_bytes,
+            }),
           ],
-          ["Retries", String(request.retry_count)],
-          ["Source revision", request.source_revision],
-          ["Snapshot", request.snapshot_fingerprint],
-          ["Prompt digest", request.prompt_digest],
-          ["Request digest", request.request_digest],
-          ["Plan digest", request.deterministic_digest ?? "Not available"],
+          [t("retries"), String(request.retry_count)],
+          [t("sourceRevision"), request.source_revision],
+          [t("snapshot"), request.snapshot_fingerprint],
+          [t("promptDigest"), request.prompt_digest],
+          [t("requestDigest"), request.request_digest],
+          [t("planDigest"), request.deterministic_digest ?? t("notAvailable")],
         ].map(([label, value]) => (
           <div key={label} className="min-w-0 rounded-xl bg-slate-50 p-3">
             <dt className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
@@ -141,34 +170,34 @@ export function AIPlanConsole({
 
       <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
         <h3 className="text-sm font-semibold text-slate-950">
-          Provider capability metadata
+          {t("capabilities")}
         </h3>
         <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
           {[
             [
-              "Implementation",
+              t("implementation"),
               request.provider_metadata.implementation_version,
             ],
-            ["Model label", request.provider_metadata.model_label],
+            [t("modelLabel"), request.provider_metadata.model_label],
             [
-              "Determinism / replay",
+              t("determinismReplay"),
               `${request.provider_metadata.deterministic} / ${request.provider_metadata.fixture_replay}`,
             ],
             [
-              "Structured output",
+              t("structuredOutput"),
               String(request.provider_metadata.structured_output),
             ],
             [
-              "Network access",
+              t("networkAccess"),
               String(request.provider_metadata.network_access),
             ],
             [
-              "Credentials required",
+              t("credentialsRequired"),
               String(request.provider_metadata.credentials_required),
             ],
-            ["Billing basis", request.provider_metadata.billing_basis],
+            [t("billingBasis"), request.provider_metadata.billing_basis],
             [
-              "Context / output limits",
+              t("contextOutputLimits"),
               `${request.provider_metadata.max_context_bytes} / ${request.provider_metadata.max_output_bytes} bytes`,
             ],
           ].map(([label, value]) => (
@@ -185,8 +214,7 @@ export function AIPlanConsole({
       {request.status === "generating" || request.status === "requested" ? (
         <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm font-semibold text-amber-900" role="status">
-            Provider generation is in progress. The durable request can be
-            safely refreshed or cancelled.
+            {t("generationPending")}
           </p>
           <button
             type="button"
@@ -194,16 +222,14 @@ export function AIPlanConsole({
             onClick={() => void onCancel()}
             className="mt-3 rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-semibold text-amber-950 outline-none hover:bg-amber-100 focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 disabled:opacity-60"
           >
-            Cancel AI Plan generation
+            {t("cancelGeneration")}
           </button>
         </div>
       ) : null}
 
       {request.error_message ? (
         <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-          <p className="font-semibold">
-            {request.error_code ?? "AI Plan failed"}
-          </p>
+          <p className="font-semibold">{request.error_code ?? t("failed")}</p>
           <p className="mt-1">{request.error_message}</p>
         </div>
       ) : null}
@@ -213,13 +239,8 @@ export function AIPlanConsole({
           className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-950"
           role="alert"
         >
-          <p className="font-semibold">
-            System-owned Eval failed · approval blocked
-          </p>
-          <p className="mt-1">
-            The proposed Plan remains saved and inspectable, but it cannot enter
-            the approval handoff while any blocking Eval is failed.
-          </p>
+          <p className="font-semibold">{t("evalBlocked")}</p>
+          <p className="mt-1">{t("evalBlockedHelp")}</p>
         </div>
       ) : null}
 
@@ -227,7 +248,7 @@ export function AIPlanConsole({
         <div className="mt-7 space-y-7">
           <section>
             <h3 className="text-sm font-semibold text-slate-500 uppercase">
-              Requirement summary
+              {t("requirementSummary")}
             </h3>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-800">
               {plan.requirement_summary}
@@ -236,47 +257,53 @@ export function AIPlanConsole({
 
           <div className="grid gap-6 md:grid-cols-2">
             <TextList
-              title="Repository findings"
+              title={t("repositoryFindings")}
               items={plan.repository_findings.map(
                 (finding) =>
                   `${finding.kind}: ${finding.summary} [${finding.context_reference_ids.join(", ")}]`,
               )}
             />
-            <TextList title="Assumptions" items={plan.assumptions} />
+            <TextList title={t("assumptions")} items={plan.assumptions} />
             <TextList
-              title="Files and components expected to change"
+              title={t("expectedChanges")}
               items={plan.expected_changes.map(
                 (change) =>
                   `${change.change_type} ${change.relative_path} · ${change.component}: ${change.rationale}`,
               )}
             />
             <TextList
-              title="Proposed typed operations"
-              items={plan.proposed_operations.map(operationLabel)}
+              title={t("operations")}
+              items={plan.proposed_operations.map((operation) =>
+                operationLabel(operation, t),
+              )}
             />
             <TextList
-              title="Validation suites"
+              title={t("validationSuites")}
               items={plan.validation_suites.map(
                 (suite) =>
-                  `${suite.suite_id}: ${suite.name} · ${suite.checks.length} required checks`,
+                  `${suite.suite_id}: ${suite.name} · ${t("requiredChecks", {
+                    count: suite.checks.length,
+                  })}`,
               )}
             />
             <TextList
-              title="Risks"
+              title={t("risks")}
               items={plan.risks.map(
                 (risk) =>
-                  `${risk.severity} · ${risk.summary} Mitigation: ${risk.mitigation}`,
+                  `${risk.severity} · ${risk.summary} ${t("mitigation", {
+                    value: risk.mitigation,
+                  })}`,
               )}
             />
             <TextList
-              title="Acceptance criteria"
+              title={t("acceptanceCriteria")}
               items={plan.acceptance_criteria.map(
                 (criterion) =>
                   `${criterion.statement} [${criterion.validation_suite_ids.join(", ")}]`,
               )}
             />
             <TextList
-              title="Unresolved questions"
+              title={t("unresolvedQuestions")}
               items={plan.unresolved_questions}
             />
           </div>
@@ -286,18 +313,17 @@ export function AIPlanConsole({
       <div className="mt-7 grid gap-6 border-t border-slate-200 pt-6 lg:grid-cols-2">
         <section aria-labelledby="ai-context-heading">
           <h3 id="ai-context-heading" className="font-semibold text-slate-950">
-            Input context manifest
+            {t("contextManifest")}
           </h3>
           <p className="mt-1 text-xs text-slate-500">
-            {request.context_excluded_count} entries excluded by policy/budget ·
-            digest{" "}
-            <span className="font-mono break-all">
-              {request.context_digest}
-            </span>
+            {t("contextExcluded", {
+              count: request.context_excluded_count,
+              digest: request.context_digest,
+            })}
           </p>
           <ul
             className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
-            aria-label="Bounded AI Plan input context manifest"
+            aria-label={t("contextAria")}
             tabIndex={0}
           >
             {request.context_manifest.map((entry, index) => (
@@ -312,7 +338,7 @@ export function AIPlanConsole({
                   {String(
                     entry.summary ??
                       entry.relative_path ??
-                      "Structured context",
+                      t("contextFallback"),
                   )}
                 </span>
               </li>
@@ -322,11 +348,9 @@ export function AIPlanConsole({
 
         <section aria-labelledby="ai-eval-heading">
           <h3 id="ai-eval-heading" className="font-semibold text-slate-950">
-            System-owned Eval evidence
+            {t("evalEvidence")}
           </h3>
-          <p className="mt-1 text-xs text-slate-500">
-            Provider self-evaluation is not trusted or accepted.
-          </p>
+          <p className="mt-1 text-xs text-slate-500">{t("evalTrust")}</p>
           <ul className="mt-3 space-y-2 text-sm">
             {request.eval_results.map((result) => (
               <li
@@ -338,11 +362,12 @@ export function AIPlanConsole({
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono text-xs font-semibold">
-                    {result.eval_id}
+                  <span className="text-xs font-semibold">
+                    {t(`eval.${evalLabelKeys[result.eval_id] ?? "unknown"}`)}{" "}
+                    <code className="font-mono">({result.eval_id})</code>
                   </span>
                   <span className="text-xs font-semibold">
-                    {result.passed ? "PASS" : "FAIL"}
+                    {result.passed ? t("pass") : t("fail")}
                   </span>
                 </div>
                 <p className="mt-1 leading-5">{result.summary}</p>
@@ -355,7 +380,7 @@ export function AIPlanConsole({
       <div className="mt-7 grid gap-6 border-t border-slate-200 pt-6 lg:grid-cols-2">
         <section aria-labelledby="ai-trace-heading">
           <h3 id="ai-trace-heading" className="font-semibold text-slate-950">
-            Provider Trace
+            {t("providerTrace")}
           </h3>
           {request.traces.length ? (
             <ol className="mt-3 space-y-3">
@@ -365,15 +390,26 @@ export function AIPlanConsole({
                   className="rounded-xl bg-slate-950 p-4 text-xs text-slate-100"
                 >
                   <p className="font-semibold">
-                    Attempt {trace.attempt_number} · {trace.status}
+                    {t("traceAttempt", {
+                      number: trace.attempt_number,
+                      status: isLocalizedStatus(trace.status)
+                        ? statusT(trace.status)
+                        : trace.status,
+                    })}
                   </p>
                   <p className="mt-2 leading-5 text-slate-300">
-                    {trace.latency_ms} ms · {trace.input_tokens} input ·{" "}
-                    {trace.output_tokens} output · {trace.total_tokens} total
+                    {t("traceUsage", {
+                      latency: trace.latency_ms,
+                      input: trace.input_tokens,
+                      output: trace.output_tokens,
+                      total: trace.total_tokens,
+                    })}
                   </p>
                   <p className="mt-1 text-slate-400">
-                    Cost {trace.cost_estimate_microunits} micro-units ·{" "}
-                    {trace.cost_basis}
+                    {t("traceCost", {
+                      cost: trace.cost_estimate_microunits,
+                      basis: trace.cost_basis,
+                    })}
                   </p>
                   {trace.error_code ? (
                     <p className="mt-1 text-red-300">
@@ -384,23 +420,22 @@ export function AIPlanConsole({
               ))}
             </ol>
           ) : (
-            <p className="mt-3 text-sm text-slate-500">
-              No Provider attempt recorded yet.
-            </p>
+            <p className="mt-3 text-sm text-slate-500">{t("noTrace")}</p>
           )}
         </section>
 
         <section aria-labelledby="ai-prompt-heading">
           <h3 id="ai-prompt-heading" className="font-semibold text-slate-950">
-            Prompt and redaction record
+            {t("promptRecord")}
           </h3>
           <p className="mt-2 text-sm text-slate-600">
-            {request.redaction_record.length} redaction/classification records.
-            Prompt data is bounded and contains no repository blob text.
+            {t("redactionSummary", {
+              count: request.redaction_record.length,
+            })}
           </p>
           <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-              Inspect persisted Prompt/request
+              {t("inspectPrompt")}
             </summary>
             <pre
               className="mt-3 max-h-80 overflow-auto text-xs whitespace-pre-wrap text-slate-700"
@@ -422,12 +457,12 @@ export function AIPlanConsole({
 
       {request.status === "generated" ? (
         <div className="mt-7 border-t border-slate-200 pt-6">
-          <h3 className="font-semibold text-slate-950">Human Plan decision</h3>
+          <h3 className="font-semibold text-slate-950">{t("humanDecision")}</h3>
           <label
             className="mt-3 block text-sm font-semibold text-slate-700"
             htmlFor="ai-rejection-reason"
           >
-            Rejection reason
+            {t("rejectionReason")}
           </label>
           <textarea
             id="ai-rejection-reason"
@@ -435,7 +470,7 @@ export function AIPlanConsole({
             onChange={(event) => setRejectionReason(event.target.value)}
             maxLength={2000}
             className="mt-1 min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20"
-            placeholder="Required only when rejecting."
+            placeholder={t("rejectionPlaceholder")}
           />
           <div className="mt-3 flex flex-wrap gap-3">
             <button
@@ -444,7 +479,7 @@ export function AIPlanConsole({
               onClick={() => void onDecision("approve")}
               className="rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white outline-none hover:bg-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 disabled:opacity-60"
             >
-              Approve AI Plan handoff
+              {t("approveHandoff")}
             </button>
             <button
               type="button"
@@ -452,7 +487,7 @@ export function AIPlanConsole({
               onClick={() => void reject()}
               className="rounded-xl bg-red-800 px-4 py-2.5 text-sm font-semibold text-white outline-none hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 disabled:opacity-60"
             >
-              Reject AI Plan
+              {t("rejectPlan")}
             </button>
             <button
               type="button"
@@ -460,7 +495,7 @@ export function AIPlanConsole({
               onClick={() => void onFreshness()}
               className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 disabled:opacity-60"
             >
-              Revalidate freshness
+              {t("revalidate")}
             </button>
             <button
               type="button"
@@ -468,7 +503,7 @@ export function AIPlanConsole({
               onClick={() => void onCancel()}
               className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-950 outline-none hover:bg-amber-100 focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 disabled:opacity-60"
             >
-              Cancel AI Plan
+              {t("cancelPlan")}
             </button>
           </div>
           {formError ? (
@@ -481,9 +516,7 @@ export function AIPlanConsole({
 
       {request.status === "approved" && request.handoff_plan_id ? (
         <p className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-          Human-approved handoff Plan:{" "}
-          <span className="font-mono break-all">{request.handoff_plan_id}</span>
-          . No Execution Grant or later approval was issued.
+          {t("handoff", { id: request.handoff_plan_id })}
         </p>
       ) : null}
     </section>

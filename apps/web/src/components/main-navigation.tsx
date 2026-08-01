@@ -2,25 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
+
+import { LocaleSwitcher } from "./locale-switcher";
 
 const links = [
-  { href: "/", label: "任务" },
-  { href: "/runners", label: "Runners" },
-  { href: "/repositories", label: "Repositories" },
-  { href: "/execution-grants", label: "Grants" },
-  { href: "/workspaces", label: "Workspaces" },
-  { href: "/validations", label: "Validations" },
-  { href: "/reviews", label: "Reviews" },
-  { href: "/deliveries", label: "Deliveries" },
+  { href: "/", key: "tasks" },
+  { href: "/runners", key: "runners" },
+  { href: "/repositories", key: "repositories" },
+  { href: "/execution-grants", key: "executionGrants" },
+  { href: "/workspaces", key: "workspaces" },
+  { href: "/validations", key: "validations" },
+  { href: "/reviews", key: "reviews" },
+  { href: "/deliveries", key: "deliveries" },
 ];
 
 export function MainNavigation() {
   const pathname = usePathname();
+  const t = useTranslations("navigation");
 
   return (
     <nav
       className="border-b border-slate-200 bg-white/90 backdrop-blur"
-      aria-label="主导航"
+      aria-label={t("label")}
     >
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 lg:px-8">
         <Link
@@ -46,10 +50,11 @@ export function MainNavigation() {
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
-                {link.label}
+                {t(link.key)}
               </Link>
             );
           })}
+          <LocaleSwitcher />
         </div>
       </div>
     </nav>

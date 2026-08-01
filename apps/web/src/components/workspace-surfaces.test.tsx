@@ -237,7 +237,7 @@ describe("Phase 4 browser surfaces", () => {
         name: "Phase 4 Adversarial Fixture",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("available")).toBeInTheDocument();
+    expect(screen.getByText("Available")).toBeInTheDocument();
     expect(
       screen.getByText(/Source working-tree status is intentionally unknown/),
     ).toBeInTheDocument();
@@ -249,12 +249,14 @@ describe("Phase 4 browser surfaces", () => {
     render(<ExecutionGrantConsole />);
     expect(
       await screen.findByText(
-        "Plan approval does not authorize execution. This Execution Grant is a separate human decision.",
+        "Plan Approval does not authorize execution. An Execution Grant is a separate human decision.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("sandbox/**")).toBeInTheDocument();
     expect(screen.getByText(/network none/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Approve Grant" }));
+    await user.click(
+      screen.getByRole("button", { name: "Approve Execution Grant" }),
+    );
     await waitFor(() =>
       expect(decideExecutionGrant).toHaveBeenCalledWith(
         grant.id,
@@ -273,7 +275,7 @@ describe("Phase 4 browser surfaces", () => {
       },
     ]);
     render(<ExecutionGrantConsole />);
-    expect(await screen.findByText("revoke_requested")).toBeInTheDocument();
+    expect(await screen.findByText("Revocation requested")).toBeInTheDocument();
     expect(
       screen.getByText(
         /effective revocation waits for 1 bounded in-flight permit/,
@@ -391,7 +393,7 @@ describe("Phase 4 browser surfaces", () => {
     render(<WorkspaceDetailConsole workspaceId={workspace.id} />);
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("execution_grant_inactive");
-    expect(within(alert).getByRole("button", { name: "重试" })).toBeVisible();
+    expect(within(alert).getByRole("button", { name: "Retry" })).toBeVisible();
   });
 
   it("blocks every destructive control for ownership recovery states", async () => {

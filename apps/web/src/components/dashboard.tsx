@@ -1,29 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
-  ApiError,
   createTask,
   getHealth,
   listTasks,
   type CreateTaskInput,
   type Task,
 } from "@/lib/api";
+import { localizeApiError } from "@/lib/localization";
 
 import { HealthPanel, type HealthState } from "./health-panel";
+import { StatusPill } from "./status-pill";
 import { TaskCard } from "./task-card";
 import { TaskForm } from "./task-form";
 
-function errorMessage(error: unknown): string {
-  return error instanceof ApiError
-    ? error.requestId
-      ? `${error.message}（请求 ID：${error.requestId}）`
-      : error.message
-    : "出现未预期的错误，请重试。";
-}
-
 export function Dashboard() {
+  const t = useTranslations("dashboard");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [listState, setListState] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -42,10 +39,10 @@ export function Dashboard() {
       setTasks(await listTasks());
       setListState("ready");
     } catch (error) {
-      setListError(errorMessage(error));
+      setListError(localizeApiError(error, errorT));
       setListState("error");
     }
-  }, []);
+  }, [errorT]);
 
   const refreshHealth = useCallback(async () => {
     setLive("checking");
@@ -71,7 +68,7 @@ export function Dashboard() {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setListError(errorMessage(error));
+        setListError(localizeApiError(error, errorT));
         setListState("error");
       });
 
@@ -88,7 +85,7 @@ export function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [errorT]);
 
   async function handleCreate(input: CreateTaskInput): Promise<boolean> {
     setIsSubmitting(true);
@@ -105,7 +102,7 @@ export function Dashboard() {
       setListState("ready");
       return true;
     } catch (error) {
-      setCreateError(errorMessage(error));
+      setCreateError(localizeApiError(error, errorT));
       return false;
     } finally {
       setIsSubmitting(false);
@@ -117,18 +114,17 @@ export function Dashboard() {
       <header className="mb-8 border-b border-slate-200 pb-8 sm:mb-10">
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm font-semibold tracking-widest text-blue-700 uppercase">
-            VisualEngineer
+            {t("eyebrow")}
           </p>
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">
             Phase 2
           </span>
         </div>
         <h1 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          受治理的前端交付任务控制台
+          {t("title")}
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-          VisualEngineer 面向企业前端团队。Phase 2 提供任务登记、显式启动的
-          Level 0 committed-HEAD 调查和确定性计划审批；不会执行或修改目标代码。
+          {t("description")}
         </p>
       </header>
 
@@ -139,16 +135,16 @@ export function Dashboard() {
             aria-labelledby="create-heading"
           >
             <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-              New task
+              {t("newTaskEyebrow")}
             </p>
             <h2
               id="create-heading"
               className="mt-1 text-xl font-semibold text-slate-950"
             >
-              创建任务
+              {t("createTitle")}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              每次提交都会生成独立幂等键，网络重放不会产生重复任务。
+              {t("createDescription")}
             </p>
 
             {createError ? (
@@ -156,7 +152,7 @@ export function Dashboard() {
                 className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
                 role="alert"
               >
-                <p className="font-semibold">任务创建失败</p>
+                <p className="font-semibold">{t("createFailed")}</p>
                 <p className="mt-1">{createError}</p>
               </div>
             ) : null}
@@ -166,13 +162,17 @@ export function Dashboard() {
                 className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"
                 role="status"
               >
-                <p className="font-semibold">任务创建成功</p>
+                <p className="font-semibold">{t("createSucceeded")}</p>
                 <dl className="mt-2 grid gap-1 text-xs sm:grid-cols-[5rem_1fr]">
-                  <dt className="font-semibold">任务 ID</dt>
+                  <dt className="font-semibold">{commonT("fields.id")}</dt>
                   <dd className="font-mono break-all">{createdTask.id}</dd>
-                  <dt className="font-semibold">状态</dt>
-                  <dd>{createdTask.status}</dd>
-                  <dt className="font-semibold">仓库</dt>
+                  <dt className="font-semibold">{commonT("fields.status")}</dt>
+                  <dd>
+                    <StatusPill tone="neutral">{createdTask.status}</StatusPill>
+                  </dd>
+                  <dt className="font-semibold">
+                    {commonT("fields.repository")}
+                  </dt>
                   <dd>{createdTask.repository_display_name}</dd>
                 </dl>
               </div>
@@ -193,13 +193,13 @@ export function Dashboard() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-              Registry
+              {t("registryEyebrow")}
             </p>
             <h2
               id="tasks-heading"
               className="mt-1 text-xl font-semibold text-slate-950"
             >
-              最近任务
+              {t("recentTasks")}
             </h2>
           </div>
           {listState === "ready" ? (
@@ -208,7 +208,7 @@ export function Dashboard() {
               type="button"
               onClick={() => void refreshTasks()}
             >
-              刷新列表
+              {t("refreshList")}
             </button>
           ) : null}
         </div>
@@ -218,7 +218,7 @@ export function Dashboard() {
             className="mt-5 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600"
             role="status"
           >
-            正在加载任务…
+            {t("loadingTasks")}
           </div>
         ) : null}
 
@@ -227,23 +227,23 @@ export function Dashboard() {
             className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-6"
             role="alert"
           >
-            <p className="font-semibold text-red-900">无法加载任务</p>
+            <p className="font-semibold text-red-900">{t("loadFailed")}</p>
             <p className="mt-1 text-sm text-red-800">{listError}</p>
             <button
               className="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-red-800 ring-1 ring-red-300 outline-none hover:bg-red-100 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2"
               type="button"
               onClick={() => void refreshTasks()}
             >
-              重试
+              {commonT("actions.retry")}
             </button>
           </div>
         ) : null}
 
         {listState === "ready" && tasks.length === 0 ? (
           <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-            <p className="font-semibold text-slate-800">还没有任务</p>
+            <p className="font-semibold text-slate-800">{t("emptyTitle")}</p>
             <p className="mt-1 text-sm text-slate-600">
-              使用上方表单创建第一个 Foundation 任务。
+              {t("emptyDescription")}
             </p>
           </div>
         ) : null}

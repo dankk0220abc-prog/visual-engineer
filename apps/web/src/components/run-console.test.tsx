@@ -26,6 +26,7 @@ import {
   runFixture,
   snapshotFixture,
 } from "@/test/fixtures";
+import { setTestLocale } from "@/test/setup";
 
 import { RunConsole } from "./run-console";
 
@@ -125,7 +126,7 @@ describe("RunConsole", () => {
         name: "Governed Repository Investigation",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("plan_ready")).toBeInTheDocument();
+    expect(screen.getByText("Plan ready")).toBeInTheDocument();
     expect(screen.getByText("Dirty working tree detected")).toBeInTheDocument();
     expect(screen.getByText(/environment_file · \.env/)).toBeInTheDocument();
     expect(
@@ -133,7 +134,7 @@ describe("RunConsole", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/deterministic plan · v1/i)).toBeInTheDocument();
     expect(
-      screen.getByText("Plan approval does not execute code."),
+      screen.getByText("Plan Approval does not execute code."),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Execution is not available in Phase 2."),
@@ -194,7 +195,8 @@ describe("RunConsole", () => {
     render(<RunConsole runId={runFixture().id} />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Snapshot temporarily unavailable");
+    expect(alert).toHaveTextContent("snapshot_unavailable");
+    expect(alert).not.toHaveTextContent("Snapshot temporarily unavailable");
     await user.click(screen.getByRole("button", { name: "Retry" }));
 
     expect(
@@ -246,7 +248,9 @@ describe("RunConsole", () => {
     await user.click(
       await screen.findByRole("button", { name: "Reject Plan" }),
     );
-    expect(screen.getByText("Reject 必须填写非空理由。")).toBeInTheDocument();
+    expect(
+      screen.getByText("A non-empty reason is required to reject."),
+    ).toBeInTheDocument();
     expect(mockedDecidePlan).not.toHaveBeenCalled();
 
     await user.type(
@@ -290,10 +294,10 @@ describe("RunConsole", () => {
     );
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("状态冲突");
+    expect(alert).toHaveTextContent("The state changed");
     expect(alert).toHaveTextContent("conflict-request");
     expect(
-      screen.getByText("Plan approval does not execute code."),
+      screen.getByText("Plan Approval does not execute code."),
     ).toBeInTheDocument();
   });
 
@@ -324,12 +328,12 @@ describe("RunConsole", () => {
     expect(
       await screen.findByRole("heading", { name: "Structured AI Plan" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("System-owned Eval evidence")).toBeInTheDocument();
-    expect(screen.getByText("schema_validity")).toBeInTheDocument();
+    expect(screen.getByText("System-owned Eval Evidence")).toBeInTheDocument();
+    expect(screen.getByText(/schema_validity/)).toBeInTheDocument();
     expect(screen.getByText("Provider Trace")).toBeInTheDocument();
     expect(
       screen.getByText(
-        /AI Plan approval does not execute code or issue authority/,
+        /AI Plan Approval does not execute code or issue authority/,
       ),
     ).toBeInTheDocument();
 
@@ -343,7 +347,9 @@ describe("RunConsole", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Reject AI Plan" }));
-    expect(screen.getByText("Reject 必须填写非空理由。")).toBeInTheDocument();
+    expect(
+      screen.getByText("A non-empty reason is required to reject the AI Plan."),
+    ).toBeInTheDocument();
     await user.type(
       screen.getByLabelText("Rejection reason"),
       "The typed scope needs revision.",
@@ -433,13 +439,15 @@ describe("RunConsole", () => {
     render(<RunConsole runId={runFixture().id} />);
 
     expect(
-      await screen.findByText("System-owned Eval failed · approval blocked"),
+      await screen.findByText(
+        "System-owned Eval failed · Plan Approval blocked",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Improve the bounded fixture frontend surface."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("generation_binding_integrity"),
+      screen.getByText(/generation_binding_integrity/),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Approve AI Plan handoff" }),
@@ -477,5 +485,27 @@ describe("RunConsole", () => {
         aiPlanRequestFixture().id,
       ),
     );
+  });
+
+  it("renders Chinese UI chrome without translating immutable AI or technical values", async () => {
+    const aiRequest = aiPlanRequestFixture();
+    setTestLocale("zh-CN");
+    mockedGetRun.mockResolvedValue(runFixture({ status: "snapshot_ready" }));
+    mockedListPlans.mockResolvedValue([]);
+    mockedListAIPlanRequests.mockResolvedValue([aiRequest]);
+
+    render(<RunConsole runId={runFixture().id} />);
+
+    expect(
+      await screen.findByRole("heading", { name: "结构化 AI 计划" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("系统所有的评估证据")).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(runFixture().id))).toBeInTheDocument();
+    expect(screen.getAllByText("a".repeat(40)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("b".repeat(64)).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Improve the bounded fixture frontend surface."),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/schema_validity/)).toBeInTheDocument();
   });
 });

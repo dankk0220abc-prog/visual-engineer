@@ -152,7 +152,9 @@ describe("DeliveryConsole", () => {
       ),
     ).toBeVisible();
     fireEvent.click(
-      screen.getByRole("button", { name: "Approve local commit" }),
+      screen.getByRole("button", {
+        name: "Approve local commit Delivery Authorization",
+      }),
     );
     await waitFor(() =>
       expect(decideDeliveryAuthorization).toHaveBeenCalledWith(
@@ -270,7 +272,9 @@ describe("DeliveryConsole", () => {
       name: "Dispatch confirmed local delivery",
     });
     fireEvent.click(dispatchButton);
-    expect(await screen.findByText("出现未预期的错误。")).toBeVisible();
+    expect(
+      await screen.findByText("An unexpected error occurred. Try again."),
+    ).toBeVisible();
     fireEvent.click(dispatchButton);
 
     await waitFor(() => expect(dispatchLocalDelivery).toHaveBeenCalledTimes(2));

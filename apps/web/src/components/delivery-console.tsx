@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  ApiError,
   cancelRunnerJob,
   createDeliveryAuthorization,
   decideDeliveryAuthorization,
@@ -17,17 +17,9 @@ import {
   type ReviewPackage,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return `${error.code}: ${error.message}${
-      error.requestId ? `（请求 ID：${error.requestId}）` : ""
-    }`;
-  }
-  return "出现未预期的错误。";
-}
 
 function statusTone(status: DeliveryAuthorization["status"]) {
   if (status === "succeeded") return "positive" as const;
@@ -50,6 +42,10 @@ function dispatchIdempotencyKey(
 }
 
 export function DeliveryConsole() {
+  const locale = useLocale();
+  const t = useTranslations("delivery");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [packages, setPackages] = useState<ReviewPackage[]>([]);
   const [authorizations, setAuthorizations] = useState<DeliveryAuthorization[]>(
     [],
@@ -74,10 +70,10 @@ export function DeliveryConsole() {
       setAuthorizations(nextAuthorizations);
       setState("ready");
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
       setState("error");
     }
-  }, []);
+  }, [errorT]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 0);
@@ -117,7 +113,7 @@ export function DeliveryConsole() {
       setConfirmed({});
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -131,7 +127,7 @@ export function DeliveryConsole() {
       setPreviews((current) => ({ ...current, [authorizationId]: preview }));
       setConfirmed((current) => ({ ...current, [authorizationId]: false }));
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -141,19 +137,16 @@ export function DeliveryConsole() {
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <header className="border-b border-slate-200 pb-8">
         <p className="text-sm font-semibold tracking-widest text-blue-700 uppercase">
-          Governed Local Delivery
+          {t("eyebrow")}
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Local Delivery Lifecycle
+          {t("title")}
         </h1>
         <p className="mt-3 max-w-4xl text-base leading-7 font-semibold text-slate-800">
-          将 fresh、approved、ready 的 Review
-          基线绑定到一次独立的人工交付授权。派发前必须核对 immutable manifest
-          并确认精确 digest；失败或取消后，只能沿同一 manifest 安全重试。
+          {t("description")}
         </p>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-          该授权永远不包含 source repository 写入、remote、push、PR、tag 或
-          deploy。Review approval 本身不能触发交付。
+          {t("boundary")}
         </p>
       </header>
 
@@ -169,7 +162,7 @@ export function DeliveryConsole() {
               className="ml-3 font-semibold underline"
               onClick={() => void refresh()}
             >
-              重试
+              {commonT("actions.retry")}
             </button>
           ) : null}
         </div>
@@ -177,7 +170,7 @@ export function DeliveryConsole() {
 
       {state === "loading" ? (
         <p className="mt-8 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
-          正在核对 Review freshness 与 local-only 权限边界…
+          {t("loading")}
         </p>
       ) : null}
 
@@ -187,24 +180,22 @@ export function DeliveryConsole() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold text-slate-950">
-                  1. 创建独立 Delivery Authorization
+                  {t("createTitle")}
                 </h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
-                  候选项必须仍是精确的 fresh Review generation、approved
-                  decision 与 ready verdict。授权会固定 checkpoint、diff
-                  hash、branch ref 和 commit message。
+                  {t("createHelp")}
                 </p>
               </div>
               <Link
                 href="/reviews"
                 className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-semibold text-blue-800 outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
               >
-                返回 Reviews
+                {t("backReviews")}
               </Link>
             </div>
             {candidates.length === 0 ? (
               <p className="mt-5 rounded-xl border border-dashed border-blue-300 p-4 text-sm text-slate-700">
-                当前没有新的 fresh、approved、ready Review 候选项。
+                {t("noCandidates")}
               </p>
             ) : (
               <ul className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -217,8 +208,10 @@ export function DeliveryConsole() {
                       {reviewPackage.id}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-slate-900">
-                      Generation {reviewPackage.freshness_generation} ·
-                      checkpoint {reviewPackage.checkpoint_id}
+                      {t("candidate", {
+                        generation: reviewPackage.freshness_generation,
+                        checkpoint: reviewPackage.checkpoint_id,
+                      })}
                     </p>
                     <button
                       type="button"
@@ -234,8 +227,8 @@ export function DeliveryConsole() {
                       }
                     >
                       {busy === `create-${reviewPackage.id}`
-                        ? "正在绑定…"
-                        : "Create Delivery Authorization"}
+                        ? t("binding")
+                        : t("createAuthorization")}
                     </button>
                   </li>
                 ))}
@@ -245,11 +238,11 @@ export function DeliveryConsole() {
 
           <section className="mt-8">
             <h2 className="text-2xl font-semibold text-slate-950">
-              2. 批准、预览、确认与恢复
+              {t("lifecycleTitle")}
             </h2>
             {authorizations.length === 0 ? (
               <p className="mt-4 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
-                尚无 Delivery Authorization。
+                {t("empty")}
               </p>
             ) : (
               <ul className="mt-5 space-y-5">
@@ -283,25 +276,32 @@ export function DeliveryConsole() {
                       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                         <div>
                           <dt className="font-semibold text-slate-700">
-                            Immutable Review baseline
+                            {t("baseline")}
                           </dt>
                           <dd className="mt-1 font-mono text-xs break-all text-slate-600">
-                            package {authorization.package_digest}
+                            {t("package", {
+                              digest: authorization.package_digest,
+                            })}
                           </dd>
                           <dd className="mt-1 text-slate-600">
-                            generation {authorization.freshness_generation} ·
-                            expires {formatTimestamp(authorization.expires_at)}
+                            {t("generationExpires", {
+                              generation: authorization.freshness_generation,
+                              expires: formatTimestamp(
+                                authorization.expires_at,
+                                locale,
+                              ),
+                            })}
                           </dd>
                         </div>
                         <div>
                           <dt className="font-semibold text-slate-700">
-                            Fixed local operation
+                            {t("fixedOperation")}
                           </dt>
                           <dd className="mt-1 text-slate-700">
                             {authorization.commit_message}
                           </dd>
                           <dd className="mt-1 font-semibold text-emerald-800">
-                            Local commit only · remote/push/PR/tag/deploy denied
+                            {t("localOnly")}
                           </dd>
                         </div>
                       </dl>
@@ -322,10 +322,10 @@ export function DeliveryConsole() {
                               )
                             }
                           >
-                            Approve local commit
+                            {t("approve")}
                           </button>
                           <label className="min-w-60 flex-1 text-sm font-semibold text-slate-700">
-                            Rejection reason
+                            {t("rejectionReason")}
                             <input
                               value={reason}
                               onChange={(event) =>
@@ -351,7 +351,7 @@ export function DeliveryConsole() {
                               )
                             }
                           >
-                            Reject
+                            {t("reject")}
                           </button>
                         </div>
                       ) : null}
@@ -364,10 +364,10 @@ export function DeliveryConsole() {
                           onClick={() => void loadPreview(authorization.id)}
                         >
                           {busy === `preview-${authorization.id}`
-                            ? "正在生成预览…"
+                            ? t("previewing")
                             : authorization.status === "approved"
-                              ? "Review delivery preview"
-                              : "Review safe retry"}
+                              ? t("reviewPreview")
+                              : t("reviewRetry")}
                         </button>
                       ) : null}
 
@@ -376,8 +376,11 @@ export function DeliveryConsole() {
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <h4 className="font-semibold text-slate-950">
-                                Immutable delivery manifest · attempt{" "}
-                                {preview.next_attempt_number ?? "blocked"}
+                                {t("manifest", {
+                                  attempt:
+                                    preview.next_attempt_number ??
+                                    t("blockedAttempt"),
+                                })}
                               </h4>
                               <p className="mt-1 font-mono text-xs break-all text-slate-600">
                                 {preview.manifest.manifest_digest}
@@ -388,13 +391,15 @@ export function DeliveryConsole() {
                                 preview.can_dispatch ? "positive" : "negative"
                               }
                             >
-                              {preview.can_dispatch ? "confirmable" : "blocked"}
+                              {preview.can_dispatch
+                                ? t("confirmable")
+                                : t("blocked")}
                             </StatusPill>
                           </div>
                           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                             <div>
                               <dt className="font-semibold text-slate-700">
-                                Deterministic Git proof
+                                {t("gitProof")}
                               </dt>
                               <dd className="mt-1 break-all text-slate-700">
                                 {preview.manifest.branch_ref}
@@ -405,11 +410,13 @@ export function DeliveryConsole() {
                             </div>
                             <div>
                               <dt className="font-semibold text-slate-700">
-                                Exact diff closure
+                                {t("diffClosure")}
                               </dt>
                               <dd className="mt-1 text-slate-700">
-                                {preview.manifest.changed_file_count} file(s) ·{" "}
-                                {preview.manifest.total_diff_bytes} bytes
+                                {t("diffSummary", {
+                                  count: preview.manifest.changed_file_count,
+                                  bytes: preview.manifest.total_diff_bytes,
+                                })}
                               </dd>
                               <dd className="mt-1 font-mono text-xs break-all text-slate-600">
                                 {preview.manifest.checkpoint_diff_hash}
@@ -430,12 +437,13 @@ export function DeliveryConsole() {
                             {preview.diff_artifact}
                           </pre>
                           <p className="mt-3 text-sm font-semibold text-emerald-900">
-                            Local ref only · source write, remote, push, PR, tag
-                            and deploy remain denied.
+                            {t("localBoundary")}
                           </p>
                           {preview.blocking_code ? (
                             <p className="mt-3 text-sm font-semibold text-red-800">
-                              {preview.blocking_code}
+                              {t("blockingCode", {
+                                code: preview.blocking_code,
+                              })}
                             </p>
                           ) : null}
                           <label className="mt-4 flex items-start gap-2 text-sm font-semibold text-slate-800">
@@ -451,8 +459,7 @@ export function DeliveryConsole() {
                               }
                               className="mt-1"
                             />
-                            I confirm this exact manifest digest for local-only
-                            delivery.
+                            {t("confirmDigest")}
                           </label>
                           <div className="mt-4 flex flex-wrap gap-3">
                             <button
@@ -484,10 +491,10 @@ export function DeliveryConsole() {
                               }
                             >
                               {busy === `dispatch-${authorization.id}`
-                                ? "正在派发…"
+                                ? t("dispatching")
                                 : preview.retry_of_dispatch_id
-                                  ? "Retry exact local delivery"
-                                  : "Dispatch confirmed local delivery"}
+                                  ? t("retryExact")
+                                  : t("dispatchConfirmed")}
                             </button>
                             <button
                               type="button"
@@ -501,7 +508,7 @@ export function DeliveryConsole() {
                                 });
                               }}
                             >
-                              Close preview
+                              {t("closePreview")}
                             </button>
                           </div>
                         </section>
@@ -519,14 +526,14 @@ export function DeliveryConsole() {
                             )
                           }
                         >
-                          Cancel active delivery
+                          {t("cancelActive")}
                         </button>
                       ) : null}
 
                       {authorization.dispatches.length > 0 ? (
                         <section className="mt-5 border-t border-slate-100 pt-5">
                           <h4 className="font-semibold text-slate-950">
-                            Dispatch history
+                            {t("history")}
                           </h4>
                           <ol className="mt-3 space-y-3">
                             {authorization.dispatches.map((dispatch) => (
@@ -536,7 +543,9 @@ export function DeliveryConsole() {
                               >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span className="font-semibold text-slate-900">
-                                    Attempt {dispatch.attempt_number}
+                                    {t("attempt", {
+                                      number: dispatch.attempt_number,
+                                    })}
                                   </span>
                                   <StatusPill
                                     tone={statusTone(dispatch.status)}
@@ -545,7 +554,9 @@ export function DeliveryConsole() {
                                   </StatusPill>
                                 </div>
                                 <p className="mt-2 font-mono text-xs break-all text-slate-600">
-                                  manifest {dispatch.manifest_digest}
+                                  {t("manifestDigest", {
+                                    digest: dispatch.manifest_digest,
+                                  })}
                                 </p>
                                 {dispatch.error_code ? (
                                   <p className="mt-2 font-semibold text-red-800">
@@ -556,7 +567,7 @@ export function DeliveryConsole() {
                                   href={`/runners/jobs/${dispatch.runner_job_id}`}
                                   className="mt-2 inline-block font-semibold text-blue-700 underline outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                                 >
-                                  Open Runner evidence
+                                  {t("openEvidence")}
                                 </Link>
                               </li>
                             ))}
@@ -567,14 +578,13 @@ export function DeliveryConsole() {
                       {authorization.delivery ? (
                         <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                           <p className="font-semibold text-emerald-950">
-                            Local commit created
+                            {t("commitCreated")}
                           </p>
                           <p className="mt-2 font-mono text-xs break-all text-emerald-900">
                             {authorization.delivery.commit_oid}
                           </p>
                           <p className="mt-1 text-sm text-emerald-900">
-                            Source repository unchanged; no remote operation was
-                            performed.
+                            {t("sourceUnchanged")}
                           </p>
                         </div>
                       ) : null}

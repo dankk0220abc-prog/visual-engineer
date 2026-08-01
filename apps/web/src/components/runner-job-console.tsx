@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -12,18 +13,21 @@ import {
   type RunnerJobEvent,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
-function message(error: unknown): string {
+function message(
+  error: unknown,
+  errorT: ReturnType<typeof useTranslations>,
+  terminalCancel: string,
+): string {
   if (error instanceof ApiError) {
     return error.code === "runner_job_terminal"
-      ? "Job 已进入终态，无法再取消。"
-      : error.requestId
-        ? `${error.message}（请求 ID：${error.requestId}）`
-        : error.message;
+      ? terminalCancel
+      : localizeApiError(error, errorT);
   }
-  return "出现未预期的错误，请重试。";
+  return errorT("unexpected");
 }
 
 function tone(
@@ -40,6 +44,10 @@ function terminal(state: RunnerJob["state"]): boolean {
 }
 
 export function RunnerJobConsole({ jobId }: { jobId: string }) {
+  const locale = useLocale();
+  const t = useTranslations("runnerJob");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [job, setJob] = useState<RunnerJob | null>(null);
   const [events, setEvents] = useState<RunnerJobEvent[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
@@ -59,10 +67,10 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
       setLoadState("ready");
       setError("");
     } catch (caught) {
-      setError(message(caught));
+      setError(message(caught, errorT, t("terminalCancel")));
       setLoadState("error");
     }
-  }, [jobId]);
+  }, [errorT, jobId, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +83,7 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
       })
       .catch((caught: unknown) => {
         if (cancelled) return;
-        setError(message(caught));
+        setError(message(caught, errorT, t("terminalCancel")));
         setLoadState("error");
       });
     const timer = window.setInterval(() => {
@@ -85,7 +93,7 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [jobId, refresh]);
+  }, [errorT, jobId, refresh, t]);
 
   async function cancel() {
     setIsCancelling(true);
@@ -94,7 +102,7 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
       const updated = await cancelRunnerJob(jobId);
       setJob(updated);
     } catch (caught) {
-      setError(message(caught));
+      setError(message(caught, errorT, t("terminalCancel")));
     } finally {
       setIsCancelling(false);
     }
@@ -107,7 +115,7 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
           className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600"
           role="status"
         >
-          正在加载 Runner Job…
+          {t("loading")}
         </div>
       </main>
     );
@@ -120,14 +128,14 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
           className="rounded-2xl border border-red-200 bg-red-50 p-6"
           role="alert"
         >
-          <p className="font-semibold text-red-900">无法加载 Runner Job</p>
+          <p className="font-semibold text-red-900">{t("loadFailed")}</p>
           <p className="mt-1 text-sm text-red-800">{error}</p>
           <button
             type="button"
             className="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-red-800 ring-1 ring-red-300 outline-none hover:bg-red-100 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2"
             onClick={() => void refresh()}
           >
-            重试
+            {commonT("actions.retry")}
           </button>
         </div>
       </main>
@@ -149,13 +157,13 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
         href="/runners"
         className="inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 outline-none hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
       >
-        ← 返回 Runner 控制台
+        ← {t("back")}
       </Link>
       <header className="mt-4 border-b border-slate-200 pb-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs font-semibold tracking-widest text-blue-700 uppercase">
-              Runner Job
+              {t("eyebrow")}
             </p>
             <h1 className="mt-2 text-2xl font-semibold break-words text-slate-950 sm:text-3xl">
               {job.kind}
@@ -171,7 +179,7 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
             className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
             role="status"
           >
-            已请求取消，正在等待 Runner 确认。此状态不会被显示为已取消或成功。
+            {t("cancelPending")}
           </p>
         ) : null}
         {error ? (
@@ -192,19 +200,19 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
             onClick={() => void cancel()}
           >
             {job.state === "cancel_requested"
-              ? "取消已请求"
+              ? t("cancelRequested")
               : isCancelling
-                ? "正在请求取消…"
-                : "Cancel Job"}
+                ? t("cancelling")
+                : t("cancelJob")}
           </button>
         )}
         {progress !== null ? (
           <div
             className="mt-5 max-w-xl"
-            aria-label={`Job progress ${progress}%`}
+            aria-label={t("progressLabel", { progress })}
           >
             <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-700">
-              <span>Progress</span>
+              <span>{t("progress")}</span>
               <span>{progress}%</span>
             </div>
             <div
@@ -229,58 +237,66 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
           aria-labelledby="envelope-heading"
         >
           <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-            Immutable policy
+            {t("policyEyebrow")}
           </p>
           <h2
             id="envelope-heading"
             className="mt-1 text-xl font-semibold text-slate-950"
           >
-            Permission Envelope
+            {t("envelope")}
           </h2>
           <dl className="mt-5 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs font-semibold text-slate-500">
-                Repository
+                {t("repository")}
               </dt>
               <dd className="mt-1 font-semibold text-emerald-800">
                 {job.permission_envelope.repository_access}
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold text-slate-500">Shell</dt>
+              <dt className="text-xs font-semibold text-slate-500">
+                {t("shell")}
+              </dt>
               <dd className="mt-1 font-semibold text-emerald-800">
                 {String(job.permission_envelope.shell_access)}
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold text-slate-500">Network</dt>
+              <dt className="text-xs font-semibold text-slate-500">
+                {t("network")}
+              </dt>
               <dd className="mt-1 font-semibold text-emerald-800">
                 {job.permission_envelope.network_policy}
               </dd>
             </div>
             <div>
               <dt className="text-xs font-semibold text-slate-500">
-                Max runtime
+                {t("maxRuntime")}
               </dt>
               <dd className="mt-1 text-slate-800">
                 {job.permission_envelope.max_runtime_seconds}s
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold text-slate-500">Lease</dt>
+              <dt className="text-xs font-semibold text-slate-500">
+                {t("lease")}
+              </dt>
               <dd className="mt-1 text-slate-800">
                 {job.permission_envelope.lease_seconds}s
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold text-slate-500">Attempts</dt>
+              <dt className="text-xs font-semibold text-slate-500">
+                {t("attempts")}
+              </dt>
               <dd className="mt-1 text-slate-800">
                 {job.attempt_count}/{job.max_attempts}
               </dd>
             </div>
             <div className="sm:col-span-2">
               <dt className="text-xs font-semibold text-slate-500">
-                Policy hash
+                {t("policyHash")}
               </dt>
               <dd className="mt-1 font-mono text-xs break-all text-slate-800">
                 {job.permission_envelope.policy_hash}
@@ -294,18 +310,16 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
           aria-labelledby="attempts-heading"
         >
           <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-            Fenced execution
+            {t("executionEyebrow")}
           </p>
           <h2
             id="attempts-heading"
             className="mt-1 text-xl font-semibold text-slate-950"
           >
-            Attempts
+            {t("attemptsTitle")}
           </h2>
           {attempts.length === 0 ? (
-            <p className="mt-5 text-sm text-slate-600">
-              Job 仍在队列中，尚无 Attempt。
-            </p>
+            <p className="mt-5 text-sm text-slate-600">{t("noAttempts")}</p>
           ) : (
             <ol className="mt-5 space-y-3">
               {attempts.map((attempt) => (
@@ -315,7 +329,9 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="font-semibold text-slate-900">
-                      Attempt {attempt.attempt_number}
+                      {t("attemptNumber", {
+                        number: attempt.attempt_number,
+                      })}
                     </p>
                     <StatusPill
                       tone={
@@ -333,14 +349,16 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
                   </div>
                   <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
                     <div>
-                      <dt className="font-semibold text-slate-500">Runner</dt>
+                      <dt className="font-semibold text-slate-500">
+                        {commonT("fields.runner")}
+                      </dt>
                       <dd className="mt-1 font-mono break-all text-slate-800">
                         {attempt.runner_id}
                       </dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Lease hint
+                        {t("leaseHint")}
                       </dt>
                       <dd className="mt-1 font-mono text-slate-800">
                         {attempt.lease_id_hint}
@@ -349,12 +367,12 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
                   </dl>
                   {attempt.state === "lease_expired" ? (
                     <p className="mt-3 text-xs font-semibold text-red-700">
-                      Attempt expired.{" "}
+                      {t("attemptExpired")}{" "}
                       {job.state === "queued"
-                        ? "Job 已重新排队。"
+                        ? t("requeued")
                         : job.state === "failed"
-                          ? "重试预算已用尽。"
-                          : "Job 已恢复到后续状态。"}
+                          ? t("retryExhausted")
+                          : t("advanced")}
                     </p>
                   ) : null}
                 </li>
@@ -369,13 +387,13 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
         aria-labelledby="result-heading"
       >
         <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-          Typed evidence
+          {t("evidenceEyebrow")}
         </p>
         <h2
           id="result-heading"
           className="mt-1 text-xl font-semibold text-slate-950"
         >
-          Result
+          {t("result")}
         </h2>
         {job.result ? (
           <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
@@ -394,14 +412,13 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
           </dl>
         ) : (
           <p className="mt-5 text-sm text-slate-600">
-            {terminal(job.state)
-              ? "此终态没有成功结果。"
-              : "Job 完成后显示经类型校验与脱敏的结果。"}
+            {terminal(job.state) ? t("terminalNoResult") : t("resultPending")}
           </p>
         )}
         {job.error_code ? (
           <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {job.error_code}: {job.error_message}
+            <span className="font-semibold">{t("errorEvidence")}: </span>
+            <code>{job.error_code}</code>: {job.error_message}
           </p>
         ) : null}
       </section>
@@ -411,16 +428,16 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
         aria-labelledby="timeline-heading"
       >
         <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-          RunnerJobEvent
+          {t("timelineEyebrow")}
         </p>
         <h2
           id="timeline-heading"
           className="mt-1 text-xl font-semibold text-slate-950"
         >
-          Timeline
+          {t("timeline")}
         </h2>
         {events.length === 0 ? (
-          <p className="mt-5 text-sm text-slate-600">尚无事件。</p>
+          <p className="mt-5 text-sm text-slate-600">{t("noEvents")}</p>
         ) : (
           <ol className="mt-5 space-y-4">
             {events.map((event) => (
@@ -429,7 +446,8 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
                 className="grid gap-2 border-l-2 border-blue-200 pl-4 sm:grid-cols-[9rem_1fr]"
               >
                 <p className="text-xs text-slate-500">
-                  #{event.sequence} · {formatTimestamp(event.created_at)}
+                  #{event.sequence} ·{" "}
+                  {formatTimestamp(event.created_at, locale)}
                 </p>
                 <div className="min-w-0">
                   <p className="font-semibold text-slate-900">
@@ -439,7 +457,9 @@ export function RunnerJobConsole({ jobId }: { jobId: string }) {
                     <pre
                       className="mt-2 max-w-full overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100"
                       tabIndex={0}
-                      aria-label={`${event.event_type} 事件元数据`}
+                      aria-label={t("eventMetadata", {
+                        type: event.event_type,
+                      })}
                     >
                       {JSON.stringify(event.metadata, null, 2)}
                     </pre>

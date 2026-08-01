@@ -152,11 +152,11 @@ describe("ReviewConsole", () => {
     expect(await screen.findByText("Evidence Manifest 2/2")).toBeVisible();
     expect(screen.getByText("Generation 1 / current 1")).toBeVisible();
     expect(
-      screen.getByText("Critical 0 · High 0 · Blocking medium 0"),
+      screen.getByText("Critical 0 · High 0 · Blocking Medium 0"),
     ).toBeVisible();
     expect(
       screen.getByText(
-        "Git authorization: false · Deployment authorization: false",
+        "Git authorization: false · Deployment authorization: false · Delivery Authorization: not issued",
       ),
     ).toBeVisible();
 

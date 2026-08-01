@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, createTask, getHealth, listTasks } from "@/lib/api";
 import { taskFixture } from "@/test/fixtures";
+import { setTestLocale } from "@/test/setup";
 
 import { Dashboard } from "./dashboard";
 
@@ -28,6 +29,7 @@ const mockedGetHealth = vi.mocked(getHealth);
 const mockedListTasks = vi.mocked(listTasks);
 
 beforeEach(() => {
+  setTestLocale("zh-CN");
   vi.clearAllMocks();
   mockedGetHealth.mockResolvedValue(true);
 });
@@ -73,7 +75,8 @@ describe("Dashboard", () => {
     render(<Dashboard />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Database unavailable");
+    expect(alert).toHaveTextContent("not_ready");
+    expect(alert).not.toHaveTextContent("Database unavailable");
     expect(alert).toHaveTextContent("req-test");
 
     await user.click(within(alert).getByRole("button", { name: "重试" }));

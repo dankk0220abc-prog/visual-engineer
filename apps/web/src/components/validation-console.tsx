@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  ApiError,
   cancelValidationSuiteRun,
   cancelValidationRun,
   createExecutionGrant,
@@ -28,6 +28,7 @@ import {
   type WorkspaceCheckpoint,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { isLocalizedStatus, localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
@@ -50,15 +51,6 @@ const activeSuiteStates = new Set([
   "running",
   "cancel_requested",
 ]);
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return `${error.code}: ${error.message}${
-      error.requestId ? `（请求 ID：${error.requestId}）` : ""
-    }`;
-  }
-  return "出现未预期的错误。";
-}
 
 function runTone(
   state: string,
@@ -86,6 +78,10 @@ function grantTone(
 }
 
 export function ValidationConsole() {
+  const locale = useLocale();
+  const t = useTranslations("validation");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [profiles, setProfiles] = useState<ValidationProfile[]>([]);
   const [runs, setRuns] = useState<ValidationRun[]>([]);
   const [suites, setSuites] = useState<ValidationSuite[]>([]);
@@ -161,10 +157,10 @@ export function ValidationConsole() {
       );
       setState("ready");
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
       setState("error");
     }
-  }, []);
+  }, [errorT]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 0);
@@ -210,7 +206,7 @@ export function ValidationConsole() {
       });
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -231,7 +227,7 @@ export function ValidationConsole() {
       );
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -244,7 +240,7 @@ export function ValidationConsole() {
       await cancelValidationSuiteRun(run.id);
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -261,7 +257,7 @@ export function ValidationConsole() {
       );
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -286,7 +282,7 @@ export function ValidationConsole() {
       });
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -310,7 +306,7 @@ export function ValidationConsole() {
       });
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -330,7 +326,7 @@ export function ValidationConsole() {
       );
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -343,7 +339,7 @@ export function ValidationConsole() {
       await cancelValidationRun(run.id);
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -353,19 +349,16 @@ export function ValidationConsole() {
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <header className="border-b border-slate-200 pb-8">
         <p className="text-sm font-semibold tracking-widest text-blue-700 uppercase">
-          Governed Validation Execution
+          {t("eyebrow")}
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Validation Runs
+          {t("title")}
         </h1>
         <p className="mt-3 max-w-4xl text-base leading-7 font-semibold text-slate-800">
-          对精确 Workspace Checkpoint 串行运行系统所有、不可参数化的多步骤
-          Validation Suite；每个实际步骤都有独立 Runner Attempt、Lease 和
-          Evidence。
+          {t("description")}
         </p>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-          本页不接受命令、argv、cwd、环境变量、依赖安装或 Provider 配置。网络与
-          Shell 均保持关闭。
+          {t("boundary")}
         </p>
       </header>
 
@@ -381,7 +374,7 @@ export function ValidationConsole() {
               className="ml-3 font-semibold underline"
               onClick={() => void refresh()}
             >
-              重试
+              {commonT("actions.retry")}
             </button>
           ) : null}
         </div>
@@ -389,7 +382,7 @@ export function ValidationConsole() {
 
       {state === "loading" ? (
         <p className="mt-8 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
-          正在加载 Validation 权限与证据…
+          {t("loading")}
         </p>
       ) : null}
 
@@ -398,21 +391,19 @@ export function ValidationConsole() {
           <section className="mt-8 grid gap-5 lg:grid-cols-2">
             <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-5 sm:p-6">
               <h2 className="text-xl font-semibold text-slate-950">
-                1. 申请 validation-only Grant
+                {t("requestGrantTitle")}
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-700">
-                只有与当前 Workspace tree fingerprint 精确一致的 Checkpoint
-                可选；创建后必须显式 Approve 才能运行。
+                {t("requestGrantHelp")}
               </p>
               {candidates.length === 0 ? (
                 <p className="mt-4 rounded-xl border border-dashed border-blue-300 p-4 text-sm text-slate-700">
-                  当前没有可验证的精确 Checkpoint。先在 Workspace 中生成一次
-                  status、diff 或 write Checkpoint。
+                  {t("noCheckpoint")}
                 </p>
               ) : (
                 <div className="mt-4 space-y-3">
                   <label className="block text-sm font-semibold text-slate-800">
-                    Exact Workspace Checkpoint
+                    {t("checkpointLabel")}
                     <select
                       className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
                       value={selectedCheckpoint}
@@ -425,9 +416,12 @@ export function ValidationConsole() {
                           key={candidate.checkpoint.id}
                           value={candidate.checkpoint.id}
                         >
-                          {candidate.workspace.repository_display_name} · W
-                          {candidate.workspace.id.slice(0, 8)} · C
-                          {candidate.checkpoint.sequence}
+                          {t("checkpointOption", {
+                            repository:
+                              candidate.workspace.repository_display_name,
+                            workspace: candidate.workspace.id.slice(0, 8),
+                            sequence: candidate.checkpoint.sequence,
+                          })}
                         </option>
                       ))}
                     </select>
@@ -440,9 +434,7 @@ export function ValidationConsole() {
                     }
                     onClick={() => void requestGrant()}
                   >
-                    {busy === "create-grant"
-                      ? "创建中…"
-                      : "创建 pending Suite Grant"}
+                    {busy === "create-grant" ? t("creating") : t("createGrant")}
                   </button>
                 </div>
               )}
@@ -450,7 +442,7 @@ export function ValidationConsole() {
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
               <h2 className="text-xl font-semibold text-slate-950">
-                固定 Suite、步骤与上限
+                {t("suiteTitle")}
               </h2>
               {suite ? (
                 <>
@@ -462,36 +454,47 @@ export function ValidationConsole() {
                   </p>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="font-semibold text-slate-500">Suite</dt>
+                      <dt className="font-semibold text-slate-500">
+                        {t("suite")}
+                      </dt>
                       <dd className="font-mono text-xs">
                         {suite.suite_id}:v{suite.suite_version}
                       </dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Ordered steps
+                        {t("orderedSteps")}
                       </dt>
                       <dd>
-                        {suite.steps.length} · {suite.failure_policy}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-slate-500">Budgets</dt>
-                      <dd>
-                        {suite.total_timeout_seconds}s total ·{" "}
-                        {suite.total_output_bytes} output bytes ·{" "}
-                        {suite.max_attempts} attempts
+                        {t("stepCount", {
+                          count: suite.steps.length,
+                          policy: suite.failure_policy,
+                        })}
                       </dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Explicit denials
+                        {t("budgets")}
                       </dt>
                       <dd>
-                        network {suite.network_policy} · Shell{" "}
-                        {String(suite.shell_access)} · user command{" "}
-                        {String(suite.user_command_input)} · artifacts{" "}
-                        {String(suite.artifact_content_transfer)}
+                        {t("budgetSummary", {
+                          timeout: suite.total_timeout_seconds,
+                          output: suite.total_output_bytes,
+                          attempts: suite.max_attempts,
+                        })}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold text-slate-500">
+                        {t("explicitDenials")}
+                      </dt>
+                      <dd>
+                        {t("denialSummary", {
+                          network: suite.network_policy,
+                          shell: String(suite.shell_access),
+                          command: String(suite.user_command_input),
+                          artifacts: String(suite.artifact_content_transfer),
+                        })}
                       </dd>
                     </div>
                   </dl>
@@ -505,29 +508,30 @@ export function ValidationConsole() {
                           {step.sequence}. {step.step_id}
                         </span>
                         <span className="mt-1 block font-mono text-xs text-slate-600">
-                          {step.profile_id}:v{step.profile_version} ·{" "}
-                          {step.timeout_seconds}s · {step.max_output_bytes}{" "}
-                          bytes
+                          {t("stepBudget", {
+                            profile: step.profile_id,
+                            version: step.profile_version,
+                            timeout: step.timeout_seconds,
+                            bytes: step.max_output_bytes,
+                          })}
                         </span>
                       </li>
                     ))}
                   </ol>
                 </>
               ) : (
-                <p className="mt-3 text-sm text-slate-600">
-                  没有可用的系统 Suite。
-                </p>
+                <p className="mt-3 text-sm text-slate-600">{t("noSuite")}</p>
               )}
             </div>
           </section>
 
           <section className="mt-10">
             <h2 className="text-2xl font-semibold text-slate-950">
-              2. 独立审批与启动
+              {t("decisionTitle")}
             </h2>
             {validationGrants.length === 0 ? (
               <p className="mt-4 rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-600">
-                尚无 Validation Grant。
+                {t("noGrants")}
               </p>
             ) : (
               <ul className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -554,7 +558,7 @@ export function ValidationConsole() {
                     <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                       <div>
                         <dt className="font-semibold text-slate-500">
-                          Workspace / Checkpoint
+                          {t("workspaceCheckpoint")}
                         </dt>
                         <dd className="mt-1 font-mono text-xs break-all">
                           {grant.validation_workspace_id} /{" "}
@@ -562,11 +566,15 @@ export function ValidationConsole() {
                         </dd>
                       </div>
                       <div>
-                        <dt className="font-semibold text-slate-500">Limits</dt>
+                        <dt className="font-semibold text-slate-500">
+                          {t("limits")}
+                        </dt>
                         <dd className="mt-1">
-                          {grant.max_validation_runs} runs ·{" "}
-                          {grant.validation_timeout_seconds}s ·{" "}
-                          {grant.validation_output_bytes} bytes
+                          {t("limitSummary", {
+                            runs: grant.max_validation_runs,
+                            timeout: grant.validation_timeout_seconds,
+                            bytes: grant.validation_output_bytes,
+                          })}
                         </dd>
                       </div>
                     </dl>
@@ -579,12 +587,12 @@ export function ValidationConsole() {
                           onClick={() => void decideGrant(grant, "approve")}
                         >
                           {busy === `approve-${grant.id}`
-                            ? "批准中…"
-                            : "Approve exact Validation Grant"}
+                            ? t("approving")
+                            : t("approveGrant")}
                         </button>
                         <div className="flex gap-2">
                           <label className="min-w-0 flex-1 text-sm font-semibold text-slate-700">
-                            Reject reason
+                            {t("rejectReason")}
                             <input
                               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
                               value={rejectReasons[grant.id] ?? ""}
@@ -605,7 +613,7 @@ export function ValidationConsole() {
                             }
                             onClick={() => void decideGrant(grant, "reject")}
                           >
-                            Reject
+                            {t("rejectGrant")}
                           </button>
                         </div>
                       </div>
@@ -620,13 +628,14 @@ export function ValidationConsole() {
                             onClick={() => void startSuite(grant)}
                           >
                             {busy === `suite-${grant.id}`
-                              ? "排队中…"
-                              : "Run fixed Suite"}
+                              ? t("queueing")
+                              : t("runSuite")}
                           </button>
                         ) : (
                           <p className="mt-5 text-xs text-slate-600">
-                            此 Grant 仅绑定 Suite retry source{" "}
-                            {grant.validation_suite_retry_of_run_id}。
+                            {t("retryGrantOnly", {
+                              id: grant.validation_suite_retry_of_run_id ?? "",
+                            })}
                           </p>
                         )
                       ) : (
@@ -637,8 +646,8 @@ export function ValidationConsole() {
                           onClick={() => void startValidation(grant)}
                         >
                           {busy === `run-${grant.id}`
-                            ? "排队中…"
-                            : "Run sealed first-slice Profile"}
+                            ? t("queueing")
+                            : t("runProfile")}
                         </button>
                       )
                     ) : null}
@@ -650,11 +659,11 @@ export function ValidationConsole() {
 
           <section className="mt-10">
             <h2 className="text-2xl font-semibold text-slate-950">
-              3. Suite 时间线与聚合结果
+              {t("suiteTimelineTitle")}
             </h2>
             {suiteRuns.length === 0 ? (
               <p className="mt-4 rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-600">
-                尚无 Validation Suite Run。
+                {t("noSuiteRuns")}
               </p>
             ) : (
               <ul className="mt-5 space-y-5">
@@ -685,8 +694,12 @@ export function ValidationConsole() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-xs font-semibold tracking-widest text-blue-700 uppercase">
-                            {run.suite_id}:v{run.suite_version} · attempt{" "}
-                            {run.attempt_number}/{run.max_attempts}
+                            {t("suiteAttempt", {
+                              suite: run.suite_id,
+                              version: run.suite_version,
+                              attempt: run.attempt_number,
+                              maximum: run.max_attempts,
+                            })}
                           </p>
                           <h3 className="mt-1 font-mono text-sm break-all text-slate-950">
                             {run.id}
@@ -699,7 +712,7 @@ export function ValidationConsole() {
                       <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
                         <div>
                           <dt className="font-semibold text-slate-500">
-                            Authority
+                            {t("authority")}
                           </dt>
                           <dd className="mt-1 font-mono text-xs break-all">
                             {run.checkpoint_fingerprint}
@@ -707,20 +720,25 @@ export function ValidationConsole() {
                         </div>
                         <div>
                           <dt className="font-semibold text-slate-500">
-                            Aggregate budget
+                            {t("aggregateBudget")}
                           </dt>
                           <dd className="mt-1">
-                            {run.combined_output_bytes}/{run.total_output_bytes}{" "}
-                            bytes · {run.total_timeout_seconds}s
+                            {t("aggregateBudgetSummary", {
+                              used: run.combined_output_bytes,
+                              maximum: run.total_output_bytes,
+                              timeout: run.total_timeout_seconds,
+                            })}
                           </dd>
                         </div>
                         <div>
                           <dt className="font-semibold text-slate-500">
-                            Progress
+                            {t("progress")}
                           </dt>
                           <dd className="mt-1">
-                            {run.completed_step_count}/{run.step_count} terminal
-                            steps
+                            {t("progressSummary", {
+                              completed: run.completed_step_count,
+                              total: run.step_count,
+                            })}
                           </dd>
                         </div>
                       </dl>
@@ -734,7 +752,7 @@ export function ValidationConsole() {
                       ) : null}
                       <ol
                         className="mt-5 space-y-3"
-                        aria-label="Validation Suite step timeline"
+                        aria-label={t("stepTimeline")}
                       >
                         {run.steps.map((step) => (
                           <li
@@ -749,7 +767,7 @@ export function ValidationConsole() {
                                 <p className="mt-1 font-mono text-xs text-slate-600">
                                   {step.profile_id}:v{step.profile_version}
                                   {step.reused_from_step_run_id
-                                    ? " · reused successful Evidence"
+                                    ? ` · ${t("reusedEvidence")}`
                                     : ""}
                                 </p>
                               </div>
@@ -758,27 +776,30 @@ export function ValidationConsole() {
                               </StatusPill>
                             </div>
                             <p className="mt-2 text-sm text-slate-700">
-                              duration {step.duration_ms ?? "—"}ms · exit{" "}
-                              {step.exit_code ?? "—"} · output{" "}
-                              {step.output_bytes}/{step.max_output_bytes} ·
-                              cleaned {String(step.cleanup_succeeded ?? "—")}
+                              {t("stepResult", {
+                                duration: step.duration_ms ?? "—",
+                                exit: step.exit_code ?? "—",
+                                output: step.output_bytes,
+                                maximum: step.max_output_bytes,
+                                cleaned: String(step.cleanup_succeeded ?? "—"),
+                              })}
                             </p>
                             {step.evidence ? (
                               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                                 <div>
                                   <h4 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                                    stdout
+                                    {t("stdout")}
                                   </h4>
                                   <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-slate-950 p-3 text-xs whitespace-pre-wrap text-slate-100">
-                                    {step.evidence.stdout || "(empty)"}
+                                    {step.evidence.stdout || t("emptyOutput")}
                                   </pre>
                                 </div>
                                 <div>
                                   <h4 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                                    stderr
+                                    {t("stderr")}
                                   </h4>
                                   <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-slate-950 p-3 text-xs whitespace-pre-wrap text-slate-100">
-                                    {step.evidence.stderr || "(empty)"}
+                                    {step.evidence.stderr || t("emptyOutput")}
                                   </pre>
                                 </div>
                               </div>
@@ -789,16 +810,23 @@ export function ValidationConsole() {
                       {run.result ? (
                         <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
                           <h4 className="font-semibold text-slate-950">
-                            Aggregate Result: {run.result.verdict}
+                            {t("aggregateResult", {
+                              verdict: isLocalizedStatus(run.result.verdict)
+                                ? commonT(`status.${run.result.verdict}`)
+                                : run.result.verdict,
+                            })}
                           </h4>
                           <p className="mt-2 text-slate-700">
-                            Evidence {run.result.evidence_references.length} ·
-                            redactions {run.result.redaction_count} · artifacts{" "}
-                            {run.result.artifact_count} · cleanup{" "}
-                            {String(run.result.cleanup_succeeded)} · source
-                            invariant {String(run.result.source_invariant)} ·
-                            canonical Workspace invariant{" "}
-                            {String(run.result.canonical_workspace_invariant)}
+                            {t("aggregateEvidence", {
+                              evidence: run.result.evidence_references.length,
+                              redactions: run.result.redaction_count,
+                              artifacts: run.result.artifact_count,
+                              cleanup: String(run.result.cleanup_succeeded),
+                              source: String(run.result.source_invariant),
+                              workspace: String(
+                                run.result.canonical_workspace_invariant,
+                              ),
+                            })}
                           </p>
                           <p className="mt-2 font-mono text-xs break-all text-slate-600">
                             {run.result.aggregate_digest}
@@ -815,8 +843,8 @@ export function ValidationConsole() {
                             onClick={() => void cancelSuite(run)}
                           >
                             {busy === `cancel-suite-${run.id}`
-                              ? "取消中…"
-                              : "Cancel Suite"}
+                              ? t("cancelling")
+                              : t("cancelSuite")}
                           </button>
                         ) : null}
                         {retryable ? (
@@ -836,8 +864,8 @@ export function ValidationConsole() {
                               }
                             >
                               {busy === `retry-suite-${run.id}`
-                                ? "重试中…"
-                                : "Retry failed steps"}
+                                ? t("retrying")
+                                : t("retrySteps")}
                             </button>
                             {!retryGrant ? (
                               <button
@@ -850,13 +878,13 @@ export function ValidationConsole() {
                                 onClick={() => void requestRetryGrant(run)}
                               >
                                 {busy === `retry-grant-${run.id}`
-                                  ? "申请中…"
-                                  : "Request lineage-bound retry Grant"}
+                                  ? t("requesting")
+                                  : t("requestRetryGrant")}
                               </button>
                             ) : null}
                             {run.attempt_number >= run.max_attempts ? (
                               <span className="text-xs text-slate-600">
-                                Retry disabled: attempt budget exhausted。
+                                {t("retryExhausted")}
                               </span>
                             ) : null}
                           </>
@@ -871,11 +899,11 @@ export function ValidationConsole() {
 
           <section className="mt-10">
             <h2 className="text-2xl font-semibold text-slate-950">
-              4. First-slice 单步记录
+              {t("singleRunsTitle")}
             </h2>
             {runs.length === 0 ? (
               <p className="mt-4 rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-600">
-                尚无 Validation Run。
+                {t("noRuns")}
               </p>
             ) : (
               <ul className="mt-5 space-y-5">
@@ -900,7 +928,7 @@ export function ValidationConsole() {
                     <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
                       <div>
                         <dt className="font-semibold text-slate-500">
-                          Checkpoint fingerprint
+                          {t("checkpointFingerprint")}
                         </dt>
                         <dd className="mt-1 font-mono text-xs break-all">
                           {run.checkpoint_fingerprint}
@@ -908,19 +936,34 @@ export function ValidationConsole() {
                       </div>
                       <div>
                         <dt className="font-semibold text-slate-500">
-                          Step / exit
+                          {t("stepExit")}
                         </dt>
                         <dd className="mt-1">
-                          {run.step.step_id} · {run.step.state} · exit{" "}
-                          {run.step.exit_code ?? "—"}
+                          {t("stepExitSummary", {
+                            step: run.step.step_id,
+                            state: run.step.state,
+                            exit: run.step.exit_code ?? "—",
+                          })}
                         </dd>
                       </div>
                       <div>
-                        <dt className="font-semibold text-slate-500">Timing</dt>
+                        <dt className="font-semibold text-slate-500">
+                          {t("timing")}
+                        </dt>
                         <dd className="mt-1">
-                          requested {formatTimestamp(run.requested_at)}
+                          {t("timingSummary", {
+                            requested: formatTimestamp(
+                              run.requested_at,
+                              locale,
+                            ),
+                          })}
                           {run.completed_at
-                            ? ` · completed ${formatTimestamp(run.completed_at)}`
+                            ? t("completedAt", {
+                                completed: formatTimestamp(
+                                  run.completed_at,
+                                  locale,
+                                ),
+                              })
                             : ""}
                         </dd>
                       </div>
@@ -938,28 +981,33 @@ export function ValidationConsole() {
                         <dl className="grid gap-3 text-sm md:grid-cols-3">
                           <div>
                             <dt className="font-semibold text-slate-500">
-                              Isolation
+                              {t("isolation")}
                             </dt>
                             <dd>
-                              network {String(run.evidence.network_isolated)} ·
-                              filesystem{" "}
-                              {String(run.evidence.filesystem_isolated)} ·
-                              cleaned {String(run.evidence.sandbox_cleaned)}
+                              {t("isolationSummary", {
+                                network: String(run.evidence.network_isolated),
+                                filesystem: String(
+                                  run.evidence.filesystem_isolated,
+                                ),
+                                cleaned: String(run.evidence.sandbox_cleaned),
+                              })}
                             </dd>
                           </div>
                           <div>
                             <dt className="font-semibold text-slate-500">
-                              Bounded result
+                              {t("boundedResult")}
                             </dt>
                             <dd>
-                              {run.evidence.duration_ms}ms · exit{" "}
-                              {run.evidence.exit_code} · redactions{" "}
-                              {run.evidence.redaction_count}
+                              {t("boundedResultSummary", {
+                                duration: run.evidence.duration_ms,
+                                exit: run.evidence.exit_code,
+                                redactions: run.evidence.redaction_count,
+                              })}
                             </dd>
                           </div>
                           <div>
                             <dt className="font-semibold text-slate-500">
-                              Fixed argv
+                              {t("fixedArgv")}
                             </dt>
                             <dd className="font-mono text-xs break-all">
                               {run.evidence.fixed_argv.join(" ")}
@@ -969,18 +1017,18 @@ export function ValidationConsole() {
                         <div className="mt-4 grid gap-3 lg:grid-cols-2">
                           <div>
                             <h4 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                              stdout
+                              {t("stdout")}
                             </h4>
                             <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 text-xs whitespace-pre-wrap text-slate-100">
-                              {run.evidence.stdout || "(empty)"}
+                              {run.evidence.stdout || t("emptyOutput")}
                             </pre>
                           </div>
                           <div>
                             <h4 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                              stderr
+                              {t("stderr")}
                             </h4>
                             <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 text-xs whitespace-pre-wrap text-slate-100">
-                              {run.evidence.stderr || "(empty)"}
+                              {run.evidence.stderr || t("emptyOutput")}
                             </pre>
                           </div>
                         </div>
@@ -991,14 +1039,14 @@ export function ValidationConsole() {
                         href={`/workspaces/${run.workspace_id}`}
                         className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 ring-1 ring-blue-300"
                       >
-                        Workspace
+                        {t("workspaceLink")}
                       </Link>
                       {run.runner_job_id ? (
                         <Link
                           href={`/runners/jobs/${run.runner_job_id}`}
                           className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 ring-1 ring-blue-300"
                         >
-                          Runner Job
+                          {t("runnerJobLink")}
                         </Link>
                       ) : null}
                       {activeStates.has(run.state) &&
@@ -1010,8 +1058,8 @@ export function ValidationConsole() {
                           onClick={() => void cancel(run)}
                         >
                           {busy === `cancel-${run.id}`
-                            ? "取消中…"
-                            : "Cancel Validation"}
+                            ? t("cancelling")
+                            : t("cancelValidation")}
                         </button>
                       ) : null}
                     </div>

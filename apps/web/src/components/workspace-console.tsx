@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  ApiError,
   createWorkspace,
   listExecutionGrants,
   listWorkspaces,
@@ -13,13 +13,9 @@ import {
   type Workspace,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
-
-function message(error: unknown): string {
-  if (error instanceof ApiError) return `${error.code}: ${error.message}`;
-  return "无法加载 Workspace。";
-}
 
 function workspaceTone(
   state: Workspace["state"],
@@ -45,6 +41,10 @@ function workspaceTone(
 
 export function WorkspaceConsole() {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations("workspaces");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [grants, setGrants] = useState<ExecutionGrant[]>([]);
   const [selectedGrant, setSelectedGrant] = useState("");
@@ -52,24 +52,29 @@ export function WorkspaceConsole() {
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const refresh = useCallback(async (showLoading = false) => {
-    if (showLoading) setState("loading");
-    try {
-      const [nextWorkspaces, nextGrants] = await Promise.all([
-        listWorkspaces(),
-        listExecutionGrants(),
-      ]);
-      setWorkspaces(nextWorkspaces);
-      setGrants(nextGrants);
-      const approved = nextGrants.find((grant) => grant.status === "approved");
-      setSelectedGrant((current) => current || approved?.id || "");
-      setState("ready");
-      setError("");
-    } catch (reason) {
-      setError(message(reason));
-      setState("error");
-    }
-  }, []);
+  const refresh = useCallback(
+    async (showLoading = false) => {
+      if (showLoading) setState("loading");
+      try {
+        const [nextWorkspaces, nextGrants] = await Promise.all([
+          listWorkspaces(),
+          listExecutionGrants(),
+        ]);
+        setWorkspaces(nextWorkspaces);
+        setGrants(nextGrants);
+        const approved = nextGrants.find(
+          (grant) => grant.status === "approved",
+        );
+        setSelectedGrant((current) => current || approved?.id || "");
+        setState("ready");
+        setError("");
+      } catch (reason) {
+        setError(localizeApiError(reason, errorT));
+        setState("error");
+      }
+    },
+    [errorT],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +90,7 @@ export function WorkspaceConsole() {
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
-        setError(message(reason));
+        setError(localizeApiError(reason, errorT));
         setState("error");
       });
     const timer = window.setInterval(() => void refresh(false), 2000);
@@ -93,7 +98,7 @@ export function WorkspaceConsole() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [refresh]);
+  }, [errorT, refresh]);
 
   const approvedGrants = useMemo(
     () => grants.filter((grant) => grant.status === "approved"),
@@ -108,7 +113,7 @@ export function WorkspaceConsole() {
       const action = await createWorkspace(selectedGrant);
       router.push(`/workspaces/${action.workspace.id}`);
     } catch (reason) {
-      setError(message(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setCreating(false);
     }
@@ -118,14 +123,13 @@ export function WorkspaceConsole() {
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <header className="border-b border-slate-200 pb-8">
         <p className="text-sm font-semibold tracking-widest text-blue-700 uppercase">
-          Runner-owned execution surface
+          {t("eyebrow")}
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Isolated Workspaces
+          {t("title")}
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-          所有修改只发生在 Runner volume 中的 detached worktree。Control Plane
-          不保存绝对路径，源仓库保持只读。
+          {t("description")}
         </p>
       </header>
 
@@ -140,36 +144,36 @@ export function WorkspaceConsole() {
             className="ml-3 font-semibold underline"
             onClick={() => void refresh(true)}
           >
-            重试
+            {commonT("actions.retry")}
           </button>
         </div>
       ) : null}
       {state === "loading" ? (
         <p className="mt-8 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
-          正在加载 Workspaces…
+          {t("loading")}
         </p>
       ) : null}
       {state === "ready" ? (
         <>
           <section className="mt-8 rounded-2xl border border-blue-200 bg-blue-50/60 p-5 sm:p-6">
             <h2 className="text-xl font-semibold text-slate-950">
-              创建 exact-revision Workspace
+              {t("createTitle")}
             </h2>
             {approvedGrants.length === 0 ? (
               <p className="mt-3 text-sm text-slate-700">
-                没有可用的 approved Execution Grant。请先在{" "}
+                {t("noGrantBefore")}{" "}
                 <Link
                   href="/execution-grants"
                   className="font-semibold text-blue-800 underline"
                 >
-                  Execution Grants
+                  {t("executionGrantsLink")}
                 </Link>{" "}
-                完成独立批准。
+                {t("noGrantAfter")}
               </p>
             ) : (
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
                 <label className="min-w-0 flex-1 text-sm font-semibold text-slate-800">
-                  Approved Grant
+                  {t("approvedGrant")}
                   <select
                     className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
                     value={selectedGrant}
@@ -190,7 +194,7 @@ export function WorkspaceConsole() {
                   disabled={!selectedGrant || creating}
                   onClick={() => void create()}
                 >
-                  {creating ? "请求中…" : "Prepare Workspace"}
+                  {creating ? t("requesting") : t("prepare")}
                 </button>
               </div>
             )}
@@ -198,10 +202,10 @@ export function WorkspaceConsole() {
 
           {workspaces.length === 0 ? (
             <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-              <h2 className="font-semibold text-slate-900">暂无 Workspace</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                approved Grant 不会自动执行；必须明确创建 Workspace。
-              </p>
+              <h2 className="font-semibold text-slate-900">
+                {t("emptyTitle")}
+              </h2>
+              <p className="mt-2 text-sm text-slate-600">{t("emptyHelp")}</p>
             </section>
           ) : (
             <ul className="mt-8 grid gap-5 lg:grid-cols-2">
@@ -225,21 +229,27 @@ export function WorkspaceConsole() {
                   </div>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="font-semibold text-slate-500">Runner</dt>
+                      <dt className="font-semibold text-slate-500">
+                        {commonT("fields.runner")}
+                      </dt>
                       <dd className="mt-1">{workspace.runner_display_name}</dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-slate-500">Changed</dt>
+                      <dt className="font-semibold text-slate-500">
+                        {t("changed")}
+                      </dt>
                       <dd className="mt-1">
-                        {workspace.changed_file_count}/
-                        {workspace.max_files_changed} files ·{" "}
-                        {workspace.total_written_bytes}/
-                        {workspace.max_total_write_bytes} bytes
+                        {t("changedSummary", {
+                          changed: workspace.changed_file_count,
+                          maximum: workspace.max_files_changed,
+                          written: workspace.total_written_bytes,
+                          budget: workspace.max_total_write_bytes,
+                        })}
                       </dd>
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="font-semibold text-slate-500">
-                        Source revision
+                        {commonT("fields.sourceRevision")}
                       </dt>
                       <dd className="mt-1 font-mono text-xs break-all">
                         {workspace.source_revision}
@@ -249,22 +259,21 @@ export function WorkspaceConsole() {
                   {workspace.state === "recovery_required" ||
                   workspace.state === "quarantined" ? (
                     <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-                      Ownership proof is{" "}
                       {workspace.state === "recovery_required"
-                        ? "missing"
-                        : "inconsistent"}
-                      . Automatic discard is blocked; inspect the recovery
-                      evidence without deleting this Workspace.
+                        ? t("ownershipMissing")
+                        : t("ownershipInconsistent")}
                     </p>
                   ) : null}
                   <p className="mt-4 text-xs text-slate-500">
-                    Expires {formatTimestamp(workspace.expires_at)}
+                    {t("expires", {
+                      time: formatTimestamp(workspace.expires_at, locale),
+                    })}
                   </p>
                   <Link
                     href={`/workspaces/${workspace.id}`}
                     className="mt-4 inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 outline-none hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-600"
                   >
-                    查看 Workspace
+                    {t("view")}
                   </Link>
                 </li>
               ))}

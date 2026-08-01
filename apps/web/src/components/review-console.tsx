@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  ApiError,
   createReviewPackage,
   decideReviewPackage,
   evaluateReleaseReadiness,
@@ -15,17 +15,9 @@ import {
   type ValidationSuiteRun,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { isLocalizedStatus, localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return `${error.code}: ${error.message}${
-      error.requestId ? `（请求 ID：${error.requestId}）` : ""
-    }`;
-  }
-  return "出现未预期的错误。";
-}
 
 function manifestEntries(reviewPackage: ReviewPackage) {
   const entries = reviewPackage.evidence_manifest.entries;
@@ -38,6 +30,10 @@ function manifestEntries(reviewPackage: ReviewPackage) {
 }
 
 export function ReviewConsole() {
+  const locale = useLocale();
+  const t = useTranslations("reviews");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [suiteRuns, setSuiteRuns] = useState<ValidationSuiteRun[]>([]);
   const [packages, setPackages] = useState<ReviewPackage[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -58,10 +54,10 @@ export function ReviewConsole() {
       setPackages(nextPackages);
       setState("ready");
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
       setState("error");
     }
-  }, []);
+  }, [errorT]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 0);
@@ -86,7 +82,7 @@ export function ReviewConsole() {
       await action();
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -96,19 +92,16 @@ export function ReviewConsole() {
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <header className="border-b border-slate-200 pb-8">
         <p className="text-sm font-semibold tracking-widest text-blue-700 uppercase">
-          Governed Final Review
+          {t("eyebrow")}
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Review & Release Readiness
+          {t("title")}
         </h1>
         <p className="mt-3 max-w-4xl text-base leading-7 font-semibold text-slate-800">
-          将最新成功 Validation Suite 的精确 Evidence 链封装为不可变 Review
-          Package，完成一次人工 Review Decision，再由系统确定性计算 Release
-          Readiness。
+          {t("description")}
         </p>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-          Approval 仅是治理决定；它不会授予 commit、push、PR、merge、tag 或
-          deployment 权限。基线或 Evidence 变旧后，ready 会立即失效。
+          {t("boundary")}
         </p>
       </header>
 
@@ -124,7 +117,7 @@ export function ReviewConsole() {
               className="ml-3 font-semibold underline"
               onClick={() => void refresh()}
             >
-              重试
+              {commonT("actions.retry")}
             </button>
           ) : null}
         </div>
@@ -132,7 +125,7 @@ export function ReviewConsole() {
 
       {state === "loading" ? (
         <p className="mt-8 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
-          正在验证 Suite Evidence 与 Review freshness…
+          {t("loading")}
         </p>
       ) : null}
 
@@ -142,23 +135,22 @@ export function ReviewConsole() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold text-slate-950">
-                  1. 创建 immutable Review Package
+                  {t("createTitle")}
                 </h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
-                  仅列出尚未封装的最新成功 Suite Result。Package
-                  不复制原始输出，只保存有序 identity/digest Evidence Manifest。
+                  {t("createHelp")}
                 </p>
               </div>
               <Link
                 href="/validations"
                 className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-semibold text-blue-800 outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
               >
-                返回 Validations
+                {t("backValidations")}
               </Link>
             </div>
             {candidates.length === 0 ? (
               <p className="mt-5 rounded-xl border border-dashed border-blue-300 p-4 text-sm text-slate-700">
-                当前没有待封装的成功 Suite Result。
+                {t("noCandidates")}
               </p>
             ) : (
               <ul className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -171,8 +163,11 @@ export function ReviewConsole() {
                       {run.id}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-slate-900">
-                      {run.suite_id}:v{run.suite_version} · checkpoint{" "}
-                      {run.checkpoint_id}
+                      {t("candidate", {
+                        suite: run.suite_id,
+                        version: run.suite_version,
+                        checkpoint: run.checkpoint_id,
+                      })}
                     </p>
                     <button
                       type="button"
@@ -188,8 +183,8 @@ export function ReviewConsole() {
                       }
                     >
                       {busy === `package-${run.id}`
-                        ? "正在封装…"
-                        : "Create immutable Review Package"}
+                        ? t("packaging")
+                        : t("createPackage")}
                     </button>
                   </li>
                 ))}
@@ -199,11 +194,11 @@ export function ReviewConsole() {
 
           <section className="mt-8">
             <h2 className="text-2xl font-semibold text-slate-950">
-              2. Review Decision 与 Readiness
+              {t("decisionTitle")}
             </h2>
             {packages.length === 0 ? (
               <p className="mt-4 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
-                尚无 Review Package。
+                {t("empty")}
               </p>
             ) : (
               <ul className="mt-5 space-y-5">
@@ -222,7 +217,7 @@ export function ReviewConsole() {
                             {reviewPackage.id}
                           </p>
                           <h3 className="mt-2 text-lg font-semibold text-slate-950">
-                            Evidence Manifest {entries.length}/2
+                            {t("manifestCount", { count: entries.length })}
                           </h3>
                         </div>
                         <StatusPill
@@ -238,21 +233,26 @@ export function ReviewConsole() {
                       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                         <div>
                           <dt className="font-semibold text-slate-700">
-                            Freshness generation
+                            {t("freshnessGeneration")}
                           </dt>
                           <dd className="mt-1 text-slate-700">
-                            Generation {reviewPackage.freshness_generation} /
-                            current {reviewPackage.current_freshness_generation}
+                            {t("generationSummary", {
+                              generation: reviewPackage.freshness_generation,
+                              current:
+                                reviewPackage.current_freshness_generation,
+                            })}
                           </dd>
                         </div>
                         <div>
                           <dt className="font-semibold text-slate-700">
-                            Trusted blocker summary
+                            {t("blockerSummary")}
                           </dt>
                           <dd className="mt-1 text-slate-700">
-                            Critical {reviewPackage.critical_count} · High{" "}
-                            {reviewPackage.high_count} · Blocking medium{" "}
-                            {reviewPackage.blocking_medium_count}
+                            {t("blockerCounts", {
+                              critical: reviewPackage.critical_count,
+                              high: reviewPackage.high_count,
+                              medium: reviewPackage.blocking_medium_count,
+                            })}
                           </dd>
                           <dd className="mt-1 font-mono text-xs break-all text-slate-500">
                             {reviewPackage.blocker_source}:v
@@ -261,7 +261,7 @@ export function ReviewConsole() {
                         </div>
                         <div>
                           <dt className="font-semibold text-slate-700">
-                            Package digest
+                            {t("packageDigest")}
                           </dt>
                           <dd className="mt-1 font-mono text-xs break-all text-slate-600">
                             {reviewPackage.package_digest}
@@ -269,7 +269,7 @@ export function ReviewConsole() {
                         </div>
                         <div>
                           <dt className="font-semibold text-slate-700">
-                            Manifest digest
+                            {t("manifestDigest")}
                           </dt>
                           <dd className="mt-1 font-mono text-xs break-all text-slate-600">
                             {reviewPackage.evidence_manifest_digest}
@@ -286,18 +286,21 @@ export function ReviewConsole() {
                               {String(entry.sequence)}. {String(entry.step_id)}
                             </span>
                             <span className="mt-1 block font-mono break-all">
-                              Evidence {String(entry.evidence_id)}
+                              {t("evidenceEntry", {
+                                id: String(entry.evidence_id),
+                              })}
                             </span>
                           </li>
                         ))}
                       </ol>
                       <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-950">
-                        Git authorization: false · Deployment authorization:
-                        false
+                        {t("authorityBoundary")}
                       </p>
                       {reviewPackage.stale_reason_code ? (
                         <p className="mt-3 text-sm font-semibold text-red-800">
-                          Stale: {reviewPackage.stale_reason_code}
+                          {t("staleCode", {
+                            code: reviewPackage.stale_reason_code,
+                          })}
                         </p>
                       ) : null}
                       <div className="mt-4 flex flex-wrap gap-2">
@@ -311,7 +314,7 @@ export function ReviewConsole() {
                             )
                           }
                         >
-                          Recheck freshness
+                          {t("recheck")}
                         </button>
                         {!reviewPackage.decision &&
                         reviewPackage.freshness === "fresh" ? (
@@ -335,7 +338,7 @@ export function ReviewConsole() {
                               )
                             }
                           >
-                            Approve Review Package
+                            {t("approve")}
                           </button>
                         ) : null}
                       </div>
@@ -343,7 +346,7 @@ export function ReviewConsole() {
                       reviewPackage.freshness === "fresh" ? (
                         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                           <label className="flex-1 text-sm font-semibold text-slate-700">
-                            Rejection reason
+                            {t("rejectionReason")}
                             <input
                               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
                               value={rejectedReason}
@@ -374,15 +377,23 @@ export function ReviewConsole() {
                               )
                             }
                           >
-                            Reject Review Package
+                            {t("reject")}
                           </button>
                         </div>
                       ) : null}
                       {reviewPackage.decision ? (
                         <div className="mt-4 rounded-xl border border-slate-200 p-4">
                           <p className="text-sm font-semibold text-slate-900">
-                            Decision: {reviewPackage.decision.decision} ·{" "}
-                            {formatTimestamp(reviewPackage.decision.created_at)}
+                            {t("decision", {
+                              decision:
+                                reviewPackage.decision.decision === "approve"
+                                  ? commonT("actions.approve")
+                                  : commonT("actions.reject"),
+                              time: formatTimestamp(
+                                reviewPackage.decision.created_at,
+                                locale,
+                              ),
+                            })}
                           </p>
                           {!reviewPackage.readiness ? (
                             <button
@@ -397,12 +408,19 @@ export function ReviewConsole() {
                                 )
                               }
                             >
-                              Compute deterministic Readiness
+                              {t("computeReadiness")}
                             </button>
                           ) : (
                             <p className="mt-2 text-sm font-semibold text-slate-800">
-                              Release Readiness:{" "}
-                              {reviewPackage.readiness.effective_verdict}
+                              {t("readiness", {
+                                verdict: isLocalizedStatus(
+                                  reviewPackage.readiness.effective_verdict,
+                                )
+                                  ? commonT(
+                                      `status.${reviewPackage.readiness.effective_verdict}`,
+                                    )
+                                  : reviewPackage.readiness.effective_verdict,
+                              })}
                             </p>
                           )}
                         </div>

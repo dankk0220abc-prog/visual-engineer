@@ -67,17 +67,19 @@ describe("RunnerConsole", () => {
 
     render(<RunnerConsole />);
 
-    expect(screen.getByText("正在加载 Runner Registry…")).toBeInTheDocument();
     expect(
-      await screen.findByRole("heading", { name: "已注册 Runner" }),
+      screen.getByText("Loading the Runner Registry…"),
     ).toBeInTheDocument();
-    expect(screen.getByText("online")).toBeInTheDocument();
-    expect(screen.getByText("offline")).toBeInTheDocument();
-    expect(screen.getByText("revoked")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Registered Runners" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Online")).toBeInTheDocument();
+    expect(screen.getByText("Offline")).toBeInTheDocument();
+    expect(screen.getAllByText("Revoked").length).toBeGreaterThan(0);
     expect(
       screen.queryByText(/bearer|bootstrap token/i),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "已撤销" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Revoked" })).toBeDisabled();
   });
 
   it("renders registry and job empty states and disables dispatch offline", async () => {
@@ -86,12 +88,12 @@ describe("RunnerConsole", () => {
 
     render(<RunnerConsole />);
 
-    expect(await screen.findByText("尚无 Runner Job")).toBeInTheDocument();
+    expect(await screen.findByText("No Runner Jobs")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "创建并查看 Job" }),
+      screen.getByRole("button", { name: "Create and view Job" }),
     ).toBeDisabled();
     expect(
-      screen.getByText("当前没有 Online Runner，Dispatch 已禁用。"),
+      screen.getByText("Dispatch is disabled because no Runner is Online."),
     ).toBeInTheDocument();
   });
 
@@ -111,11 +113,14 @@ describe("RunnerConsole", () => {
     render(<RunnerConsole />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Runner registry unavailable");
+    expect(alert).toHaveTextContent("not_ready");
+    expect(alert).not.toHaveTextContent("Runner registry unavailable");
     expect(alert).toHaveTextContent("runner-request");
-    await user.click(within(alert).getByRole("button", { name: "重试" }));
+    await user.click(within(alert).getByRole("button", { name: "Retry" }));
 
-    expect(await screen.findByText("尚无已注册 Runner")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No registered Runners"),
+    ).toBeInTheDocument();
   });
 
   it("previews the immutable envelope and dispatches a diagnostic", async () => {
@@ -124,16 +129,18 @@ describe("RunnerConsole", () => {
     const user = userEvent.setup();
 
     render(<RunnerConsole />);
-    await screen.findByRole("heading", { name: "创建受限 Job" });
+    await screen.findByRole("heading", { name: "Create a bounded Job" });
 
-    const preview = screen.getByLabelText("Permission Envelope 预览");
+    const preview = screen.getByLabelText("Permission Envelope preview");
     expect(preview).toHaveTextContent("system_diagnostic_v1");
     expect(preview).toHaveTextContent("none");
     expect(preview).toHaveTextContent("false");
     expect(preview).toHaveTextContent("control-plane only");
     expect(preview).toHaveTextContent("not accessed");
 
-    await user.click(screen.getByRole("button", { name: "创建并查看 Job" }));
+    await user.click(
+      screen.getByRole("button", { name: "Create and view Job" }),
+    );
 
     await waitFor(() =>
       expect(mockedCreateRunnerJob).toHaveBeenCalledWith({
@@ -155,10 +162,12 @@ describe("RunnerConsole", () => {
     await user.click(
       await screen.findByRole("radio", { name: /Controlled Wait/ }),
     );
-    const duration = screen.getByLabelText("Duration（毫秒）");
+    const duration = screen.getByLabelText("Duration (milliseconds)");
     await user.clear(duration);
     await user.type(duration, "4200");
-    await user.click(screen.getByRole("button", { name: "创建并查看 Job" }));
+    await user.click(
+      screen.getByRole("button", { name: "Create and view Job" }),
+    );
 
     await waitFor(() =>
       expect(mockedCreateRunnerJob).toHaveBeenCalledWith({
@@ -174,14 +183,14 @@ describe("RunnerConsole", () => {
 
     render(<RunnerConsole />);
     await user.click(
-      await screen.findByRole("button", { name: "撤销 Runner" }),
+      await screen.findByRole("button", { name: "Revoke Runner" }),
     );
 
     await waitFor(() =>
       expect(mockedRevokeRunner).toHaveBeenCalledWith(runnerFixture().id),
     );
     expect(
-      await screen.findByRole("button", { name: "已撤销" }),
+      await screen.findByRole("button", { name: "Revoked" }),
     ).toBeDisabled();
   });
 });

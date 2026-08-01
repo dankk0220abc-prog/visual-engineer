@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
 import { StatusPill } from "./status-pill";
 
 export type HealthState = "checking" | "healthy" | "unavailable";
@@ -11,10 +15,14 @@ function HealthRow({
   description: string;
   state: HealthState;
 }) {
+  const statusT = useTranslations("common.status");
   const display = {
-    checking: { label: "检查中", tone: "pending" as const },
-    healthy: { label: "正常", tone: "positive" as const },
-    unavailable: { label: "不可用", tone: "negative" as const },
+    checking: { label: statusT("checking"), tone: "pending" as const },
+    healthy: { label: statusT("healthy"), tone: "positive" as const },
+    unavailable: {
+      label: statusT("unavailable"),
+      tone: "negative" as const,
+    },
   }[state];
 
   return (
@@ -37,6 +45,7 @@ export function HealthPanel({
   ready: HealthState;
   onRetry: () => void;
 }) {
+  const t = useTranslations("health");
   const hasFailure = live === "unavailable" || ready === "unavailable";
 
   return (
@@ -47,13 +56,13 @@ export function HealthPanel({
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-            Runtime
+            {t("eyebrow")}
           </p>
           <h2
             id="health-heading"
             className="mt-1 text-lg font-semibold text-slate-950"
           >
-            服务健康
+            {t("title")}
           </h2>
         </div>
         {hasFailure ? (
@@ -62,19 +71,19 @@ export function HealthPanel({
             className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 outline-none hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
             onClick={onRetry}
           >
-            重新检查
+            {t("recheck")}
           </button>
         ) : null}
       </div>
       <ul className="mt-5 divide-y divide-slate-100">
         <HealthRow
-          label="Liveness"
-          description="API 进程能够响应"
+          label={t("liveness")}
+          description={t("livenessDescription")}
           state={live}
         />
         <HealthRow
-          label="Readiness"
-          description="API 已连接数据库"
+          label={t("readiness")}
+          description={t("readinessDescription")}
           state={ready}
         />
       </ul>

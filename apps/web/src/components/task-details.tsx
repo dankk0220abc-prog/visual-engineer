@@ -1,17 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  ApiError,
-  getTask,
-  listRuns,
-  startRun,
-  type Run,
-  type Task,
-} from "@/lib/api";
+import { getTask, listRuns, startRun, type Run, type Task } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
@@ -35,6 +30,10 @@ function Detail({
 }
 
 export function TaskDetails({ taskId }: { taskId: string }) {
+  const locale = useLocale();
+  const t = useTranslations("taskDetails");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [task, setTask] = useState<Task | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -54,14 +53,10 @@ export function TaskDetails({ taskId }: { taskId: string }) {
       setRuns(loadedRuns);
       setState("ready");
     } catch (error) {
-      setMessage(
-        error instanceof ApiError
-          ? error.message
-          : "出现未预期的错误，请重试。",
-      );
+      setMessage(localizeApiError(error, errorT));
       setState("error");
     }
-  }, [taskId]);
+  }, [errorT, taskId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,18 +70,14 @@ export function TaskDetails({ taskId }: { taskId: string }) {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setMessage(
-          error instanceof ApiError
-            ? error.message
-            : "出现未预期的错误，请重试。",
-        );
+        setMessage(localizeApiError(error, errorT));
         setState("error");
       });
 
     return () => {
       cancelled = true;
     };
-  }, [taskId]);
+  }, [errorT, taskId]);
 
   async function handleStartRun() {
     setIsStarting(true);
@@ -97,13 +88,9 @@ export function TaskDetails({ taskId }: { taskId: string }) {
         run,
         ...current.filter((item) => item.id !== run.id),
       ]);
-      setStartMessage("Read-only Run 已创建。");
+      setStartMessage(t("runCreated"));
     } catch (error) {
-      setStartMessage(
-        error instanceof ApiError
-          ? error.message
-          : "无法创建 read-only Run，请重试。",
-      );
+      setStartMessage(localizeApiError(error, errorT));
     } finally {
       setIsStarting(false);
     }
@@ -116,7 +103,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
         href="/"
       >
         <span aria-hidden="true">←&nbsp;</span>
-        返回任务列表
+        {t("back")}
       </Link>
 
       {state === "loading" ? (
@@ -124,7 +111,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
           className="mt-6 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600"
           role="status"
         >
-          正在加载任务详情…
+          {t("loading")}
         </div>
       ) : null}
 
@@ -134,7 +121,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
           role="alert"
         >
           <h1 className="text-lg font-semibold text-red-950">
-            无法加载任务详情
+            {t("loadFailed")}
           </h1>
           <p className="mt-2 text-sm text-red-800">{message}</p>
           <button
@@ -142,7 +129,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
             type="button"
             onClick={() => void load()}
           >
-            重试
+            {commonT("actions.retry")}
           </button>
         </div>
       ) : null}
@@ -153,7 +140,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-6">
               <div className="min-w-0">
                 <p className="text-xs font-semibold tracking-widest text-blue-700 uppercase">
-                  Task detail
+                  {t("eyebrow")}
                 </p>
                 <h1 className="mt-2 text-2xl font-semibold break-words text-slate-950 sm:text-3xl">
                   {task.title}
@@ -163,29 +150,29 @@ export function TaskDetails({ taskId }: { taskId: string }) {
             </div>
 
             <dl className="mt-2">
-              <Detail label="Task ID">
+              <Detail label={t("taskId")}>
                 <span className="font-mono text-xs">{task.id}</span>
               </Detail>
-              <Detail label="Objective">{task.objective}</Detail>
-              <Detail label="Repository">
+              <Detail label={t("objective")}>{task.objective}</Detail>
+              <Detail label={t("repository")}>
                 {task.repository_display_name} · {task.repository_kind}
               </Detail>
-              <Detail label="Locator">
+              <Detail label={t("locator")}>
                 <span className="font-mono text-xs">
                   {task.repository_locator}
                 </span>
               </Detail>
-              <Detail label="Created">
+              <Detail label={t("created")}>
                 <time dateTime={task.created_at}>
-                  {formatTimestamp(task.created_at)}
+                  {formatTimestamp(task.created_at, locale)}
                 </time>
               </Detail>
-              <Detail label="Updated">
+              <Detail label={t("updated")}>
                 <time dateTime={task.updated_at}>
-                  {formatTimestamp(task.updated_at)}
+                  {formatTimestamp(task.updated_at, locale)}
                 </time>
               </Detail>
-              <Detail label="Version">{task.version}</Detail>
+              <Detail label={t("version")}>{task.version}</Detail>
             </dl>
           </article>
 
@@ -196,18 +183,16 @@ export function TaskDetails({ taskId }: { taskId: string }) {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold tracking-widest text-blue-700 uppercase">
-                  Level 0 · Read-only
+                  {t("runsEyebrow")}
                 </p>
                 <h2
                   id="runs-heading"
                   className="mt-1 text-xl font-semibold text-slate-950"
                 >
-                  Repository investigation Runs
+                  {t("runsTitle")}
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Snapshot mode: Committed HEAD。扫描器只从 Git
-                  对象读取有限的已提交元数据；不会读取未提交文件内容（dirty 或
-                  untracked），也不会执行仓库脚本。
+                  {t("runsDescription")}
                 </p>
               </div>
               <button
@@ -216,7 +201,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
                 onClick={() => void handleStartRun()}
                 className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white outline-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isStarting ? "正在创建…" : "Start read-only investigation"}
+                {isStarting ? t("startingRun") : t("startRun")}
               </button>
             </div>
 
@@ -231,7 +216,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
 
             {runs.length === 0 ? (
               <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-                尚无 Run。创建后会持久化显示 Snapshot、Plan 和 Audit 状态。
+                {t("runsEmpty")}
               </div>
             ) : (
               <ul className="mt-5 divide-y divide-slate-100">
@@ -245,9 +230,13 @@ export function TaskDetails({ taskId }: { taskId: string }) {
                         {run.id}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-700">
-                        <span>{run.status}</span>
+                        <StatusPill tone="neutral">{run.status}</StatusPill>
                         <span aria-hidden="true">·</span>
-                        <span>Level 0 / {run.permission_level}</span>
+                        <span>
+                          {t("permissionSummary", {
+                            permission: run.permission_level,
+                          })}
+                        </span>
                         <span aria-hidden="true">·</span>
                         <span>Committed HEAD</span>
                       </div>
@@ -256,7 +245,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
                       className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 outline-none hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                       href={`/runs/${run.id}`}
                     >
-                      打开 Run
+                      {t("openRun")}
                     </Link>
                   </li>
                 ))}

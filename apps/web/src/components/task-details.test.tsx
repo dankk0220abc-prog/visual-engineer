@@ -33,16 +33,18 @@ describe("TaskDetails", () => {
 
     render(<TaskDetails taskId={task.id} />);
 
-    expect(screen.getByText("正在加载任务详情…")).toBeInTheDocument();
+    expect(screen.getByText("Loading task details…")).toBeInTheDocument();
     expect(
       await screen.findByRole("heading", { name: task.title }),
     ).toBeInTheDocument();
     expect(screen.getByText(task.objective)).toBeInTheDocument();
-    expect(screen.getByText("draft")).toBeInTheDocument();
+    expect(screen.getByText("Draft")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Start read-only investigation" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/不会读取未提交文件内容/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/does not read dirty or untracked file contents/),
+    ).toBeInTheDocument();
   });
 
   it("provides a retry after an error", async () => {
@@ -59,8 +61,9 @@ describe("TaskDetails", () => {
     render(<TaskDetails taskId={task.id} />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Task temporarily unavailable");
-    await user.click(within(alert).getByRole("button", { name: "重试" }));
+    expect(alert).toHaveTextContent("unexpected_error");
+    expect(alert).not.toHaveTextContent("Task temporarily unavailable");
+    await user.click(within(alert).getByRole("button", { name: "Retry" }));
 
     expect(
       await screen.findByRole("heading", { name: task.title }),
@@ -84,10 +87,10 @@ describe("TaskDetails", () => {
     );
 
     expect(
-      await screen.findByText("Read-only Run 已创建。"),
+      await screen.findByText("Read-only Run created."),
     ).toBeInTheDocument();
     expect(screen.getByText(run.id)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "打开 Run" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Open Run" })).toHaveAttribute(
       "href",
       `/runs/${run.id}`,
     );

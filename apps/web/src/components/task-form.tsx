@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 import type { CreateTaskInput, RepositoryKind } from "@/lib/api";
 
@@ -34,7 +35,10 @@ function value(formData: FormData, name: FieldName): string {
   return String(formData.get(name) ?? "").trim();
 }
 
-function validate(formData: FormData): {
+function validate(
+  formData: FormData,
+  t: ReturnType<typeof useTranslations>,
+): {
   errors: FieldErrors;
   input?: CreateTaskInput;
 } {
@@ -45,25 +49,29 @@ function validate(formData: FormData): {
   const repositoryLocator = value(formData, "repository_locator");
   const errors: FieldErrors = {};
 
-  if (!title) errors.title = "请输入任务标题。";
-  else if (title.length > 120) errors.title = "标题不能超过 120 个字符。";
+  if (!title) errors.title = t("validation.titleRequired");
+  else if (title.length > 120)
+    errors.title = t("validation.titleTooLong", { max: 120 });
 
-  if (!objective) errors.objective = "请输入任务目标。";
+  if (!objective) errors.objective = t("validation.objectiveRequired");
   else if (objective.length > 4000)
-    errors.objective = "任务目标不能超过 4000 个字符。";
+    errors.objective = t("validation.objectiveTooLong", { max: 4000 });
 
   if (!["local_path", "github"].includes(repositoryKind)) {
-    errors.repository_kind = "请选择支持的仓库类型。";
+    errors.repository_kind = t("validation.repositoryKind");
   }
 
   if (!repositoryDisplayName)
-    errors.repository_display_name = "请输入仓库显示名称。";
+    errors.repository_display_name = t("validation.displayNameRequired");
   else if (repositoryDisplayName.length > 120)
-    errors.repository_display_name = "仓库显示名称不能超过 120 个字符。";
+    errors.repository_display_name = t("validation.displayNameTooLong", {
+      max: 120,
+    });
 
-  if (!repositoryLocator) errors.repository_locator = "请输入仓库位置。";
+  if (!repositoryLocator)
+    errors.repository_locator = t("validation.locatorRequired");
   else if (repositoryLocator.length > 1024)
-    errors.repository_locator = "仓库位置不能超过 1024 个字符。";
+    errors.repository_locator = t("validation.locatorTooLong", { max: 1024 });
 
   for (const [name, fieldValue] of Object.entries({
     title,
@@ -72,7 +80,7 @@ function validate(formData: FormData): {
     repository_locator: repositoryLocator,
   })) {
     if (fieldValue.includes("\0")) {
-      errors[name as FieldName] = "字段不能包含 NUL 字符。";
+      errors[name as FieldName] = t("validation.nul");
     }
   }
 
@@ -97,12 +105,13 @@ export function TaskForm({
   isSubmitting: boolean;
   onSubmit: (input: CreateTaskInput) => Promise<boolean>;
 }) {
+  const t = useTranslations("taskForm");
   const [errors, setErrors] = useState<FieldErrors>({});
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const result = validate(new FormData(form));
+    const result = validate(new FormData(form), t);
     setErrors(result.errors);
 
     if (!result.input) return;
@@ -123,14 +132,14 @@ export function TaskForm({
     <form className="mt-6 space-y-5" noValidate onSubmit={handleSubmit}>
       <div>
         <label className="text-sm font-semibold text-slate-800" htmlFor="title">
-          任务标题
+          {t("title")}
         </label>
         <input
           className={inputClasses}
           id="title"
           name="title"
           maxLength={120}
-          placeholder="例如：重构项目导航"
+          placeholder={t("titlePlaceholder")}
           {...errorProps("title")}
         />
         <ErrorMessage error={errors.title} field="title" />
@@ -141,14 +150,14 @@ export function TaskForm({
           className="text-sm font-semibold text-slate-800"
           htmlFor="objective"
         >
-          任务目标
+          {t("objective")}
         </label>
         <textarea
           className={`${inputClasses} min-h-28 resize-y`}
           id="objective"
           name="objective"
           maxLength={4000}
-          placeholder="说明期望结果和验证标准。创建 Task 只保存元数据；显式创建 Level 0 Run 后才能只读扫描。"
+          placeholder={t("objectivePlaceholder")}
           {...errorProps("objective")}
         />
         <ErrorMessage error={errors.objective} field="objective" />
@@ -156,12 +165,12 @@ export function TaskForm({
 
       <fieldset>
         <legend className="text-sm font-semibold text-slate-800">
-          仓库信息
+          {t("repositoryInfo")}
         </legend>
         <div className="mt-2 grid gap-4 sm:grid-cols-2">
           <div>
             <label className="text-sm text-slate-700" htmlFor="repository_kind">
-              仓库类型
+              {t("repositoryKind")}
             </label>
             <select
               className={inputClasses}
@@ -170,7 +179,7 @@ export function TaskForm({
               name="repository_kind"
               {...errorProps("repository_kind")}
             >
-              <option value="local_path">本地路径</option>
+              <option value="local_path">{t("localPath")}</option>
               <option value="github">GitHub</option>
             </select>
             <ErrorMessage
@@ -183,14 +192,14 @@ export function TaskForm({
               className="text-sm text-slate-700"
               htmlFor="repository_display_name"
             >
-              显示名称
+              {t("displayName")}
             </label>
             <input
               className={inputClasses}
               id="repository_display_name"
               name="repository_display_name"
               maxLength={120}
-              placeholder="design-system"
+              placeholder={t("displayNamePlaceholder")}
               {...errorProps("repository_display_name")}
             />
             <ErrorMessage
@@ -204,19 +213,18 @@ export function TaskForm({
             className="text-sm text-slate-700"
             htmlFor="repository_locator"
           >
-            仓库位置
+            {t("locator")}
           </label>
           <input
             className={inputClasses}
             id="repository_locator"
             name="repository_locator"
             maxLength={1024}
-            placeholder="/workspace/design-system 或 owner/repository"
+            placeholder={t("locatorPlaceholder")}
             {...errorProps("repository_locator")}
           />
           <p className="mt-1.5 text-xs leading-5 text-slate-500">
-            创建 Task 时仅保存为元数据。只有显式启动 Level 0 Run，且路径通过
-            allowlist 后，才会读取 committed HEAD。
+            {t("locatorHelp")}
           </p>
           <ErrorMessage
             error={errors.repository_locator}
@@ -230,7 +238,7 @@ export function TaskForm({
         disabled={isSubmitting}
         className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white outline-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isSubmitting ? "正在创建…" : "创建任务"}
+        {isSubmitting ? t("submitting") : t("submit")}
       </button>
     </form>
   );

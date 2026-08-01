@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -23,17 +24,19 @@ import {
   type WorkspaceEvent,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
-function message(error: unknown): string {
+function message(
+  error: unknown,
+  t: ReturnType<typeof useTranslations>,
+): string {
   if (error instanceof ApiError) {
-    return `${error.code}: ${error.message}${
-      error.requestId ? `（请求 ID：${error.requestId}）` : ""
-    }`;
+    return localizeApiError(error, t);
   }
   if (error instanceof Error) return error.message;
-  return "Workspace 操作失败。";
+  return t("unexpected");
 }
 
 function tone(
@@ -58,13 +61,16 @@ function tone(
   return "neutral";
 }
 
-async function waitForJob(jobId: string): Promise<RunnerJob> {
+async function waitForJob(
+  jobId: string,
+  timeoutMessage: string,
+): Promise<RunnerJob> {
   for (let attempt = 0; attempt < 240; attempt += 1) {
     const job = await getRunnerJob(jobId);
     if (["succeeded", "failed", "cancelled"].includes(job.state)) return job;
     await new Promise((resolve) => window.setTimeout(resolve, 500));
   }
-  throw new Error("Job 等待超时；请刷新后查看 durable 状态。");
+  throw new Error(timeoutMessage);
 }
 
 export function WorkspaceDetailConsole({
@@ -72,6 +78,10 @@ export function WorkspaceDetailConsole({
 }: {
   workspaceId: string;
 }) {
+  const locale = useLocale();
+  const t = useTranslations("workspaceDetail");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [events, setEvents] = useState<WorkspaceEvent[]>([]);
   const [checkpoints, setCheckpoints] = useState<WorkspaceCheckpoint[]>([]);
@@ -107,11 +117,11 @@ export function WorkspaceDetailConsole({
         setCheckpoints(nextCheckpoints);
         setState("ready");
       } catch (reason) {
-        setError(message(reason));
+        setError(message(reason, errorT));
         setState("error");
       }
     },
-    [workspaceId],
+    [errorT, workspaceId],
   );
 
   useEffect(() => {
@@ -130,7 +140,7 @@ export function WorkspaceDetailConsole({
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
-        setError(message(reason));
+        setError(message(reason, errorT));
         setState("error");
       });
     const timer = window.setInterval(() => void refresh(false), 2000);
@@ -138,7 +148,7 @@ export function WorkspaceDetailConsole({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [refresh, workspaceId]);
+  }, [errorT, refresh, workspaceId]);
 
   const newByteSize = useMemo(
     () => new TextEncoder().encode(writeContent).byteLength,
@@ -157,21 +167,21 @@ export function WorkspaceDetailConsole({
   ): Promise<RunnerJob | null> {
     setBusy(label);
     setError("");
-    setNotice(`${label} 已排队，等待 Runner lease…`);
+    setNotice(t("queued", { action: label }));
     try {
       const action = await dispatch();
-      const completed = await waitForJob(action.job.id);
+      const completed = await waitForJob(action.job.id, t("jobWaitTimeout"));
       setLastJob(completed);
       if (completed.state !== "succeeded") {
         throw new Error(
-          `${completed.error_code ?? "job_failed"}: Runner 拒绝或未完成该操作。`,
+          `${completed.error_code ?? "job_failed"}: ${t("actionRejected")}`,
         );
       }
-      setNotice(`${label} 已完成并持久化。`);
+      setNotice(t("actionCompleted", { action: label }));
       await refresh(false);
       return completed;
     } catch (reason) {
-      setError(message(reason));
+      setError(message(reason, errorT));
       setNotice("");
       await refresh(false);
       return null;
@@ -181,7 +191,7 @@ export function WorkspaceDetailConsole({
   }
 
   async function runList() {
-    const completed = await executeAction("List", () =>
+    const completed = await executeAction(t("list"), () =>
       listWorkspaceDirectory(workspaceId, {
         relative_directory: directory,
         depth: 3,
@@ -194,7 +204,7 @@ export function WorkspaceDetailConsole({
   }
 
   async function runRead() {
-    const completed = await executeAction("Read", () =>
+    const completed = await executeAction(t("readText"), () =>
       readWorkspaceText(workspaceId, {
         relative_path: readPath,
         max_bytes: 32768,
@@ -224,7 +234,7 @@ export function WorkspaceDetailConsole({
             expected_sha256: expectedHash,
           };
     const completed = await executeAction(
-      writeMode === "create" ? "Create text" : "Replace text",
+      writeMode === "create" ? t("createText") : t("replaceText"),
       () => writeWorkspaceText(workspaceId, input),
     );
     if (completed?.result?.kind === "workspace_write_text_v1") {
@@ -259,14 +269,14 @@ export function WorkspaceDetailConsole({
         href="/workspaces"
         className="inline-flex rounded-lg px-2 py-1 text-sm font-semibold text-blue-700 outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
       >
-        ← Workspaces
+        ← {t("back")}
       </Link>
       {state === "loading" ? (
         <p
           className="mt-6 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600"
           role="status"
         >
-          正在加载 Workspace、Timeline 与 Checkpoints…
+          {t("loading")}
         </p>
       ) : null}
       {error ? (
@@ -280,7 +290,7 @@ export function WorkspaceDetailConsole({
             className="ml-3 font-semibold underline"
             onClick={() => void refresh(true)}
           >
-            重试
+            {commonT("actions.retry")}
           </button>
         </div>
       ) : null}
@@ -299,7 +309,7 @@ export function WorkspaceDetailConsole({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold tracking-widest text-blue-700 uppercase">
-                  Runner-owned isolated workspace
+                  {t("eyebrow")}
                 </p>
                 <h1 className="mt-3 text-2xl font-semibold tracking-tight break-words text-slate-950 sm:text-4xl">
                   {workspace.repository_display_name}
@@ -314,13 +324,12 @@ export function WorkspaceDetailConsole({
             </div>
             {workspace.state === "discarded" ? (
               <p className="mt-5 rounded-xl border border-slate-300 bg-slate-100 p-4 text-sm font-semibold text-slate-800">
-                Workspace 已销毁。Runner 路径已清理；只保留 Control Plane
-                证据与事件。
+                {t("discarded")}
               </p>
             ) : null}
             {workspace.state === "expired" ? (
               <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                Workspace 已过期，只允许受控 Discard。
+                {t("expired")}
               </p>
             ) : null}
             {workspace.state === "recovery_required" ||
@@ -331,49 +340,52 @@ export function WorkspaceDetailConsole({
               >
                 <p className="font-semibold">
                   {workspace.state === "recovery_required"
-                    ? "Workspace ownership proof is missing."
-                    : "Workspace ownership evidence is inconsistent."}
+                    ? t("ownershipMissing")
+                    : t("ownershipInconsistent")}
                 </p>
-                <p className="mt-1">
-                  All filesystem mutation and automatic discard are blocked.
-                  Preserve the Workspace and use the controlled recovery
-                  runbook; do not reconstruct ownership from Git status.
-                </p>
+                <p className="mt-1">{t("ownershipBlocked")}</p>
               </div>
             ) : null}
             <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                <dt className="font-semibold text-slate-500">Runner</dt>
+                <dt className="font-semibold text-slate-500">
+                  {commonT("fields.runner")}
+                </dt>
                 <dd className="mt-1">{workspace.runner_display_name}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-slate-500">Grant</dt>
+                <dt className="font-semibold text-slate-500">{t("grant")}</dt>
                 <dd className="mt-1 font-mono text-xs break-all">
                   {workspace.grant_id}
                 </dd>
               </div>
               <div>
                 <dt className="font-semibold text-slate-500">
-                  Workspace fingerprint
+                  {t("fingerprint")}
                 </dt>
                 <dd className="mt-1 font-mono text-xs break-all">
-                  {workspace.workspace_fingerprint ?? "preparing"}
+                  {workspace.workspace_fingerprint ?? t("preparing")}
                 </dd>
               </div>
               <div className="sm:col-span-2">
                 <dt className="font-semibold text-slate-500">
-                  Source revision
+                  {commonT("fields.sourceRevision")}
                 </dt>
                 <dd className="mt-1 font-mono text-xs break-all">
                   {workspace.source_revision}
                 </dd>
               </div>
               <div>
-                <dt className="font-semibold text-slate-500">Budget usage</dt>
+                <dt className="font-semibold text-slate-500">
+                  {t("budgetUsage")}
+                </dt>
                 <dd className="mt-1">
-                  {workspace.changed_file_count}/{workspace.max_files_changed}{" "}
-                  files · {workspace.total_written_bytes}/
-                  {workspace.max_total_write_bytes} bytes
+                  {t("budgetSummary", {
+                    changed: workspace.changed_file_count,
+                    maximum: workspace.max_files_changed,
+                    written: workspace.total_written_bytes,
+                    budget: workspace.max_total_write_bytes,
+                  })}
                 </dd>
               </div>
             </dl>
@@ -384,26 +396,25 @@ export function WorkspaceDetailConsole({
             aria-labelledby="typed-tools-heading"
           >
             <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-              Fixture-only manual controls
+              {t("toolsEyebrow")}
             </p>
             <h2
               id="typed-tools-heading"
               className="mt-1 text-xl font-semibold text-slate-950"
             >
-              Typed Tool Console
+              {t("toolsTitle")}
             </h2>
             <p className="mt-2 text-sm text-slate-600">
-              固定能力，无自由 Shell。所有路径都是相对 POSIX path，并再次受
-              Execution Grant、Runner FD walker 与 lease fencing 校验。
+              {t("toolsDescription")}
             </p>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <fieldset className="min-w-0 rounded-xl border border-slate-200 p-4">
                 <legend className="px-2 font-semibold text-slate-900">
-                  List / Read
+                  {t("listRead")}
                 </legend>
                 <label className="block text-sm font-semibold text-slate-700">
-                  Relative directory
+                  {t("relativeDirectory")}
                   <input
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                     value={directory}
@@ -418,10 +429,10 @@ export function WorkspaceDetailConsole({
                   disabled={!actionable || Boolean(busy)}
                   onClick={() => void runList()}
                 >
-                  List
+                  {t("list")}
                 </button>
                 <label className="mt-5 block text-sm font-semibold text-slate-700">
-                  Relative text path
+                  {t("relativeTextPath")}
                   <input
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                     value={readPath}
@@ -434,13 +445,13 @@ export function WorkspaceDetailConsole({
                   disabled={!actionable || Boolean(busy)}
                   onClick={() => void runRead()}
                 >
-                  Read text
+                  {t("readText")}
                 </button>
               </fieldset>
 
               <fieldset className="min-w-0 rounded-xl border border-slate-200 p-4">
                 <legend className="px-2 font-semibold text-slate-900">
-                  Create / Replace text
+                  {t("createReplace")}
                 </legend>
                 <div className="flex gap-4">
                   {(["replace", "create"] as const).map((mode) => (
@@ -454,12 +465,12 @@ export function WorkspaceDetailConsole({
                         checked={writeMode === mode}
                         onChange={() => selectWriteMode(mode)}
                       />
-                      {mode}
+                      {t(mode)}
                     </label>
                   ))}
                 </div>
                 <label className="mt-4 block text-sm font-semibold text-slate-700">
-                  Relative path
+                  {t("relativePath")}
                   <input
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                     value={writePath}
@@ -470,7 +481,7 @@ export function WorkspaceDetailConsole({
                 </label>
                 {writeMode === "replace" ? (
                   <label className="mt-4 block text-sm font-semibold text-slate-700">
-                    Expected SHA-256
+                    {t("expectedSha")}
                     <input
                       className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                       value={expectedHash}
@@ -481,7 +492,7 @@ export function WorkspaceDetailConsole({
                   </label>
                 ) : null}
                 <label className="mt-4 block text-sm font-semibold text-slate-700">
-                  UTF-8 content
+                  {t("utf8Content")}
                   <textarea
                     className="mt-1 min-h-28 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                     value={writeContent}
@@ -492,26 +503,26 @@ export function WorkspaceDetailConsole({
                 </label>
                 <dl
                   className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-lg bg-slate-50 p-3 text-xs"
-                  aria-label="Write preflight"
+                  aria-label={t("writePreflight")}
                 >
-                  <dt className="font-semibold">Relative path</dt>
+                  <dt className="font-semibold">{t("relativePath")}</dt>
                   <dd className="font-mono break-all">{writePath}</dd>
-                  <dt className="font-semibold">Operation</dt>
-                  <dd>{writeMode}</dd>
-                  <dt className="font-semibold">Current hash</dt>
+                  <dt className="font-semibold">{t("operation")}</dt>
+                  <dd>{t(writeMode)}</dd>
+                  <dt className="font-semibold">{t("currentHash")}</dt>
                   <dd className="font-mono break-all">
-                    {currentHash || "not read"}
+                    {currentHash || t("notRead")}
                   </dd>
-                  <dt className="font-semibold">Expected hash</dt>
+                  <dt className="font-semibold">{t("expectedHash")}</dt>
                   <dd className="font-mono break-all">
                     {writeMode === "create"
                       ? "expected_absent=true"
-                      : expectedHash || "required"}
+                      : expectedHash || t("required")}
                   </dd>
-                  <dt className="font-semibold">New byte size</dt>
+                  <dt className="font-semibold">{t("newByteSize")}</dt>
                   <dd>{newByteSize}</dd>
-                  <dt className="font-semibold">Remaining budget</dt>
-                  <dd>{remainingBytes} bytes</dd>
+                  <dt className="font-semibold">{t("remainingBudget")}</dt>
+                  <dd>{t("bytes", { count: remainingBytes })}</dd>
                 </dl>
                 <button
                   type="button"
@@ -527,7 +538,9 @@ export function WorkspaceDetailConsole({
                   onClick={() => void runWrite()}
                 >
                   {busy ||
-                    (writeMode === "create" ? "Create text" : "Replace text")}
+                    (writeMode === "create"
+                      ? t("createText")
+                      : t("replaceText"))}
                 </button>
               </fieldset>
             </div>
@@ -538,12 +551,12 @@ export function WorkspaceDetailConsole({
                 className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 ring-1 ring-blue-300 outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:opacity-50"
                 disabled={!actionable || Boolean(busy)}
                 onClick={() =>
-                  void executeAction("Status", () =>
+                  void executeAction(t("status"), () =>
                     getWorkspaceStatus(workspaceId),
                   )
                 }
               >
-                Status
+                {t("status")}
               </button>
               <button
                 type="button"
@@ -554,12 +567,12 @@ export function WorkspaceDetailConsole({
                   Boolean(busy)
                 }
                 onClick={() =>
-                  void executeAction("Diff + Seal", () =>
+                  void executeAction(t("diffSeal"), () =>
                     getWorkspaceDiff(workspaceId),
                   )
                 }
               >
-                Diff + Seal
+                {t("diffSeal")}
               </button>
               <button
                 type="button"
@@ -570,24 +583,24 @@ export function WorkspaceDetailConsole({
                   Boolean(busy)
                 }
                 onClick={() =>
-                  void executeAction("Rollback", () =>
+                  void executeAction(t("rollback"), () =>
                     rollbackWorkspace(workspaceId),
                   )
                 }
               >
-                Rollback to initial
+                {t("rollback")}
               </button>
               <button
                 type="button"
                 className="rounded-lg px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-300 outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-50"
                 disabled={!discardable || Boolean(busy)}
                 onClick={() =>
-                  void executeAction("Discard", () =>
+                  void executeAction(t("discard"), () =>
                     discardWorkspace(workspaceId),
                   )
                 }
               >
-                Discard
+                {t("discard")}
               </button>
             </div>
           </section>
@@ -595,7 +608,7 @@ export function WorkspaceDetailConsole({
           <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
             <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-950">
-                Tool output
+                {t("toolOutput")}
               </h2>
               {entries.length > 0 ? (
                 <ul className="mt-4 divide-y divide-slate-100 text-sm">
@@ -614,12 +627,12 @@ export function WorkspaceDetailConsole({
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 text-sm text-slate-600">List 结果为空。</p>
+                <p className="mt-3 text-sm text-slate-600">{t("listEmpty")}</p>
               )}
               {readContent ? (
                 <div className="mt-5">
                   <p className="text-xs font-semibold text-slate-500">
-                    Read SHA-256
+                    {t("readSha")}
                   </p>
                   <p className="mt-1 font-mono text-xs break-all">
                     {currentHash}
@@ -631,22 +644,25 @@ export function WorkspaceDetailConsole({
               ) : null}
               {lastJob ? (
                 <p className="mt-4 text-xs text-slate-500">
-                  Last Job {lastJob.kind} · {lastJob.state} ·{" "}
-                  {lastJob.id.slice(0, 8)}
+                  {t("lastJob", {
+                    kind: lastJob.kind,
+                    state: lastJob.state,
+                    id: lastJob.id.slice(0, 8),
+                  })}
                 </p>
               ) : null}
             </section>
 
             <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-950">
-                Bounded Diff & Checkpoints
+                {t("diffCheckpoints")}
               </h2>
               <p className="mt-2 text-sm font-semibold text-emerald-800">
-                No source repository write · no Git delivery
+                {t("noSourceWrite")}
               </p>
               {checkpoints.length === 0 ? (
                 <p className="mt-4 text-sm text-slate-600">
-                  尚无 Checkpoint；成功 write 或 diff 后自动生成。
+                  {t("noCheckpoints")}
                 </p>
               ) : (
                 <ol className="mt-4 space-y-5">
@@ -656,22 +672,26 @@ export function WorkspaceDetailConsole({
                       className="min-w-0 rounded-xl border border-slate-200 p-4"
                     >
                       <p className="font-semibold text-slate-900">
-                        Checkpoint #{checkpoint.sequence}
+                        {t("checkpointNumber", {
+                          sequence: checkpoint.sequence,
+                        })}
                       </p>
                       <p className="mt-2 font-mono text-xs break-all text-slate-500">
                         diff {checkpoint.diff_hash}
                       </p>
                       <p className="mt-2 text-xs text-slate-600">
-                        {checkpoint.changed_paths.join(", ") || "clean"} ·{" "}
+                        {checkpoint.changed_paths.join(", ") || t("clean")} ·{" "}
                         {checkpoint.total_diff_bytes} bytes
                       </p>
                       {checkpoint.side_effect_permit_id ? (
                         <p className="mt-2 font-mono text-xs break-all text-slate-500">
-                          permit {checkpoint.side_effect_permit_id}
+                          {t("permit", {
+                            id: checkpoint.side_effect_permit_id,
+                          })}
                         </p>
                       ) : null}
                       <pre className="mt-3 max-h-80 overflow-auto rounded-lg bg-slate-950 p-4 text-xs break-words whitespace-pre-wrap text-slate-100">
-                        {checkpoint.diff_artifact || "(empty diff)"}
+                        {checkpoint.diff_artifact || t("emptyDiff")}
                       </pre>
                     </li>
                   ))}
@@ -682,10 +702,10 @@ export function WorkspaceDetailConsole({
 
           <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-semibold text-slate-950">
-              Workspace Timeline
+              {t("timeline")}
             </h2>
             {events.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-600">暂无事件。</p>
+              <p className="mt-3 text-sm text-slate-600">{t("noEvents")}</p>
             ) : (
               <ol className="mt-5 space-y-4">
                 {events.map((event) => (
@@ -694,7 +714,7 @@ export function WorkspaceDetailConsole({
                     className="grid gap-1 border-l-2 border-blue-200 pl-4 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]"
                   >
                     <time className="text-xs text-slate-500">
-                      {formatTimestamp(event.created_at)}
+                      {formatTimestamp(event.created_at, locale)}
                     </time>
                     <div className="min-w-0">
                       <p className="font-semibold text-slate-900">

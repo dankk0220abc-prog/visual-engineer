@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  ApiError,
   createRunnerJob,
   listRunnerJobs,
   listRunners,
@@ -15,17 +15,9 @@ import {
   type RunnerJob,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
-
-function message(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.requestId
-      ? `${error.message}（请求 ID：${error.requestId}）`
-      : error.message;
-  }
-  return "出现未预期的错误，请重试。";
-}
 
 function runnerTone(
   status: Runner["status"],
@@ -47,6 +39,10 @@ function jobTone(
 
 export function RunnerConsole() {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations("runnerConsole");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [runners, setRunners] = useState<Runner[]>([]);
   const [jobs, setJobs] = useState<RunnerJob[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
@@ -61,22 +57,25 @@ export function RunnerConsole() {
   const [dispatchError, setDispatchError] = useState("");
   const [revokingId, setRevokingId] = useState("");
 
-  const refresh = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoadState("loading");
-    setLoadError("");
-    try {
-      const [nextRunners, nextJobs] = await Promise.all([
-        listRunners(),
-        listRunnerJobs(),
-      ]);
-      setRunners(nextRunners);
-      setJobs(nextJobs);
-      setLoadState("ready");
-    } catch (error) {
-      setLoadError(message(error));
-      setLoadState("error");
-    }
-  }, []);
+  const refresh = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setLoadState("loading");
+      setLoadError("");
+      try {
+        const [nextRunners, nextJobs] = await Promise.all([
+          listRunners(),
+          listRunnerJobs(),
+        ]);
+        setRunners(nextRunners);
+        setJobs(nextJobs);
+        setLoadState("ready");
+      } catch (error) {
+        setLoadError(localizeApiError(error, errorT));
+        setLoadState("error");
+      }
+    },
+    [errorT],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +88,7 @@ export function RunnerConsole() {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setLoadError(message(error));
+        setLoadError(localizeApiError(error, errorT));
         setLoadState("error");
       });
     const timer = window.setInterval(() => {
@@ -99,7 +98,7 @@ export function RunnerConsole() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [refresh]);
+  }, [errorT, refresh]);
 
   async function dispatch() {
     setIsDispatching(true);
@@ -116,7 +115,7 @@ export function RunnerConsole() {
       ]);
       router.push(`/runners/jobs/${job.id}`);
     } catch (error) {
-      setDispatchError(message(error));
+      setDispatchError(localizeApiError(error, errorT));
     } finally {
       setIsDispatching(false);
     }
@@ -130,7 +129,7 @@ export function RunnerConsole() {
         current.map((item) => (item.id === revoked.id ? revoked : item)),
       );
     } catch (error) {
-      setLoadError(message(error));
+      setLoadError(localizeApiError(error, errorT));
       setLoadState("error");
     } finally {
       setRevokingId("");
@@ -142,18 +141,17 @@ export function RunnerConsole() {
       <header className="border-b border-slate-200 pb-8">
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm font-semibold tracking-widest text-blue-700 uppercase">
-            Execution plane
+            {t("eyebrow")}
           </p>
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">
             Phase 3
           </span>
         </div>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Local Runner 控制台
+          {t("title")}
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-          通过浏览器调度仓库无关的类型化诊断与可取消等待。Runner
-          没有项目代码、Shell、worktree、Git 或公共网络权限。
+          {t("description")}
         </p>
       </header>
 
@@ -162,7 +160,7 @@ export function RunnerConsole() {
           className="mt-8 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600"
           role="status"
         >
-          正在加载 Runner Registry…
+          {t("loading")}
         </div>
       ) : null}
 
@@ -171,14 +169,14 @@ export function RunnerConsole() {
           className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-6"
           role="alert"
         >
-          <p className="font-semibold text-red-900">无法加载 Runner 控制面</p>
+          <p className="font-semibold text-red-900">{t("loadFailed")}</p>
           <p className="mt-1 text-sm text-red-800">{loadError}</p>
           <button
             type="button"
             className="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-red-800 ring-1 ring-red-300 outline-none hover:bg-red-100 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2"
             onClick={() => void refresh()}
           >
-            重试
+            {commonT("actions.retry")}
           </button>
         </div>
       ) : null}
@@ -193,13 +191,13 @@ export function RunnerConsole() {
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                    Registry
+                    {t("registryEyebrow")}
                   </p>
                   <h2
                     id="runner-registry-heading"
                     className="mt-1 text-xl font-semibold text-slate-950"
                   >
-                    已注册 Runner
+                    {t("registryTitle")}
                   </h2>
                 </div>
                 <button
@@ -207,17 +205,17 @@ export function RunnerConsole() {
                   className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 outline-none hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                   onClick={() => void refresh(false)}
                 >
-                  刷新
+                  {commonT("actions.refresh")}
                 </button>
               </div>
 
               {runners.length === 0 ? (
                 <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
                   <p className="font-semibold text-slate-800">
-                    尚无已注册 Runner
+                    {t("emptyRunners")}
                   </p>
                   <p className="mt-1 text-sm text-slate-600">
-                    运行 make platform-up 后，本地 Runner 会自动注册。
+                    {t("emptyRunnersHelp")}
                   </p>
                 </div>
               ) : (
@@ -243,17 +241,17 @@ export function RunnerConsole() {
                       <dl className="mt-4 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
                         <div>
                           <dt className="text-xs font-semibold text-slate-500">
-                            Last seen
+                            {t("lastSeen")}
                           </dt>
                           <dd className="mt-1 text-slate-800">
                             {runner.last_seen_at
-                              ? formatTimestamp(runner.last_seen_at)
-                              : "尚未心跳"}
+                              ? formatTimestamp(runner.last_seen_at, locale)
+                              : t("neverSeen")}
                           </dd>
                         </div>
                         <div>
                           <dt className="text-xs font-semibold text-slate-500">
-                            Protocol / software
+                            {t("protocolSoftware")}
                           </dt>
                           <dd className="mt-1 text-slate-800">
                             v{runner.protocol_version} /{" "}
@@ -262,7 +260,7 @@ export function RunnerConsole() {
                         </div>
                         <div className="sm:col-span-2">
                           <dt className="text-xs font-semibold text-slate-500">
-                            Capabilities
+                            {commonT("fields.capabilities")}
                           </dt>
                           <dd className="mt-1 break-words text-slate-800">
                             {runner.capabilities.join(" · ")}
@@ -270,7 +268,7 @@ export function RunnerConsole() {
                         </div>
                         <div className="sm:col-span-2">
                           <dt className="text-xs font-semibold text-slate-500">
-                            Active job
+                            {t("activeJob")}
                           </dt>
                           <dd className="mt-1 text-slate-800">
                             {runner.active_job ? (
@@ -279,10 +277,14 @@ export function RunnerConsole() {
                                 className="font-semibold text-blue-700 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-blue-600"
                               >
                                 {runner.active_job.kind} ·{" "}
-                                {runner.active_job.state}
+                                <StatusPill
+                                  tone={jobTone(runner.active_job.state)}
+                                >
+                                  {runner.active_job.state}
+                                </StatusPill>
                               </Link>
                             ) : (
-                              "无"
+                              t("none")
                             )}
                           </dd>
                         </div>
@@ -297,10 +299,10 @@ export function RunnerConsole() {
                         onClick={() => void revoke(runner.id)}
                       >
                         {runner.status === "revoked"
-                          ? "已撤销"
+                          ? t("revoked")
                           : revokingId === runner.id
-                            ? "撤销中…"
-                            : "撤销 Runner"}
+                            ? t("revoking")
+                            : t("revokeRunner")}
                       </button>
                     </li>
                   ))}
@@ -313,17 +315,17 @@ export function RunnerConsole() {
               aria-labelledby="dispatch-heading"
             >
               <p className="text-xs font-semibold tracking-widest text-blue-700 uppercase">
-                Dispatch
+                {t("dispatchEyebrow")}
               </p>
               <h2
                 id="dispatch-heading"
                 className="mt-1 text-xl font-semibold text-slate-950"
               >
-                创建受限 Job
+                {t("dispatchTitle")}
               </h2>
               <fieldset className="mt-5 space-y-3">
                 <legend className="text-sm font-semibold text-slate-800">
-                  Job kind
+                  {t("jobKind")}
                 </legend>
                 <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-blue-200 bg-white p-3">
                   <input
@@ -336,10 +338,10 @@ export function RunnerConsole() {
                   />
                   <span>
                     <span className="block font-semibold text-slate-900">
-                      System Diagnostic
+                      {t("systemDiagnostic")}
                     </span>
                     <span className="mt-1 block text-xs leading-5 text-slate-600">
-                      仅返回脱敏的软件、Python、OS family、架构和能力版本。
+                      {t("systemDiagnosticHelp")}
                     </span>
                   </span>
                 </label>
@@ -354,10 +356,10 @@ export function RunnerConsole() {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-slate-900">
-                      Controlled Wait
+                      {t("controlledWait")}
                     </span>
                     <span className="mt-1 block text-xs leading-5 text-slate-600">
-                      最长 10 秒，用于验证租约、进度与取消。
+                      {t("controlledWaitHelp")}
                     </span>
                   </span>
                 </label>
@@ -365,7 +367,7 @@ export function RunnerConsole() {
 
               {kind === "controlled_wait_v1" ? (
                 <label className="mt-4 block text-sm font-semibold text-slate-800">
-                  Duration（毫秒）
+                  {t("duration")}
                   <input
                     className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
                     type="number"
@@ -382,29 +384,35 @@ export function RunnerConsole() {
 
               <div
                 className="mt-5 rounded-xl border border-blue-200 bg-white p-4"
-                aria-label="Permission Envelope 预览"
+                aria-label={t("envelopePreview")}
               >
                 <p className="text-sm font-semibold text-slate-950">
-                  Permission Envelope 预览
+                  {t("envelopePreview")}
                 </p>
                 <dl className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-xs">
-                  <dt className="text-slate-600">Allowed capability</dt>
+                  <dt className="text-slate-600">{t("allowedCapability")}</dt>
                   <dd className="text-right font-mono break-all text-slate-900">
                     {kind}
                   </dd>
-                  <dt className="text-slate-600">Repository access</dt>
-                  <dd className="font-semibold text-emerald-800">none</dd>
-                  <dt className="text-slate-600">Shell access</dt>
-                  <dd className="font-semibold text-emerald-800">false</dd>
-                  <dt className="text-slate-600">Network</dt>
+                  <dt className="text-slate-600">{t("repositoryAccess")}</dt>
                   <dd className="font-semibold text-emerald-800">
-                    control-plane only
+                    {t("noneValue")}
                   </dd>
-                  <dt className="text-slate-600">Max runtime</dt>
-                  <dd className="font-semibold text-slate-900">10 seconds</dd>
-                  <dt className="text-slate-600">Project code</dt>
+                  <dt className="text-slate-600">{t("shellAccess")}</dt>
                   <dd className="font-semibold text-emerald-800">
-                    not accessed
+                    {t("falseValue")}
+                  </dd>
+                  <dt className="text-slate-600">{t("network")}</dt>
+                  <dd className="font-semibold text-emerald-800">
+                    {t("controlPlaneOnly")}
+                  </dd>
+                  <dt className="text-slate-600">{t("maxRuntime")}</dt>
+                  <dd className="font-semibold text-slate-900">
+                    {t("tenSeconds")}
+                  </dd>
+                  <dt className="text-slate-600">{t("projectCode")}</dt>
+                  <dd className="font-semibold text-emerald-800">
+                    {t("notAccessed")}
                   </dd>
                 </dl>
               </div>
@@ -429,11 +437,11 @@ export function RunnerConsole() {
                 }
                 onClick={() => void dispatch()}
               >
-                {isDispatching ? "正在创建…" : "创建并查看 Job"}
+                {isDispatching ? t("dispatching") : t("createAndView")}
               </button>
               {runners.every((runner) => runner.status !== "online") ? (
                 <p className="mt-2 text-xs text-amber-800">
-                  当前没有 Online Runner，Dispatch 已禁用。
+                  {t("noOnlineRunner")}
                 </p>
               ) : null}
             </section>
@@ -443,21 +451,21 @@ export function RunnerConsole() {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                  Durable queue
+                  {t("queueEyebrow")}
                 </p>
                 <h2
                   id="runner-jobs-heading"
                   className="mt-1 text-xl font-semibold text-slate-950"
                 >
-                  最近 Job
+                  {t("recentJobs")}
                 </h2>
               </div>
             </div>
             {jobs.length === 0 ? (
               <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                <p className="font-semibold text-slate-800">尚无 Runner Job</p>
+                <p className="font-semibold text-slate-800">{t("emptyJobs")}</p>
                 <p className="mt-1 text-sm text-slate-600">
-                  使用 Dispatch 创建第一个受限任务。
+                  {t("emptyJobsHelp")}
                 </p>
               </div>
             ) : (
@@ -479,14 +487,17 @@ export function RunnerConsole() {
                       {job.id}
                     </p>
                     <p className="mt-3 text-sm text-slate-600">
-                      Attempts {job.attempt_count}/{job.max_attempts} ·{" "}
-                      {formatTimestamp(job.created_at)}
+                      {t("attempts", {
+                        current: job.attempt_count,
+                        maximum: job.max_attempts,
+                      })}{" "}
+                      · {formatTimestamp(job.created_at, locale)}
                     </p>
                     <Link
                       href={`/runners/jobs/${job.id}`}
                       className="mt-4 inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 outline-none hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                     >
-                      查看 Job
+                      {t("viewJob")}
                     </Link>
                   </li>
                 ))}

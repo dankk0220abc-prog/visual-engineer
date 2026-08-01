@@ -1,3 +1,9 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
+import { isLocalizedStatus } from "@/lib/localization";
+
 type StatusTone = "neutral" | "positive" | "negative" | "pending";
 
 const toneClasses: Record<StatusTone, string> = {
@@ -14,11 +20,17 @@ export function StatusPill({
   children: React.ReactNode;
   tone?: StatusTone;
 }) {
+  const t = useTranslations("common.status");
+  const content =
+    typeof children === "string" && isLocalizedStatus(children)
+      ? t(children)
+      : children;
+
   return (
     <span
       className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClasses[tone]}`}
     >
-      {children}
+      {content}
     </span>
   );
 }

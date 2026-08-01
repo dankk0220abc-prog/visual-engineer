@@ -544,7 +544,7 @@ describe("ValidationConsole", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "创建 pending Suite Grant",
+        name: "Create pending Validation Execution Grant",
       }),
     );
 
@@ -568,7 +568,7 @@ describe("ValidationConsole", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Approve exact Validation Grant",
+        name: "Approve exact Validation Execution Grant",
       }),
     );
 
@@ -618,7 +618,7 @@ describe("ValidationConsole", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Approve exact Validation Grant",
+        name: "Approve exact Validation Execution Grant",
       }),
     );
     await waitFor(() =>
@@ -630,7 +630,7 @@ describe("ValidationConsole", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Run fixed Suite" }),
+      await screen.findByRole("button", { name: "Run fixed Validation Suite" }),
     );
     await waitFor(() => expect(createValidationSuiteRun).toHaveBeenCalled());
     expect(createValidationSuiteRun).toHaveBeenCalledWith(
@@ -652,7 +652,7 @@ describe("ValidationConsole", () => {
     render(<ValidationConsole />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Cancel Suite" }),
+      await screen.findByRole("button", { name: "Cancel Validation Suite" }),
     );
     await waitFor(() =>
       expect(cancelValidationSuiteRun).toHaveBeenCalledWith(suiteRun.id),
@@ -679,7 +679,7 @@ describe("ValidationConsole", () => {
     render(<ValidationConsole />);
 
     expect(
-      await screen.findByText("Aggregate Result: failed"),
+      await screen.findByText("Aggregate Result: Failed"),
     ).toBeInTheDocument();
     expect(screen.getByText(/validation_profile_failed/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry failed steps" }));

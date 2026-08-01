@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  ApiError,
   createExecutionGrant,
   decideExecutionGrant,
   listEligibleExecutionContexts,
@@ -14,17 +14,9 @@ import {
   type ExecutionGrant,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
+import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
-
-function message(error: unknown): string {
-  if (error instanceof ApiError) {
-    return `${error.code}: ${error.message}${
-      error.requestId ? `（请求 ID：${error.requestId}）` : ""
-    }`;
-  }
-  return "出现未预期的错误。";
-}
 
 function grantTone(
   status: ExecutionGrant["status"],
@@ -36,6 +28,10 @@ function grantTone(
 }
 
 export function ExecutionGrantConsole() {
+  const locale = useLocale();
+  const t = useTranslations("executionGrants");
+  const commonT = useTranslations("common");
+  const errorT = useTranslations("errors");
   const [contexts, setContexts] = useState<EligibleExecutionContext[]>([]);
   const [grants, setGrants] = useState<ExecutionGrant[]>([]);
   const [selected, setSelected] = useState("");
@@ -56,10 +52,10 @@ export function ExecutionGrantConsole() {
       setSelected((current) => current || nextContexts[0]?.plan_id || "");
       setState("ready");
     } catch (reason) {
-      setError(message(reason));
+      setError(localizeApiError(reason, errorT));
       setState("error");
     }
-  }, []);
+  }, [errorT]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,13 +69,13 @@ export function ExecutionGrantConsole() {
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
-        setError(message(reason));
+        setError(localizeApiError(reason, errorT));
         setState("error");
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [errorT]);
 
   const selectedContext = useMemo(
     () => contexts.find((context) => context.plan_id === selected) ?? null,
@@ -97,7 +93,7 @@ export function ExecutionGrantConsole() {
       });
       await refresh();
     } catch (reason) {
-      setError(message(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -116,7 +112,7 @@ export function ExecutionGrantConsole() {
       });
       await refresh();
     } catch (reason) {
-      setError(message(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -129,7 +125,7 @@ export function ExecutionGrantConsole() {
       await revokeExecutionGrant(grant.id);
       await refresh();
     } catch (reason) {
-      setError(message(reason));
+      setError(localizeApiError(reason, errorT));
     } finally {
       setBusy("");
     }
@@ -139,24 +135,22 @@ export function ExecutionGrantConsole() {
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <header className="border-b border-slate-200 pb-8">
         <p className="text-sm font-semibold tracking-widest text-blue-700 uppercase">
-          Independent execution authority
+          {t("eyebrow")}
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Execution Grants
+          {t("title")}
         </h1>
         <p className="mt-3 max-w-4xl text-base leading-7 font-semibold text-slate-800">
-          Plan approval does not authorize execution. This Execution Grant is a
-          separate human decision.
+          {t("boundary")}
         </p>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          策略由服务器从 approved Plan 与当前 Repository Handle
-          收窄生成；浏览器不能提交 Shell、主机路径或扩大后的权限。
+          {t("description")}
         </p>
       </header>
 
       {state === "loading" ? (
         <p className="mt-8 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
-          正在加载授权上下文…
+          {t("loading")}
         </p>
       ) : null}
       {error ? (
@@ -171,7 +165,7 @@ export function ExecutionGrantConsole() {
               className="ml-3 font-semibold underline"
               onClick={() => void refresh()}
             >
-              重试
+              {commonT("actions.retry")}
             </button>
           ) : null}
         </div>
@@ -181,16 +175,14 @@ export function ExecutionGrantConsole() {
         <>
           <section className="mt-8 rounded-2xl border border-blue-200 bg-blue-50/60 p-5 sm:p-6">
             <h2 className="text-xl font-semibold text-slate-950">
-              从 eligible Plan 创建 pending Grant
+              {t("createTitle")}
             </h2>
             {contexts.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-700">
-                当前没有 revision 一致的 approved Plan 与 available Repository。
-              </p>
+              <p className="mt-3 text-sm text-slate-700">{t("noContexts")}</p>
             ) : (
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
                 <label className="min-w-0 flex-1 text-sm font-semibold text-slate-800">
-                  Approved execution context
+                  {t("contextLabel")}
                   <select
                     className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
                     value={selected}
@@ -198,8 +190,11 @@ export function ExecutionGrantConsole() {
                   >
                     {contexts.map((context) => (
                       <option key={context.plan_id} value={context.plan_id}>
-                        {context.task_title} · Plan v{context.plan_version} ·{" "}
-                        {context.repository_display_name}
+                        {t("contextOption", {
+                          task: context.task_title,
+                          version: context.plan_version,
+                          repository: context.repository_display_name,
+                        })}
                       </option>
                     ))}
                   </select>
@@ -210,7 +205,7 @@ export function ExecutionGrantConsole() {
                   disabled={!selectedContext || busy === "create"}
                   onClick={() => void createGrant()}
                 >
-                  {busy === "create" ? "创建中…" : "创建 pending Grant"}
+                  {busy === "create" ? t("creating") : t("createPending")}
                 </button>
               </div>
             )}
@@ -219,11 +214,9 @@ export function ExecutionGrantConsole() {
           {grants.length === 0 ? (
             <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
               <h2 className="font-semibold text-slate-900">
-                暂无 Execution Grant
+                {t("emptyTitle")}
               </h2>
-              <p className="mt-2 text-sm text-slate-600">
-                选择上方 approved context 创建第一条独立授权。
-              </p>
+              <p className="mt-2 text-sm text-slate-600">{t("emptyHelp")}</p>
             </section>
           ) : (
             <ul className="mt-8 space-y-6">
@@ -248,20 +241,24 @@ export function ExecutionGrantConsole() {
 
                   <dl className="mt-5 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-3">
                     <div>
-                      <dt className="font-semibold text-slate-500">Plan</dt>
+                      <dt className="font-semibold text-slate-500">
+                        {t("plan")}
+                      </dt>
                       <dd className="mt-1 font-mono text-xs break-all">
                         {grant.plan_id}
                       </dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-slate-500">Snapshot</dt>
+                      <dt className="font-semibold text-slate-500">
+                        {commonT("fields.snapshot")}
+                      </dt>
                       <dd className="mt-1 font-mono text-xs break-all">
                         {grant.snapshot_fingerprint}
                       </dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Source revision
+                        {commonT("fields.sourceRevision")}
                       </dt>
                       <dd className="mt-1 font-mono text-xs break-all">
                         {grant.source_revision}
@@ -269,7 +266,7 @@ export function ExecutionGrantConsole() {
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Allowed operations
+                        {t("allowedOperations")}
                       </dt>
                       <dd className="mt-1 break-words">
                         {grant.allowed_operations.join(" · ")}
@@ -277,7 +274,7 @@ export function ExecutionGrantConsole() {
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Allowed paths
+                        {t("allowedPaths")}
                       </dt>
                       <dd className="mt-1 font-mono text-xs break-all">
                         {grant.allowed_paths.join(", ")}
@@ -285,41 +282,49 @@ export function ExecutionGrantConsole() {
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Denied paths
+                        {t("deniedPaths")}
                       </dt>
                       <dd className="mt-1 max-h-24 overflow-y-auto font-mono text-xs break-all">
                         {grant.denied_paths.join(", ")}
                       </dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-slate-500">Budgets</dt>
+                      <dt className="font-semibold text-slate-500">
+                        {t("budgets")}
+                      </dt>
                       <dd className="mt-1">
-                        {grant.max_files_changed} files ·{" "}
-                        {grant.max_total_write_bytes} total bytes ·{" "}
-                        {grant.max_single_file_bytes} per file ·{" "}
-                        {grant.max_diff_bytes} diff bytes
+                        {t("budgetSummary", {
+                          files: grant.max_files_changed,
+                          total: grant.max_total_write_bytes,
+                          single: grant.max_single_file_bytes,
+                          diff: grant.max_diff_bytes,
+                        })}
                       </dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Workspace TTL
+                        {t("workspaceTtl")}
                       </dt>
                       <dd className="mt-1">{grant.workspace_ttl_seconds}s</dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-slate-500">
-                        Explicit denials
+                        {t("explicitDenials")}
                       </dt>
                       <dd className="mt-1">
-                        network {grant.network_policy} · Shell{" "}
-                        {String(grant.shell_access)} · source write{" "}
-                        {String(grant.source_repository_write_access)} · Git
-                        delivery {String(grant.git_delivery_access)}
+                        {t("denialSummary", {
+                          network: grant.network_policy,
+                          shell: String(grant.shell_access),
+                          sourceWrite: String(
+                            grant.source_repository_write_access,
+                          ),
+                          gitDelivery: String(grant.git_delivery_access),
+                        })}
                       </dd>
                     </div>
                     <div className="md:col-span-2 xl:col-span-3">
                       <dt className="font-semibold text-slate-500">
-                        Canonical policy hash
+                        {t("canonicalPolicyHash")}
                       </dt>
                       <dd className="mt-1 font-mono text-xs break-all">
                         {grant.policy_hash}
@@ -328,23 +333,26 @@ export function ExecutionGrantConsole() {
                   </dl>
 
                   <p className="mt-5 text-xs text-slate-500">
-                    Requested {formatTimestamp(grant.requested_at)} · expires{" "}
-                    {formatTimestamp(grant.expires_at)}
+                    {t("requestedExpires", {
+                      requested: formatTimestamp(grant.requested_at, locale),
+                      expires: formatTimestamp(grant.expires_at, locale),
+                    })}
                   </p>
                   {grant.status === "revoke_requested" ? (
                     <p
                       className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
                       role="status"
                     >
-                      Revocation requested. New Side-effect Permits are blocked;
-                      effective revocation waits for{" "}
-                      {grant.in_flight_permit_count} bounded in-flight permit
-                      {grant.in_flight_permit_count === 1 ? "" : "s"}.
+                      {t("revocationPending", {
+                        count: grant.in_flight_permit_count,
+                      })}
                     </p>
                   ) : null}
                   {grant.revoked_at ? (
                     <p className="mt-3 text-xs text-slate-500">
-                      Revocation effective {formatTimestamp(grant.revoked_at)}
+                      {t("revocationEffective", {
+                        time: formatTimestamp(grant.revoked_at, locale),
+                      })}
                     </p>
                   ) : null}
                   {grant.status === "pending" ? (
@@ -356,11 +364,11 @@ export function ExecutionGrantConsole() {
                         onClick={() => void decide(grant, "approve")}
                       >
                         {busy === `approve-${grant.id}`
-                          ? "批准中…"
-                          : "Approve Grant"}
+                          ? t("approving")
+                          : t("approveGrant")}
                       </button>
                       <label className="text-sm font-semibold text-slate-700">
-                        Reject reason
+                        {t("rejectReason")}
                         <input
                           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
                           value={rejectReason[grant.id] ?? ""}
@@ -381,7 +389,7 @@ export function ExecutionGrantConsole() {
                         }
                         onClick={() => void decide(grant, "reject")}
                       >
-                        Reject
+                        {t("rejectGrant")}
                       </button>
                     </div>
                   ) : null}
@@ -391,7 +399,7 @@ export function ExecutionGrantConsole() {
                         href="/workspaces"
                         className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
                       >
-                        创建或查看 Workspace
+                        {t("workspaceAction")}
                       </Link>
                       <button
                         type="button"
@@ -399,7 +407,7 @@ export function ExecutionGrantConsole() {
                         disabled={Boolean(busy)}
                         onClick={() => void revoke(grant)}
                       >
-                        Revoke
+                        {t("revokeGrant")}
                       </button>
                     </div>
                   ) : null}

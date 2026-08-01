@@ -78,11 +78,11 @@ describe("RunnerJobConsole", () => {
   it("renders running state, fenced attempt, immutable envelope, and timeline", async () => {
     render(<RunnerJobConsole jobId={runnerJobFixture().id} />);
 
-    expect(screen.getByText("正在加载 Runner Job…")).toBeInTheDocument();
+    expect(screen.getByText("Loading Runner Job…")).toBeInTheDocument();
     expect(
       await screen.findByRole("heading", { name: "Permission Envelope" }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("running")).toHaveLength(2);
+    expect(screen.getAllByText("Running")).toHaveLength(2);
     expect(screen.getByText("Attempt 1")).toBeInTheDocument();
     expect(screen.getByText("a91d…30c4")).toBeInTheDocument();
     expect(screen.getByText("none")).toBeInTheDocument();
@@ -123,10 +123,14 @@ describe("RunnerJobConsole", () => {
       expect(mockedCancelRunnerJob).toHaveBeenCalledWith(runnerJobFixture().id),
     );
     expect(
-      await screen.findByText(/已请求取消，正在等待 Runner 确认/),
+      await screen.findByText(
+        /Cancellation was requested and is awaiting Runner confirmation/,
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "取消已请求" })).toBeDisabled();
-    expect(screen.queryByText("cancelled")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Cancellation requested" }),
+    ).toBeDisabled();
+    expect(screen.queryByText("Cancelled")).not.toBeInTheDocument();
   });
 
   it("shows lease expiry, requeue evidence, retry, and typed result", async () => {
@@ -171,11 +175,11 @@ describe("RunnerJobConsole", () => {
     render(<RunnerJobConsole jobId={runnerJobFixture().id} />);
 
     expect(await screen.findByText("Attempt 2")).toBeInTheDocument();
-    expect(screen.getByText("lease_expired")).toBeInTheDocument();
+    expect(screen.getByText("Lease expired")).toBeInTheDocument();
     expect(screen.getByText("Attempt 1").closest("li")).toHaveTextContent(
-      "Job 已恢复到后续状态。",
+      "The Job advanced to a later state.",
     );
-    expect(screen.getAllByText("succeeded")).toHaveLength(2);
+    expect(screen.getAllByText("Succeeded")).toHaveLength(2);
     expect(screen.getByText("runner_software_version")).toBeInTheDocument();
     expect(screen.getByText("3.13.5")).toBeInTheDocument();
   });
@@ -194,8 +198,10 @@ describe("RunnerJobConsole", () => {
 
     render(<RunnerJobConsole jobId={runnerJobFixture().id} />);
 
-    expect(await screen.findAllByText("cancelled")).not.toHaveLength(0);
-    expect(screen.getByText("此终态没有成功结果。")).toBeInTheDocument();
+    expect(await screen.findAllByText("Cancelled")).not.toHaveLength(0);
+    expect(
+      screen.getByText("This terminal state has no successful result."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Cancel Job" }),
     ).not.toBeInTheDocument();
@@ -221,9 +227,10 @@ describe("RunnerJobConsole", () => {
     render(<RunnerJobConsole jobId={runnerJobFixture().id} />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Runner Job temporarily unavailable");
+    expect(alert).toHaveTextContent("The state changed");
+    expect(alert).not.toHaveTextContent("Runner Job temporarily unavailable");
     expect(alert).toHaveTextContent("job-request");
-    await user.click(within(alert).getByRole("button", { name: "重试" }));
+    await user.click(within(alert).getByRole("button", { name: "Retry" }));
 
     expect(
       await screen.findByRole("heading", { name: "Permission Envelope" }),
