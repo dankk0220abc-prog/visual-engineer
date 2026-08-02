@@ -350,7 +350,13 @@ function PlanReview({
       </div>
 
       <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
-        <p className="font-semibold">{t("approvalBoundary")}</p>
+        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-semibold">
+          <span>{t("executionAvailable")}</span>
+          <code className="rounded-md bg-white/80 px-2 py-0.5 font-mono text-xs break-all ring-1 ring-violet-200">
+            execution_available={String(plan.execution_available)}
+          </code>
+        </p>
+        <p className="mt-2 font-semibold">{t("approvalBoundary")}</p>
         <p className="mt-1">
           {plan.source === "governed_ai"
             ? t("aiAuthorityHelp")

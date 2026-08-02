@@ -15,7 +15,7 @@ import {
   type ValidationSuiteRun,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
-import { isLocalizedStatus, localizeApiError } from "@/lib/localization";
+import { localizeApiError, localizeStatus } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
@@ -33,6 +33,7 @@ export function ReviewConsole() {
   const locale = useLocale();
   const t = useTranslations("reviews");
   const commonT = useTranslations("common");
+  const statusT = useTranslations("common.status");
   const errorT = useTranslations("errors");
   const [suiteRuns, setSuiteRuns] = useState<ValidationSuiteRun[]>([]);
   const [packages, setPackages] = useState<ReviewPackage[]>([]);
@@ -413,13 +414,10 @@ export function ReviewConsole() {
                           ) : (
                             <p className="mt-2 text-sm font-semibold text-slate-800">
                               {t("readiness", {
-                                verdict: isLocalizedStatus(
+                                verdict: localizeStatus(
                                   reviewPackage.readiness.effective_verdict,
-                                )
-                                  ? commonT(
-                                      `status.${reviewPackage.readiness.effective_verdict}`,
-                                    )
-                                  : reviewPackage.readiness.effective_verdict,
+                                  statusT,
+                                ),
                               })}
                             </p>
                           )}

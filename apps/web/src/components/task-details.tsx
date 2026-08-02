@@ -238,7 +238,7 @@ export function TaskDetails({ taskId }: { taskId: string }) {
                           })}
                         </span>
                         <span aria-hidden="true">·</span>
-                        <span>Committed HEAD</span>
+                        <span>{t("committedHead")}</span>
                       </div>
                     </div>
                     <Link

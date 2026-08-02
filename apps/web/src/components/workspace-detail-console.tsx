@@ -30,13 +30,13 @@ import { StatusPill } from "./status-pill";
 
 function message(
   error: unknown,
-  t: ReturnType<typeof useTranslations>,
+  errorT: ReturnType<typeof useTranslations>,
 ): string {
   if (error instanceof ApiError) {
-    return localizeApiError(error, t);
+    return localizeApiError(error, errorT);
   }
   if (error instanceof Error) return error.message;
-  return t("unexpected");
+  return errorT("unexpected");
 }
 
 function tone(
@@ -465,7 +465,7 @@ export function WorkspaceDetailConsole({
                         checked={writeMode === mode}
                         onChange={() => selectWriteMode(mode)}
                       />
-                      {t(mode)}
+                      {mode === "create" ? t("create") : t("replace")}
                     </label>
                   ))}
                 </div>
@@ -508,7 +508,7 @@ export function WorkspaceDetailConsole({
                   <dt className="font-semibold">{t("relativePath")}</dt>
                   <dd className="font-mono break-all">{writePath}</dd>
                   <dt className="font-semibold">{t("operation")}</dt>
-                  <dd>{t(writeMode)}</dd>
+                  <dd>{writeMode === "create" ? t("create") : t("replace")}</dd>
                   <dt className="font-semibold">{t("currentHash")}</dt>
                   <dd className="font-mono break-all">
                     {currentHash || t("notRead")}

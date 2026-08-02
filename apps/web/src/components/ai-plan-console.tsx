@@ -4,7 +4,11 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import type { AIPlanRequest } from "@/lib/api";
-import { isLocalizedStatus } from "@/lib/localization";
+import {
+  localizeAction,
+  localizeEval,
+  localizeStatus,
+} from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
@@ -31,37 +35,22 @@ function operationLabel(
   t: ReturnType<typeof useTranslations>,
 ): string {
   if (operation.kind === "workspace_text_create_v1") {
-    return t("createText", {
+    return localizeAction("workspace_text_create_v1", t, {
       path: operation.relative_path,
       intent: operation.intent,
     });
   }
   if (operation.kind === "workspace_text_replace_v1") {
-    return t("replaceText", {
+    return localizeAction("workspace_text_replace_v1", t, {
       path: operation.relative_path,
       intent: operation.intent,
     });
   }
-  return t("validationSuiteOperation", {
+  return localizeAction("validation_suite_v1", t, {
     id: operation.suite_id,
     version: operation.suite_version,
   });
 }
-
-const evalLabelKeys: Record<string, string> = {
-  schema_validity: "schemaValidity",
-  generation_binding_integrity: "generationBindingIntegrity",
-  unsupported_file_reference: "unsupportedFileReference",
-  hallucinated_repository_fact: "hallucinatedRepositoryFact",
-  forbidden_operation: "forbiddenOperation",
-  secret_context_leakage: "secretContextLeakage",
-  over_budget_context: "overBudgetContext",
-  missing_acceptance_criteria: "missingAcceptanceCriteria",
-  stale_revision: "staleRevision",
-  deterministic_replay: "deterministicReplay",
-  malicious_requirement_prompt_injection: "maliciousRequirementPromptInjection",
-  approval_boundary_bypass: "approvalBoundaryBypass",
-};
 
 function statusTone(
   status: AIPlanRequest["status"],
@@ -363,7 +352,7 @@ export function AIPlanConsole({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-semibold">
-                    {t(`eval.${evalLabelKeys[result.eval_id] ?? "unknown"}`)}{" "}
+                    {localizeEval(result.eval_id, t)}{" "}
                     <code className="font-mono">({result.eval_id})</code>
                   </span>
                   <span className="text-xs font-semibold">
@@ -392,9 +381,7 @@ export function AIPlanConsole({
                   <p className="font-semibold">
                     {t("traceAttempt", {
                       number: trace.attempt_number,
-                      status: isLocalizedStatus(trace.status)
-                        ? statusT(trace.status)
-                        : trace.status,
+                      status: localizeStatus(trace.status, statusT),
                     })}
                   </p>
                   <p className="mt-2 leading-5 text-slate-300">

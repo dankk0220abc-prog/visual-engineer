@@ -17,7 +17,7 @@ import {
   type ReviewPackage,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
-import { localizeApiError } from "@/lib/localization";
+import { localizeApiError, localizeErrorCode } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
@@ -306,6 +306,12 @@ export function DeliveryConsole() {
                         </div>
                       </dl>
 
+                      {authorization.error_code ? (
+                        <p className="mt-4 text-sm font-semibold break-words text-red-800">
+                          {localizeErrorCode(authorization.error_code, errorT)}
+                        </p>
+                      ) : null}
+
                       {authorization.status === "pending" ? (
                         <div className="mt-5 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-5">
                           <button
@@ -440,10 +446,8 @@ export function DeliveryConsole() {
                             {t("localBoundary")}
                           </p>
                           {preview.blocking_code ? (
-                            <p className="mt-3 text-sm font-semibold text-red-800">
-                              {t("blockingCode", {
-                                code: preview.blocking_code,
-                              })}
+                            <p className="mt-3 text-sm font-semibold break-words text-red-800">
+                              {localizeErrorCode(preview.blocking_code, errorT)}
                             </p>
                           ) : null}
                           <label className="mt-4 flex items-start gap-2 text-sm font-semibold text-slate-800">
@@ -559,8 +563,12 @@ export function DeliveryConsole() {
                                   })}
                                 </p>
                                 {dispatch.error_code ? (
-                                  <p className="mt-2 font-semibold text-red-800">
-                                    {dispatch.error_code}
+                                  <p className="mt-2 font-semibold break-words text-red-800">
+                                    {localizeErrorCode(
+                                      dispatch.error_code,
+                                      errorT,
+                                      dispatch.request_id,
+                                    )}
                                   </p>
                                 ) : null}
                                 <Link

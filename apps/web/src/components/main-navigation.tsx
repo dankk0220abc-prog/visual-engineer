@@ -6,20 +6,19 @@ import { useTranslations } from "next-intl";
 
 import { LocaleSwitcher } from "./locale-switcher";
 
-const links = [
-  { href: "/", key: "tasks" },
-  { href: "/runners", key: "runners" },
-  { href: "/repositories", key: "repositories" },
-  { href: "/execution-grants", key: "executionGrants" },
-  { href: "/workspaces", key: "workspaces" },
-  { href: "/validations", key: "validations" },
-  { href: "/reviews", key: "reviews" },
-  { href: "/deliveries", key: "deliveries" },
-];
-
 export function MainNavigation() {
   const pathname = usePathname();
   const t = useTranslations("navigation");
+  const links = [
+    { href: "/", label: t("tasks") },
+    { href: "/runners", label: t("runners") },
+    { href: "/repositories", label: t("repositories") },
+    { href: "/execution-grants", label: t("executionGrants") },
+    { href: "/workspaces", label: t("workspaces") },
+    { href: "/validations", label: t("validations") },
+    { href: "/reviews", label: t("reviews") },
+    { href: "/deliveries", label: t("deliveries") },
+  ];
 
   return (
     <nav
@@ -50,7 +49,7 @@ export function MainNavigation() {
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
-                {t(link.key)}
+                {link.label}
               </Link>
             );
           })}

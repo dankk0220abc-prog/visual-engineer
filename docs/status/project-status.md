@@ -1,51 +1,36 @@
 # Project Status
 
-- Phase: Phase 7 First Vertical Slice — Governed AI Planning with
-  Deterministic Provider
-- Overall status: `FINAL_GATE_PASS_SEALING_PREPARED`
-- Governance qualifier: INDEPENDENT FINAL GATE PASS; FIXTURE-ONLY LOCAL SEAL;
-  MAIN FAST-FORWARD REQUIRES EXPLICIT USER AUTHORIZATION
+- Phase: Web Console zh-CN / en-US Localization Focused Remediation
+- Overall status: `IMPLEMENTATION_COMPLETE_READY_FOR_INDEPENDENT_FOCUSED_RE_REVIEW`
+- Governance qualifier: implementer remediation only; not an independent PASS,
+  seal, integration, or production approval
 - Last updated: 2026-08-02
-- Current local `main`: `9c282e91a42a87ea553171d5aa55a0f77564bb14`
-- Reviewed candidate: `8003c835284343be8c4046f868ec6d1f66369cef`
-- Final audit branch: `codex/audit-governed-ai-planning-final-20260802`
-- Final-gate Plan:
-  [`phase-7-governed-ai-planning-first-slice-final-gate.md`](../exec-plans/phase-7-governed-ai-planning-first-slice-final-gate.md)
-- ADR: [`ADR 0021`](../adr/0021-governed-ai-plan-handoff.md)
-- Final-gate Evidence:
-  [`phase-7-governed-ai-planning-first-slice-final-gate-verification.md`](../evidence/phase-7-governed-ai-planning-first-slice-final-gate-verification.md)
-- Final audit:
-  [`phase-7-governed-ai-planning-first-slice-final-gate.md`](../security/audits/phase-7-governed-ai-planning-first-slice-final-gate.md)
-- Scope: bounded committed-Snapshot context, versioned Prompt, strict typed
-  Provider request/response, exact generation and repository-fact grounding,
-  deterministic fake replay, twelve system-owned Evals, freshness, human
-  approve/reject, and authority-free Plan handoff.
-- Finding: `VE-P7-AIP-FR-001 PASS`; the permanent consistent-tamper regression
-  fails binding and grounding while replay remains deterministic.
-- Independent focused results: original Finding `1/1`, complete AI
-  Eval/PostgreSQL `34/34`, prompt-injection scanner `1/1`, Web blocked state
-  `1/1`, desktop+narrow real stack `2/2`, Eval manifest `94` cases, secret
-  scan, source invariance, format, lint, typecheck, and diff checks PASS.
-- Explicit denials: real Provider SDK/network/key/billing, CreativeDeploy,
-  Customer 0, real repository, broader Runner permission, arbitrary shell,
-  Execution Grant auto-issue, Review/Delivery auto-approval, remote Git, push,
-  PR, merge, tag, and deployment.
-- Fresh aggregate: exactly one `make verify`, exit `0`; Python `351/351` at
-  `84.32%` coverage, Web `61/61` at `71.49%` function coverage, Playwright
-  `20/20`, Migration, Security, Workspace Chaos, Eval, source invariance, and
-  final diff PASS.
-- Docker cleanup: all focused and aggregate project containers, networks, and
-  volumes are zero; unique focused image tags removed; pre-existing aggregate
-  image-tag namespaces retained.
-- Reviewer scope: only final-gate Evidence, ExecPlan, audit report, and this
-  Project Status changed; production code, existing tests, and historical FAIL
-  artifacts remain unchanged.
-- Sealing subject: `chore: seal governed ai planning first slice`; exact hash
-  is reported in the post-commit handoff.
-- Next action: wait for explicit user authorization before any local
-  fast-forward of `main`.
+- Current local `main`: `450b660f1ab9e82993cfe1780a1967e5d6bf72cd`
+- Remediation baseline: `1ed1ecb0bbccd5171c1182e86f9359ba29dc0386`
+- Reviewed production candidate: `5f3ef6cf3bf21a4521124007ef5aa363075c4327`
+- Remediation branch: `fix/web-console-i18n-focused-remediation`
+- Remediation Plan:
+  [`web-console-i18n-focused-remediation.md`](../exec-plans/web-console-i18n-focused-remediation.md)
+- Remediation Evidence:
+  [`web-console-i18n-focused-remediation-verification.md`](../evidence/web-console-i18n-focused-remediation-verification.md)
+- Findings addressed: `VE-I18N-FR-001` stable status/error projection,
+  `VE-I18N-FR-002` permanent call-key/ICU/registry gates, and
+  `VE-I18N-FR-003` exact `execution_available=false` authority cue.
+- Focused verification: i18n/status/error/AI UI `47/47`; complete Web
+  `96/96`; bilingual desktop+narrow local smoke `4/4`; format, lint,
+  TypeScript, production build, source invariance, Impeccable detector, and
+  diff whitespace PASS.
+- Docker qualifier: candidate-matching isolated API/PostgreSQL Playwright was
+  not run because no matching image exists locally without repeating the prior
+  registry-blocked build; this remains for independent re-review.
+- Explicit denials: API/persistence/AuditEvent or authority semantic changes,
+  second i18n library, locale route changes, immutable AI/Evidence translation,
+  Provider/API key, remote Git, push, PR, merge, tag, deploy, sealing, and main
+  movement.
+- Next action: independent focused re-review from the local remediation
+  checkpoint.
 
-`GOVERNED AI PLANNING FIRST SLICE FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
+`VISUALENGINEER LOCALIZATION REMEDIATION COMPLETE — READY FOR INDEPENDENT FOCUSED RE-REVIEW`
 
 ## Preserved Phase 6 completion
 

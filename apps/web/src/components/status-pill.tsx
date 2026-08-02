@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { isLocalizedStatus } from "@/lib/localization";
+import { isLocalizedStatus, localizeStatus } from "@/lib/localization";
 
 type StatusTone = "neutral" | "positive" | "negative" | "pending";
 
@@ -22,8 +22,9 @@ export function StatusPill({
 }) {
   const t = useTranslations("common.status");
   const content =
-    typeof children === "string" && isLocalizedStatus(children)
-      ? t(children)
+    typeof children === "string" &&
+    (isLocalizedStatus(children) || /^[a-z][a-z0-9_]*$/.test(children))
+      ? localizeStatus(children, t)
       : children;
 
   return (

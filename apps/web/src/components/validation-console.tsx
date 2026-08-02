@@ -28,7 +28,7 @@ import {
   type WorkspaceCheckpoint,
 } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
-import { isLocalizedStatus, localizeApiError } from "@/lib/localization";
+import { localizeApiError, localizeStatus } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
 
@@ -81,6 +81,7 @@ export function ValidationConsole() {
   const locale = useLocale();
   const t = useTranslations("validation");
   const commonT = useTranslations("common");
+  const statusT = useTranslations("common.status");
   const errorT = useTranslations("errors");
   const [profiles, setProfiles] = useState<ValidationProfile[]>([]);
   const [runs, setRuns] = useState<ValidationRun[]>([]);
@@ -811,9 +812,10 @@ export function ValidationConsole() {
                         <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
                           <h4 className="font-semibold text-slate-950">
                             {t("aggregateResult", {
-                              verdict: isLocalizedStatus(run.result.verdict)
-                                ? commonT(`status.${run.result.verdict}`)
-                                : run.result.verdict,
+                              verdict: localizeStatus(
+                                run.result.verdict,
+                                statusT,
+                              ),
                             })}
                           </h4>
                           <p className="mt-2 text-slate-700">

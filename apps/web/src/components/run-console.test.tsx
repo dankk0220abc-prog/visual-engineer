@@ -236,6 +236,37 @@ describe("RunConsole", () => {
     );
   });
 
+  it.each([
+    [
+      "en-US",
+      "AI Plan Approval is not an Execution Grant and does not automatically issue Review Approval, Delivery Authorization, or a Side-effect Permit.",
+    ],
+    [
+      "zh-CN",
+      "AI 计划批准不等于执行授权，也不会自动签发审查批准、交付授权或副作用许可。",
+    ],
+  ] as const)(
+    "keeps execution_available=false visible on an approved governed AI Plan in %s",
+    async (locale, authorityCopy) => {
+      setTestLocale(locale);
+      mockedGetRun.mockResolvedValue(runFixture({ status: "approved" }));
+      mockedListPlans.mockResolvedValue([
+        planFixture({
+          source: "governed_ai",
+          status: "approved",
+          execution_available: false,
+        }),
+      ]);
+
+      render(<RunConsole runId={runFixture().id} />);
+
+      expect(
+        await screen.findByText("execution_available=false"),
+      ).toBeVisible();
+      expect(screen.getByText(authorityCopy)).toBeVisible();
+    },
+  );
+
   it("requires a rejection reason and exposes approve and reject actions", async () => {
     const run = runFixture({ status: "awaiting_plan_approval" });
     const plan = planFixture({ status: "awaiting_approval" });

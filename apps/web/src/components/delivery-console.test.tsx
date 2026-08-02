@@ -11,6 +11,7 @@ import {
   type DeliveryAuthorization,
   type ReviewPackage,
 } from "@/lib/api";
+import { setTestLocale } from "@/test/setup";
 
 import { DeliveryConsole } from "./delivery-console";
 
@@ -135,6 +136,24 @@ describe("DeliveryConsole", () => {
         { review_package_id: reviewPackage.id },
         expect.stringContaining(`delivery-authorization-${reviewPackage.id}-`),
       ),
+    );
+  });
+
+  it("localizes a Chinese Delivery status and stable error while retaining its code", async () => {
+    setTestLocale("zh-CN");
+    vi.mocked(listDeliveryAuthorizations).mockResolvedValue([
+      {
+        ...authorization,
+        status: "stale",
+        error_code: "delivery_authorization_expired",
+      },
+    ]);
+
+    render(<DeliveryConsole />);
+
+    expect(await screen.findByText("已失效")).toBeVisible();
+    expect(screen.getByText(/交付授权在派发前已过期/)).toHaveTextContent(
+      "delivery_authorization_expired",
     );
   });
 
@@ -324,7 +343,12 @@ describe("DeliveryConsole", () => {
     vi.mocked(dispatchLocalDelivery).mockResolvedValue(failed);
     render(<DeliveryConsole />);
 
-    expect(await screen.findByText("workspace_state_invalid")).toBeVisible();
+    const localizedErrors = await screen.findAllByText(
+      /The Workspace state does not allow/,
+    );
+    expect(localizedErrors).toHaveLength(2);
+    expect(localizedErrors[1]).toHaveTextContent("workspace_state_invalid");
+    expect(localizedErrors[1]).toHaveTextContent("request-failed");
     fireEvent.click(screen.getByRole("button", { name: "Review safe retry" }));
     expect(
       await screen.findByText("Immutable delivery manifest · attempt 2"),
