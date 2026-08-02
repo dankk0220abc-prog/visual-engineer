@@ -249,7 +249,7 @@ export function Dashboard() {
         ) : null}
 
         {listState === "ready" && tasks.length > 0 ? (
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 xl:grid-cols-3">
             {tasks.map((task) => (
               <TaskCard key={task.id} task={task} />
             ))}
