@@ -1,36 +1,37 @@
 # Project Status
 
-- Phase: Web Console zh-CN / en-US Localization Focused Remediation
-- Overall status: `IMPLEMENTATION_COMPLETE_READY_FOR_INDEPENDENT_FOCUSED_RE_REVIEW`
-- Governance qualifier: implementer remediation only; not an independent PASS,
-  seal, integration, or production approval
+- Phase: Web Console zh-CN / en-US Localization Final Gate
+- Overall status: `BLOCKED_EXTERNAL_REGISTRY_UNAVAILABLE`
+- Governance qualifier: human visual acceptance passed, but the complete
+  automated aggregate is blocked before Playwright; not sealed, integrated, or
+  production approved
 - Last updated: 2026-08-02
 - Current local `main`: `450b660f1ab9e82993cfe1780a1967e5d6bf72cd`
-- Remediation baseline: `1ed1ecb0bbccd5171c1182e86f9359ba29dc0386`
-- Reviewed production candidate: `5f3ef6cf3bf21a4521124007ef5aa363075c4327`
-- Remediation branch: `fix/web-console-i18n-focused-remediation`
-- Remediation Plan:
-  [`web-console-i18n-focused-remediation.md`](../exec-plans/web-console-i18n-focused-remediation.md)
-- Remediation Evidence:
-  [`web-console-i18n-focused-remediation-verification.md`](../evidence/web-console-i18n-focused-remediation-verification.md)
-- Findings addressed: `VE-I18N-FR-001` stable status/error projection,
-  `VE-I18N-FR-002` permanent call-key/ICU/registry gates, and
-  `VE-I18N-FR-003` exact `execution_available=false` authority cue.
-- Focused verification: i18n/status/error/AI UI `47/47`; complete Web
-  `96/96`; bilingual desktop+narrow local smoke `4/4`; format, lint,
-  TypeScript, production build, source invariance, Impeccable detector, and
-  diff whitespace PASS.
-- Docker qualifier: candidate-matching isolated API/PostgreSQL Playwright was
-  not run because no matching image exists locally without repeating the prior
-  registry-blocked build; this remains for independent re-review.
-- Explicit denials: API/persistence/AuditEvent or authority semantic changes,
-  second i18n library, locale route changes, immutable AI/Evidence translation,
-  Provider/API key, remote Git, push, PR, merge, tag, deploy, sealing, and main
-  movement.
-- Next action: independent focused re-review from the local remediation
-  checkpoint.
+- Final Gate candidate / HEAD: `1f69521caf30f6a19ddf4a708c9465f411cb6eaa`
+- Final Gate branch: `codex/audit-localization-final-rereview-20260802-019fc2e6`
+- Human visual acceptance: `HUMAN VISUAL ACCEPTANCE PASS`
+- Final Gate Plan:
+  [`web-console-i18n-zh-en-final-gate.md`](../exec-plans/web-console-i18n-zh-en-final-gate.md)
+- Final Gate Evidence:
+  [`web-console-i18n-zh-en-final-gate-verification.md`](../evidence/web-console-i18n-zh-en-final-gate-verification.md)
+- Aggregate: deterministic pre-E2E gates passed twice; both canonical attempts
+  failed at Web frozen dependency install 509/511 with the same external npm
+  registry timeout, before service and Playwright startup; exit 2.
+- Coverage: Python 84.32%; Web statements 74.42%, branches 73.45%, functions
+  72.70%, lines 75.87%.
+- Not reached: Playwright, Workspace Chaos, Workspace Security target,
+  Validation Security, complete Security target, Eval, and final aggregate
+  `git diff --check`.
+- Docker: exact E2E containers, networks, volumes, fixtures, and temporary image
+  tags cleaned; pre-existing non-task resources preserved.
+- Reviewer changes: no production code, locale resources, existing tests,
+  dependencies, or lockfiles; only Final Gate governance documents updated.
+- Explicit denials preserved: sealing, main movement, remote Git, push, PR, tag,
+  deploy, real Provider, and API-key configuration.
+- Next action: wait for external registry recovery and fresh explicit user
+  authorization; do not make another retry under this task.
 
-`VISUALENGINEER LOCALIZATION REMEDIATION COMPLETE — READY FOR INDEPENDENT FOCUSED RE-REVIEW`
+`VISUALENGINEER LOCALIZATION FINAL GATE BLOCKED — EXTERNAL REGISTRY UNAVAILABLE`
 
 ## Preserved Phase 6 completion
 
