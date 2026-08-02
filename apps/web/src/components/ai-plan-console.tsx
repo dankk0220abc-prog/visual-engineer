@@ -299,12 +299,12 @@ export function AIPlanConsole({
         </div>
       ) : null}
 
-      <div className="mt-7 grid gap-6 border-t border-slate-200 pt-6 lg:grid-cols-2">
-        <section aria-labelledby="ai-context-heading">
+      <div className="mt-7 grid grid-cols-[minmax(0,1fr)] gap-6 border-t border-slate-200 pt-6 lg:grid-cols-2">
+        <section className="min-w-0" aria-labelledby="ai-context-heading">
           <h3 id="ai-context-heading" className="font-semibold text-slate-950">
             {t("contextManifest")}
           </h3>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs [overflow-wrap:anywhere] break-words text-slate-500">
             {t("contextExcluded", {
               count: request.context_excluded_count,
               digest: request.context_digest,
@@ -318,12 +318,12 @@ export function AIPlanConsole({
             {request.context_manifest.map((entry, index) => (
               <li
                 key={String(entry.reference_id ?? index)}
-                className="rounded-lg bg-slate-50 p-3 text-slate-700"
+                className="min-w-0 rounded-lg bg-slate-50 p-3 text-slate-700"
               >
-                <span className="font-mono text-xs text-indigo-700">
+                <span className="font-mono text-xs break-all text-indigo-700">
                   {String(entry.reference_id ?? "context")}
                 </span>
-                <span className="mt-1 block break-words">
+                <span className="mt-1 block [overflow-wrap:anywhere] break-words">
                   {String(
                     entry.summary ??
                       entry.relative_path ??
@@ -335,7 +335,7 @@ export function AIPlanConsole({
           </ul>
         </section>
 
-        <section aria-labelledby="ai-eval-heading">
+        <section className="min-w-0" aria-labelledby="ai-eval-heading">
           <h3 id="ai-eval-heading" className="font-semibold text-slate-950">
             {t("evalEvidence")}
           </h3>
