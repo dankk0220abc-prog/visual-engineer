@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from "@playwright/test";
+import { type APIRequestContext, type Page } from "@playwright/test";
+
+import { expect, test } from "./support/fixtures";
+import type { E2eTestResources } from "./support/isolation";
+import { expectUiLocale, setUiLocale } from "./support/locale";
 
 test.setTimeout(180_000);
+const uiLocale = "en-US";
+test.use({ locale: uiLocale });
 
 const apiBaseUrl = (
   process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:18000"
@@ -68,7 +69,10 @@ async function waitForJob(
   return apiJson(request, "get", `/api/v1/runner-jobs/${jobId}`);
 }
 
-async function exactValidationCheckpoint(request: APIRequestContext): Promise<{
+async function exactValidationCheckpoint(
+  request: APIRequestContext,
+  resources: E2eTestResources,
+): Promise<{
   checkpointId: string;
   implementationGrantId: string;
   workspaceId: string;
@@ -98,12 +102,16 @@ async function exactValidationCheckpoint(request: APIRequestContext): Promise<{
   }
   expect(grant.status).toBe("approved");
   const implementationGrantId = requireString(grant.id, "Grant ID");
+  resources.trackGrant(implementationGrantId);
 
   const prepared = await apiJson(request, "post", "/api/v1/workspaces", {
     grant_id: implementationGrantId,
   });
   const workspace = prepared.workspace as JsonObject;
   const prepareJob = prepared.job as JsonObject;
+  const workspaceId = requireString(workspace.id, "Workspace ID");
+  resources.trackWorkspace(workspaceId);
+  resources.trackJob(requireString(prepareJob.id, "Workspace prepare Job ID"));
   expect(
     (
       await waitForJob(
@@ -112,8 +120,6 @@ async function exactValidationCheckpoint(request: APIRequestContext): Promise<{
       )
     ).state,
   ).toBe("succeeded");
-  const workspaceId = requireString(workspace.id, "Workspace ID");
-
   const write = await apiJson(
     request,
     "post",
@@ -126,6 +132,7 @@ async function exactValidationCheckpoint(request: APIRequestContext): Promise<{
     },
   );
   const writeJob = write.job as JsonObject;
+  resources.trackJob(requireString(writeJob.id, "Workspace write Job ID"));
   expect(
     (
       await waitForJob(
@@ -141,6 +148,7 @@ async function exactValidationCheckpoint(request: APIRequestContext): Promise<{
     `/api/v1/workspaces/${workspaceId}/actions/diff`,
   );
   const diffJob = diff.job as JsonObject;
+  resources.trackJob(requireString(diffJob.id, "Workspace diff Job ID"));
   expect(
     (
       await waitForJob(
@@ -178,11 +186,14 @@ async function expectAccessibleAndContained(page: Page) {
 }
 
 test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate evidence", async ({
+  context,
   page,
   request,
+  resources,
 }) => {
+  await setUiLocale(context, uiLocale);
   const { checkpointId, implementationGrantId, workspaceId } =
-    await exactValidationCheckpoint(request);
+    await exactValidationCheckpoint(request, resources);
 
   let profileGrant = await apiJson(
     request,
@@ -225,8 +236,10 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     );
   }
   const profileGrantId = requireString(profileGrant.id, "Profile Grant ID");
+  resources.trackGrant(profileGrantId);
 
   await page.goto("/validations");
+  await expectUiLocale(page, uiLocale);
   await expect(
     page.getByRole("heading", { name: "Validation Runs" }),
   ).toBeVisible();
@@ -260,7 +273,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
   const runCard = page
     .getByRole("listitem")
     .filter({ hasText: validationRunId });
-  await expect(runCard.getByText("succeeded", { exact: true })).toBeVisible({
+  await expect(runCard.locator('[data-status="succeeded"]')).toBeVisible({
     timeout: 60_000,
   });
   await expect(runCard.getByText("VE_VALIDATION_PROFILE_PASS")).toBeVisible();
@@ -275,7 +288,11 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
         response.url().endsWith("/api/v1/execution-grants") &&
         response.ok(),
     ),
-    page.getByRole("button", { name: "创建 pending Suite Grant" }).click(),
+    page
+      .getByRole("button", {
+        name: "Create pending Validation Execution Grant",
+      })
+      .click(),
   ]);
   const createdGrant: unknown = await grantResponse.json();
   if (typeof createdGrant !== "object" || createdGrant === null) {
@@ -285,17 +302,20 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     (createdGrant as JsonObject).id,
     "Suite Grant ID",
   );
+  resources.trackGrant(suiteGrantId);
 
   const grantCard = page
     .getByRole("listitem")
     .filter({ hasText: suiteGrantId });
-  await expect(grantCard.getByText("pending", { exact: true })).toBeVisible({
+  await expect(grantCard.locator('[data-status="pending"]')).toBeVisible({
     timeout: 30_000,
   });
   await grantCard
-    .getByRole("button", { name: "Approve exact Validation Grant" })
+    .getByRole("button", {
+      name: "Approve exact Validation Execution Grant",
+    })
     .click();
-  await expect(grantCard.getByText("approved", { exact: true })).toBeVisible({
+  await expect(grantCard.locator('[data-status="approved"]')).toBeVisible({
     timeout: 30_000,
   });
 
@@ -306,7 +326,9 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
         response.url().endsWith("/api/v1/validation-suite-runs") &&
         response.ok(),
     ),
-    grantCard.getByRole("button", { name: "Run fixed Suite" }).click(),
+    grantCard
+      .getByRole("button", { name: "Run fixed Validation Suite" })
+      .click(),
   ]);
   const created: unknown = await createdResponse.json();
   if (typeof created !== "object" || created === null) {
@@ -320,7 +342,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     .getByRole("listitem")
     .filter({ hasText: suiteRunId });
   await expect(
-    suiteRunCard.getByText("succeeded", { exact: true }).first(),
+    suiteRunCard.locator('[data-status="succeeded"]').first(),
   ).toBeVisible({
     timeout: 60_000,
   });
@@ -331,7 +353,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     suiteRunCard.getByText("VE_VALIDATION_PROFILE_MANIFEST_PASS"),
   ).toBeVisible({ timeout: 30_000 });
   await expect(
-    suiteRunCard.getByText("Aggregate Result: succeeded"),
+    suiteRunCard.getByText("Aggregate Result: Succeeded"),
   ).toBeVisible();
   await expect(
     suiteRunCard.getByText(/Evidence 2 · redactions 0 · artifacts 0/),
@@ -345,7 +367,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     .getByRole("listitem")
     .filter({ hasText: suiteRunId });
   await expect(
-    persistedSuite.getByText("Aggregate Result: succeeded"),
+    persistedSuite.getByText("Aggregate Result: Succeeded"),
   ).toBeVisible({ timeout: 30_000 });
   await expect(
     persistedSuite.getByText("VE_VALIDATION_PROFILE_MANIFEST_PASS"),
@@ -394,17 +416,17 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     ),
   ).toBeVisible();
   await packageCard.getByRole("button", { name: "Recheck freshness" }).click();
-  await expect(packageCard.getByText("fresh", { exact: true })).toBeVisible();
+  await expect(packageCard.locator('[data-status="fresh"]')).toBeVisible();
   await packageCard
     .getByRole("button", { name: "Approve Review Package" })
     .click();
-  await expect(packageCard.getByText(/Decision: approve/)).toBeVisible({
+  await expect(packageCard.getByText(/Decision: Approve/)).toBeVisible({
     timeout: 30_000,
   });
   await packageCard
-    .getByRole("button", { name: "Compute deterministic Readiness" })
+    .getByRole("button", { name: "Compute deterministic Release Readiness" })
     .click();
-  await expect(packageCard.getByText("Release Readiness: ready")).toBeVisible({
+  await expect(packageCard.getByText("Release Readiness: Ready")).toBeVisible({
     timeout: 30_000,
   });
   await expectAccessibleAndContained(page);
@@ -415,7 +437,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
   ).toBeVisible();
   await expect(
     page.getByText(
-      "该授权永远不包含 source repository 写入、remote、push、PR、tag 或 deploy。Review approval 本身不能触发交付。",
+      "Delivery Authorization never includes source-repository write, remote, push, PR, tag, or deploy authority. Review Approval cannot trigger delivery.",
     ),
   ).toBeVisible();
   const deliveryCandidate = page
@@ -449,13 +471,15 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     ),
   ).toBeVisible();
   await expect(
-    authorizationCard.getByText("pending", { exact: true }),
+    authorizationCard.locator('[data-status="pending"]'),
   ).toBeVisible();
   await authorizationCard
-    .getByRole("button", { name: "Approve local commit" })
+    .getByRole("button", {
+      name: "Approve local commit Delivery Authorization",
+    })
     .click();
   await expect(
-    authorizationCard.getByText("approved", { exact: true }),
+    authorizationCard.locator('[data-status="approved"]'),
   ).toBeVisible({ timeout: 30_000 });
   await authorizationCard
     .getByRole("button", { name: "Review delivery preview" })
@@ -465,7 +489,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
   ).toBeVisible();
   await expect(
     authorizationCard.getByText(
-      "Local ref only · source write, remote, push, PR, tag and deploy remain denied.",
+      "Local ref only · source write, remote, push, PR, tag, and deploy remain denied.",
     ),
   ).toBeVisible();
   await authorizationCard
@@ -477,7 +501,7 @@ test("Phase 5 fixed Profile compatibility and multi-step Suite run to aggregate 
     .getByRole("button", { name: "Dispatch confirmed local delivery" })
     .click();
   await expect(
-    authorizationCard.getByText("succeeded", { exact: true }).first(),
+    authorizationCard.locator('[data-status="succeeded"]').first(),
   ).toBeVisible({ timeout: 60_000 });
   await expect(
     authorizationCard.getByText("Local commit created"),

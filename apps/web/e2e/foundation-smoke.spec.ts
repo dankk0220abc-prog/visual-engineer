@@ -1,59 +1,72 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+
+import { expect, test } from "./support/fixtures";
+import { uniqueE2eLabel } from "./support/isolation";
+import { expectUiLocale, setUiLocale } from "./support/locale";
+
+const uiLocale = "en-US";
+test.use({ locale: uiLocale });
 
 test.describe("Foundation smoke", () => {
   test("creates, retrieves, and persists a task", async ({
+    context,
     page,
   }, testInfo) => {
-    const uniqueSuffix = `${testInfo.project.name}-${Date.now()}`;
+    const uniqueSuffix = uniqueE2eLabel(testInfo, "foundation");
     const title = `E2E Foundation ${uniqueSuffix}`;
 
+    await setUiLocale(context, uiLocale);
     await page.goto("/");
+    await expectUiLocale(page, uiLocale);
 
     await expect(
-      page.getByRole("heading", { name: "受治理的前端交付任务控制台" }),
+      page.getByRole("heading", {
+        name: "Governed frontend delivery task console",
+      }),
     ).toBeVisible();
     await expect(
       page
         .getByRole("listitem")
         .filter({ hasText: "Liveness" })
-        .getByText("正常"),
+        .getByText("Healthy"),
     ).toBeVisible();
     await expect(
       page
         .getByRole("listitem")
         .filter({ hasText: "Readiness" })
-        .getByText("正常"),
+        .getByText("Healthy"),
     ).toBeVisible();
 
-    await page.getByLabel("任务标题").fill(title);
+    await page.getByLabel("Task title").fill(title);
     await page
-      .getByLabel("任务目标")
+      .getByLabel("Task objective")
       .fill("Verify the real Foundation API and PostgreSQL persistence.");
-    await page.getByLabel("显示名称").fill("visual-engineer-e2e");
-    await page.getByLabel("仓库位置").fill(`/test-fixtures/${uniqueSuffix}`);
-    await page.getByRole("button", { name: "创建任务" }).click();
+    await page.getByLabel("Display name").fill("visual-engineer-e2e");
+    await page
+      .getByLabel("Repository locator")
+      .fill(`/test-fixtures/${uniqueSuffix}`);
+    await page.getByRole("button", { name: "Create task" }).click();
 
-    await expect(page.getByText("任务创建成功")).toBeVisible();
+    await expect(page.getByText("Task created")).toBeVisible();
     const taskCard = page
       .getByRole("article")
       .filter({ has: page.getByRole("heading", { name: title }) });
     await expect(taskCard).toBeVisible();
-    await expect(taskCard.getByText("draft")).toBeVisible();
-    await taskCard.getByRole("link", { name: /查看详情/ }).click();
+    await expect(taskCard.locator('[data-status="draft"]')).toBeVisible();
+    await taskCard.getByRole("link", { name: "View details" }).click();
 
     await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+$/);
     const taskDetail = page.getByRole("article");
     await expect(
       taskDetail.getByRole("heading", { name: title }),
     ).toBeVisible();
-    await expect(taskDetail.getByText("draft", { exact: true })).toBeVisible();
+    await expect(taskDetail.locator('[data-status="draft"]')).toBeVisible();
 
     await page.reload();
     await expect(
       taskDetail.getByRole("heading", { name: title }),
     ).toBeVisible();
-    await expect(taskDetail.getByText("draft", { exact: true })).toBeVisible();
+    await expect(taskDetail.locator('[data-status="draft"]')).toBeVisible();
 
     const accessibility = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa"])

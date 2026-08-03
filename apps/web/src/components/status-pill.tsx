@@ -26,9 +26,14 @@ export function StatusPill({
     (isLocalizedStatus(children) || /^[a-z][a-z0-9_]*$/.test(children))
       ? localizeStatus(children, t)
       : children;
+  const status =
+    typeof children === "string" && /^[a-z][a-z0-9_]*$/.test(children)
+      ? children
+      : undefined;
 
   return (
     <span
+      data-status={status}
       className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClasses[tone]}`}
     >
       {content}

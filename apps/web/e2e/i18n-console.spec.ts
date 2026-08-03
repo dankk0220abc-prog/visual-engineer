@@ -1,21 +1,30 @@
 import {
-  expect,
-  test,
   type APIRequestContext,
   type Page,
+  type TestInfo,
 } from "@playwright/test";
 
-const dashboardLongTitleTask = {
-  title:
-    "Localization dashboard task card with an intentionally long title that must remain fully readable at 390 pixel viewport",
-  objective:
-    "Keep every word in this real task objective readable while the dashboard card wraps naturally within the narrow viewport.",
-  repository_kind: "local_path",
-  repository_display_name: "Synthetic adversarial fixture",
-  repository_locator: "/repositories/e2e/adversarial",
-} as const;
+import { expect, test } from "./support/fixtures";
+import { uniqueE2eLabel } from "./support/isolation";
+import {
+  expectUiLocale,
+  setUiLocale,
+  switchUiLocale,
+  type UiLocale,
+} from "./support/locale";
 
-type DashboardTask = typeof dashboardLongTitleTask & {
+function dashboardLongTitleTask(testInfo: TestInfo) {
+  return {
+    title: `Localized dashboard title wraps at 390px ${uniqueE2eLabel(testInfo, "i18n")}`,
+    objective:
+      "Keep every word in this real task objective readable while the dashboard card wraps naturally within the narrow viewport.",
+    repository_kind: "local_path",
+    repository_display_name: "Synthetic adversarial fixture",
+    repository_locator: "/repositories/e2e/adversarial",
+  } as const;
+}
+
+type DashboardTask = ReturnType<typeof dashboardLongTitleTask> & {
   id: string;
   status: string;
   created_at: string;
@@ -42,30 +51,10 @@ const localizedPages = {
   ],
 } as const;
 
-async function expectLocale(page: Page, locale: "zh-CN" | "en-US") {
-  await expect(page.locator("html")).toHaveAttribute("lang", locale);
-  await expect(
-    page.getByRole("combobox", {
-      name: locale === "zh-CN" ? "界面语言" : "Interface language",
-    }),
-  ).toHaveValue(locale);
-}
-
-async function switchLocale(page: Page, locale: "zh-CN" | "en-US") {
-  const navigation = page.waitForNavigation({ waitUntil: "domcontentloaded" });
-  await page
-    .getByRole("combobox", {
-      name: locale === "zh-CN" ? "Interface language" : "界面语言",
-    })
-    .selectOption(locale);
-  await navigation;
-  await expectLocale(page, locale);
-}
-
-async function smokeCorePages(page: Page, locale: "zh-CN" | "en-US") {
+async function smokeCorePages(page: Page, locale: UiLocale) {
   for (const [path, title] of localizedPages[locale]) {
     await page.goto(path);
-    await expectLocale(page, locale);
+    await expectUiLocale(page, locale);
     await expect(
       page.getByRole("heading", { name: title, exact: true }),
     ).toBeVisible();
@@ -76,25 +65,33 @@ async function smokeCorePages(page: Page, locale: "zh-CN" | "en-US") {
   }
 }
 
-async function createDashboardLongTitleTask(request: APIRequestContext) {
+async function createDashboardLongTitleTask(
+  request: APIRequestContext,
+  testInfo: TestInfo,
+) {
   const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL!;
+  const task = dashboardLongTitleTask(testInfo);
   const response = await request.post(`${apiBaseUrl}/api/v1/tasks`, {
-    data: dashboardLongTitleTask,
+    data: task,
     headers: {
-      "Idempotency-Key": "i18n-dashboard-long-title-containment-v1",
+      "Idempotency-Key": uniqueE2eLabel(testInfo, "i18n-dashboard-task"),
     },
   });
 
-  expect(response.ok()).toBe(true);
+  if (!response.ok()) {
+    throw new Error(
+      `Dashboard task fixture failed (${response.status()}): ${await response.text()}`,
+    );
+  }
   return (await response.json()) as DashboardTask;
 }
 
 async function expectDashboardLongTitleTaskContained(
   page: Page,
   task: DashboardTask,
-  locale: "zh-CN" | "en-US",
+  locale: UiLocale,
 ) {
-  await expectLocale(page, locale);
+  await expectUiLocale(page, locale);
   const card = page
     .getByRole("article")
     .filter({
@@ -169,11 +166,11 @@ test.describe("English Web Console localization", () => {
     page,
     request,
   }) => {
-    await context.clearCookies();
+    await setUiLocale(context, "en-US");
     await page.goto("/");
-    await expectLocale(page, "en-US");
+    await expectUiLocale(page, "en-US");
     await page.reload();
-    await expectLocale(page, "en-US");
+    await expectUiLocale(page, "en-US");
     await smokeCorePages(page, "en-US");
 
     const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL;
@@ -198,21 +195,23 @@ test.describe("Chinese Web Console localization", () => {
     context,
     page,
   }) => {
-    await context.clearCookies();
+    await setUiLocale(context, "zh-CN");
     await page.goto("/");
-    await expectLocale(page, "zh-CN");
+    await expectUiLocale(page, "zh-CN");
 
-    await switchLocale(page, "en-US");
+    await switchUiLocale(page, "en-US");
     await page.reload();
-    await expectLocale(page, "en-US");
-    await switchLocale(page, "zh-CN");
+    await expectUiLocale(page, "en-US");
+    await switchUiLocale(page, "zh-CN");
     await page.reload();
-    await expectLocale(page, "zh-CN");
+    await expectUiLocale(page, "zh-CN");
     await smokeCorePages(page, "zh-CN");
   });
 });
 
 test.describe("Dashboard narrow localization containment", () => {
+  test.use({ locale: "en-US" });
+
   test("keeps a real long-title task card contained at 390px in both locales", async ({
     context,
     page,
@@ -224,12 +223,12 @@ test.describe("Dashboard narrow localization containment", () => {
       "Requires the real VisualEngineer API",
     );
 
-    const task = await createDashboardLongTitleTask(request);
-    await context.clearCookies();
+    const task = await createDashboardLongTitleTask(request, testInfo);
+    await setUiLocale(context, "en-US");
     await page.goto("/");
     await expectDashboardLongTitleTaskContained(page, task, "en-US");
 
-    await switchLocale(page, "zh-CN");
+    await switchUiLocale(page, "zh-CN");
     await expectDashboardLongTitleTaskContained(page, task, "zh-CN");
   });
 });

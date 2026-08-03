@@ -2,14 +2,15 @@ import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from "@playwright/test";
+import { type APIRequestContext, type Page } from "@playwright/test";
+
+import { expect, test } from "./support/fixtures";
+import type { E2eTestResources } from "./support/isolation";
+import { expectUiLocale, setUiLocale } from "./support/locale";
 
 test.setTimeout(180_000);
+const uiLocale = "en-US";
+test.use({ locale: uiLocale });
 
 const apiBaseUrl = (
   process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:18000"
@@ -94,16 +95,8 @@ async function waitForJob(
 
 async function approvedGrant(
   request: APIRequestContext,
-  options: { forceNew?: boolean } = {},
+  resources: E2eTestResources,
 ): Promise<JsonObject> {
-  const forceNew = options.forceNew ?? false;
-  if (!forceNew) {
-    const grants = requireItems(
-      await apiJson(request, "get", "/api/v1/execution-grants"),
-    );
-    const existing = grants.find((grant) => grant.status === "approved");
-    if (existing) return existing;
-  }
   const contexts = requireItems(
     await apiJson(request, "get", "/api/v1/execution-grants/eligible-contexts"),
   );
@@ -128,11 +121,13 @@ async function approvedGrant(
     );
   }
   expect(grant.status).toBe("approved");
+  resources.trackGrant(requireString(grant.id, "Grant ID"));
   return grant;
 }
 
 async function preparedWorkspace(
   request: APIRequestContext,
+  resources: E2eTestResources,
   grant: JsonObject,
 ): Promise<JsonObject> {
   const action = await apiJson(request, "post", "/api/v1/workspaces", {
@@ -140,6 +135,8 @@ async function preparedWorkspace(
   });
   const workspace = action.workspace as JsonObject;
   const job = action.job as JsonObject;
+  resources.trackWorkspace(requireString(workspace.id, "Workspace ID"));
+  resources.trackJob(requireString(job.id, "Workspace prepare Job ID"));
   const completed = await waitForJob(
     request,
     requireString(job.id, "Workspace prepare Job ID"),
@@ -257,124 +254,167 @@ function restoreRegistryAndControlState(workspaceId: string): void {
   );
 }
 
+function restoreRevokedGrantForCleanup(grantId: string): void {
+  workspaceHex(grantId);
+  compose(
+    "exec",
+    "-T",
+    "db",
+    "psql",
+    "-U",
+    "visualengineer",
+    "-d",
+    "visualengineer",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `UPDATE execution_grants SET status='approved', revocation_requested_at=NULL, revoked_at=NULL WHERE id='${grantId}'::uuid AND status IN ('revoke_requested', 'revoked')`,
+  );
+}
+
 test("Phase 4 revocation and missing ownership proof stay fail-closed and visible", async ({
+  context,
   page,
   request,
+  resources,
 }) => {
-  const firstGrant = await approvedGrant(request);
-  const revokedWorkspace = await preparedWorkspace(request, firstGrant);
-  const revokedWorkspaceId = requireString(
-    revokedWorkspace.id,
-    "Revocation Workspace ID",
-  );
-  await page.goto(`/workspaces/${revokedWorkspaceId}`);
-  await expect(page.getByText("ready", { exact: true })).toBeVisible({
-    timeout: 30_000,
-  });
-  await page.getByRole("button", { name: "Read text" }).click();
-  await expect(page.getByText("Original fixture text.")).toBeVisible({
-    timeout: 30_000,
-  });
+  await setUiLocale(context, uiLocale);
+  let revokedGrantId: string | undefined;
+  let hiddenRegistryWorkspaceId: string | undefined;
+  try {
+    const firstGrant = await approvedGrant(request, resources);
+    revokedGrantId = requireString(firstGrant.id, "Grant ID");
+    const revokedWorkspace = await preparedWorkspace(
+      request,
+      resources,
+      firstGrant,
+    );
+    const revokedWorkspaceId = requireString(
+      revokedWorkspace.id,
+      "Revocation Workspace ID",
+    );
+    await page.goto(`/workspaces/${revokedWorkspaceId}`);
+    await expectUiLocale(page, uiLocale);
+    await expect(page.locator('[data-status="ready"]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByRole("button", { name: "Read text" }).click();
+    await expect(page.getByText("Original fixture text.")).toBeVisible({
+      timeout: 30_000,
+    });
 
-  const revoked = await apiJson(
-    request,
-    "post",
-    `/api/v1/execution-grants/${requireString(firstGrant.id, "Grant ID")}/revoke`,
-  );
-  expect(revoked.status).toBe("revoked");
-  expect(revoked.in_flight_permit_count).toBe(0);
-  await page.goto("/execution-grants");
-  await expect(
-    page.getByText("revoked", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(page.getByText(/Revocation effective/).first()).toBeVisible();
+    const revoked = await apiJson(
+      request,
+      "post",
+      `/api/v1/execution-grants/${requireString(firstGrant.id, "Grant ID")}/revoke`,
+    );
+    expect(revoked.status).toBe("revoked");
+    expect(revoked.in_flight_permit_count).toBe(0);
+    await page.goto("/execution-grants");
+    await expect(page.locator('[data-status="revoked"]').first()).toBeVisible();
+    await expect(page.getByText(/Revocation effective/).first()).toBeVisible();
 
-  await page.goto(`/workspaces/${revokedWorkspaceId}`);
-  await page
-    .getByLabel("UTF-8 content")
-    .fill("This write must be denied after effective revocation.\n");
-  await expect(
-    page.getByRole("button", { name: "Replace text" }),
-  ).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Discard" })).toBeDisabled();
-  const deniedWrite = await request.post(
-    `${apiBaseUrl}/api/v1/workspaces/${revokedWorkspaceId}/actions/write-text`,
-    {
-      data: {
-        mode: "replace",
-        relative_path: "sandbox/original.txt",
-        content: "This write must be denied after effective revocation.\n",
-        expected_sha256: createHash("sha256")
-          .update("Original fixture text.\n")
-          .digest("hex"),
+    await page.goto(`/workspaces/${revokedWorkspaceId}`);
+    await page
+      .getByLabel("UTF-8 content")
+      .fill("This write must be denied after effective revocation.\n");
+    await expect(
+      page.getByRole("button", { name: "Replace text" }),
+    ).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Discard" })).toBeDisabled();
+    const deniedWrite = await request.post(
+      `${apiBaseUrl}/api/v1/workspaces/${revokedWorkspaceId}/actions/write-text`,
+      {
+        data: {
+          mode: "replace",
+          relative_path: "sandbox/original.txt",
+          content: "This write must be denied after effective revocation.\n",
+          expected_sha256: createHash("sha256")
+            .update("Original fixture text.\n")
+            .digest("hex"),
+        },
+        headers: { "X-Request-ID": randomUUID() },
       },
-      headers: { "X-Request-ID": randomUUID() },
-    },
-  );
-  expect(deniedWrite.status()).toBe(409);
-  expect(await deniedWrite.json()).toMatchObject({
-    error: { code: "execution_grant_inactive" },
-  });
-  const revokedInspection = inspectWorkspace(revokedWorkspaceId);
-  expect(revokedInspection.workspace).toBe(true);
-  expect(revokedInspection.content).toBe("Original fixture text.\n");
-  expect(revokedInspection.mirror).toBe(true);
-  await expectAccessibleAndContained(page);
+    );
+    expect(deniedWrite.status()).toBe(409);
+    expect(await deniedWrite.json()).toMatchObject({
+      error: { code: "execution_grant_inactive" },
+    });
+    const revokedInspection = inspectWorkspace(revokedWorkspaceId);
+    expect(revokedInspection.workspace).toBe(true);
+    expect(revokedInspection.content).toBe("Original fixture text.\n");
+    expect(revokedInspection.mirror).toBe(true);
+    await expectAccessibleAndContained(page);
 
-  const recoveryGrant = await approvedGrant(request, { forceNew: true });
-  const recoveryWorkspace = await preparedWorkspace(request, recoveryGrant);
-  const recoveryWorkspaceId = requireString(
-    recoveryWorkspace.id,
-    "Recovery Workspace ID",
-  );
-  const sealed = await apiJson(
-    request,
-    "post",
-    `/api/v1/workspaces/${recoveryWorkspaceId}/actions/diff`,
-  );
-  const sealedJob = sealed.job as JsonObject;
-  const completedSeal = await waitForJob(
-    request,
-    requireString(sealedJob.id, "Recovery seal Job ID"),
-  );
-  expect(completedSeal.state).toBe("succeeded");
-  await page.goto(`/workspaces/${recoveryWorkspaceId}`);
-  await expect(page.getByText("sealed", { exact: true })).toBeVisible({
-    timeout: 30_000,
-  });
-  hideRegistry(recoveryWorkspaceId);
-  await page.getByRole("button", { name: "Discard" }).click();
-  await expect(
-    page.getByText("recovery_required", { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(
-    page.getByText("Workspace ownership proof is missing."),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Discard" })).toBeDisabled();
-  await expect(
-    page.getByRole("button", { name: "Replace text" }),
-  ).toBeDisabled();
-  const recoveryInspection = inspectWorkspace(recoveryWorkspaceId);
-  expect(recoveryInspection.workspace).toBe(true);
-  expect(recoveryInspection.content).toBe("Original fixture text.\n");
-  expect(recoveryInspection.mirror).toBe(true);
-  await expectAccessibleAndContained(page);
+    const recoveryGrant = await approvedGrant(request, resources);
+    const recoveryWorkspace = await preparedWorkspace(
+      request,
+      resources,
+      recoveryGrant,
+    );
+    const recoveryWorkspaceId = requireString(
+      recoveryWorkspace.id,
+      "Recovery Workspace ID",
+    );
+    const sealed = await apiJson(
+      request,
+      "post",
+      `/api/v1/workspaces/${recoveryWorkspaceId}/actions/diff`,
+    );
+    const sealedJob = sealed.job as JsonObject;
+    const completedSeal = await waitForJob(
+      request,
+      requireString(sealedJob.id, "Recovery seal Job ID"),
+    );
+    expect(completedSeal.state).toBe("succeeded");
+    await page.goto(`/workspaces/${recoveryWorkspaceId}`);
+    await expect(page.locator('[data-status="sealed"]')).toBeVisible({
+      timeout: 30_000,
+    });
+    hideRegistry(recoveryWorkspaceId);
+    hiddenRegistryWorkspaceId = recoveryWorkspaceId;
+    await page.getByRole("button", { name: "Discard" }).click();
+    await expect(page.locator('[data-status="recovery_required"]')).toBeVisible(
+      { timeout: 30_000 },
+    );
+    await expect(
+      page.getByText("Workspace ownership proof is missing."),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Discard" })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Replace text" }),
+    ).toBeDisabled();
+    const recoveryInspection = inspectWorkspace(recoveryWorkspaceId);
+    expect(recoveryInspection.workspace).toBe(true);
+    expect(recoveryInspection.content).toBe("Original fixture text.\n");
+    expect(recoveryInspection.mirror).toBe(true);
+    await expectAccessibleAndContained(page);
 
-  restoreRegistryAndControlState(recoveryWorkspaceId);
-  const discarded = await apiJson(
-    request,
-    "post",
-    `/api/v1/workspaces/${recoveryWorkspaceId}/actions/discard`,
-  );
-  const discardJob = discarded.job as JsonObject;
-  const completedDiscard = await waitForJob(
-    request,
-    requireString(discardJob.id, "Cleanup discard Job ID"),
-  );
-  expect(completedDiscard.state).toBe("succeeded");
-  await apiJson(
-    request,
-    "post",
-    `/api/v1/execution-grants/${requireString(recoveryGrant.id, "Grant ID")}/revoke`,
-  );
+    restoreRegistryAndControlState(recoveryWorkspaceId);
+    hiddenRegistryWorkspaceId = undefined;
+    const discarded = await apiJson(
+      request,
+      "post",
+      `/api/v1/workspaces/${recoveryWorkspaceId}/actions/discard`,
+    );
+    const discardJob = discarded.job as JsonObject;
+    const completedDiscard = await waitForJob(
+      request,
+      requireString(discardJob.id, "Cleanup discard Job ID"),
+    );
+    expect(completedDiscard.state).toBe("succeeded");
+    await apiJson(
+      request,
+      "post",
+      `/api/v1/execution-grants/${requireString(recoveryGrant.id, "Grant ID")}/revoke`,
+    );
+  } finally {
+    try {
+      if (hiddenRegistryWorkspaceId) {
+        restoreRegistryAndControlState(hiddenRegistryWorkspaceId);
+      }
+    } finally {
+      if (revokedGrantId) restoreRevokedGrantForCleanup(revokedGrantId);
+    }
+  }
 });

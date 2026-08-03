@@ -1,9 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
-async function expectAccessibleAndContained(
-  page: import("@playwright/test").Page,
-) {
+import { expect, test } from "./support/fixtures";
+import { expectUiLocale, setUiLocale } from "./support/locale";
+
+const uiLocale = "en-US";
+test.use({ locale: uiLocale });
+
+async function expectAccessibleAndContained(page: Page) {
   const accessibility = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa"])
     .analyze();
@@ -15,39 +19,54 @@ async function expectAccessibleAndContained(
   ).toBe(false);
 }
 
-async function openOnlineRegistry(page: import("@playwright/test").Page) {
+async function openOnlineRegistry(page: Page) {
   await page.goto("/runners");
+  await expectUiLocale(page, uiLocale);
   await expect(
-    page.getByRole("heading", { name: "Local Runner 控制台" }),
+    page.getByRole("heading", { name: "Local Runner console" }),
   ).toBeVisible();
-  await expect(page.getByText("online", { exact: true })).toBeVisible({
+  await expect(page.locator('[data-status="online"]')).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByLabel("Permission Envelope 预览")).toContainText(
+  await expect(page.getByLabel("Permission Envelope preview")).toContainText(
     "Repository accessnone",
   );
-  await expect(page.getByLabel("Permission Envelope 预览")).toContainText(
+  await expect(page.getByLabel("Permission Envelope preview")).toContainText(
     "Shell accessfalse",
   );
-  await expect(page.getByLabel("Permission Envelope 预览")).toContainText(
+  await expect(page.getByLabel("Permission Envelope preview")).toContainText(
     "Networkcontrol-plane only",
   );
-  await expect(page.getByLabel("Permission Envelope 预览")).toContainText(
+  await expect(page.getByLabel("Permission Envelope preview")).toContainText(
     "Project codenot accessed",
   );
 }
 
 test.describe("Phase 3 browser-orchestrated Local Runner", () => {
   test("Flow A dispatches a durable redacted system diagnostic", async ({
+    context,
     page,
+    resources,
   }) => {
+    await setUiLocale(context, uiLocale);
     await openOnlineRegistry(page);
-    await page.getByRole("button", { name: "创建并查看 Job" }).click();
+    const [jobResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          response.url().endsWith("/api/v1/runner-jobs") &&
+          response.ok(),
+      ),
+      page.getByRole("button", { name: "Create and view Job" }).click(),
+    ]);
+    const job = (await jobResponse.json()) as { id?: unknown };
+    if (typeof job.id !== "string") throw new Error("Runner Job ID is invalid");
+    resources.trackJob(job.id);
     await expect(page).toHaveURL(/\/runners\/jobs\/[0-9a-f-]+$/);
 
-    await expect(
-      page.getByText("succeeded", { exact: true }).first(),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-status="succeeded"]').first()).toBeVisible(
+      { timeout: 30_000 },
+    );
     await expect(page.getByText("job_created")).toBeVisible();
     await expect(page.getByText("job_claimed")).toBeVisible();
     await expect(page.getByText("job_started")).toBeVisible();
@@ -72,43 +91,67 @@ test.describe("Phase 3 browser-orchestrated Local Runner", () => {
     await page.reload();
     await expect(page).toHaveURL(persistedUrl);
     await expect(
-      page.getByText("succeeded", { exact: true }).first(),
+      page.locator('[data-status="succeeded"]').first(),
     ).toBeVisible();
     await expect(page.getByText("job_succeeded")).toBeVisible();
     await expectAccessibleAndContained(page);
   });
 
   test("Flow B visibly requests and acknowledges controlled-wait cancellation", async ({
+    context,
     page,
+    resources,
   }) => {
+    await setUiLocale(context, uiLocale);
     await openOnlineRegistry(page);
     await page.getByRole("radio", { name: /Controlled Wait/ }).check();
-    await page.getByLabel("Duration（毫秒）").fill("10000");
-    await page.getByRole("button", { name: "创建并查看 Job" }).click();
+    await page.getByLabel("Duration (milliseconds)").fill("10000");
+    const [jobResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          response.url().endsWith("/api/v1/runner-jobs") &&
+          response.ok(),
+      ),
+      page.getByRole("button", { name: "Create and view Job" }).click(),
+    ]);
+    const job = (await jobResponse.json()) as { id?: unknown };
+    if (typeof job.id !== "string") throw new Error("Runner Job ID is invalid");
+    resources.trackJob(job.id);
     await expect(page).toHaveURL(/\/runners\/jobs\/[0-9a-f-]+$/);
 
+    await expect(page.locator('[data-status="running"]').first()).toBeVisible({
+      timeout: 30_000,
+    });
+    const [cancelResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          response.url().endsWith(`/api/v1/runner-jobs/${job.id}/cancel`) &&
+          response.ok(),
+      ),
+      page.getByRole("button", { name: "Cancel Job" }).click(),
+    ]);
+    const cancelResult = (await cancelResponse.json()) as { state?: unknown };
+    expect(cancelResult.state).toBe("cancel_requested");
+    await expect(page.locator('[data-status="cancelled"]').first()).toBeVisible(
+      { timeout: 30_000 },
+    );
     await expect(
-      page.getByText("running", { exact: true }).first(),
-    ).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Cancel Job" }).click();
-    await expect(
-      page.getByText(/已请求取消，正在等待 Runner 确认/),
-    ).toBeVisible();
-    await expect(
-      page.getByText("cancel_requested", { exact: true }).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByText("cancelled", { exact: true }).first(),
-    ).toBeVisible({ timeout: 30_000 });
-    await expect(
-      page.getByText(/已请求取消，正在等待 Runner 确认/),
+      page.getByText(
+        /Cancellation was requested and is awaiting Runner confirmation/,
+      ),
     ).toHaveCount(0);
     await expect(
-      page.getByText("cancel_requested", { exact: true }).first(),
+      page.getByText("cancel_requested", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("cancel_acknowledged")).toBeVisible();
+    await expect(
+      page.getByText("cancel_acknowledged", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("job_succeeded")).toHaveCount(0);
-    await expect(page.getByText("此终态没有成功结果。")).toBeVisible();
+    await expect(
+      page.getByText("This terminal state has no successful result."),
+    ).toBeVisible();
     await expectAccessibleAndContained(page);
   });
 });

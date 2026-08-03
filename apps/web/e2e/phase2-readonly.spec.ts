@@ -1,33 +1,58 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { expect, test } from "./support/fixtures";
+import type { E2eTestResources } from "./support/isolation";
+import { uniqueE2eLabel } from "./support/isolation";
+import { expectUiLocale, setUiLocale } from "./support/locale";
 
 const repositoryLocator = "/repositories/e2e/adversarial";
+const uiLocale = "en-US";
+test.use({ locale: uiLocale });
 
 async function createTaskAndOpenRun(
-  page: import("@playwright/test").Page,
+  page: Page,
+  resources: E2eTestResources,
   title: string,
 ) {
   await page.goto("/");
-  await page.getByLabel("任务标题").fill(title);
+  await expectUiLocale(page, uiLocale);
+  await page.getByLabel("Task title").fill(title);
   await page
-    .getByLabel("任务目标")
+    .getByLabel("Task objective")
     .fill("Review a governed frontend quality remediation plan.");
-  await page.getByLabel("显示名称").fill("Synthetic adversarial fixture");
-  await page.getByLabel("仓库位置").fill(repositoryLocator);
-  await page.getByRole("button", { name: "创建任务" }).click();
+  await page.getByLabel("Display name").fill("Synthetic adversarial fixture");
+  await page.getByLabel("Repository locator").fill(repositoryLocator);
+  await page.getByRole("button", { name: "Create task" }).click();
   const taskCard = page
     .getByRole("article")
     .filter({ has: page.getByRole("heading", { name: title }) });
-  await taskCard.getByRole("link", { name: /查看详情/ }).click();
-  await page
-    .getByRole("button", { name: "Start read-only investigation" })
-    .click();
-  await expect(page.getByText("Read-only Run 已创建。")).toBeVisible();
-  await page.getByRole("link", { name: "打开 Run" }).click();
+  await taskCard.getByRole("link", { name: "View details" }).click();
+  const [runResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        /\/api\/v1\/tasks\/[0-9a-f-]+\/runs$/.test(response.url()) &&
+        response.ok(),
+    ),
+    page.getByRole("button", { name: "Start read-only investigation" }).click(),
+  ]);
+  const run: unknown = await runResponse.json();
+  if (
+    typeof run !== "object" ||
+    run === null ||
+    !("id" in run) ||
+    typeof run.id !== "string"
+  ) {
+    throw new Error("Created Run response is invalid");
+  }
+  resources.trackRun(run.id);
+  await expect(page.getByText("Read-only Run created.")).toBeVisible();
+  await page.getByRole("link", { name: "Open Run" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 }
 
-async function createSnapshotAndPlan(page: import("@playwright/test").Page) {
+async function createSnapshotAndPlan(page: Page) {
   await page
     .getByRole("button", { name: "Create committed-HEAD Snapshot" })
     .click();
@@ -51,10 +76,13 @@ async function createSnapshotAndPlan(page: import("@playwright/test").Page) {
 
 test.describe("Phase 2 governed read-only flow", () => {
   test("Flow A revises, submits, and approves without execution", async ({
+    context,
     page,
+    resources,
   }, testInfo) => {
-    const title = `Phase 2 approve ${testInfo.project.name}-${Date.now()}`;
-    await createTaskAndOpenRun(page, title);
+    await setUiLocale(context, uiLocale);
+    const title = uniqueE2eLabel(testInfo, "Phase 2 approve");
+    await createTaskAndOpenRun(page, resources, title);
     await createSnapshotAndPlan(page);
 
     await page
@@ -69,10 +97,12 @@ test.describe("Phase 2 governed read-only flow", () => {
     await expect(page.getByText(/deterministic plan · v2/i)).toBeVisible();
 
     await page.getByRole("button", { name: "Submit latest Plan" }).click();
-    await expect(page.getByText("awaiting_plan_approval")).toBeVisible();
+    await expect(
+      page.locator('[data-status="awaiting_plan_approval"]'),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Approve Plan" }).click();
     await expect(
-      page.getByText("approved", { exact: true }).first(),
+      page.locator('[data-status="approved"]').first(),
     ).toBeVisible();
     await expect(
       page.getByText("Execution is not available in Phase 2."),
@@ -80,7 +110,7 @@ test.describe("Phase 2 governed read-only flow", () => {
 
     await page.reload();
     await expect(
-      page.getByText("approved", { exact: true }).first(),
+      page.locator('[data-status="approved"]').first(),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Audit Timeline" }),
@@ -100,22 +130,29 @@ test.describe("Phase 2 governed read-only flow", () => {
   });
 
   test("Flow B requires a reason and rejects durably", async ({
+    context,
     page,
+    resources,
   }, testInfo) => {
-    const title = `Phase 2 reject ${testInfo.project.name}-${Date.now()}`;
-    await createTaskAndOpenRun(page, title);
+    await setUiLocale(context, uiLocale);
+    const title = uniqueE2eLabel(testInfo, "Phase 2 reject");
+    await createTaskAndOpenRun(page, resources, title);
     await createSnapshotAndPlan(page);
 
     await page.getByRole("button", { name: "Submit latest Plan" }).click();
-    await expect(page.getByText("awaiting_plan_approval")).toBeVisible();
+    await expect(
+      page.locator('[data-status="awaiting_plan_approval"]'),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Reject Plan" }).click();
-    await expect(page.getByText("Reject 必须填写非空理由。")).toBeVisible();
+    await expect(
+      page.getByText("A non-empty reason is required to reject."),
+    ).toBeVisible();
     await page
       .getByLabel("Rejection reason")
       .fill("The proposed scope requires a human-authored revision.");
     await page.getByRole("button", { name: "Reject Plan" }).click();
     await expect(
-      page.getByText("rejected", { exact: true }).first(),
+      page.locator('[data-status="rejected"]').first(),
     ).toBeVisible();
     await expect(page.getByText("plan_rejected")).toBeVisible();
 
