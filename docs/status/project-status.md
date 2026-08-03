@@ -1,37 +1,43 @@
 # Project Status
 
-- Phase: Web Console zh-CN / en-US Localization Final Gate
-- Overall status: `BLOCKED_EXTERNAL_REGISTRY_UNAVAILABLE`
-- Governance qualifier: human visual acceptance passed, but the complete
-  automated aggregate is blocked before Playwright; not sealed, integrated, or
-  production approved
-- Last updated: 2026-08-02
+- Phase: Localization, Web Build Reproducibility, and Playwright Final Gate
+- Overall status: `FINAL_GATE_PASS_LOCAL_SEAL_AUTHORIZED`
+- Governance qualifier: human visual acceptance and the independent local
+  automated Final Gate passed; local fast-forward of `main` remains separately
+  unauthorized and this is not production approval
+- Last updated: 2026-08-03
 - Current local `main`: `450b660f1ab9e82993cfe1780a1967e5d6bf72cd`
-- Final Gate candidate / HEAD: `1f69521caf30f6a19ddf4a708c9465f411cb6eaa`
-- Final Gate branch: `codex/audit-localization-final-rereview-20260802-019fc2e6`
+- Final Gate candidate: `4182cd60823aff7ee9a4b65d3da2287662ff48b0`
+- Final Gate branch: `codex/localization-web-final-gate-20260803`
 - Human visual acceptance: `HUMAN VISUAL ACCEPTANCE PASS`
 - Final Gate Plan:
-  [`web-console-i18n-zh-en-final-gate.md`](../exec-plans/web-console-i18n-zh-en-final-gate.md)
+  [`playwright-locale-contract-remediation.md`](../exec-plans/playwright-locale-contract-remediation.md)
 - Final Gate Evidence:
-  [`web-console-i18n-zh-en-final-gate-verification.md`](../evidence/web-console-i18n-zh-en-final-gate-verification.md)
-- Aggregate: deterministic pre-E2E gates passed twice; both canonical attempts
-  failed at Web frozen dependency install 509/511 with the same external npm
-  registry timeout, before service and Playwright startup; exit 2.
-- Coverage: Python 84.32%; Web statements 74.42%, branches 73.45%, functions
-  72.70%, lines 75.87%.
-- Not reached: Playwright, Workspace Chaos, Workspace Security target,
-  Validation Security, complete Security target, Eval, and final aggregate
-  `git diff --check`.
-- Docker: exact E2E containers, networks, volumes, fixtures, and temporary image
-  tags cleaned; pre-existing non-task resources preserved.
+  [`playwright-locale-contract-remediation-verification.md`](../evidence/playwright-locale-contract-remediation-verification.md)
+- Aggregate: the sole authorized `make verify` invocation exited `0`; no
+  aggregate rerun occurred.
+- Coverage: Python `351 passed`, 84.32%; Web `98 passed`, statements 74.44%,
+  branches 73.56%, functions 72.70%, lines 75.89%.
+- Playwright: `25 passed`, `3` existing expected skipped, `0 failed`; no locale
+  locator mismatch and no cascade active-workspace `409`.
+- Migration, source invariance, Workspace Chaos, Workspace/Validation/Runner/
+  Review Security, deterministic Eval, Docker config, production build, and
+  final `git diff --check`: passed in the same aggregate.
+- Web build: pinned Node/pnpm and lockfile digest remained unchanged;
+  offline/frozen install is enforced with network disabled. The retained
+  production image was healthy and task-owned resources are limited to exact
+  post-seal cleanup without global prune.
 - Reviewer changes: no production code, locale resources, existing tests,
   dependencies, or lockfiles; only Final Gate governance documents updated.
-- Explicit denials preserved: sealing, main movement, remote Git, push, PR, tag,
-  deploy, real Provider, and API-key configuration.
-- Next action: wait for external registry recovery and fresh explicit user
-  authorization; do not make another retry under this task.
+- Sealing: exact local subject
+  `chore: seal localization and web build reproducibility`; hash reported in
+  the final handoff. This does not move `main`.
+- Explicit denials preserved: main movement, remote Git, push, PR, tag, deploy,
+  real Provider, and API-key configuration.
+- Next action: await explicit user authorization for local fast-forward of
+  `main`; do not infer push, PR, tag, deploy, Provider, or API-key authority.
 
-`VISUALENGINEER LOCALIZATION FINAL GATE BLOCKED — EXTERNAL REGISTRY UNAVAILABLE`
+`VISUALENGINEER LOCALIZATION AND WEB BUILD FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
 
 ## Preserved Phase 6 completion
 
