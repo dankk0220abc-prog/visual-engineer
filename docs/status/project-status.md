@@ -1,21 +1,43 @@
 # Project Status
 
 - Phase: GitHub Publication Readiness
-- Overall status: `PUBLICATION_READINESS_COMPLETE_LOCAL_CHECKPOINT`
+- Overall status: `PUBLICATION_READINESS_FINAL_GATE_PASS_SEALED`
 - Governance qualifier: the integrated product and bilingual Web baseline is
-  sealed on local `main`; this branch may prepare Private publication material
-  but cannot create a repository, configure a remote, push, open a pull
-  request, tag, deploy, or configure a real Provider
+  sealed on local `main`; the publication candidate has passed independent
+  local Private-readiness review, but no repository creation, remote, push,
+  pull request, tag, deploy, real Provider, or API-key authority exists
 - Last updated: 2026-08-03
 - Current local `main`: `84668b9e3fda1bb55e25ffa2006e6327985d234b`
-- Publication branch: `chore/github-publication-readiness`
+- Publication candidate: `7cea7133e059c725269043ccb269668f95cb4323`
+- Publication implementation branch: `chore/github-publication-readiness`
+- Independent final-review branch:
+  `codex/github-publication-final-review-20260803`
 - Publication plan:
   [`github-publication-readiness.md`](../exec-plans/github-publication-readiness.md)
-- Publication evidence:
+- Implementation evidence:
   [`github-publication-readiness-verification.md`](../evidence/github-publication-readiness-verification.md)
-- Publication posture: ready for explicit Private repository creation
-  authorization; Public blocked by License and internal/history curation;
-  remote CI not verified
+- Final Review Evidence:
+  [`github-publication-readiness-final-review-verification.md`](../evidence/github-publication-readiness-final-review-verification.md)
+- Publication posture: independent Private readiness PASS; Public blocked by
+  License authorization, internal/history curation, author confirmation,
+  security contact, collaboration policy, and fresh post-curation scan;
+  remote CI `NOT VERIFIED`; actionlint `NOT AVAILABLE`
+- Final review secret/history result: exact expected-main 1,139 unique text
+  blobs and candidate 1,165 unique text blobs; no confirmed secret, binary,
+  skipped, or oversized object
+- Final review content result: local absolute paths, CreativeDeploy, Customer
+  0, internal evidence, and noreply author metadata are Private-compatible and
+  explicit Public blockers
+- Final review CI result: six YAML files parse; 20 action references use full
+  commit SHAs; permissions are `contents: read`; no `pull_request_target`,
+  repository Secret context, artifact upload, remote mutation, or deployment
+- Final review local gates: README/link/anchor/path/locale checks, ignore and
+  artifact policy, Prettier, Docker Compose configuration, source invariance,
+  source-scope review, and `git diff --check` pass
+- Final reviewer changes: only Final Review Evidence, this ExecPlan, and
+  Project Status; no production code or tests modified
+- Publication sealing subject: `chore: seal GitHub publication readiness`;
+  hash reported in the post-commit handoff
 - Integrated localization/Web final-gate seal:
   `84668b9e3fda1bb55e25ffa2006e6327985d234b`
 - Final Gate candidate: `4182cd60823aff7ee9a4b65d3da2287662ff48b0`
@@ -48,7 +70,7 @@
 - Next action: await explicit Private repository creation authorization; do not
   infer remote, push, PR, tag, deploy, Provider, or API-key authority.
 
-`VISUALENGINEER GITHUB PUBLICATION READINESS COMPLETE — READY FOR EXPLICIT PRIVATE REPOSITORY CREATION AUTHORIZATION`
+`VISUALENGINEER GITHUB PUBLICATION READINESS FINAL GATE PASS — SEALED AND AWAITING PRIVATE REPOSITORY CREATION AUTHORIZATION`
 
 ## Preserved Phase 6 completion
 

@@ -57,6 +57,16 @@ mutation scope.
 - [x] Run targeted verification and record every material exit code.
 - [x] Review the complete diff, create the local checkpoint commit, and verify
       final branch/HEAD/default-branch/worktree state.
+- [x] Independently review candidate
+      `7cea7133e059c725269043ccb269668f95cb4323` against exact local `main`
+      `84668b9e3fda1bb55e25ffa2006e6327985d234b` from a separate audit branch.
+- [x] Re-run redacting history/object, privacy/content, artifact, README/link,
+      YAML/workflow, governance, ignore, Compose, and source-invariance gates.
+- [x] Record the independent Private PASS, Public blockers, actionlint/remote-CI
+      limitations, and production/test invariance in
+      [`github-publication-readiness-final-review-verification.md`](../evidence/github-publication-readiness-final-review-verification.md).
+- [x] Prepare the exact local sealing commit; its hash and final Git state are
+      reported in the post-commit handoff.
 
 ## Decisions
 
@@ -96,6 +106,15 @@ mutation scope.
 - Existing CI already used immutable action SHAs and minimal `contents: read`,
   but did not separate fast and heavy publication-facing gates or declare
   lockfile paths for every cache.
+- Independent final review reproduced the expected-main count of exactly 1,139
+  unique text blobs and found no binary, skipped, oversized, or confirmed
+  secret object. One redacted Bearer-shaped literal is a low-entropy negative
+  API test fixture that expects `401`, not a live credential.
+- Candidate history contains 1,165 unique text blobs. Current-tree local paths,
+  CreativeDeploy, Customer 0, internal evidence, and the single noreply author
+  identity are Private-compatible but remain explicit Public blockers.
+- `actionlint` is not installed, so actionlint remains `NOT AVAILABLE`; remote
+  GitHub Actions execution remains `NOT VERIFIED`.
 
 ## Verification
 
@@ -111,8 +130,8 @@ mutation scope.
 
 Exact completed commands and exit codes are maintained in
 [`docs/evidence/github-publication-readiness-verification.md`](../evidence/github-publication-readiness-verification.md).
-Unfinished final checks are `NOT YET VERIFIED` until that file records exit
-code `0`.
+The independent final decision and its current commands are maintained in
+[`docs/evidence/github-publication-readiness-final-review-verification.md`](../evidence/github-publication-readiness-final-review-verification.md).
 
 ## Rollback
 
@@ -135,8 +154,12 @@ explicit owner direction; do not reset or rewrite the default branch.
 
 ## Outcome and follow-ups
 
-`COMPLETE`. Publication-only checks pass and the scoped local checkpoint is the
-sole branch delta. The Private verdict is ready for explicit repository
-creation authorization; Public remains blocked. The checkpoint hash and final
-branch/default-branch/worktree state are reported in the final handoff because
-a commit cannot contain its own hash.
+`FINAL_GATE_PASS`. The exact publication candidate passed independent Private
+readiness review and is sealed locally by the subject
+`chore: seal GitHub publication readiness`. Public conversion remains blocked,
+and no repository creation, remote, push, PR, tag, deploy, real Provider, or
+API-key authority is inferred. The sealing hash and final
+branch/HEAD/default-branch/worktree state are reported in the final handoff
+because a commit cannot contain its own hash.
+
+`VISUALENGINEER GITHUB PUBLICATION READINESS FINAL GATE PASS — SEALED AND AWAITING PRIVATE REPOSITORY CREATION AUTHORIZATION`
