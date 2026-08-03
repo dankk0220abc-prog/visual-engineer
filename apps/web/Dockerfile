@@ -8,7 +8,13 @@ FROM base AS dependency-cache
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN test "$(sha256sum pnpm-lock.yaml | cut -d ' ' -f1)" = "1910825c0e44fcb0c0d49bfda5087340071d9b6bec50bead184fd223411ac045"
 RUN --mount=type=cache,id=visualengineer-web-pnpm-11.14.0-1910825c0e44fcb0c0d49bfda5087340071d9b6bec50bead184fd223411ac045,target=/pnpm/store,sharing=locked \
-  pnpm fetch
+  export pnpm_config_fetch_timeout=300000 \
+  && export pnpm_config_fetch_retries=2 \
+  && test "$(pnpm config get fetchTimeout)" = "300000" \
+  && test "$(pnpm config get fetchRetries)" = "2" \
+  && printf 'pnpm effective fetchTimeout=%s fetchRetries=%s\n' \
+    "$(pnpm config get fetchTimeout)" "$(pnpm config get fetchRetries)" \
+  && pnpm fetch
 
 FROM dependency-cache AS dependencies
 COPY package.json ./
@@ -16,7 +22,8 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/api-contract/package.json packages/api-contract/package.json
 RUN test "$(node -p "require('./package.json').packageManager")" = "pnpm@11.14.0" \
   && test "$(pnpm --version)" = "11.14.0"
-RUN --mount=type=cache,id=visualengineer-web-pnpm-11.14.0-1910825c0e44fcb0c0d49bfda5087340071d9b6bec50bead184fd223411ac045,target=/pnpm/store,sharing=locked \
+RUN --network=none \
+    --mount=type=cache,id=visualengineer-web-pnpm-11.14.0-1910825c0e44fcb0c0d49bfda5087340071d9b6bec50bead184fd223411ac045,target=/pnpm/store,sharing=locked \
   pnpm install --offline --frozen-lockfile --filter @visual-engineer/web...
 
 FROM base AS builder

@@ -3,7 +3,10 @@ packages:
   - packages/*
 
 # Exact native build allowlist required by pnpm's supply-chain policy.
+strictDepBuilds: true
 allowBuilds:
+  "@parcel/watcher@2.6.0": false
+  "@swc/core@1.15.47": false
   esbuild: true
   sharp: true
   unrs-resolver: true
