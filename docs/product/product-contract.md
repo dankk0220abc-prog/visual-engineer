@@ -57,7 +57,7 @@ There is no executable Deployment Pack runtime. Repository content can narrow
 future work but cannot elevate permission, expand a Runner Envelope, or bypass
 approval.
 
-## Implemented through the Phase 7 first vertical-slice candidate
+## Implemented through the integrated Phase 7 first vertical slice
 
 The current product provides:
 

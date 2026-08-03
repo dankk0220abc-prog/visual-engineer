@@ -1,6 +1,6 @@
 # System Overview
 
-VisualEngineer through the Phase 7 first-slice candidate is a local,
+VisualEngineer at the integrated Phase 7 and bilingual-console baseline is a local,
 single-user governed planning, fixture-only isolated editing, fixed-Profile
 validation, system-owned multi-step Suite, immutable final-review/readiness,
 and confirmed recoverable local-delivery foundation. Solid nodes below are

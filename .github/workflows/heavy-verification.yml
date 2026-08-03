@@ -1,0 +1,76 @@
+name: CI / Heavy Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heavy-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-migration:
+    name: Docker build, Compose, and migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: 0.11.30
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv python install 3.12.13
+      - run: uv sync --frozen
+      - run: make docker-config
+      - run: docker compose build api web runner
+      - run: make migration-check
+
+  security-eval:
+    name: Security and deterministic evals
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: 0.11.30
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv python install 3.12.13
+      - run: uv sync --frozen
+      - run: make workspace-security-check
+      - run: make security-check
+      - run: make eval
+
+  real-stack:
+    name: Playwright and Workspace Chaos
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: 0.11.30
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          version: 11.14.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: uv python install 3.12.13
+      - run: uv sync --frozen
+      - run: pnpm fetch --frozen-lockfile
+      - run: pnpm install --offline --frozen-lockfile
+      - run: pnpm --filter @visual-engineer/web exec playwright install --with-deps chromium
+      - run: make e2e
+      - run: make workspace-chaos-check

@@ -1,12 +1,23 @@
 # Project Status
 
-- Phase: Localization, Web Build Reproducibility, and Playwright Final Gate
-- Overall status: `FINAL_GATE_PASS_LOCAL_SEAL_AUTHORIZED`
-- Governance qualifier: human visual acceptance and the independent local
-  automated Final Gate passed; local fast-forward of `main` remains separately
-  unauthorized and this is not production approval
+- Phase: GitHub Publication Readiness
+- Overall status: `PUBLICATION_READINESS_COMPLETE_LOCAL_CHECKPOINT`
+- Governance qualifier: the integrated product and bilingual Web baseline is
+  sealed on local `main`; this branch may prepare Private publication material
+  but cannot create a repository, configure a remote, push, open a pull
+  request, tag, deploy, or configure a real Provider
 - Last updated: 2026-08-03
-- Current local `main`: `450b660f1ab9e82993cfe1780a1967e5d6bf72cd`
+- Current local `main`: `84668b9e3fda1bb55e25ffa2006e6327985d234b`
+- Publication branch: `chore/github-publication-readiness`
+- Publication plan:
+  [`github-publication-readiness.md`](../exec-plans/github-publication-readiness.md)
+- Publication evidence:
+  [`github-publication-readiness-verification.md`](../evidence/github-publication-readiness-verification.md)
+- Publication posture: ready for explicit Private repository creation
+  authorization; Public blocked by License and internal/history curation;
+  remote CI not verified
+- Integrated localization/Web final-gate seal:
+  `84668b9e3fda1bb55e25ffa2006e6327985d234b`
 - Final Gate candidate: `4182cd60823aff7ee9a4b65d3da2287662ff48b0`
 - Final Gate branch: `codex/localization-web-final-gate-20260803`
 - Human visual acceptance: `HUMAN VISUAL ACCEPTANCE PASS`
@@ -30,14 +41,14 @@
 - Reviewer changes: no production code, locale resources, existing tests,
   dependencies, or lockfiles; only Final Gate governance documents updated.
 - Sealing: exact local subject
-  `chore: seal localization and web build reproducibility`; hash reported in
-  the final handoff. This does not move `main`.
-- Explicit denials preserved: main movement, remote Git, push, PR, tag, deploy,
-  real Provider, and API-key configuration.
-- Next action: await explicit user authorization for local fast-forward of
-  `main`; do not infer push, PR, tag, deploy, Provider, or API-key authority.
+  `chore: seal localization and web build reproducibility`; integrated at the
+  current `main` above.
+- Explicit denials preserved: remote Git, repository creation, push, PR, tag,
+  deploy, real Provider, and API-key configuration.
+- Next action: await explicit Private repository creation authorization; do not
+  infer remote, push, PR, tag, deploy, Provider, or API-key authority.
 
-`VISUALENGINEER LOCALIZATION AND WEB BUILD FINAL GATE PASS — SEALED AND AWAITING EXPLICIT USER AUTHORIZATION FOR LOCAL FAST-FORWARD MAIN`
+`VISUALENGINEER GITHUB PUBLICATION READINESS COMPLETE — READY FOR EXPLICIT PRIVATE REPOSITORY CREATION AUTHORIZATION`
 
 ## Preserved Phase 6 completion
 

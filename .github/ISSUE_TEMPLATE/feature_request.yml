@@ -1,0 +1,59 @@
+name: Feature request
+description: Propose a bounded VisualEngineer product or governance improvement.
+title: "[Feature]: "
+labels: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Requests cannot grant authority. Real Provider, repository write, remote Git,
+        or deployment changes require separate design, approval, and security review.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user or governance problem without customer-confidential data.
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Delivery package or area
+      options:
+        - Design Implementation
+        - Design-System Migration
+        - Frontend Quality Remediation
+        - Platform governance
+        - Developer experience
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What observable result should exist?
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Authority and non-goals
+      description: Identify new permissions, network, secrets, data, Git, or deployment boundaries and explicit non-goals.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Acceptance evidence
+      description: Which deterministic, security, browser, or human evidence should prove completion?
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I included no secret, PII, customer material, private path, or account data.
+          required: true

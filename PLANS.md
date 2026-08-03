@@ -1,14 +1,19 @@
 # ExecPlan Standard
 
-The active Phase 6 implementation record is
+The active repository-governance record is
+[`docs/exec-plans/github-publication-readiness.md`](docs/exec-plans/github-publication-readiness.md).
+It prepares the exact integrated baseline for a first Private GitHub
+publication without creating a repository, configuring a remote, pushing,
+opening a pull request, tagging, deploying, or configuring a real Provider.
+Public conversion remains a separate blocked decision.
+
+The completed Phase 6 implementation record remains at
 [`docs/exec-plans/phase-6-governed-local-delivery-lifecycle.md`](docs/exec-plans/phase-6-governed-local-delivery-lifecycle.md).
 It defines the second safe Phase 6 slice as an immutable delivery preview and
 manifest, exact digest confirmation, keyed dispatch, durable attempt history,
 and bounded safe retry for the fixture-only local commit introduced by the
-first slice. It does not authorize a remote, push, pull request, tag, deploy,
-source repository write, real repository, Customer 0, CreativeDeploy, LLM,
-model Provider, API key, authentication, or multi-tenancy. Its evidence is
-implementer evidence only; independent focused review remains required.
+first slice. Its evidence is historical and does not authorize remote Git or a
+later publication action.
 
 The sealed and integrated first-slice plan remains at
 [`docs/exec-plans/phase-6-governed-local-delivery.md`](docs/exec-plans/phase-6-governed-local-delivery.md).

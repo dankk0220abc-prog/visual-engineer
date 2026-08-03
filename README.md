@@ -1,314 +1,273 @@
 # VisualEngineer
 
-VisualEngineer is a governed AI design-engineering and delivery system for
-enterprise frontend teams. Its intended V1 destination is a human-approved
-system that can understand a bounded frontend request, investigate an
-authorized repository, propose a plan, work inside an isolated workspace,
-validate in a browser, recover from failure, and prepare an evidence-backed
-pull request.
+[简体中文](README.zh-CN.md) ·
+[Architecture](docs/architecture/overview.md) ·
+[Quick Start](#quick-start) ·
+[Security](SECURITY.md) ·
+[Contributing](CONTRIBUTING.md)
 
-It is not a general-purpose autonomous coding system. V1 is constrained to
-three delivery packages:
+VisualEngineer is a governed design-engineering and delivery system for
+enterprise frontend teams. It turns a bounded frontend objective into
+reviewable repository facts, a human-decided plan, fixture-only isolated work,
+deterministic validation evidence, final review, and an explicitly authorized
+local delivery proof.
 
-1. **Design Implementation:** new pages, components, and explicit design
-   requirements.
-2. **Design-System Migration:** bounded token, component, and brand-rule
-   migration.
-3. **Frontend Quality Remediation:** responsive, visual, accessibility, and
-   explicitly identified frontend-quality repairs.
+It is not a general-purpose autonomous coding agent. The implemented system is
+local and single-user, uses synthetic fixtures for every write or validation
+path, has no real model connection, and cannot push, open a pull request, tag,
+merge, deploy, or modify a source repository.
 
-The product separates a governed **VisualEngineer Core** from a customer
-**Deployment Pack**. Core owns the implemented Task/Run, committed-snapshot,
-deterministic-plan, approval, and audit boundaries. A Deployment Pack supplies
-a repository profile, customer constraints, allowed future validation,
-design-system context, acceptance criteria, test strategy, and project
-playbook. Phase 4 implements one fixture-only isolated-workspace path. Phase 5
-adds system-owned fixed validation, immutable multi-step Suites, and governed
-final review. Phase 6 adds a separately approved, fixture-only local branch
-and commit lifecycle. The Phase 7 first slice adds model-neutral governed AI
-planning through a deterministic fake Provider; real model calls and every
-remote delivery integration remain future capabilities.
+## The problem it addresses
 
-## Current state
+Enterprise frontend delivery often mixes intent, repository access,
+implementation authority, test evidence, review, and release permission. That
+makes it difficult to prove what a tool observed, what a person approved, and
+which side effect was actually authorized.
 
-Local `main` at `9c282e91a42a87ea553171d5aa55a0f77564bb14`
-contains the completed Phase 0-6 first and second slices. The active candidate
-is **Phase 7 First Vertical Slice — Governed AI Planning with Deterministic
-Provider** on `codex/phase-7-governed-ai-planning-first-slice`. It is a
-fixture-only implementation candidate pending independent focused review; it
-is not a real-Provider authorization, production claim, seal, or main
-integration.
+VisualEngineer keeps those facts separate. Repository content is untrusted
+input. A plan approval is only a decision record. Workspace mutation, final
+review, local delivery, and each side effect require distinct, narrowly bound
+authority.
 
-A local user can independently approve a narrow Execution Grant, prepare an
-exact detached workspace, use closed UTF-8 file tools, inspect bounded
-status/diff/checkpoints, roll back to baseline, and discard it. Plan approval
-never creates or approves an Execution Grant.
+## Implemented capabilities
 
-The implemented target is:
+- Bounded Task and Run lifecycle with immutable committed-`HEAD` snapshots.
+- Fixed, no-shell repository intelligence with sensitive-path, secret,
+  symlink, submodule, LFS, binary, count, byte, and timeout controls.
+- Deterministic policy planning and a model-neutral governed AI planning
+  protocol backed only by `DeterministicFixtureProvider`.
+- Versioned prompts, bounded redacted context, typed plan output, replayable
+  traces, synthetic non-billable usage, and system-owned deterministic evals.
+- Human plan approval that creates no execution, review, delivery, Git, or
+  deployment authority.
+- An outbound Local Runner with an opaque repository handle, typed jobs,
+  leases, cancellation, retry, and fenced attempts.
+- Fixture-only isolated UTF-8 workspace tools rooted in a Runner-owned copy.
+- Fixed fixture validation profiles and an immutable multi-step suite in a
+  disposable Linux sandbox with filesystem and network restrictions.
+- Immutable final review packages, freshness invalidation, human review
+  decisions, and deterministic readiness verdicts.
+- A separately approved, digest-confirmed, fixture-only local branch and
+  commit lifecycle. Remote Git remains unavailable.
+- Responsive `en-US` and `zh-CN` web-console experiences with explicit raw
+  protocol diagnostics where translation would hide operational facts.
 
-- a responsive Next.js task console;
-- a versioned FastAPI Task, Run, Snapshot, Plan, decision, and audit API;
-- PostgreSQL persistence and Alembic schema history;
-- immutable committed-HEAD snapshots with bounded dirty-path metadata;
-- a fixed-command, no-shell repository scanner with allowlist, secret,
-  symlink, submodule, LFS, byte-budget, and timeout controls;
-- deterministic plan generation and Foundation policy validation;
-- a closed model-neutral planning Provider protocol, deterministic fixture
-  replay, versioned Prompt registry, bounded redacted context manifest,
-  structured AI Plan schema, attempt Trace, synthetic non-billable usage/cost,
-  and system-owned deterministic Eval evidence;
-- a revision-bound AI Plan request state machine with stale fencing,
-  idempotent replay, concurrent one-winner human approve/reject, and an
-  authority-free handoff to the existing governed Plan chain;
-- revision, stale-version, idempotency, and concurrent final-decision guards;
-- a pure versioned Runner Protocol with immutable canonical-hash Permission
-  Envelopes;
-- PostgreSQL Runner registry, durable Job queue, `SKIP LOCKED` claim, Attempts,
-  leases, cancellation, retries, reaper, fencing, and typed events;
-- an independent outbound non-root Runner with repository-free diagnostic/wait
-  Jobs and one fixture-only opaque Repository Handle;
-- immutable, independently decided Execution Grants bound to an approved
-  Plan/Snapshot/revision with `sandbox/**`, denied sensitive paths, budgets,
-  no network, no shell, no source write, and no Git delivery;
-- a no-source-Git snapshot adapter that validates bounded loose/packed Git
-  objects, computes only the authorized revision's commit/tree/blob closure,
-  and materializes it into new Runner-owned loose-object inodes with no
-  alternates, plus detached exact-revision workspaces in dedicated volumes;
-- short-lived PostgreSQL-backed Side-effect Permits for prepare, create/
-  replace, rollback, and discard, with bounded Grant revocation semantics;
-- signed Runner-local Workspace ownership and pending/completed discard
-  evidence, authenticated registry state, exact root-inode reconciliation,
-  and fail-closed recovery/quarantine rather than unproven deletion;
-- descriptor-rooted list/read/create/compare-and-swap replace, fixed Git
-  status/diff, immutable checkpoints, baseline rollback, and exact discard;
-- two immutable fixture Validation Profiles and one
-  `fixture-integrity-suite-v1:v1` Suite with no user-supplied step, command,
-  argv, cwd, environment, package, or URL;
-- separately approved validation-only Grants bound to an exact Workspace
-  Checkpoint/revision and fixed run, timeout, CPU, memory, PID, file-descriptor,
-  output, artifact, and expiry budgets;
-- a disposable Runner validation sandbox with bounded no-follow input copy,
-  Linux Landlock filesystem confinement, seccomp network denial, monotonic
-  timeout/cancel, process-group cleanup, and exact sandbox removal;
-- immutable bounded Validation Run/step/evidence records that preserve the
-  canonical Workspace for passing, failing, timed-out, and cancelled runs;
-- immutable Suite Run/ordered-step/aggregate-result records with serial
-  dispatch, fail-fast, per-step and combined budgets, cancellation, one-Run
-  lineage-bound Grant consumption, and a fresh-Grant retry that reuses
-  successful Evidence without redispatch;
-- trusted Suite success reconstruction from the exact catalog, child
-  Run/Job/Attempt/Lease/Grant/Permit/Evidence chain, recomputed digests, and
-  ordered PostgreSQL-enforced aggregate references;
-- immutable versioned final Review Packages with ordered Evidence Manifests,
-  exact revision/Workspace/Checkpoint tree+diff/Suite+Profile/policy/Grant
-  lineage, freshness generations, permanent transaction-bound invalidation,
-  one expected-generation and keyed immutable local-user Review Decision,
-  sequenced append-only AuditEvents, frozen Critical/High/blocking-Medium
-  counts, and a PostgreSQL-recomputed deterministic Release Readiness Verdict;
-- explicit false Git and deployment authorization throughout Review Package,
-  Decision, readiness, API, database, and browser surfaces;
-- separate immutable local Delivery Authorization/Decision, dual-bound
-  Side-effect Permit, fixed Runner Git plumbing, and one durable fixture-only
-  local branch/commit proof with source and remote invariance;
-- browser Runner registry, dispatch, Job detail, progress, result, cancellation,
-  offline/retry evidence, and Timeline;
-- generated OpenAPI-to-TypeScript contract artifacts;
-- adversarial security evaluation and deterministic quality checks;
-- Docker Compose for local development;
-- optional API-only read-only repository mounts for synthetic and Customer 0
-  investigation;
-- CI definitions that mirror local commands;
-- concrete product, architecture, permission, security, and evaluation
-  documents.
+See [Product Contract](docs/product/product-contract.md) and
+[V1 Boundaries](docs/product/v1-boundaries.md) for the precise implemented and
+reserved scope.
 
-Explicitly not implemented: any real model SDK, network model call, API key,
-model-specific evaluation or billing, general shell, arbitrary
-target-repository commands, package lifecycle or installation, any
-CreativeDeploy workspace/write, source-repository write, binary/delete/rename
-tools, remote push/PR/tag/deploy delivery, remote CI evidence, automated visual
-comparison or repair, authentication, multi-tenancy, public hosting, or
-production deployment.
+## End-to-end governance workflow
 
-CreativeDeploy is internal Customer 0 and Design Partner 0. It is not in scope
-for this Phase 7 slice: it must not be accessed, mounted, read, written,
-tested, built, or used as verification evidence. Historical Phase 2 documents
-describe a separately authorized read-only path, but that does not authorize
-this branch. CreativeDeploy is not an external enterprise customer and
-provides no time-saving, adoption, production-impact, or production-deployment
-evidence.
+1. A user creates a bounded frontend Task and starts a read-only Run.
+2. The Control Plane records an immutable snapshot from allowlisted committed
+   Git objects; dirty and untracked content is not read.
+3. Deterministic policy or the deterministic fake Provider proposes a plan.
+4. A human approves or rejects that exact plan version. Approval grants no
+   execution authority.
+5. A separate Execution Grant can authorize fixture-only workspace operations.
+6. Separate validation authority can run only fixed system-owned profiles.
+7. A Review Package binds the exact evidence and receives a separate human
+   decision and readiness verdict.
+8. A separate Delivery Authorization plus exact manifest confirmation can
+   authorize one local fixture commit.
+9. Remote push, pull request, tag, merge, release, and deployment remain
+   unavailable.
+
+The authority distinctions are summarized in
+[Architecture Overview](docs/architecture/overview.md#authority-is-not-transitive).
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U["Local user"] --> W["Next.js web console"]
-    W --> A["FastAPI /api/v1"]
+    H["Local human"] --> W["Next.js Web Console"]
+    W --> A["FastAPI Control Plane"]
     A --> D[("PostgreSQL")]
-    A --> Q["Runner registry, policy, queue, leases"]
-    Q --> D
-    R["Local Runner: outbound polling only"] --> Q
+    A --> S["Bounded read-only scanner"]
+    A --> Q["Typed job queue and policy"]
+    R["Outbound Local Runner"] --> Q
     R --> X["Closed typed executors"]
-    R --> M["Runner-owned mirror + detached fixture workspace"]
-    M --> F["Descriptor-safe UTF-8 file tools"]
-    A --> S["Historical Phase 2 bounded read-only scanner"]
-    S -. "optional exact read-only override" .-> T["Allowlisted repository"]
-    A -. "OpenAPI export" .-> C["Generated TypeScript contract"]
-    C -. "typed client input" .-> W
-    X -. "not implemented" .-> G["Future target commands / Git delivery"]
+    R --> F["Read-only synthetic fixture"]
+    X --> V["Runner-owned workspace and validation roots"]
+    A -. "OpenAPI" .-> C["Generated TypeScript contracts"]
+    C -. "typed client" .-> W
+    V -. "not implemented" .-> G["Remote Git or deployment"]
 ```
 
-FastAPI OpenAPI is the HTTP contract source. The browser never accesses the
-database or target repository directly. Runner Protocol v1 is shared as a pure
-Pydantic package. The Phase 3 base platform has no repository mount. Phase 4's
-fixture profile gives only Runner one exact read-only source mount plus
-dedicated mirror, workspace, and registry volumes; API, Web, and PostgreSQL get
-none. Phase 2's optional read-only scanner override remains historical and
-separate.
+The Web never accesses PostgreSQL, Git, Docker, a workspace, or credentials.
+The API owns governance state but executes no Runner job. The Runner polls
+outbound, receives closed job schemas, and knows fixture paths that the API and
+Web do not. PostgreSQL and service checks independently enforce important
+state and authority invariants.
 
-## Local development
+Detailed diagrams and boundary descriptions are in
+[docs/architecture/overview.md](docs/architecture/overview.md) and
+[docs/architecture/system-overview.md](docs/architecture/system-overview.md).
 
-Prerequisites and exact command behavior are defined by the project manifests
-and Makefile. The verified local sequence is:
+## Technology stack
+
+- Web: Next.js 16, React 19, strict TypeScript, Tailwind CSS, next-intl,
+  Vitest, Testing Library, Playwright, and axe.
+- API: Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, psycopg,
+  pytest, Ruff, mypy, and coverage.
+- Runner protocol: versioned Pydantic models shared without API or executor
+  dependencies.
+- Persistence: PostgreSQL 17 with additive Alembic migrations.
+- Tooling: Node.js `24.18.0`, pnpm `11.14.0`, Python `3.12.13`, uv, Make,
+  Docker, and Docker Compose.
+- Contracts: FastAPI OpenAPI is authoritative; TypeScript output is generated.
+
+## Quick Start
+
+### Prerequisites
+
+- Git and Make.
+- Docker Desktop or another Docker Engine with Compose v2.
+- Node.js `24.18.0` and Corepack/pnpm `11.14.0`.
+- Python `3.12.13` and uv.
+
+The pinned versions are recorded in `.python-version`, `package.json`,
+`pnpm-lock.yaml`, `uv.lock`, and the Dockerfiles. Local verification has been
+performed on Apple Silicon macOS with Docker Desktop. The workflows target
+GitHub-hosted Linux, but no remote GitHub Actions run is claimed by this
+repository state.
+
+### Bootstrap and start
 
 ```sh
 make bootstrap
 make platform-up
 ```
 
-Local endpoints are the web console at `http://localhost:3000`, API
-documentation at `http://localhost:8000/docs`, liveness at
-`http://localhost:8000/health/live`, and readiness at
-`http://localhost:8000/health/ready`. The Runner console is
-`http://localhost:3000/runners`. Startup generates an ignored high-entropy
-local Bootstrap Token without printing it and waits for the Runner to become
-online. Phase 4 browser pages are `/repositories`, `/execution-grants`,
-`/workspaces`, and `/workspaces/{id}`. The Phase 5 fixture-only validation flow
-is `/validations`; governed final review is `/reviews`.
+`make bootstrap` installs only lockfile-resolved project dependencies.
+`make platform-up` creates the synthetic fixture, generates an ignored local
+Runner bootstrap token without printing it, builds the local services, applies
+the current migration, waits for health checks, and seeds the fixture-only
+workspace path.
 
-Stop project services with:
+No real Provider key is required or accepted by the implemented planning path.
+Do not create one for this setup.
+
+Open:
+
+- Web Console: `http://127.0.0.1:3000`
+- API docs: `http://127.0.0.1:8000/docs`
+- Liveness: `http://127.0.0.1:8000/health/live`
+- Readiness: `http://127.0.0.1:8000/health/ready`
+
+The interface-language selector switches between English and Simplified
+Chinese. Raw IDs, digests, states, and error codes remain visible for
+operational diagnosis.
+
+For an isolated, deterministic AI planning walkthrough, follow
+[Fixture AI Planning Demo](docs/runbooks/fixture-ai-planning-demo.md). It uses
+only generated local fixtures, performs no network model call, and stops before
+any approval unless the human operator explicitly decides the plan.
+
+### Migration-only development path
 
 ```sh
-make down
+make db-up
+make migrate
 ```
 
-Do not commit `.env.runner.local` or any `.env`.
-
-## Testing and contracts
-
-Use the narrow commands while developing and the aggregate command before a
-checkpoint:
+### Diagnose and stop
 
 ```sh
+make platform-logs
+make platform-down
+```
+
+`make platform-down` removes project containers and the network while
+preserving named development data. If ports `3000`, `8000`, `5432`, or `55433`
+are already occupied, set the corresponding published-port variables and keep
+`WEB_ORIGIN` and `NEXT_PUBLIC_API_BASE_URL` consistent; do not terminate an
+unrelated process.
+
+`.env.example` documents safe local configuration. A real `.env`, generated
+`.env.runner.local`, logs, databases, traces, browser artifacts, caches, and
+build outputs must remain untracked.
+
+## Tests and quality gates
+
+The repository provides narrow gates and one aggregate gate:
+
+```sh
+make contracts-check
 make format-check
 make lint
 make typecheck
 make test
 make build
-make contracts-check
 make migration-check
-make phase4-findings-check
 make source-invariance-check
-make workspace-security-check
-make workspace-security-repair-check
 make security-check
 make eval
 make e2e
-make runner-smoke
-make workspace-smoke
 make workspace-chaos-check
 make verify
 ```
 
-Backend integration and migration tests must use PostgreSQL. Playwright must
-exercise the real web/API/database stack rather than a mocked API. Contract
-generation must be repeatable and leave no diff. See the current final local
-gate evidence before treating any check as passed:
-[`docs/evidence/phase-4-final-integration-gate-verification.md`](docs/evidence/phase-4-final-integration-gate-verification.md).
+`make verify` is intentionally expensive. It combines contracts, formatting,
+lint, types, unit/integration tests, production Web build, Compose validation,
+migration checks, source invariance, workspace and security checks, real-stack
+Playwright, chaos, deterministic evals, and final whitespace validation.
 
-To run the internal Customer 0 case after all synthetic gates pass:
+Historical local evidence is retained under `docs/evidence/`. A workflow file
+or old evidence is not proof that a new revision passed remotely or locally;
+only a command run against that revision with exit code `0` is a current pass.
 
-```sh
-CUSTOMER0_REPOSITORY_PATH="$HOME/Developer/CreativeDeploy" \
-  make customer0-readonly-case
-```
+## Security model
 
-This mount is API-only and read-only. The command creates or reuses the
-idempotent Customer 0 Task and Run, creates a committed-HEAD Snapshot and
-deterministic Plan, submits it, and stops at `awaiting_plan_approval`. It never
-approves, rejects, installs, builds, tests, or modifies CreativeDeploy.
+The core rules are deny by default, exact immutable bindings, least authority,
+human decisions at distinct boundaries, no shell, no unreviewed network, no
+source write, and no secret logging. See [SECURITY.md](SECURITY.md),
+[Security Boundaries](docs/security/security-boundaries.md), and the Runner and
+Workspace threat models.
 
-## Docker
+Do not report vulnerabilities, credentials, customer data, or exploit details
+in a public issue. The private reporting route is intentionally marked as a
+pre-publication owner decision because no public security address exists.
 
-The local target uses `docker compose` services for `db`, `api`, `web`, and
-`runner`, with explicit health checks and a migration step. Runner is
-non-root, root-filesystem-read-only, capability-free, CPU/memory/PID/FD
-bounded, has no published port, and joins only the internal `runner-control`
-network. The fixture override mounts one exact synthetic source read-only only
-into Runner and adds separate credential, mirror, workspace, and registry
-volumes. Intended commands are:
+## Current limitations
 
-```sh
-docker compose config
-docker compose build
-make up
-make logs
-make down
-```
+- Local, single-user development posture; no authentication, tenancy, CSRF
+  design, public hardening, backup operations, or production SRE model.
+- No real Provider SDK, model network call, API key, real billing, or
+  Provider-specific evaluation.
+- All mutation, validation, and local delivery capabilities are synthetic
+  fixture-only.
+- No arbitrary shell, target repository commands, package installation, or
+  real customer workspace.
+- No remote clone/fetch/push, pull request, merge, tag, release, GitHub Pages,
+  public hosting, or deployment.
+- No production-customer, performance, time-saving, or adoption claims.
 
-An image build is not a production deployment. Production migration,
-credentials, networking, backups, and observability remain future work.
+## Roadmap
 
-## Security limits
+Future work requires separate design, authorization, and independent security
+review for:
 
-This project remains local-only and single-user. It must not be exposed
-publicly. A locator alone grants no access: Level 0 reads require a canonical
-allowlisted local Git root, and target repositories remain read-only.
-Repository text is untrusted data, not an instruction source. Human plan
-approval is a durable governance decision, not execution permission. A
-separate immutable Grant authorizes only the exact fixture Workspace scope.
-Every mutating operation additionally requires a current, attempt-bound,
-single-use Side-effect Permit immediately before the filesystem mutation.
-Unprovable Workspace ownership enters recovery/quarantine and is not deleted.
-Descriptor confinement is deliberately conservative but does not claim
-hostile multi-tenant syscall isolation. Local bearer tokens are not a
-production identity scheme. Never add real secrets. Read
-[`SECURITY.md`](SECURITY.md) before integration work.
+- authenticated users, organizations, roles, and production operations;
+- isolated real-Provider credentials, egress policy, observability, and
+  Provider-specific evals;
+- non-fixture repository workspaces and closed target validation commands;
+- controlled browser and visual evidence;
+- remote Git and pull-request authority distinct from review readiness; and
+- backup, recovery, rate/resource limits, incident response, and deployment.
 
-## Documentation
+These are roadmap items, not available capabilities.
 
-- [Product contract](docs/product/product-contract.md)
-- [V1 boundaries](docs/product/v1-boundaries.md)
-- [System overview](docs/architecture/system-overview.md)
-- [Isolated workspaces](docs/architecture/isolated-workspaces.md)
-- [Runner Protocol v1](docs/architecture/runner-protocol.md)
-- [Run state machine](docs/architecture/state-machine.md)
-- [Data model](docs/architecture/data-model.md)
-- [Tool permissions](docs/architecture/tool-permissions.md)
-- [Threat model](docs/security/threat-model-v0.md)
-- [Runner threat model](docs/security/runner-threat-model.md)
-- [Workspace threat model](docs/security/workspace-threat-model.md)
-- [Phase 4 ExecPlan](docs/exec-plans/phase-4-isolated-workspace-tools.md)
-- [Phase 3 ExecPlan](docs/exec-plans/phase-3-browser-orchestrated-local-runner.md)
-- [Phase 2 ExecPlan](docs/exec-plans/phase-2-readonly-repository-intelligence.md)
-- [Foundation ExecPlan](docs/exec-plans/phase-0-1-foundation.md)
-- [Project status](docs/status/project-status.md)
-- [Environment audit](docs/evidence/phase-0-1-environment-audit.md)
-- [Phase 2 verification evidence](docs/evidence/phase-2-verification.md)
-- [Phase 3 verification evidence](docs/evidence/phase-3-verification.md)
-- [Phase 4 verification evidence](docs/evidence/phase-4-verification.md)
-- [Phase 4 independent security audit](docs/security/audits/phase-4-workspace-security-audit.md)
-- [Phase 4 security repair ExecPlan](docs/exec-plans/phase-4-security-repair.md)
-- [Phase 4 security repair evidence](docs/evidence/phase-4-security-repair-verification.md)
-- [Phase 4 independent security re-audit](docs/security/audits/phase-4-security-reaudit.md)
-- [Phase 4 Security Remediation Round 2 ExecPlan](docs/exec-plans/phase-4-security-remediation-2.md)
-- [Phase 4 Security Remediation Round 2 evidence](docs/evidence/phase-4-security-remediation-2-verification.md)
-- [Phase 4 Final Integration Gate ExecPlan](docs/exec-plans/phase-4-final-integration-gate.md)
-- [Phase 4 Final Integration Gate evidence](docs/evidence/phase-4-final-integration-gate-verification.md)
-- [Local development runbook](docs/runbooks/local-development.md)
-- [Local Runner runbook](docs/runbooks/local-runner.md)
-- [Runner recovery runbook](docs/runbooks/runner-recovery.md)
-- [Workspace lifecycle runbook](docs/runbooks/workspace-lifecycle.md)
-- [Workspace recovery runbook](docs/runbooks/workspace-recovery.md)
-- [Customer 0 read-only runbook](docs/runbooks/customer0-readonly-investigation.md)
-- [CreativeDeploy Customer 0 evidence](docs/deployment-cases/creative-deploy/phase-2-readonly-evidence.md)
-- [Evaluation strategy](docs/evals/eval-strategy-v0.md)
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Public contribution intake is not open
+until the repository owner chooses a license, security contact, and public
+collaboration policy. A Code of Conduct is therefore not added yet.
+
+## License
+
+No open-source license has been granted. The repository owner must make an
+explicit decision before converting the repository to Public. The decision
+record compares Apache-2.0, MIT, and retaining all rights in
+[License Decision](docs/publication/license-decision.md). Apache-2.0 is the
+current recommendation, not an adopted license.

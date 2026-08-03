@@ -7,7 +7,7 @@ and Frontend Quality Remediation work for governed frontend teams. V1 is not a
 promise of arbitrary language, repository, backend, infrastructure, or general
 software-engineering support.
 
-## Implemented Foundation through the Phase 7 first-slice candidate
+## Implemented Foundation through the integrated Phase 7 first slice
 
 - Task create/list/detail with bounded validation and idempotency.
 - Level 0 `read_only` Run creation and durable state.
