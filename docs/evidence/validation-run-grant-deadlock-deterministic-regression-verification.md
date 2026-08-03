@@ -18,7 +18,7 @@ evidence record. It does not change the production service or repository.
 The exact same test bytes were executed against both product versions:
 
 - Test: `apps/api/tests/test_validation_run_grant_deadlock_regression.py`
-- SHA-256: `87054e14a144eab676a4000a6dcc0a1997a2e07e9f1e2f1862a246d39805e5af`
+- SHA-256: `702e6810293ee193e0b6ae3bcb5cd099c7f9e4f974b4c3cd396647044f911f66`
 - Baseline copy comparison: byte-for-byte identical before the formal matrix
 - PostgreSQL source: the repository's existing dedicated local test database
   configuration
@@ -54,16 +54,16 @@ PostgreSQL deadlock (`DeadlockDetected`, SQLSTATE `40P01`).
 
 | Run | Winner PID / XID | Runner-return XID | Loser PID / XID | Visible child/job | Competition  | Waiter -> blocker | Wait event    | Result    |
 | --: | ---------------- | ----------------- | --------------- | ----------------- | ------------ | ----------------- | ------------- | --------- |
-|   1 | 8134 / 2178      | 2180              | 8135 / 2181     | true / true       | child select | 8135 -> 8134      | transactionid | 40P01 Red |
-|   2 | 8152 / 2203      | 2205              | 8153 / 2206     | true / true       | child select | 8153 -> 8152      | transactionid | 40P01 Red |
-|   3 | 8164 / 2228      | 2230              | 8165 / 2231     | true / true       | child select | 8165 -> 8164      | transactionid | 40P01 Red |
-|   4 | 8176 / 2253      | 2255              | 8177 / 2256     | true / true       | child select | 8177 -> 8176      | transactionid | 40P01 Red |
-|   5 | 8188 / 2278      | 2280              | 8189 / 2281     | true / true       | child select | 8189 -> 8188      | transactionid | 40P01 Red |
-|   6 | 8200 / 2303      | 2305              | 8201 / 2306     | true / true       | child select | 8201 -> 8200      | transactionid | 40P01 Red |
-|   7 | 8212 / 2326      | 2328              | 8213 / 2329     | true / true       | child select | 8213 -> 8212      | transactionid | 40P01 Red |
-|   8 | 8224 / 2351      | 2353              | 8225 / 2354     | true / true       | child select | 8225 -> 8224      | transactionid | 40P01 Red |
-|   9 | 8237 / 2376      | 2378              | 8238 / 2379     | true / true       | child select | 8238 -> 8237      | transactionid | 40P01 Red |
-|  10 | 8249 / 2399      | 2401              | 8250 / 2402     | true / true       | child select | 8250 -> 8249      | transactionid | 40P01 Red |
+|   1 | 11083 / 8154     | 8156              | 11084 / 8157    | true / true       | child select | 11084 -> 11083    | transactionid | 40P01 Red |
+|   2 | 11095 / 8179     | 8181              | 11096 / 8182    | true / true       | child select | 11096 -> 11095    | transactionid | 40P01 Red |
+|   3 | 11107 / 8202     | 8204              | 11108 / 8205    | true / true       | child select | 11108 -> 11107    | transactionid | 40P01 Red |
+|   4 | 11119 / 8227     | 8229              | 11120 / 8230    | true / true       | child select | 11120 -> 11119    | transactionid | 40P01 Red |
+|   5 | 11131 / 8252     | 8254              | 11132 / 8255    | true / true       | child select | 11132 -> 11131    | transactionid | 40P01 Red |
+|   6 | 11144 / 8275     | 8277              | 11145 / 8278    | true / true       | child select | 11145 -> 11144    | transactionid | 40P01 Red |
+|   7 | 11163 / 8300     | 8302              | 11164 / 8303    | true / true       | child select | 11164 -> 11163    | transactionid | 40P01 Red |
+|   8 | 11175 / 8325     | 8327              | 11176 / 8328    | true / true       | child select | 11176 -> 11175    | transactionid | 40P01 Red |
+|   9 | 11187 / 8350     | 8352              | 11188 / 8353    | true / true       | child select | 11188 -> 11187    | transactionid | 40P01 Red |
+|  10 | 11199 / 8375     | 8377              | 11200 / 8378    | true / true       | child select | 11200 -> 11199    | transactionid | 40P01 Red |
 
 Red result: `10/10 deterministic expected failures`.
 
@@ -74,16 +74,16 @@ and recorded no database exception or deadlock.
 
 | Run | Winner PID / XID | Runner-return XID | Loser PID / XID | Visible child/job | Competition       | Waiter -> blocker | Wait event    | Result |
 | --: | ---------------- | ----------------- | --------------- | ----------------- | ----------------- | ----------------- | ------------- | ------ |
-|   1 | 8288 / 2424      | 2425              | 8289 / 2426     | false / false     | outer transaction | 8289 -> 8288      | transactionid | Green  |
-|   2 | 8300 / 2448      | 2449              | 8301 / 2450     | false / false     | outer transaction | 8301 -> 8300      | transactionid | Green  |
-|   3 | 8305 / 2472      | 2473              | 8306 / 2474     | false / false     | outer transaction | 8306 -> 8305      | transactionid | Green  |
-|   4 | 8317 / 2496      | 2497              | 8318 / 2498     | false / false     | outer transaction | 8318 -> 8317      | transactionid | Green  |
-|   5 | 8322 / 2520      | 2521              | 8323 / 2522     | false / false     | outer transaction | 8323 -> 8322      | transactionid | Green  |
-|   6 | 8334 / 2544      | 2545              | 8335 / 2546     | false / false     | outer transaction | 8335 -> 8334      | transactionid | Green  |
-|   7 | 8347 / 2568      | 2569              | 8348 / 2570     | false / false     | outer transaction | 8348 -> 8347      | transactionid | Green  |
-|   8 | 8352 / 2592      | 2593              | 8353 / 2594     | false / false     | outer transaction | 8353 -> 8352      | transactionid | Green  |
-|   9 | 8364 / 2616      | 2617              | 8365 / 2618     | false / false     | outer transaction | 8365 -> 8364      | transactionid | Green  |
-|  10 | 8369 / 2640      | 2641              | 8370 / 2642     | false / false     | outer transaction | 8370 -> 8369      | transactionid | Green  |
+|   1 | 11254 / 8398     | 8399              | 11255 / 8400    | false / false     | outer transaction | 11255 -> 11254    | transactionid | Green  |
+|   2 | 11266 / 8422     | 8423              | 11267 / 8424    | false / false     | outer transaction | 11267 -> 11266    | transactionid | Green  |
+|   3 | 11271 / 8446     | 8447              | 11272 / 8448    | false / false     | outer transaction | 11272 -> 11271    | transactionid | Green  |
+|   4 | 11283 / 8470     | 8471              | 11284 / 8472    | false / false     | outer transaction | 11284 -> 11283    | transactionid | Green  |
+|   5 | 11288 / 8494     | 8495              | 11289 / 8496    | false / false     | outer transaction | 11289 -> 11288    | transactionid | Green  |
+|   6 | 11300 / 8518     | 8519              | 11301 / 8520    | false / false     | outer transaction | 11301 -> 11300    | transactionid | Green  |
+|   7 | 11310 / 8542     | 8543              | 11312 / 8544    | false / false     | outer transaction | 11312 -> 11310    | transactionid | Green  |
+|   8 | 11316 / 8566     | 8567              | 11317 / 8568    | false / false     | outer transaction | 11317 -> 11316    | transactionid | Green  |
+|   9 | 11328 / 8590     | 8591              | 11329 / 8592    | false / false     | outer transaction | 11329 -> 11328    | transactionid | Green  |
+|  10 | 11333 / 8614     | 8615              | 11334 / 8616    | false / false     | outer transaction | 11334 -> 11333    | transactionid | Green  |
 
 Green result: `10/10 deterministic passes`.
 
@@ -93,10 +93,27 @@ Green result: `10/10 deterministic passes`.
 | --------------------------------------------- | --------------: | -------------------------------------- |
 | Ruff format check, focused regression file    |               0 | already formatted                      |
 | Ruff lint, focused regression file            |               0 | all checks passed                      |
+| `make typecheck-api`                          |               0 | 132 source files passed                |
 | Red baseline formal matrix                    | expected 1 each | 10/10 real PostgreSQL `40P01` failures |
 | Green candidate formal matrix                 |          0 each | 10/10 passes; no database exception    |
 | Targeted regression + Suite remediation tests |               0 | 12 passed, 1 warning                   |
 | `make test-api-direct`                        |               0 | 356 passed, 1 warning; 84.44% coverage |
+
+## First remote attempt and focused correction
+
+Commit `4631ccd02c7bd0642e72f6468612b356f5702087` triggered the first stacked
+CI attempt:
+
+- Six jobs passed.
+- Fast Python failed at `make typecheck-api` with five nullable-value errors in
+  the new regression test. The focused correction adds only two explicit
+  non-null assertions; final local `make typecheck-api` passes all 132 files.
+- Heavy Playwright/Workspace Chaos failed because the pre-existing Web E2E
+  locator for the `Read text` button resolved to two elements. Neither the
+  focused correction nor this candidate changes Web or E2E product code.
+
+The final Red/Green matrices and every local ledger entry above were rerun after
+the focused type correction, using the final test hash recorded in this file.
 
 ## Publication and cleanup state
 

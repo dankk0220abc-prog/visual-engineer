@@ -40,6 +40,7 @@ def _parameter_values(parameters: Any) -> set[str]:
 
 def _backend_pid(connection: Connection) -> int:
     driver_connection = connection.connection.driver_connection
+    assert driver_connection is not None
     return int(driver_connection.info.backend_pid)
 
 
@@ -378,6 +379,7 @@ def test_child_visibility_window_cannot_deadlock_suite_replay(
             )
             release_final_binding_update.set()
         else:
+            assert opposing_wait is not None
             record(
                 "loser_waiting_on_atomic_outer_transaction",
                 backend_pid=opposing_wait["pid"],
