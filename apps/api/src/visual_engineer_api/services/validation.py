@@ -229,12 +229,17 @@ class ValidationService:
             max_artifact_count=profile.max_artifact_count,
         )
         try:
-            job = RunnerService(self._session).create_workspace_job(spec, request_id=request_id)
+            job = RunnerService(self._session).create_workspace_job(
+                spec,
+                request_id=request_id,
+                commit=False,
+            )
         except RunnerServiceError as exc:
             raise ValidationServiceError(exc.code, exc.message, category=exc.category) from exc
         validation_run.runner_job_id = job.id
         validation_run.state = "queued"
         validation_run.version += 1
+        self._session.flush()
         self._session.commit()
         self._session.refresh(validation_run)
         return self._response(validation_run)
