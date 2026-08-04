@@ -33,6 +33,7 @@ from visual_engineer_api.models.workspace import (
     Workspace,
 )
 from visual_engineer_api.schemas.validation import ValidationSuiteRunCreate
+from visual_engineer_api.services.runner import RunnerService, RunnerServiceError
 from visual_engineer_api.services.validation import ValidationService
 from visual_engineer_api.services.validation_suite import (
     ValidationSuiteService,
@@ -57,28 +58,64 @@ def _durable_counts(session: Session) -> tuple[int, ...]:
     )
 
 
-@pytest.mark.parametrize("same_idempotency_key", [True, False])
-def test_concurrent_suite_create_consumes_one_grant_exactly_once(
-    client: TestClient,
-    db_session: Session,
-    runner_bootstrap_token: str,
+def _assert_concurrent_suite_create(
+    context: SuiteContext,
+    *,
     database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
     same_idempotency_key: bool,
+    submission_order: tuple[int, int],
 ) -> None:
-    context = _prepare_suite(
-        client,
-        db_session,
-        runner_bootstrap_token,
-        start_suite=False,
-    )
-    db_session.commit()
     engine = create_engine(database_url)
-    barrier = threading.Barrier(2)
+    grant_lock_barrier = threading.Barrier(2)
+    first_grant_locked = threading.Event()
+    worker_state = threading.local()
     shared_key = f"suite-race-{uuid.uuid4()}"
+    original_required_grant = ValidationSuiteService._required_suite_grant
+
+    def synchronize_before_grant_lock(
+        service: ValidationSuiteService,
+        grant_id: uuid.UUID,
+        suite_reference: str,
+        *,
+        expected_attempt_number: int,
+        expected_root_suite_run_id: uuid.UUID | None,
+        expected_retry_of_suite_run_id: uuid.UUID | None,
+    ) -> tuple[Any, ...]:
+        if not getattr(worker_state, "grant_barrier_passed", False):
+            worker_state.grant_barrier_passed = True
+            grant_lock_barrier.wait(timeout=10)
+        if worker_state.worker != submission_order[0]:
+            if not first_grant_locked.wait(timeout=10):
+                raise TimeoutError("timed out waiting for the ordered Suite Grant lock")
+            return original_required_grant(
+                service,
+                grant_id,
+                suite_reference,
+                expected_attempt_number=expected_attempt_number,
+                expected_root_suite_run_id=expected_root_suite_run_id,
+                expected_retry_of_suite_run_id=expected_retry_of_suite_run_id,
+            )
+        result = original_required_grant(
+            service,
+            grant_id,
+            suite_reference,
+            expected_attempt_number=expected_attempt_number,
+            expected_root_suite_run_id=expected_root_suite_run_id,
+            expected_retry_of_suite_run_id=expected_retry_of_suite_run_id,
+        )
+        first_grant_locked.set()
+        return result
+
+    monkeypatch.setattr(
+        ValidationSuiteService,
+        "_required_suite_grant",
+        synchronize_before_grant_lock,
+    )
 
     def create_once(worker: int) -> tuple[str, str]:
+        worker_state.worker = worker
         key = shared_key if same_idempotency_key else f"{shared_key}-{worker}"
-        barrier.wait(timeout=10)
         with Session(engine) as session:
             try:
                 response = ValidationSuiteService(session).create(
@@ -97,10 +134,7 @@ def test_concurrent_suite_create_consumes_one_grant_exactly_once(
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = [
             future.result(timeout=30)
-            for future in (
-                executor.submit(create_once, 1),
-                executor.submit(create_once, 2),
-            )
+            for future in [executor.submit(create_once, worker) for worker in submission_order]
         ]
 
     with Session(engine) as verification:
@@ -119,18 +153,303 @@ def test_concurrent_suite_create_consumes_one_grant_exactly_once(
             )
             or 0
         )
+        child_job_count = int(
+            verification.scalar(
+                select(func.count(RunnerJob.id)).where(
+                    RunnerJob.execution_grant_id == uuid.UUID(context.grant_id)
+                )
+            )
+            or 0
+        )
+        unbound_child_count = int(
+            verification.scalar(
+                select(func.count(ValidationRun.id)).where(
+                    ValidationRun.execution_grant_id == uuid.UUID(context.grant_id),
+                    ValidationRun.runner_job_id.is_(None),
+                )
+            )
+            or 0
+        )
     engine.dispose()
 
     assert len(suite_ids) == 1
     assert child_count == 1
+    assert child_job_count == 1
+    assert unbound_child_count == 0
     if same_idempotency_key:
         assert [result[0] for result in results] == ["created", "created"]
         assert {result[1] for result in results} == {str(suite_ids[0])}
     else:
-        assert sorted(result[0] for result in results) == ["created", "denied"]
-        assert next(result[1] for result in results if result[0] == "denied") == (
-            "validation_suite_grant_already_consumed"
+        assert [result[0] for result in results] == ["created", "denied"]
+        assert results[1][1] == ("validation_suite_grant_already_consumed")
+
+
+@pytest.mark.parametrize("same_idempotency_key", [True, False])
+def test_concurrent_suite_create_consumes_one_grant_exactly_once(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    same_idempotency_key: bool,
+) -> None:
+    context = _prepare_suite(
+        client,
+        db_session,
+        runner_bootstrap_token,
+        start_suite=False,
+    )
+    db_session.commit()
+    _assert_concurrent_suite_create(
+        context,
+        database_url=database_url,
+        monkeypatch=monkeypatch,
+        same_idempotency_key=same_idempotency_key,
+        submission_order=(1, 2),
+    )
+
+
+@pytest.mark.parametrize("same_idempotency_key", [True, False])
+def test_concurrent_suite_create_reverse_submission_order(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    same_idempotency_key: bool,
+) -> None:
+    context = _prepare_suite(
+        client,
+        db_session,
+        runner_bootstrap_token,
+        start_suite=False,
+    )
+    db_session.commit()
+    _assert_concurrent_suite_create(
+        context,
+        database_url=database_url,
+        monkeypatch=monkeypatch,
+        same_idempotency_key=same_idempotency_key,
+        submission_order=(2, 1),
+    )
+
+
+def test_suite_child_dispatch_rollback_has_no_partial_rows(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _prepare_suite(
+        client,
+        db_session,
+        runner_bootstrap_token,
+        start_suite=False,
+    )
+    db_session.commit()
+    engine = create_engine(database_url)
+    original_create_workspace_job = RunnerService.create_workspace_job
+    independent_observations: list[tuple[int, int]] = []
+
+    def fail_after_non_committing_flush(
+        service: RunnerService,
+        spec: Any,
+        *,
+        request_id: str,
+        commit: bool = True,
+    ) -> Any:
+        assert commit is False
+        original_create_workspace_job(
+            service,
+            spec,
+            request_id=request_id,
+            commit=commit,
         )
+        with Session(engine) as observer:
+            independent_observations.append(
+                (
+                    int(
+                        observer.scalar(
+                            select(func.count(ValidationRun.id)).where(
+                                ValidationRun.execution_grant_id == uuid.UUID(context.grant_id)
+                            )
+                        )
+                        or 0
+                    ),
+                    int(
+                        observer.scalar(
+                            select(func.count(RunnerJob.id)).where(
+                                RunnerJob.execution_grant_id == uuid.UUID(context.grant_id)
+                            )
+                        )
+                        or 0
+                    ),
+                )
+            )
+        raise RunnerServiceError(
+            "injected_validation_dispatch_failure",
+            "Injected Validation dispatch failure",
+            category="internal",
+        )
+
+    monkeypatch.setattr(
+        RunnerService,
+        "create_workspace_job",
+        fail_after_non_committing_flush,
+    )
+    shared_key = f"suite-dispatch-rollback-{uuid.uuid4()}"
+    with Session(engine) as session:
+        created = ValidationSuiteService(session).create(
+            ValidationSuiteRunCreate(
+                execution_grant_id=uuid.UUID(context.grant_id),
+                suite_id="fixture-integrity-suite-v1",
+                suite_version=1,
+            ),
+            idempotency_key=shared_key,
+            request_id="suite-dispatch-rollback",
+        )
+
+    assert independent_observations == [(0, 0)]
+    assert created.state == "recovery_required"
+    assert created.error_code == "injected_validation_dispatch_failure"
+    assert created.execution_grant_id == uuid.UUID(context.grant_id)
+    assert created.steps[0].state == "recovery_required"
+    assert created.steps[0].validation_run_id is None
+    assert created.steps[0].runner_job_id is None
+
+    with Session(engine) as verification:
+        assert (
+            verification.scalar(
+                select(func.count(ValidationSuiteRun.id)).where(
+                    ValidationSuiteRun.execution_grant_id == uuid.UUID(context.grant_id)
+                )
+            )
+            == 1
+        )
+        assert (
+            verification.scalar(
+                select(func.count(ValidationRun.id)).where(
+                    ValidationRun.execution_grant_id == uuid.UUID(context.grant_id)
+                )
+            )
+            == 0
+        )
+        assert (
+            verification.scalar(
+                select(func.count(RunnerJob.id)).where(
+                    RunnerJob.execution_grant_id == uuid.UUID(context.grant_id)
+                )
+            )
+            == 0
+        )
+        replay = ValidationSuiteService(verification).create(
+            ValidationSuiteRunCreate(
+                execution_grant_id=uuid.UUID(context.grant_id),
+                suite_id="fixture-integrity-suite-v1",
+                suite_version=1,
+            ),
+            idempotency_key=shared_key,
+            request_id="suite-dispatch-rollback-replay",
+        )
+        assert replay.id == created.id
+        with pytest.raises(
+            ValidationSuiteServiceError,
+            match="Suite-scoped Execution Grant already authorizes a Suite lineage",
+        ) as denied:
+            ValidationSuiteService(verification).create(
+                ValidationSuiteRunCreate(
+                    execution_grant_id=uuid.UUID(context.grant_id),
+                    suite_id="fixture-integrity-suite-v1",
+                    suite_version=1,
+                ),
+                idempotency_key=f"{shared_key}-different",
+                request_id="suite-dispatch-rollback-different-key",
+            )
+        assert denied.value.code == "validation_suite_grant_already_consumed"
+    engine.dispose()
+
+
+def test_disjoint_suite_grants_do_not_share_a_global_lock(
+    client: TestClient,
+    db_session: Session,
+    runner_bootstrap_token: str,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = _prepare_suite(client, db_session, runner_bootstrap_token, start_suite=False)
+    second = _prepare_suite(client, db_session, runner_bootstrap_token, start_suite=False)
+    db_session.commit()
+    engine = create_engine(database_url)
+    first_grant_locked = threading.Event()
+    release_first_grant = threading.Event()
+    original_required_grant = ValidationSuiteService._required_suite_grant
+
+    def hold_first_exact_grant(
+        service: ValidationSuiteService,
+        grant_id: uuid.UUID,
+        suite_reference: str,
+        *,
+        expected_attempt_number: int,
+        expected_root_suite_run_id: uuid.UUID | None,
+        expected_retry_of_suite_run_id: uuid.UUID | None,
+    ) -> tuple[Any, ...]:
+        result = original_required_grant(
+            service,
+            grant_id,
+            suite_reference,
+            expected_attempt_number=expected_attempt_number,
+            expected_root_suite_run_id=expected_root_suite_run_id,
+            expected_retry_of_suite_run_id=expected_retry_of_suite_run_id,
+        )
+        if grant_id == uuid.UUID(first.grant_id) and not first_grant_locked.is_set():
+            first_grant_locked.set()
+            if not release_first_grant.wait(timeout=10):
+                raise TimeoutError("timed out holding the first exact Suite Grant lock")
+        return result
+
+    monkeypatch.setattr(
+        ValidationSuiteService,
+        "_required_suite_grant",
+        hold_first_exact_grant,
+    )
+
+    def create_for(context: SuiteContext, worker: str) -> uuid.UUID:
+        with Session(engine) as session:
+            response = ValidationSuiteService(session).create(
+                ValidationSuiteRunCreate(
+                    execution_grant_id=uuid.UUID(context.grant_id),
+                    suite_id="fixture-integrity-suite-v1",
+                    suite_version=1,
+                ),
+                idempotency_key=f"disjoint-suite-{worker}-{uuid.uuid4()}",
+                request_id=f"disjoint-suite-{worker}",
+            )
+            return response.id
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(create_for, first, "first")
+        assert first_grant_locked.wait(timeout=10)
+        second_future = executor.submit(create_for, second, "second")
+        try:
+            second_id = second_future.result(timeout=10)
+        finally:
+            release_first_grant.set()
+        first_id = first_future.result(timeout=10)
+
+    assert first_id != second_id
+    with Session(engine) as verification:
+        assert (
+            verification.scalar(
+                select(func.count(ValidationSuiteRun.id)).where(
+                    ValidationSuiteRun.execution_grant_id.in_(
+                        (uuid.UUID(first.grant_id), uuid.UUID(second.grant_id))
+                    )
+                )
+            )
+            == 2
+        )
+    engine.dispose()
 
 
 @pytest.mark.parametrize("authority_failure", ["revoked", "expired", "stale"])
