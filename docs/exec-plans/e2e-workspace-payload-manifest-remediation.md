@@ -2,11 +2,11 @@
 
 ## Status
 
-LOCAL IMPLEMENTATION VERIFIED; PUBLICATION NOT YET PERFORMED. This plan is
-limited to PR #14's E2E workspace-tree postcondition,
-its dedicated helper and tests, and verification evidence. It does not authorize
-product, PostgreSQL transaction, workflow timeout/retry, Provider, API key,
-license, tag, deployment, readiness, or merge changes.
+LOCAL IMPLEMENTATION AND FIRST REMOTE HEAVY RUN VERIFIED; DOCUMENT FORMAT
+FOLLOW-UP IN PROGRESS. This plan is limited to PR #14's E2E workspace-tree
+postcondition, its dedicated helper and tests, and verification evidence. It
+does not authorize product, PostgreSQL transaction, workflow timeout/retry,
+Provider, API key, license, tag, deployment, readiness, or merge changes.
 
 ## Baseline and failure
 
@@ -69,7 +69,15 @@ It excludes timestamps, inode, ownership, absolute root, and traversal order.
   digest `4bac1f7730f2fd7f1ff11e7de14f502c1bf3d7d8671de185187150e2b808731a`,
   all lifecycle checks, and zero cleanup residue.
 - No second E2E and no full `make verify` were run.
-- Commit, push, PR #14 remote CI, PR #15 rebase, and stacked CI remain pending.
+- Commit `f611e5e891c3aaf901ccff816eb567631810f89a` was ordinary-pushed to PR
+  #14. Heavy run `30913072675` passed all three jobs, including remote
+  Playwright `25 passed`, `3 skipped`, workspace-tree manifest equality,
+  cleanup verification, and Workspace Chaos.
+- Fast run `30913072708` exposed the known `validation_runs` PostgreSQL
+  deadlock owned by PR #15 plus a Prettier failure in this new evidence file.
+  The latter is being corrected by a documentation-only normal follow-up
+  commit; no PR #14 product/database fix is authorized.
+- PR #15 rebase and stacked CI remain pending.
 
 ## Rollback
 
