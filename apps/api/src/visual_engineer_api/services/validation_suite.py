@@ -747,6 +747,7 @@ class ValidationSuiteService:
             current.deadline_at = now + timedelta(seconds=current.total_timeout_seconds)
             current.state = "queued"
         current.version += 1
+        self._session.flush()
 
         try:
             child = ValidationService(self._session).create(
@@ -761,6 +762,7 @@ class ValidationSuiteService:
                 suite_dispatch_ref=f"{current.suite_id}:v{current.suite_version}",
             )
         except ValidationServiceError as exc:
+            self._session.rollback()
             failed_run = self._required_run(suite_run_id, lock=True)
             failed_steps = self._validation.suite_steps(suite_run_id, lock=True)
             failed_step = next(step for step in failed_steps if step.id == pending.id)
