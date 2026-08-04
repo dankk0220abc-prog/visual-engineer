@@ -80,8 +80,54 @@ git_status_hash() {
   fi
 }
 
-workspace_tree_fingerprint() {
-  uv run python scripts/tree_fingerprint.py "$WORKSPACE_FIXTURE_REPOSITORY"
+write_workspace_payload_manifest() {
+  e2e_manifest_output=$1
+  uv run python scripts/workspace_payload_manifest.py write \
+    "$WORKSPACE_FIXTURE_REPOSITORY" "$e2e_manifest_output"
+}
+
+workspace_payload_manifest_digest() {
+  e2e_manifest_path=$1
+  uv run python scripts/workspace_payload_manifest.py digest "$e2e_manifest_path"
+}
+
+check_workspace_payload_manifest() {
+  e2e_expected_manifest=$1
+  e2e_actual_manifest=$2
+  e2e_workspace_root=$3
+  e2e_expected_digest=$4
+
+  if write_workspace_payload_manifest "$e2e_actual_manifest"; then
+    if e2e_actual_digest=$(workspace_payload_manifest_digest "$e2e_actual_manifest"); then
+      if [ "$e2e_expected_digest" = "$e2e_actual_digest" ]; then
+        report_check PASS workspace-tree "$e2e_expected_digest" "$e2e_actual_digest" \
+          "$e2e_workspace_root" 0
+      else
+        report_check FAIL workspace-tree "$e2e_expected_digest" "$e2e_actual_digest" \
+          "$e2e_workspace_root" 1 >&2
+        if uv run python scripts/workspace_payload_manifest.py compare \
+          "$e2e_expected_manifest" "$e2e_actual_manifest" \
+          --check-name workspace-tree --workspace-root "$e2e_workspace_root" >&2; then
+          printf 'E2E_WORKSPACE_MANIFEST_DIAGNOSTIC status="FAIL" reason="digest-mismatch-without-entry-diff"\n' >&2
+        else
+          e2e_manifest_compare_exit=$?
+          if [ "$e2e_manifest_compare_exit" -ne 1 ]; then
+            printf 'E2E_WORKSPACE_MANIFEST_DIAGNOSTIC status="FAIL" reason="compare-error" raw_exit=%s\n' \
+              "$e2e_manifest_compare_exit" >&2
+          fi
+        fi
+      fi
+    else
+      e2e_manifest_digest_exit=$?
+      report_check FAIL workspace-tree "$e2e_expected_digest" manifest-digest-error \
+        "$e2e_workspace_root" "$e2e_manifest_digest_exit" >&2
+    fi
+  else
+    e2e_manifest_write_exit=$?
+    report_check FAIL workspace-tree "$e2e_expected_digest" manifest-write-error \
+      "$e2e_workspace_root" "$e2e_manifest_write_exit" >&2
+  fi
+  return 0
 }
 
 compose_down() {
@@ -165,7 +211,10 @@ FIXTURE_HEAD_BEFORE=$(git -C "$FIXTURE_REPOSITORY" rev-parse HEAD)
 FIXTURE_STATUS_BEFORE=$(git_status_hash "$FIXTURE_REPOSITORY")
 WORKSPACE_HEAD_BEFORE=$(git -C "$WORKSPACE_FIXTURE_REPOSITORY" rev-parse HEAD)
 WORKSPACE_STATUS_BEFORE=$(git_status_hash "$WORKSPACE_FIXTURE_REPOSITORY")
-WORKSPACE_TREE_BEFORE=$(workspace_tree_fingerprint)
+WORKSPACE_MANIFEST_BEFORE="$FIXTURE_DIRECTORY/workspace-payload-before.json"
+WORKSPACE_MANIFEST_AFTER="$FIXTURE_DIRECTORY/workspace-payload-after.json"
+write_workspace_payload_manifest "$WORKSPACE_MANIFEST_BEFORE"
+WORKSPACE_TREE_BEFORE=$(workspace_payload_manifest_digest "$WORKSPACE_MANIFEST_BEFORE")
 E2E_REPOSITORY_PATH="$FIXTURE_REPOSITORY" \
 WORKSPACE_FIXTURE_REPOSITORY_PATH="$WORKSPACE_FIXTURE_REPOSITORY" \
 POSTGRES_PUBLISHED_PORT="$E2E_DB_PORT" \
@@ -209,8 +258,8 @@ check_command_equal workspace-head "$WORKSPACE_HEAD_BEFORE" "$WORKSPACE_FIXTURE_
   git -C "$WORKSPACE_FIXTURE_REPOSITORY" rev-parse HEAD
 check_command_equal workspace-status "$WORKSPACE_STATUS_BEFORE" "$WORKSPACE_FIXTURE_REPOSITORY" \
   git_status_hash "$WORKSPACE_FIXTURE_REPOSITORY"
-check_command_equal workspace-tree "$WORKSPACE_TREE_BEFORE" "$WORKSPACE_FIXTURE_REPOSITORY" \
-  workspace_tree_fingerprint
+check_workspace_payload_manifest "$WORKSPACE_MANIFEST_BEFORE" "$WORKSPACE_MANIFEST_AFTER" \
+  "$WORKSPACE_FIXTURE_REPOSITORY" "$WORKSPACE_TREE_BEFORE"
 check_path_absent committed-lifecycle-marker "$FIXTURE_REPOSITORY/lifecycle-ran"
 check_path_absent dependency-lifecycle-marker "$FIXTURE_REPOSITORY/dependency-lifecycle-ran"
 check_path_absent dirty-lifecycle-marker "$FIXTURE_REPOSITORY/dirty-lifecycle-ran"
