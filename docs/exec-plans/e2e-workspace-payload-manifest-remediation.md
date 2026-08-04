@@ -2,11 +2,13 @@
 
 ## Status
 
-LOCAL IMPLEMENTATION AND FIRST REMOTE HEAVY RUN VERIFIED; DOCUMENT FORMAT
-FOLLOW-UP IN PROGRESS. This plan is limited to PR #14's E2E workspace-tree
-postcondition, its dedicated helper and tests, and verification evidence. It
-does not authorize product, PostgreSQL transaction, workflow timeout/retry,
-Provider, API key, license, tag, deployment, readiness, or merge changes.
+IMPLEMENTATION AND PR #14 REMOTE VERIFICATION COMPLETE. This plan is limited
+to PR #14's E2E workspace-tree postcondition, its dedicated helper and tests,
+and verification evidence. It does not authorize product, PostgreSQL
+transaction, workflow timeout/retry, Provider, API key, license, tag,
+deployment, readiness, or merge changes. The child PR's live synchronization
+and CI state are reported separately so that this base-branch record does not
+become self-invalidating after the child is rebased.
 
 ## Baseline and failure
 
@@ -75,9 +77,17 @@ It excludes timestamps, inode, ownership, absolute root, and traversal order.
   cleanup verification, and Workspace Chaos.
 - Fast run `30913072708` exposed the known `validation_runs` PostgreSQL
   deadlock owned by PR #15 plus a Prettier failure in this new evidence file.
-  The latter is being corrected by a documentation-only normal follow-up
-  commit; no PR #14 product/database fix is authorized.
-- PR #15 rebase and stacked CI remain pending.
+  The latter was corrected by documentation-only commit
+  `91a272560511882d96acf0957ec4e10be69cffb5`; no PR #14 product/database fix
+  was made.
+- On that exact follow-up head, Fast run `30913943585` passed all five jobs and
+  Heavy run `30913943104` passed all three jobs. The Heavy E2E reported
+  `24 passed`, `1 flaky` successful retry, and `3 skipped`, with suite exit
+  `0`; workspace-tree payload equality, all explicit postconditions, cleanup
+  verification, and Workspace Chaos passed.
+- PR #15 synchronization is performed only after publication of the final
+  base head. Its resulting head and stacked workflow results are deliberately
+  reported as live external state rather than embedded in this PR #14 plan.
 
 ## Rollback
 

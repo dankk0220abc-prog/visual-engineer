@@ -83,6 +83,26 @@ Fast run `30913072708` had two independently attributed failures:
   unformatted. This in-scope documentation issue is corrected in a normal
   follow-up commit and requires a fresh CI run.
 
+Documentation-only commit `91a272560511882d96acf0957ec4e10be69cffb5`
+corrected that formatting without changing the helper, wrapper, or tests. On
+that exact head, Fast run `30913943585` passed all five jobs and Heavy run
+`30913943104` passed all three jobs:
+
+- Playwright reported `24 passed`, `1 flaky` successful retry, and `3 skipped`;
+  the suite raw exit was `0`.
+- Fixture HEAD/status, workspace HEAD/status, and all lifecycle markers passed.
+- Workspace payload digest
+  `dd4cdcc07036d5e60ae0d53c7250695ce16d342485086134a11a7cc262e0fd93`
+  matched before and after.
+- Cleanup containers, networks, volumes, and temporary fixture directory
+  passed with final exit `0`.
+- Workspace Chaos passed with the source repository and `.git` fingerprint
+  unchanged.
+
+The child PR's rebased head and stacked workflow state are live GitHub state
+reported separately after the final base head is published; they are not
+embedded here because doing so would require changing the base again.
+
 ## Tooling corrections retained in the record
 
 - The GitHub CI inspection helper was first invoked with unavailable `python`
