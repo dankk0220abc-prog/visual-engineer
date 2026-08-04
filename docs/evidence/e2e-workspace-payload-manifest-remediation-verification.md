@@ -136,3 +136,118 @@ timeout change, ignored-file exemption, or CI skip was added.
 
 No Provider or API key was connected. No license, tag, deploy, readiness,
 merge, main movement, or remote branch deletion was performed.
+
+## 2026-08-04 fail-closed race remediation evidence
+
+### Exact preflight
+
+- Physical root and Git top-level were both
+  `/Users/danke/Developer/VisualEngineer`.
+- The starting branch was `fix/validation-run-grant-deadlock` at
+  `5a12a359ab1e33a5edbc69b3659e3e36ad9547a0`; tracked, staged, and untracked
+  changes were empty. Stash and merge/rebase/cherry-pick/revert/bisect/
+  sequencer state were empty.
+- Local and remote `main` were
+  `c310dab795d01a29c2ca8c5fe4aaeaeb8179bd4a` (ahead/behind `0/0`). Local,
+  cached remote, live remote, and GitHub PR #14 heads were
+  `a2281f956db6ef5354ee0fd0a4becc876392b03a` (ahead/behind `0/0`). The same
+  four PR #15 observations were
+  `5a12a359ab1e33a5edbc69b3659e3e36ad9547a0` (ahead/behind `0/0`).
+- Backup refs were exact:
+  `backup/pr15-pre-fingerprint-sync` at
+  `8d660e0e9ad1535c08037e62c9d7f826ce0dfc8d` and
+  `backup/pr15-pre-final-evidence-sync` at
+  `95db82413418f7b6c216f05f10e4210bc170c837`.
+- GitHub authentication was active. PR #14 was OPEN/DRAFT, based on `main`;
+  PR #15 was OPEN/DRAFT, based on `fix/ci-e2e-post-gate`.
+- The latest starting PR #14 Heavy run `30916010775` was successful. Fast run
+  `30916017016` failed and remains a historical input to the post-push exact
+  failure-attribution check.
+- After the baseline passed, the checkout switched to
+  `fix/ci-e2e-post-gate`; local HEAD and GitHub PR #14 HEAD matched exactly.
+
+### Frozen PR #15 child identity
+
+| Child path                                                                             | Starting blob                              |
+| -------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `apps/api/src/visual_engineer_api/services/validation.py`                              | `0ff24a3c9fcc2e28ee25b1a88c461846758a0d17` |
+| `apps/api/src/visual_engineer_api/services/validation_suite.py`                        | `a40065d5dd1909a600802ee0043d2b4850f13dee` |
+| `apps/api/tests/test_phase5_validation_suites_remediation.py`                          | `a29d946f10a7e95916ee0629816d3b447aa143a3` |
+| `apps/api/tests/test_validation_run_grant_deadlock_regression.py`                      | `0ed0e4ecb0f9d4419c58288e1d6445bfeb866c58` |
+| `docs/evidence/validation-run-grant-deadlock-deterministic-regression-verification.md` | `2117e34fc6f38ef0fc695810683720c2fe28a7a2` |
+| `docs/evidence/validation-run-grant-deadlock-remediation-verification.md`              | `e6f601664411c04bc3f1eb2aa5476491717d460f` |
+| `docs/exec-plans/validation-run-grant-deadlock-remediation.md`                         | `026246f53f116ade7456a9a655cde1572a4df39e` |
+
+The starting stable patch-id was
+`7d8c499328266ce0959b54dbbbdae30817874b9e`. The dedicated regression test
+SHA-256 was
+`702e6810293ee193e0b6ae3bcb5cd099c7f9e4f974b4c3cd396647044f911f66`.
+
+### Implementation checkpoint
+
+- `UnsupportedWorkspaceEntryError` now rejects every entry outside the closed
+  directory/regular-file/symlink union. The root `.git` byte name is removed
+  before classification.
+- Descriptor-pinned traversal compares `st_dev`, `st_ino`, full `st_mode`,
+  `st_size`, `st_mtime_ns`, and `st_ctime_ns` at the required pre, descriptor,
+  read, rescan, and post-path stages.
+- Exactly two scans must match in canonical bytes and internal metadata. These
+  identity fields are not serialized into the manifest.
+- Diagnostics are globally capped at 20 deterministic records. Summary output
+  includes the total and omitted count, while symlink targets are represented
+  only by type, byte length, and SHA-256.
+- `scripts/run-e2e.sh` is unchanged because its existing manifest-write error
+  path already turns a typed helper failure into a failed workspace-tree
+  postcondition without swallowing the nonzero exit.
+
+### Validation ledger
+
+| Command or case                                                                                                | Result                                                                          | Exit |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---- |
+| `uv run python -m py_compile scripts/workspace_payload_manifest.py scripts/test_workspace_payload_manifest.py` | PASS                                                                            | `0`  |
+| `bash -n scripts/run-e2e.sh`                                                                                   | PASS; wrapper unchanged                                                         | `0`  |
+| `uv run python scripts/test_workspace_payload_manifest.py -v`                                                  | 22 PASS, 0 skip                                                                 | `0`  |
+| real FIFO and Unix domain socket                                                                               | typed rejection; relative safe diagnostics                                      | `0`  |
+| root `.git` file/directory/symlink                                                                             | excluded before classification                                                  | `0`  |
+| pre-`lstat` to open replacement                                                                                | `WorkspaceSnapshotChangedError`                                                 | `0`  |
+| descriptor-read in-place mutation                                                                              | `WorkspaceSnapshotChangedError`                                                 | `0`  |
+| directory snapshot then add/delete/replace                                                                     | three typed fail-closed cases                                                   | `0`  |
+| symlink replacement during `readlink`                                                                          | `WorkspaceSnapshotChangedError`                                                 | `0`  |
+| processed file changed before overall completion                                                               | global two-snapshot mismatch                                                    | `0`  |
+| opposite creation-order trees                                                                                  | canonical bytes and SHA-256 exact                                               | `0`  |
+| diagnostic cap and target/body redaction                                                                       | 20 emitted of 25; 5 omitted                                                     | `0`  |
+| `make source-invariance-check`                                                                                 | PASS; 118 source entries, 10 Git objects, 2 status records, 0 extension markers | `0`  |
+| `git diff --check` before E2E                                                                                  | PASS                                                                            | `0`  |
+| `CI=true make e2e`                                                                                             | 25 passed, 3 skipped; all postconditions and cleanup PASS                       | `0`  |
+
+The two independently rooted creation-order manifests both produced
+`0c7200f335b15c61752848ad8303165c6b85234ba7081f79de70482f8f3da343`.
+Neither absolute root nor mtime/ctime was serialized.
+
+The single local E2E produced `25 passed`, `3 skipped` in 1.9 minutes with no
+flaky retry. Its workspace payload expected and actual digests were both
+`4bac1f7730f2fd7f1ff11e7de14f502c1bf3d7d8671de185187150e2b808731a`.
+Fixture HEAD/status, workspace HEAD/status, and all lifecycle-marker checks
+passed. Compose-down and fixture removal passed; residual containers,
+networks, volumes, and the fixture directory were all absent.
+`E2E_RESULT` was
+`primary_exit=0 cleanup_verification_exit=0 final_exit=0`. This was the only
+local E2E run; full `make verify`, API-direct, historical repetition, broad
+security/eval/migration, and a second E2E were not run.
+
+During test development, the first Unix socket location exceeded the platform
+AF_UNIX pathname bound and the 22-case run reported 21 PASS / 1 capability
+skip. The fixture was narrowed to a real short `/tmp` root; the dedicated
+socket case then passed and the final full 22-case run had no skip. No product
+failure was rerun, and no timeout, retry, or assertion was relaxed.
+
+The two Python files were mechanically normalized with
+`uv run ruff format scripts/workspace_payload_manifest.py scripts/test_workspace_payload_manifest.py`;
+the two documentation files were normalized with a path-limited
+`pnpm exec prettier --write` invocation. Both formatter commands exited `0`.
+Python compile/import and all 22 helper cases passed again on the formatted
+files. Final `git diff --check`, exact four-path scope, and PR #15 blob,
+patch-id, and regression-hash checks also exited `0`.
+
+Commit/push, PR #14 exact-head CI, and stacked PR #15 synchronization remain
+NOT YET VERIFIED.

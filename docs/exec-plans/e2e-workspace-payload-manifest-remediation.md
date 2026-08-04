@@ -2,13 +2,12 @@
 
 ## Status
 
-IMPLEMENTATION AND PR #14 REMOTE VERIFICATION COMPLETE. This plan is limited
-to PR #14's E2E workspace-tree postcondition, its dedicated helper and tests,
-and verification evidence. It does not authorize product, PostgreSQL
-transaction, workflow timeout/retry, Provider, API key, license, tag,
-deployment, readiness, or merge changes. The child PR's live synchronization
-and CI state are reported separately so that this base-branch record does not
-become self-invalidating after the child is rebased.
+FAIL-CLOSED RACE REMEDIATION LOCALLY VERIFIED; PUBLICATION AND STACKED CI
+PENDING. The original implementation and PR #14 remote-verification record
+remains preserved below. This follow-up is limited to the same helper, its
+focused tests, this plan, and its evidence. It does not authorize product,
+PostgreSQL transaction, workflow timeout/retry, Provider, API key, license,
+tag, deployment, readiness, or merge changes.
 
 ## Baseline and failure
 
@@ -94,3 +93,56 @@ It excludes timestamps, inode, ownership, absolute root, and traversal order.
 Before publication, revert only this plan's allowlisted files. After publication,
 revert the dedicated PR #14 remediation commit with a normal follow-up commit.
 Do not reset, clean, or force-push PR #14.
+
+## 2026-08-04 fail-closed race remediation
+
+The final focused re-review identified three bounded gaps in the helper, not a
+reason to reopen any prior product phase:
+
+- `VE-SFFR-001`: FIFO, socket, device, and unknown entries were serialized as
+  empty-content records instead of being rejected.
+- `VE-SFFR-002`: a pathname-oriented, single-pass scan could miss replacement,
+  read-time mutation, directory-entry mutation, or a change to an already
+  processed file.
+- `VE-SFFR-003`: the tests did not compare two separately created but
+  semantically identical trees built in opposite creation order.
+
+The narrow implementation contract is:
+
+1. Admit only directory, regular-file, and symlink records. Exclude the exact
+   root `.git` name before classification; reject every unsupported nested
+   type with `UnsupportedWorkspaceEntryError` containing only a relative path,
+   safe type/mode, and stage.
+2. Traverse from pinned directory descriptors. Compare pathname pre-`lstat`,
+   descriptor `fstat`, post-read `fstat`, post-path `lstat`, directory entry
+   byte sets, and stable identity/metadata fields. Any inconsistency becomes
+   `WorkspaceSnapshotChangedError`; there is no sleep or retry.
+3. Build exactly two complete snapshots and require both canonical bytes and
+   internal identity/metadata maps to match. Do not build a third snapshot.
+4. Keep symlink target bytes fingerprint-sensitive in the canonical manifest,
+   but replace raw targets in mismatch logs with byte length and SHA-256. Emit
+   at most 20 deterministic entry diagnostics plus total and omitted counts.
+5. Use real FIFO, Unix socket, file, directory, and symlink operations. Open
+   race windows with `threading.Event`; do not mock a final manifest or typed
+   exception.
+
+Preflight matched the authorized baseline exactly: clean worktree and index;
+no untracked files, stash, or in-progress Git operation; `main` at
+`c310dab795d01a29c2ca8c5fe4aaeaeb8179bd4a`; PR #14 at
+`a2281f956db6ef5354ee0fd0a4becc876392b03a`; PR #15 at
+`5a12a359ab1e33a5edbc69b3659e3e36ad9547a0`; and both backup refs at their
+expected SHAs. Both PRs were OPEN/DRAFT with the expected stacked bases. The
+seven PR #15 paths, blob IDs, stable patch-id, and regression-test SHA-256 were
+recorded before modification and must remain exact through the child rebase.
+
+Local focused validation is VERIFIED: Python compile/import and Bash syntax;
+22 focused helper tests with no skip; real FIFO and Unix socket rejection; all
+required Event-synchronized race cases; creation-order equality; bounded,
+redacted diagnostics; source invariance; and `git diff --check` passed. The
+single authorized `CI=true make e2e` passed with `25 passed`, `3 skipped`, no
+retry, exact workspace payload digest equality, all postconditions, and zero
+cleanup residue. No second E2E and no full `make verify` were run.
+
+Ordinary PR #14 publication, its exact-head Fast/Heavy contracts, and the
+guarded PR #15 rebase and stacked CI remain NOT YET VERIFIED until completed
+and recorded in the evidence file.

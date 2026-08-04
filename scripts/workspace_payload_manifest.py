@@ -4,11 +4,27 @@ import json
 import os
 import stat
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 SCHEMA = "visualengineer-workspace-payload-manifest-v1"
 EMPTY_CONTENT_DIGEST = hashlib.sha256(b"").hexdigest()
+DIAGNOSTIC_ENTRY_LIMIT = 20
+
+
+class UnsupportedWorkspaceEntryError(ValueError):
+    """Raised when a workspace entry is not a directory, file, or symlink."""
+
+
+class WorkspaceSnapshotChangedError(RuntimeError):
+    """Raised when the workspace changes while a manifest is being built."""
+
+
+@dataclass(frozen=True)
+class _Snapshot:
+    manifest: dict[str, Any]
+    metadata: dict[str, tuple[int, int, int, int, int, int]]
 
 
 def _entry_type(mode: int) -> str:
@@ -29,68 +45,265 @@ def _entry_type(mode: int) -> str:
     return "unknown"
 
 
-def _file_digest(path: Path) -> str:
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags)
+def _metadata_signature(metadata: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _snapshot_changed(relative_path: str, stage: str, reason: str) -> WorkspaceSnapshotChangedError:
+    return WorkspaceSnapshotChangedError(
+        f"Workspace snapshot changed: path={relative_path!r}; stage={stage}; reason={reason}"
+    )
+
+
+def _require_same_metadata(
+    expected: os.stat_result,
+    actual: os.stat_result,
+    relative_path: str,
+    stage: str,
+) -> None:
+    if _metadata_signature(expected) != _metadata_signature(actual):
+        raise _snapshot_changed(relative_path, stage, "metadata-mismatch")
+
+
+def _lstat(
+    name: bytes | Path,
+    directory_descriptor: int | None,
+    relative_path: str,
+    stage: str,
+) -> os.stat_result:
     try:
-        metadata = os.fstat(descriptor)
-        if not stat.S_ISREG(metadata.st_mode):
-            raise RuntimeError(f"Manifest entry changed type while reading: {path.name!r}")
+        if directory_descriptor is None:
+            return os.lstat(name)
+        return os.lstat(name, dir_fd=directory_descriptor)
+    except OSError:
+        raise _snapshot_changed(relative_path, stage, "lstat-failed") from None
+
+
+def _fstat(descriptor: int, relative_path: str, stage: str) -> os.stat_result:
+    try:
+        return os.fstat(descriptor)
+    except OSError:
+        raise _snapshot_changed(relative_path, stage, "fstat-failed") from None
+
+
+def _directory_entry_names(
+    descriptor: int, relative_path: str, exclude_top_level_git: bool
+) -> tuple[bytes, ...]:
+    try:
+        with os.scandir(descriptor) as scanner:
+            names = [os.fsencode(entry.name) for entry in scanner]
+    except OSError:
+        raise _snapshot_changed(relative_path, "directory-scan", "scandir-failed") from None
+    if exclude_top_level_git:
+        names = [name for name in names if name != b".git"]
+    return tuple(sorted(names))
+
+
+def _relative_child(relative_directory: str, name: bytes) -> str:
+    decoded_name = os.fsdecode(name)
+    if relative_directory == ".":
+        return decoded_name
+    return f"{relative_directory}/{decoded_name}"
+
+
+def _file_digest(
+    directory_descriptor: int,
+    name: bytes,
+    relative_path: str,
+    pre_metadata: os.stat_result,
+) -> str:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(name, flags, dir_fd=directory_descriptor)
+    except OSError:
+        raise _snapshot_changed(relative_path, "file-open", "open-failed") from None
+    try:
+        descriptor_pre = _fstat(descriptor, relative_path, "file-descriptor-pre")
+        _require_same_metadata(pre_metadata, descriptor_pre, relative_path, "file-descriptor-pre")
+        if not stat.S_ISREG(descriptor_pre.st_mode):
+            raise _snapshot_changed(relative_path, "file-descriptor-pre", "type-mismatch")
+
         digest = hashlib.sha256()
-        while block := os.read(descriptor, 64 * 1024):
-            digest.update(block)
-        return digest.hexdigest()
+        try:
+            while block := os.read(descriptor, 64 * 1024):
+                digest.update(block)
+        except OSError:
+            raise _snapshot_changed(relative_path, "file-read", "read-failed") from None
+
+        descriptor_post = _fstat(descriptor, relative_path, "file-descriptor-post")
+        _require_same_metadata(
+            descriptor_pre, descriptor_post, relative_path, "file-descriptor-post"
+        )
     finally:
         os.close(descriptor)
 
+    pathname_post = _lstat(name, directory_descriptor, relative_path, "file-pathname-post")
+    _require_same_metadata(pre_metadata, pathname_post, relative_path, "file-pathname-post")
+    return digest.hexdigest()
 
-def _logical_size(entry_type: str, metadata: os.stat_result, symlink_target: str | None) -> int:
+
+def _logical_size(entry_type: str, metadata: os.stat_result, symlink_target: bytes | None) -> int:
     if entry_type == "file":
         return metadata.st_size
     if entry_type == "symlink":
         assert symlink_target is not None
-        return len(os.fsencode(symlink_target))
+        return len(symlink_target)
     return 0
+
+
+def _scan_directory(
+    directory_descriptor: int,
+    relative_directory: str,
+    directory_pre: os.stat_result,
+    entries: list[dict[str, Any]],
+    metadata_by_path: dict[str, tuple[int, int, int, int, int, int]],
+    *,
+    is_root: bool,
+) -> None:
+    descriptor_pre = _fstat(directory_descriptor, relative_directory, "directory-descriptor-pre")
+    _require_same_metadata(
+        directory_pre, descriptor_pre, relative_directory, "directory-descriptor-pre"
+    )
+    if not stat.S_ISDIR(descriptor_pre.st_mode):
+        raise _snapshot_changed(relative_directory, "directory-descriptor-pre", "type-mismatch")
+    metadata_by_path[relative_directory] = _metadata_signature(descriptor_pre)
+
+    initial_names = _directory_entry_names(directory_descriptor, relative_directory, is_root)
+    for name in initial_names:
+        relative_path = _relative_child(relative_directory, name)
+        entry_pre = _lstat(name, directory_descriptor, relative_path, "entry-pre")
+        entry_type = _entry_type(entry_pre.st_mode)
+        if entry_type not in {"directory", "file", "symlink"}:
+            raise UnsupportedWorkspaceEntryError(
+                "Unsupported workspace entry: "
+                f"path={relative_path!r}; type={entry_type}; "
+                f"mode={stat.S_IFMT(entry_pre.st_mode):#o}; stage=entry-classification"
+            )
+
+        symlink_target: bytes | None = None
+        entry: dict[str, Any] = {
+            "type": entry_type,
+            "mode": f"{stat.S_IMODE(entry_pre.st_mode):04o}",
+            "path": relative_path,
+            "size": 0,
+        }
+        if entry_type == "file":
+            entry["size"] = _logical_size(entry_type, entry_pre, None)
+            entry["content_sha256"] = _file_digest(
+                directory_descriptor, name, relative_path, entry_pre
+            )
+            metadata_by_path[relative_path] = _metadata_signature(entry_pre)
+        elif entry_type == "symlink":
+            try:
+                target = os.readlink(name, dir_fd=directory_descriptor)
+            except OSError:
+                raise _snapshot_changed(
+                    relative_path, "symlink-readlink", "readlink-failed"
+                ) from None
+            symlink_target = os.fsencode(target)
+            symlink_post = _lstat(
+                name, directory_descriptor, relative_path, "symlink-pathname-post"
+            )
+            _require_same_metadata(entry_pre, symlink_post, relative_path, "symlink-pathname-post")
+            entry["size"] = _logical_size(entry_type, entry_pre, symlink_target)
+            entry["symlink_target"] = os.fsdecode(symlink_target)
+            metadata_by_path[relative_path] = _metadata_signature(entry_pre)
+        else:
+            entry["content_sha256"] = EMPTY_CONTENT_DIGEST
+
+        entries.append(entry)
+        if entry_type == "directory":
+            flags = (
+                os.O_RDONLY
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_DIRECTORY", 0)
+            )
+            try:
+                child_descriptor = os.open(name, flags, dir_fd=directory_descriptor)
+            except OSError:
+                raise _snapshot_changed(relative_path, "directory-open", "open-failed") from None
+            try:
+                _scan_directory(
+                    child_descriptor,
+                    relative_path,
+                    entry_pre,
+                    entries,
+                    metadata_by_path,
+                    is_root=False,
+                )
+            finally:
+                os.close(child_descriptor)
+            directory_path_post = _lstat(
+                name, directory_descriptor, relative_path, "directory-pathname-post"
+            )
+            _require_same_metadata(
+                entry_pre, directory_path_post, relative_path, "directory-pathname-post"
+            )
+
+    final_names = _directory_entry_names(directory_descriptor, relative_directory, is_root)
+    if initial_names != final_names:
+        raise _snapshot_changed(relative_directory, "directory-entry-rescan", "entry-set-mismatch")
+    descriptor_post = _fstat(directory_descriptor, relative_directory, "directory-descriptor-post")
+    _require_same_metadata(
+        descriptor_pre, descriptor_post, relative_directory, "directory-descriptor-post"
+    )
+
+
+def _build_snapshot(resolved_root: Path) -> _Snapshot:
+    root_pre = _lstat(resolved_root, None, ".", "root-pre")
+    if not stat.S_ISDIR(root_pre.st_mode):
+        raise ValueError("Workspace payload manifest root must be a directory")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+    )
+    try:
+        root_descriptor = os.open(resolved_root, flags)
+    except OSError:
+        raise _snapshot_changed(".", "root-open", "open-failed") from None
+    entries: list[dict[str, Any]] = []
+    metadata_by_path: dict[str, tuple[int, int, int, int, int, int]] = {}
+    try:
+        _scan_directory(
+            root_descriptor,
+            ".",
+            root_pre,
+            entries,
+            metadata_by_path,
+            is_root=True,
+        )
+    finally:
+        os.close(root_descriptor)
+    root_post = _lstat(resolved_root, None, ".", "root-post")
+    _require_same_metadata(root_pre, root_post, ".", "root-post")
+
+    entries.sort(key=lambda entry: os.fsencode(entry["path"]))
+    return _Snapshot(
+        manifest={"schema": SCHEMA, "entries": entries},
+        metadata=metadata_by_path,
+    )
 
 
 def build_manifest(root: Path) -> dict[str, Any]:
     resolved_root = root.resolve(strict=True)
-    if not resolved_root.is_dir():
-        raise ValueError("Workspace payload manifest root must be a directory")
-
-    entries: list[dict[str, Any]] = []
-    pending = [resolved_root]
-    while pending:
-        directory = pending.pop()
-        children = list(os.scandir(directory))
-        children.sort(key=lambda child: os.fsencode(child.name), reverse=True)
-        for child in children:
-            if directory == resolved_root and os.fsencode(child.name) == b".git":
-                continue
-
-            path = Path(child.path)
-            relative_path = path.relative_to(resolved_root).as_posix()
-            metadata = child.stat(follow_symlinks=False)
-            entry_type = _entry_type(metadata.st_mode)
-            symlink_target = os.readlink(path) if entry_type == "symlink" else None
-            entry: dict[str, Any] = {
-                "type": entry_type,
-                "mode": f"{stat.S_IMODE(metadata.st_mode):04o}",
-                "path": relative_path,
-                "size": _logical_size(entry_type, metadata, symlink_target),
-            }
-            if entry_type == "file":
-                entry["content_sha256"] = _file_digest(path)
-            elif entry_type == "symlink":
-                entry["symlink_target"] = symlink_target
-            else:
-                entry["content_sha256"] = EMPTY_CONTENT_DIGEST
-            entries.append(entry)
-            if entry_type == "directory":
-                pending.append(path)
-
-    entries.sort(key=lambda entry: os.fsencode(entry["path"]))
-    return {"schema": SCHEMA, "entries": entries}
+    first = _build_snapshot(resolved_root)
+    second = _build_snapshot(resolved_root)
+    if (
+        canonical_manifest_bytes(first.manifest) != canonical_manifest_bytes(second.manifest)
+        or first.metadata != second.metadata
+    ):
+        raise _snapshot_changed(".", "global-snapshot-compare", "snapshot-mismatch")
+    return first.manifest
 
 
 def canonical_manifest_bytes(manifest: dict[str, Any]) -> bytes:
@@ -178,7 +391,10 @@ def _diagnostic_entry(entry: dict[str, Any]) -> dict[str, Any]:
         "size": entry["size"],
     }
     if entry["type"] == "symlink":
-        diagnostic["symlink_target"] = entry["symlink_target"]
+        target_bytes = os.fsencode(entry["symlink_target"])
+        diagnostic["symlink_target_type"] = "bytes"
+        diagnostic["symlink_target_byte_length"] = len(target_bytes)
+        diagnostic["symlink_target_sha256"] = hashlib.sha256(target_bytes).hexdigest()
     else:
         diagnostic["content_sha256"] = entry["content_sha256"]
     return diagnostic
@@ -198,6 +414,7 @@ def print_mismatch(
         return False
 
     added, removed, changed = manifest_differences(expected, actual)
+    diagnostic_total_count = len(added) + len(removed) + len(changed)
     summary = {
         "check": check_name,
         "expected_digest": expected_digest,
@@ -206,32 +423,38 @@ def print_mismatch(
         "added_count": len(added),
         "removed_count": len(removed),
         "changed_count": len(changed),
+        "diagnostic_limit": DIAGNOSTIC_ENTRY_LIMIT,
+        "diagnostic_total_count": diagnostic_total_count,
+        "diagnostic_omitted_count": max(0, diagnostic_total_count - DIAGNOSTIC_ENTRY_LIMIT),
     }
     print(
         "E2E_WORKSPACE_MANIFEST_MISMATCH " + json.dumps(summary, ensure_ascii=True, sort_keys=True)
     )
-    for entry in added:
-        print(
-            "E2E_WORKSPACE_MANIFEST_ADDED "
-            + json.dumps(_diagnostic_entry(entry), ensure_ascii=True, sort_keys=True)
-        )
-    for entry in removed:
-        print(
-            "E2E_WORKSPACE_MANIFEST_REMOVED "
-            + json.dumps(_diagnostic_entry(entry), ensure_ascii=True, sort_keys=True)
-        )
+    diagnostics: list[tuple[str, dict[str, Any]]] = []
+    diagnostics.extend(("ADDED", _diagnostic_entry(entry)) for entry in added)
+    diagnostics.extend(("REMOVED", _diagnostic_entry(entry)) for entry in removed)
     for old_entry, new_entry in changed:
-        diagnostic = {
-            "path": old_entry["path"],
-            "old": {
-                key: value for key, value in _diagnostic_entry(old_entry).items() if key != "path"
-            },
-            "new": {
-                key: value for key, value in _diagnostic_entry(new_entry).items() if key != "path"
-            },
-        }
+        diagnostics.append(
+            (
+                "CHANGED",
+                {
+                    "path": old_entry["path"],
+                    "old": {
+                        key: value
+                        for key, value in _diagnostic_entry(old_entry).items()
+                        if key != "path"
+                    },
+                    "new": {
+                        key: value
+                        for key, value in _diagnostic_entry(new_entry).items()
+                        if key != "path"
+                    },
+                },
+            )
+        )
+    for label, diagnostic in diagnostics[:DIAGNOSTIC_ENTRY_LIMIT]:
         print(
-            "E2E_WORKSPACE_MANIFEST_CHANGED "
+            f"E2E_WORKSPACE_MANIFEST_{label} "
             + json.dumps(diagnostic, ensure_ascii=True, sort_keys=True)
         )
     return True
