@@ -1,6 +1,6 @@
 # Model-neutral multi-Provider foundation
 
-Status: IN PROGRESS
+Status: IMPLEMENTATION COMPLETE — DRAFT PR/CI PENDING
 
 ## Goal
 
@@ -78,7 +78,24 @@ compatibility.
 
 - Preflight completed and matched the requested baseline.
 - Existing AI Planning persistence and authority boundaries inspected.
-- No-migration path selected; implementation underway.
+- No-migration path selected and the existing `provider_id`/JSON metadata
+  boundary retained.
+- Closed six-Provider registry, five explicit allowlisted adapters, safe
+  configuration discovery, and Provider-selectable Plan request implemented.
+- Generated OpenAPI/TypeScript contracts updated; bilingual desktop/390 px UI,
+  accessibility coverage, focused real-stack browser denial path, and five-image
+  Evidence workflow completed.
+- Focused backend matrix: 44 passed. Focused Web/i18n matrix: 34 passed. Focused
+  Playwright: 4 passed with source/workspace invariance and zero residual E2E
+  resources. Canonical `make test`: Python 383 passed and Web 101 passed.
+- Current Web Docker production build completed. A later all-image local rebuild
+  stopped before tests on an external Debian security mirror `502`; the failure
+  is preserved and was not retried. The focused browser matrix then reused the
+  already-built exact API/Runner images plus the current Web image through the
+  repository's no-build path.
+- Draft PR creation and Fast/Heavy CI inspection remain pending. No live Provider
+  request, key handling, merge, tag, release, deployment, License work, or
+  Dependabot work was performed.
 
 ## Rollback
 

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "scenario_id": "provider-registry-mobile-zh",
+  "image_filename": "provider-registry-mobile-zh.png",
+  "visible_dom_sha256": "5817268e2509c8782eec641beb6ef776899eb063f1d3ec913ba0b2a06082c121",
+  "forbidden_pattern_scan": "passed",
+  "provider_environment_value_scan": "passed",
+  "classification": "fixture_mock_not_live"
+}

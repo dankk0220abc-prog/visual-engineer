@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "scenario_id": "provider-unconfigured-error-desktop-zh",
+  "image_filename": "provider-unconfigured-error-desktop-zh.png",
+  "visible_dom_sha256": "33c8d0ed99fcd47a7369c703706b1c09d30df4975dfc358ee8b8966de38d8c43",
+  "forbidden_pattern_scan": "passed",
+  "provider_environment_value_scan": "passed",
+  "classification": "fixture_mock_not_live"
+}

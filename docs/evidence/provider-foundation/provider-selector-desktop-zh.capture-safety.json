@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "scenario_id": "provider-selector-desktop-zh",
+  "image_filename": "provider-selector-desktop-zh.png",
+  "visible_dom_sha256": "f3581233d670c96ec623c21723707c0f3b9c5f0b22c746e828db1fff48332f4b",
+  "forbidden_pattern_scan": "passed",
+  "provider_environment_value_scan": "passed",
+  "classification": "fixture_mock_not_live"
+}

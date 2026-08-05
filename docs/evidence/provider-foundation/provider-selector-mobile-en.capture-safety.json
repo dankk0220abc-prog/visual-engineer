@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "scenario_id": "provider-selector-mobile-en",
+  "image_filename": "provider-selector-mobile-en.png",
+  "visible_dom_sha256": "fea4ce5d06a424eadd85a45bc50f312c2c5e3603b50d2454b87840d3018db578",
+  "forbidden_pattern_scan": "passed",
+  "provider_environment_value_scan": "passed",
+  "classification": "fixture_mock_not_live"
+}

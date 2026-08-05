@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "scenario_id": "provider-registry-desktop-en",
+  "image_filename": "provider-registry-desktop-en.png",
+  "visible_dom_sha256": "8b205159c43b49e8c2abef6f019d13adf2c0a5ed6d33331ab213be7c91ef1002",
+  "forbidden_pattern_scan": "passed",
+  "provider_environment_value_scan": "passed",
+  "classification": "fixture_mock_not_live"
+}
