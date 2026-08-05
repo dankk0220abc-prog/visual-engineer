@@ -1,4 +1,5 @@
 import type {
+  AIProvider,
   AIPlanRequest,
   AuditEvent,
   Plan,
@@ -9,6 +10,79 @@ import type {
   Snapshot,
   Task,
 } from "@/lib/api";
+
+export function aiProviderFixtures(): AIProvider[] {
+  const fixtureCapabilities: AIProvider["capabilities"] = {
+    structured_output: "supported",
+    tool_calling: "unsupported",
+    streaming: "unsupported",
+    reasoning: "unsupported",
+    token_usage_reporting: "supported",
+    request_id: "supported",
+    configurable_timeout: "unsupported",
+    model_availability: "supported",
+    maximum_output_control: "supported",
+  };
+  const realCapabilities: AIProvider["capabilities"] = {
+    structured_output: "supported",
+    tool_calling: "unsupported",
+    streaming: "unsupported",
+    reasoning: "not_verified",
+    token_usage_reporting: "supported",
+    request_id: "not_verified",
+    configurable_timeout: "supported",
+    model_availability: "not_verified",
+    maximum_output_control: "supported",
+  };
+  const realProviders = [
+    ["zhipu", "Zhipu GLM", "glm-5.2", "https://docs.bigmodel.cn/"],
+    ["qwen", "Qwen", "qwen3.8-max", "https://help.aliyun.com/"],
+    [
+      "deepseek",
+      "DeepSeek",
+      "deepseek-v4-pro",
+      "https://api-docs.deepseek.com/",
+    ],
+    [
+      "doubao",
+      "Doubao",
+      "doubao-seed-2-0-lite-260215",
+      "https://www.volcengine.com/docs/",
+    ],
+    ["kimi", "Kimi", "kimi-k2.6", "https://platform.kimi.com/docs/"],
+  ] as const;
+
+  return [
+    {
+      provider_id: "deterministic-fixture",
+      display_name: "Deterministic Fixture",
+      model_id: "fixture-planner-v1",
+      configured: true,
+      enabled: true,
+      live_validation_status: "fixture_validated",
+      local_secret_required: false,
+      status_reason: "available",
+      reason_disabled: null,
+      status_description: "available",
+      documentation_url: "https://github.com/",
+      capabilities: fixtureCapabilities,
+    },
+    ...realProviders.map(([providerId, displayName, modelId, docs]) => ({
+      provider_id: providerId,
+      display_name: displayName,
+      model_id: modelId,
+      configured: false,
+      enabled: false,
+      live_validation_status: "not_performed" as const,
+      local_secret_required: true,
+      status_reason: "missing_local_api_key" as const,
+      reason_disabled: "missing_local_api_key" as const,
+      status_description: "not_configured",
+      documentation_url: docs,
+      capabilities: realCapabilities,
+    })),
+  ];
+}
 
 export function aiPlanRequestFixture(
   overrides: Partial<AIPlanRequest> = {},

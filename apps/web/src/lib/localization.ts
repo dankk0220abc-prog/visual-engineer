@@ -19,6 +19,7 @@ export const localizedStatusKeys = [
   "discarded",
   "expired",
   "failed",
+  "fixture_validated",
   "fresh",
   "generated",
   "generating",
@@ -57,6 +58,7 @@ export const localizedStatusKeys = [
   "unavailable",
   "unknown",
   "not_ready",
+  "not_performed",
 ] as const;
 
 export type LocalizedStatusKey = (typeof localizedStatusKeys)[number];
@@ -126,6 +128,8 @@ export const localizedErrorKeys = [
   "plan_submission_policy_violation",
   "policy_denied",
   "protocol_payload_too_large",
+  "provider_disabled",
+  "provider_not_configured",
   "repository_head_unavailable",
   "repository_kind_not_supported",
   "repository_revision_changed",

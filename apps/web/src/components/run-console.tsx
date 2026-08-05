@@ -15,12 +15,14 @@ import {
   getRun,
   getSnapshot,
   listAuditEvents,
+  listAIProviders,
   listAIPlanRequests,
   listPlans,
   refreshAIPlanFreshness,
   revisePlan,
   submitPlan,
   type AIPlanRequest,
+  type AIProvider,
   type AuditEvent,
   type Plan,
   type PlanRevisionInput,
@@ -31,6 +33,7 @@ import { formatTimestamp } from "@/lib/format";
 import { localizeApiError } from "@/lib/localization";
 
 import { AIPlanConsole } from "./ai-plan-console";
+import { ProviderSelector } from "./provider-foundation";
 import { StatusPill } from "./status-pill";
 
 type LoadState = "loading" | "ready" | "error";
@@ -597,6 +600,7 @@ export function RunConsole({ runId }: { runId: string }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [aiPlanRequests, setAIPlanRequests] = useState<AIPlanRequest[]>([]);
+  const [aiProviders, setAIProviders] = useState<AIProvider[]>([]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState("");
@@ -605,6 +609,9 @@ export function RunConsole({ runId }: { runId: string }) {
   const [deliveryPackage, setDeliveryPackage] = useState<
     Plan["delivery_package"]
   >("frontend_quality_remediation");
+  const [selectedProviderId, setSelectedProviderId] = useState<
+    AIProvider["provider_id"]
+  >("deterministic-fixture");
 
   const currentPlan = useMemo(() => plans[0] ?? null, [plans]);
   const currentAIPlan = useMemo(
@@ -617,20 +624,35 @@ export function RunConsole({ runId }: { runId: string }) {
     setMessage("");
     try {
       const loadedRun = await getRun(runId);
-      const [loadedSnapshot, loadedPlans, loadedAIPlans, loadedEvents] =
-        await Promise.all([
-          getSnapshot(runId).catch((error: unknown) => {
-            if (error instanceof ApiError && error.status === 404) return null;
-            throw error;
-          }),
-          listPlans(runId),
-          listAIPlanRequests(runId),
-          listAuditEvents(runId),
-        ]);
+      const [
+        loadedSnapshot,
+        loadedPlans,
+        loadedAIPlans,
+        loadedProviders,
+        loadedEvents,
+      ] = await Promise.all([
+        getSnapshot(runId).catch((error: unknown) => {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        }),
+        listPlans(runId),
+        listAIPlanRequests(runId),
+        listAIProviders(),
+        listAuditEvents(runId),
+      ]);
       setRun(loadedRun);
       setSnapshot(loadedSnapshot);
       setPlans(loadedPlans);
       setAIPlanRequests(loadedAIPlans);
+      setAIProviders(loadedProviders);
+      setSelectedProviderId((current) =>
+        loadedProviders.some(
+          (provider) => provider.provider_id === current && provider.enabled,
+        )
+          ? current
+          : (loadedProviders.find((provider) => provider.enabled)
+              ?.provider_id ?? "deterministic-fixture"),
+      );
       setEvents(loadedEvents);
       setState("ready");
     } catch (error) {
@@ -767,10 +789,7 @@ export function RunConsole({ runId }: { runId: string }) {
           !currentAIPlan &&
           run.status === "snapshot_ready" ? (
             <section className="rounded-2xl border border-indigo-300 bg-gradient-to-br from-indigo-50 to-white p-6 shadow-sm">
-              <p className="text-xs font-semibold tracking-widest text-indigo-700 uppercase">
-                {t("firstSlice")}
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-slate-950">
+              <h2 className="text-lg font-semibold text-slate-950">
                 {t("emptyAiPlan")}
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
@@ -779,6 +798,12 @@ export function RunConsole({ runId }: { runId: string }) {
               <p className="mt-2 max-w-3xl rounded-lg border border-indigo-200 bg-white/80 p-3 text-sm leading-6 text-indigo-950">
                 {t("interfaceOutputBoundary")}
               </p>
+              <ProviderSelector
+                providers={aiProviders}
+                value={selectedProviderId}
+                onChange={setSelectedProviderId}
+                disabled={busy}
+              />
               <label
                 className="mt-4 block text-sm font-semibold text-slate-700"
                 htmlFor="ai-delivery-package"
@@ -812,7 +837,10 @@ export function RunConsole({ runId }: { runId: string }) {
                   void perform(() =>
                     createAIPlanRequest(
                       run.id,
-                      { delivery_package: deliveryPackage },
+                      {
+                        delivery_package: deliveryPackage,
+                        provider_id: selectedProviderId,
+                      },
                       crypto.randomUUID(),
                     ),
                   )

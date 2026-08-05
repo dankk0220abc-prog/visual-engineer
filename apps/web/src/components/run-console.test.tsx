@@ -13,6 +13,7 @@ import {
   getRun,
   getSnapshot,
   listAuditEvents,
+  listAIProviders,
   listAIPlanRequests,
   listPlans,
   refreshAIPlanFreshness,
@@ -20,6 +21,7 @@ import {
   submitPlan,
 } from "@/lib/api";
 import {
+  aiProviderFixtures,
   aiPlanRequestFixture,
   auditFixture,
   planFixture,
@@ -43,6 +45,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     getRun: vi.fn(),
     getSnapshot: vi.fn(),
     listAuditEvents: vi.fn(),
+    listAIProviders: vi.fn(),
     listAIPlanRequests: vi.fn(),
     listPlans: vi.fn(),
     refreshAIPlanFreshness: vi.fn(),
@@ -60,6 +63,7 @@ const mockedDecideAIPlanRequest = vi.mocked(decideAIPlanRequest);
 const mockedGetRun = vi.mocked(getRun);
 const mockedGetSnapshot = vi.mocked(getSnapshot);
 const mockedListAuditEvents = vi.mocked(listAuditEvents);
+const mockedListAIProviders = vi.mocked(listAIProviders);
 const mockedListAIPlanRequests = vi.mocked(listAIPlanRequests);
 const mockedListPlans = vi.mocked(listPlans);
 const mockedRevisePlan = vi.mocked(revisePlan);
@@ -71,6 +75,7 @@ beforeEach(() => {
   mockedGetRun.mockResolvedValue(runFixture({ status: "plan_ready" }));
   mockedGetSnapshot.mockResolvedValue(snapshotFixture());
   mockedListPlans.mockResolvedValue([planFixture()]);
+  mockedListAIProviders.mockResolvedValue(aiProviderFixtures());
   mockedListAIPlanRequests.mockResolvedValue([]);
   mockedListAuditEvents.mockResolvedValue([
     auditFixture(),
@@ -352,7 +357,10 @@ describe("RunConsole", () => {
     await waitFor(() =>
       expect(mockedCreateAIPlanRequest).toHaveBeenCalledWith(
         snapshotReady.id,
-        { delivery_package: "frontend_quality_remediation" },
+        {
+          delivery_package: "frontend_quality_remediation",
+          provider_id: "deterministic-fixture",
+        },
         expect.any(String),
       ),
     );

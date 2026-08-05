@@ -6,6 +6,7 @@
   "navigation": {
     "label": "Primary navigation",
     "tasks": "Tasks",
+    "providers": "AI Providers",
     "runners": "Runners",
     "repositories": "Repository Intelligence",
     "executionGrants": "Execution Grants",
@@ -59,6 +60,7 @@
       "discarded": "Discarded",
       "expired": "Expired",
       "failed": "Failed",
+      "fixture_validated": "Fixture validated",
       "fresh": "Fresh",
       "generated": "Generated",
       "generating": "Generating",
@@ -97,6 +99,7 @@
       "unavailable": "Unavailable",
       "unknown": "Unknown",
       "not_ready": "Not ready",
+      "not_performed": "Not performed",
       "unknownWithCode": "Unknown status ({code})"
     },
     "fields": {
@@ -433,6 +436,66 @@
     "noEvents": "No events yet.",
     "eventMetadata": "{type} event metadata"
   },
+  "providerFoundation": {
+    "title": "AI Provider Foundation",
+    "description": "A closed, model-neutral registry for governed planning. The deterministic fixture is the only enabled provider in this slice; real-provider adapters remain visibly unavailable until local configuration and separate live validation are complete.",
+    "fixtureDefault": "Fixture is the safe default",
+    "secretBoundary": "Secret presence is evaluated by the server only. API keys, environment-variable names, values, prefixes, file paths, and authentication material are never returned to this interface.",
+    "authorityBoundary": "Provider selection can only request a Plan proposal. It cannot issue an Execution Grant, run shell commands, mutate a Workspace, approve Review, authorize Delivery, or deploy.",
+    "evidenceLabel": "Fixture / Mock Evidence · Not a live-provider call",
+    "loading": "Loading the closed provider registry…",
+    "loadFailed": "Provider status could not be loaded",
+    "registryTitle": "Registered planning providers",
+    "registryDescription": "Six fixed provider identities are shown in registry order. Availability is fail-closed and capability declarations are explicit, including anything not yet verified.",
+    "providerCount": "{count, plural, one {# provider} other {# providers}}",
+    "available": "Available",
+    "notConfigured": "Not configured",
+    "configuration": "Configuration",
+    "configured": "Configured locally",
+    "runtime": "Planning runtime",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "liveValidation": "Live validation",
+    "fixtureValidated": "Fixture validated",
+    "liveNotPerformed": "Live provider validation not performed",
+    "fixtureDescription": "Local deterministic fixture with no credentials, network access, or billable usage.",
+    "adapterDescription": "Fixed-endpoint adapter foundation. No custom base URL, model override, headers, tools, or retries are accepted from the request.",
+    "officialDocumentation": "Official provider documentation",
+    "capabilities": "Declared capabilities",
+    "selectorTitle": "Planning provider",
+    "selectorDescription": "Only enabled registry entries can be selected. Disabled providers remain visible with a specific reason.",
+    "viewStatus": "View provider status",
+    "selectAria": "Select {name}",
+    "providerName": {
+      "deterministicFixture": "Deterministic Fixture",
+      "zhipu": "Zhipu GLM · 智谱 GLM",
+      "qwen": "Qwen · 通义千问",
+      "deepseek": "DeepSeek",
+      "doubao": "Doubao · 豆包",
+      "kimi": "Kimi"
+    },
+    "reason": {
+      "available": "Available for deterministic, non-network planning.",
+      "missing_local_api_key": "Disabled because the required local API key is not configured.",
+      "live_validation_not_performed": "Local secret presence was detected, but this provider remains disabled because live validation was not performed."
+    },
+    "capability": {
+      "structured_output": "Structured output",
+      "tool_calling": "Tool calling",
+      "streaming": "Streaming",
+      "reasoning": "Reasoning mode",
+      "token_usage_reporting": "Token usage reporting",
+      "request_id": "Request ID",
+      "configurable_timeout": "Configurable timeout",
+      "model_availability": "Model availability",
+      "maximum_output_control": "Maximum output control"
+    },
+    "support": {
+      "supported": "Supported",
+      "unsupported": "Unsupported",
+      "not_verified": "Not verified"
+    }
+  },
   "runConsole": {
     "noneRecorded": "None recorded.",
     "packageScript": "Package script: {workspace} · {script}",
@@ -518,9 +581,8 @@
     "emptyIntelligenceHelp": "Creating a Snapshot reads committed HEAD from an allowlisted Git repository and does not read uncommitted file contents.",
     "snapshotting": "Creating Snapshot…",
     "createSnapshot": "Create committed-HEAD Snapshot",
-    "firstSlice": "First vertical slice",
     "emptyAiPlan": "Governed AI Plan is empty",
-    "aiPlanHelp": "Generate a strictly structured Plan from bounded Repository Intelligence, a versioned Prompt, and the deterministic fake Provider. No API key, network call, or Workspace mutation is used.",
+    "aiPlanHelp": "Choose from the closed provider registry to request a strictly structured Plan. The deterministic fixture is currently the only enabled option and uses no API key, network call, or Workspace mutation; real providers remain disabled pending separate live validation.",
     "interfaceOutputBoundary": "Interface language does not translate generated AI Plan, Trace, Eval, or immutable Evidence. AI output language is not part of the current Prompt binding.",
     "aiDeliveryPackage": "AI Plan delivery package",
     "designImplementation": "Design Implementation",
@@ -779,6 +841,8 @@
   "errors": {
     "unexpected": "An unexpected error occurred. Try again.",
     "network_error": "The API could not be reached. Confirm that the service is running.",
+    "provider_disabled": "Fixture / Mock Evidence · Not a live-provider call. This provider is registered but disabled until its separate validation gate is complete. Select Deterministic Fixture, or complete local configuration and a separately authorized live-validation gate.",
+    "provider_not_configured": "Fixture / Mock Evidence · Not a live-provider call. This provider is unavailable because its required local configuration is missing. Select Deterministic Fixture, or complete local configuration and a separately authorized live-validation gate.",
     "invalid_response": "The API returned an unrecognized response.",
     "conflict": "The state changed. Refresh the page and review the latest durable state.",
     "atomic_write_failed": "The bounded atomic write could not be completed.",
