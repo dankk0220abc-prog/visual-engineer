@@ -57,21 +57,21 @@ matrix through `20260801_0015` with no new revision.
 
 ## Verification matrix
 
-| Boundary | Result |
-| --- | --- |
+| Boundary                             | Result                                                                                                                                                                           |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Provider/Planning/PostgreSQL focused | `44 passed`; registry/configuration, five adapters, redaction, timeout/cancel/concurrency/byte/retry/endpoint bounds, API discovery, and failure-state zero-side-effect coverage |
-| Web component/i18n focused | `34 passed`; selector/status states, en-US/zh-CN, generated status/error registry completeness, and Run Console request binding |
-| Python format/lint/type | Ruff format/check passed; mypy passed `135` source files |
-| Web format/lint/type | Prettier, ESLint, and `tsc --noEmit` passed |
-| Contract | `make contracts-check` passed after source-first OpenAPI and TypeScript generation |
-| Focused real-stack browser | `4 passed`; desktop/390 px, en-US/zh-CN, axe WCAG A/AA, containment, Fixture default, five disabled real Providers, DOM-tamper API 422, and zero persisted AI Plan |
-| Canonical aggregate | One `make test` run passed: Python `383 passed` at `84.66%`; Web `101 passed` at `73.10%` functions |
-| Migration | `make migration-check` passed; no migration added |
-| Secret scan | Existing high-confidence secret scan passed |
-| UI craft detector | Impeccable detector returned `[]` |
-| UI finish review | Fresh read-only Impeccable reviewer returned `disposition: ship`; no actionable blockers remained after semantics, mobile density, recovery, and hierarchy fixes |
-| Evidence scan | Passed on five PNGs, five capture-time DOM scan records, manifest, and two Markdown records; `13` artifacts total |
-| Whitespace | `git diff --check` passed |
+| Web component/i18n focused           | `34 passed`; selector/status states, en-US/zh-CN, generated status/error registry completeness, and Run Console request binding                                                  |
+| Python format/lint/type              | Ruff format/check passed; mypy passed `135` source files                                                                                                                         |
+| Web format/lint/type                 | Prettier, ESLint, and `tsc --noEmit` passed                                                                                                                                      |
+| Contract                             | `make contracts-check` passed after source-first OpenAPI and TypeScript generation                                                                                               |
+| Focused real-stack browser           | `4 passed`; desktop/390 px, en-US/zh-CN, axe WCAG A/AA, containment, Fixture default, five disabled real Providers, DOM-tamper API 422, and zero persisted AI Plan               |
+| Canonical aggregate                  | One `make test` run passed: Python `383 passed` at `84.66%`; Web `101 passed` at `73.10%` functions                                                                              |
+| Migration                            | `make migration-check` passed; no migration added                                                                                                                                |
+| Secret scan                          | Existing high-confidence secret scan passed                                                                                                                                      |
+| UI craft detector                    | Impeccable detector returned `[]`                                                                                                                                                |
+| UI finish review                     | Fresh read-only Impeccable reviewer returned `disposition: ship`; no actionable blockers remained after semantics, mobile density, recovery, and hierarchy fixes                 |
+| Evidence scan                        | Passed on five PNGs, five capture-time DOM scan records, manifest, and two Markdown records; `13` artifacts total                                                                |
+| Whitespace                           | `git diff --check` passed                                                                                                                                                        |
 
 The first isolated adapter subset executed 15 successful assertions but exited 1
 because the repository-wide coverage gate saw only the selected file
@@ -92,6 +92,14 @@ successfully. This external build attempt remains failed/NOT VERIFIED and was
 not retried. The final browser capture used the repository's no-build path with
 the previously successful exact API/Runner images and current Web image; its
 4/4 product result is reported separately from the failed rebuild.
+
+Draft PR #16 preserved its initial CI result. Fast run `30988834061` failed
+only because this verification record had not yet been normalized by Prettier;
+its Python, Runner, contract, and repository-policy jobs passed. Heavy run
+`30988833959` passed security/evals, a fresh three-image Docker build,
+migration, Playwright, and Workspace Chaos on the same application candidate.
+The evidence record was then formatted without changing product behavior; the
+failed Fast run was not rerun.
 
 ## Screenshot evidence
 
