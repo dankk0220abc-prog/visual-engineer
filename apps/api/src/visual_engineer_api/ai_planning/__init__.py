@@ -12,6 +12,7 @@ from visual_engineer_api.ai_planning.provider import (
     ProviderInvocationResult,
     invoke_provider,
 )
+from visual_engineer_api.ai_planning.provider_registry import ProviderId, ProviderRegistry
 
 __all__ = [
     "AIPlanContract",
@@ -22,6 +23,8 @@ __all__ = [
     "ProviderCapabilityMetadata",
     "ProviderError",
     "ProviderErrorCategory",
+    "ProviderId",
     "ProviderInvocationResult",
+    "ProviderRegistry",
     "invoke_provider",
 ]

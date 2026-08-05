@@ -4,7 +4,8 @@ from typing import Annotated, Any, NoReturn
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from visual_engineer_api.ai_planning.fake_provider import DeterministicFixtureProvider
+from visual_engineer_api.ai_planning.provider_registry import ProviderRegistry
+from visual_engineer_api.core.config import get_settings
 from visual_engineer_api.db.session import get_db
 from visual_engineer_api.schemas.ai_planning import (
     AIPlanDecisionCreate,
@@ -66,8 +67,8 @@ def _raise_service_error(error: AIPlanningServiceError) -> NoReturn:
     summary="List installed model-neutral planning Provider capabilities",
 )
 def list_ai_providers() -> AIProviderListResponse:
-    capability = DeterministicFixtureProvider().capabilities
-    return AIProviderListResponse(items=[capability], total=1)
+    items = ProviderRegistry(get_settings()).list()
+    return AIProviderListResponse(items=items, total=len(items))
 
 
 @router.post(
@@ -78,7 +79,7 @@ def list_ai_providers() -> AIProviderListResponse:
         200: {"model": AIPlanRequestResponse, "description": "Idempotent replay"},
         **STANDARD_ERRORS,
     },
-    summary="Generate and independently evaluate one governed deterministic AI Plan",
+    summary="Generate and independently evaluate one governed AI Plan",
 )
 def create_ai_plan_request(
     run_id: uuid.UUID,

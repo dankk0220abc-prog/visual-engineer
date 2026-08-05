@@ -37,6 +37,10 @@ from visual_engineer_api.ai_planning.provider import (
     ProviderErrorCategory,
     invoke_provider,
 )
+from visual_engineer_api.ai_planning.provider_registry import (
+    ProviderId,
+    ProviderRegistry,
+)
 from visual_engineer_api.core.config import Settings, get_settings
 from visual_engineer_api.core.observability import log_governance_event
 from visual_engineer_api.models.ai_planning import (
@@ -111,12 +115,13 @@ class AIPlanningService:
         self._repository = AIPlanningRepository(session)
         self._runs = RunRepository(session)
         self._tasks = TaskRepository(session)
-        self._provider = provider or DeterministicFixtureProvider()
         self._settings = settings or get_settings()
+        self._provider_override = provider
+        self._provider_registry = ProviderRegistry(self._settings)
 
     @property
     def provider(self) -> PlanningProvider:
-        return self._provider
+        return self._provider_override or DeterministicFixtureProvider()
 
     def create_request(
         self,
@@ -126,11 +131,12 @@ class AIPlanningService:
         request_id: str,
         idempotency_key: str,
     ) -> tuple[AIPlanRequestResponse, bool]:
+        provider = self._select_provider(payload.provider_id)
         request_hash = canonical_digest(
             {
                 "run_id": str(run_id),
                 "delivery_package": payload.delivery_package.value,
-                "provider_id": self._provider.capabilities.provider_id,
+                "provider_id": provider.capabilities.provider_id,
                 "prompt_version": PROMPT_VERSION,
             }
         )
@@ -175,7 +181,7 @@ class AIPlanningService:
             self._not_found("task_not_found", "Task was not found")
 
         generation_request, prompt, redactions, excluded_count = self._generation_request(
-            task, snapshot, payload
+            task, snapshot, payload, provider
         )
         request_values = generation_request.model_dump(mode="json")
         context_values = [
@@ -191,8 +197,8 @@ class AIPlanningService:
             prompt_version=PROMPT_VERSION,
             prompt_digest=PROMPT_DIGEST,
             prompt_payload=prompt,
-            provider_id=self._provider.capabilities.provider_id,
-            provider_metadata=self._provider.capabilities.model_dump(mode="json"),
+            provider_id=provider.capabilities.provider_id,
+            provider_metadata=provider.capabilities.model_dump(mode="json"),
             request_payload=request_values,
             request_digest=canonical_digest(request_values),
             response_payload=None,
@@ -541,6 +547,7 @@ class AIPlanningService:
         ai_request = self._repository.get_request(ai_plan_request_id, lock=True)
         if ai_request is None or ai_request.status != "requested":
             return
+        provider = self._select_persisted_provider(ai_request.provider_id)
         run = self._runs.get(ai_request.run_id, lock=True)
         if run is None or run.status != "snapshot_ready":
             self._conflict(
@@ -563,7 +570,7 @@ class AIPlanningService:
         _CANCELLATIONS.register(ai_request.id, token)
         try:
             provider_run = invoke_provider(
-                self._provider,
+                provider,
                 generation_request,
                 token,
                 timeout_seconds=self._settings.ai_provider_timeout_seconds,
@@ -667,7 +674,7 @@ class AIPlanningService:
             invalid_response_code = "provider_response_not_json"
             invalid_response_message = "Provider response was not canonical JSON"
         else:
-            if response_bytes > self._provider.capabilities.max_output_bytes:
+            if response_bytes > provider.capabilities.max_output_bytes:
                 invalid_response_code = "provider_output_budget_exceeded"
                 invalid_response_message = "Provider response exceeded its output budget"
         try:
@@ -709,7 +716,7 @@ class AIPlanningService:
             generation_request,
             plan,
             locked.prompt_payload,
-            self._provider,
+            provider,
             expected_source_revision=locked.source_revision,
             expected_snapshot_fingerprint=locked.snapshot_fingerprint,
         )
@@ -769,9 +776,10 @@ class AIPlanningService:
         task: Task,
         snapshot: RepositorySnapshot,
         payload: AIPlanRequestCreate,
+        provider: PlanningProvider,
     ) -> tuple[AIPlanGenerationRequest, dict[str, Any], list[dict[str, Any]], int]:
         redacted = redact_requirement(task.objective)
-        provider_context_limit = self._provider.capabilities.max_context_bytes
+        provider_context_limit = provider.capabilities.max_context_bytes
         budget = ContextBudget(
             max_context_bytes=min(self._settings.ai_plan_context_max_bytes, provider_context_limit),
             max_references=self._settings.ai_plan_context_max_references,
@@ -1039,6 +1047,48 @@ class AIPlanningService:
                 details=safe,
             )
         )
+
+    def _select_provider(self, provider_id: ProviderId) -> PlanningProvider:
+        if self._provider_override is not None:
+            if self._provider_override.capabilities.provider_id != provider_id.value:
+                raise AIPlanningServiceError(
+                    "provider_disabled",
+                    "The selected Provider is not enabled for this planning service",
+                    category="policy",
+                )
+            return self._provider_override
+
+        status = self._provider_registry.get(provider_id)
+        if not status.configured:
+            raise AIPlanningServiceError(
+                "provider_not_configured",
+                "The selected Provider is missing its local API key",
+                category="policy",
+            )
+        if not status.enabled:
+            raise AIPlanningServiceError(
+                "provider_disabled",
+                "The selected Provider is disabled until live validation is completed",
+                category="policy",
+            )
+        if provider_id == ProviderId.DETERMINISTIC_FIXTURE:
+            return DeterministicFixtureProvider()
+        raise AIPlanningServiceError(
+            "provider_disabled",
+            "The selected Provider is not enabled for governed planning",
+            category="policy",
+        )
+
+    def _select_persisted_provider(self, provider_id: str) -> PlanningProvider:
+        try:
+            typed_provider_id = ProviderId(provider_id)
+        except ValueError as exc:
+            raise AIPlanningServiceError(
+                "provider_disabled",
+                "The stored Provider is outside the closed registry",
+                category="policy",
+            ) from exc
+        return self._select_provider(typed_provider_id)
 
     @staticmethod
     def _conflict(code: str, message: str) -> NoReturn:
