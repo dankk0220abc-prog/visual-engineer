@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import playwrightConfig from "../../playwright.config";
 import {
   enforceProviderEvidenceSafety,
   PROVIDER_EVIDENCE_SECRET_LEAK,
@@ -11,6 +12,44 @@ const syntheticSecret = ["ve", "synthetic", "provider", "key", "only"].join(
 );
 
 describe("provider evidence safety", () => {
+  it("isolates Provider Evidence projects from ordinary failure artifacts", () => {
+    const projects = playwrightConfig.projects ?? [];
+    const providerProjects = projects.filter((project) =>
+      project.name?.startsWith("provider-evidence-"),
+    );
+    const ordinaryProjects = projects.filter((project) =>
+      ["desktop-chromium", "narrow-chromium"].includes(project.name ?? ""),
+    );
+
+    expect(playwrightConfig.use).toMatchObject({
+      trace: "retain-on-failure",
+      screenshot: "only-on-failure",
+      video: "retain-on-failure",
+    });
+    expect(providerProjects).toHaveLength(2);
+    for (const project of providerProjects) {
+      expect(project.retries).toBe(0);
+      expect(project.use).toMatchObject({
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      });
+    }
+    expect(ordinaryProjects).toHaveLength(2);
+    for (const project of ordinaryProjects) {
+      const ignored = Array.isArray(project.testIgnore)
+        ? project.testIgnore.map(String)
+        : [String(project.testIgnore)];
+      expect(ignored).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/provider-foundation/),
+          expect.stringMatching(/provider-evidence-safety-harness/),
+          expect.stringMatching(/provider-evidence-safety-negative/),
+        ]),
+      );
+    }
+  });
+
   it("passes safe DOM text without retaining the checked value", () => {
     const record = enforceProviderEvidenceSafety("Fixture provider status", {
       forbiddenPatterns: [/Authorization/i],

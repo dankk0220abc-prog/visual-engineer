@@ -1,6 +1,6 @@
 # Model-neutral multi-Provider foundation
 
-Status: SECURITY REMEDIATION IN PROGRESS — FOCUSED VALIDATION PENDING
+Status: SECURITY ROUND-2 REMEDIATION IN PROGRESS — REMOTE CI PENDING
 
 ## Goal
 
@@ -121,6 +121,39 @@ compatibility.
   layers by base-image registry metadata `DeadlineExceeded`. It was not retried
   and no network/test policy changed; current-code browser validation remains
   `NOT VERIFIED`, so the remediation canonical aggregate was not run.
+- Round-2 preflight matched candidate HEAD
+  `881b1901be387c2c74b0a575bd49dc2b87bba669`, tree
+  `057d867591cc624be4f4b834dee48e195b7d1430`, clean local/remote state,
+  unchanged main, both backup refs, PR #16 OPEN/DRAFT/CLEAN, no review state,
+  and accepted Fast `31259595598` / Heavy `31259595588` on that exact starting
+  HEAD.
+- Preserved the second independent FAIL history: semaphore acquisition
+  ownership transfer under outer task cancellation, ambient `SSLKEYLOGFILE`
+  inheritance, and Playwright automatic failure artifacts over a Secret DOM.
+- Added a cancellation-atomic semaphore permit lease. Ownership is recorded in
+  the acquisition task before completion with no intervening await; all
+  controlled cleanup is shielded to completion, and the owned lease is released
+  synchronously and idempotently in the outer finalizer.
+- Replaced `ssl.create_default_context()` with direct
+  `SSLContext(PROTOCOL_TLS_CLIENT)`, explicit hostname/CERT_REQUIRED policy, and
+  explicit locked-certifi loading. Ambient proxy, CA, and `SSLKEYLOGFILE`
+  settings cannot enable TLS key logging or replace trust.
+- Isolated Provider Evidence into dedicated Playwright projects with retry,
+  trace, automatic screenshot, and video all off. Added a fixed-code safe
+  reporter and a real Chromium synthetic-DOM negative child whose output and
+  artifact directory are inspected without passing a Secret in argv.
+- Round-2 focused validation passed `42` Provider transport tests, `65`
+  Provider/Planning tests, Ruff, mypy over `135` source files, Prettier, ESLint,
+  TypeScript, six Web safety tests, the current `107`-test Web unit run, and the
+  standalone real-browser synthetic-leak harness. No sleep, retry, timeout
+  increase, real key access, or real Provider request was used.
+- The single no-build real-stack focused run passed the synthetic-leak harness
+  but safely failed four product cases with only the fixed safe code. All
+  invariance and resource cleanup checks passed. With no redundant local image
+  rebuild authorized or needed for unchanged dependencies, those product cases
+  remain `NOT VERIFIED`; fresh Fast/Heavy CI on the published round-2 HEAD is
+  the canonical remaining gate. The canonical local aggregate remains not run
+  because focused real-stack product validation did not fully pass locally.
 
 ## Rollback
 

@@ -438,10 +438,45 @@ class _ObservableSemaphore(asyncio.Semaphore):
     def __init__(self, value: int) -> None:
         super().__init__(value)
         self.acquire_entered = asyncio.Event()
+        self.release_count = 0
 
     async def acquire(self) -> Literal[True]:
         self.acquire_entered.set()
         return await super().acquire()
+
+    def release(self) -> None:
+        self.release_count += 1
+        super().release()
+
+
+class _AcquireReturnBarrierAdapter(DeepSeekAdapter):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.acquire_operation_completed = asyncio.Event()
+        self.release_acquire_return = asyncio.Event()
+        self._controlled_await_count = 0
+
+    async def _await_controlled(
+        self,
+        operation: Awaitable[Any],
+        *,
+        cancellation: CancellationToken,
+        cancellation_event: asyncio.Event,
+        deadline_at: float,
+        response: httpx.Response | None = None,
+    ) -> Any:
+        result = await super()._await_controlled(
+            operation,
+            cancellation=cancellation,
+            cancellation_event=cancellation_event,
+            deadline_at=deadline_at,
+            response=response,
+        )
+        self._controlled_await_count += 1
+        if self._controlled_await_count == 1:
+            self.acquire_operation_completed.set()
+            await self.release_acquire_return.wait()
+        return result
 
 
 class _ControlledAsyncStream(httpx.AsyncByteStream):
@@ -488,6 +523,271 @@ async def _provider_error(awaitable: Awaitable[ProviderAdapterResult]) -> Provid
     except ProviderError as error:
         return error
     raise AssertionError("Provider invocation unexpectedly succeeded")
+
+
+async def _assert_exact_single_permit_capacity(semaphore: _ObservableSemaphore) -> None:
+    assert await semaphore.acquire() is True
+    second_acquire_entered = asyncio.Event()
+    semaphore.acquire_entered = second_acquire_entered
+    second_acquire = asyncio.create_task(semaphore.acquire())
+    await second_acquire_entered.wait()
+    assert second_acquire.done() is False
+    semaphore.release()
+    assert await second_acquire is True
+    semaphore.release()
+
+
+def _pending_tasks() -> set[asyncio.Task[Any]]:
+    current = asyncio.current_task()
+    return {task for task in asyncio.all_tasks() if task is not current and not task.done()}
+
+
+def test_outer_cancellation_after_completed_acquire_releases_exactly_once() -> None:
+    async def scenario() -> None:
+        semaphore = _ObservableSemaphore(1)
+        call_count = 0
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return _mock_success_response()
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = _AcquireReturnBarrierAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_semaphore=semaphore,
+            )
+            invocation = asyncio.create_task(
+                adapter.invoke(_generation_request(), CancellationToken())
+            )
+            await adapter.acquire_operation_completed.wait()
+            assert semaphore.locked() is True
+            invocation.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await invocation
+
+            assert semaphore.release_count == 1
+            assert semaphore.locked() is False
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+            assert call_count == 1
+            assert semaphore.release_count == 2
+            await _assert_exact_single_permit_capacity(semaphore)
+            assert _pending_tasks() == set()
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("competition", ["deadline", "token"])
+def test_outer_cancellation_before_acquire_wins_control_competition(
+    competition: str,
+) -> None:
+    async def scenario() -> None:
+        clock = _ManualDeadlineClock()
+        semaphore = _ObservableSemaphore(0)
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            return _mock_success_response()
+
+        cancellation = CancellationToken()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_clock=clock,
+                _test_semaphore=semaphore,
+            )
+            invocation = asyncio.create_task(adapter.invoke(_generation_request(), cancellation))
+            await semaphore.acquire_entered.wait()
+            if competition == "deadline":
+                clock.expire()
+            else:
+                cancellation.cancel()
+            invocation.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await invocation
+
+            assert semaphore.release_count == 0
+            semaphore.release()
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+            assert semaphore.release_count == 2
+            await _assert_exact_single_permit_capacity(semaphore)
+            assert _pending_tasks() == set()
+
+    _run(scenario())
+
+
+def test_outer_cancellation_during_provider_request_releases_slot() -> None:
+    async def scenario() -> None:
+        semaphore = _ObservableSemaphore(1)
+        request_entered = asyncio.Event()
+        request_cancelled = asyncio.Event()
+        block_request = asyncio.Event()
+        call_count = 0
+
+        async def handler(_: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                return _mock_success_response()
+            request_entered.set()
+            try:
+                await block_request.wait()
+            finally:
+                request_cancelled.set()
+            return _mock_success_response()
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_semaphore=semaphore,
+            )
+            invocation = asyncio.create_task(
+                adapter.invoke(_generation_request(), CancellationToken())
+            )
+            await request_entered.wait()
+            invocation.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await invocation
+            assert request_cancelled.is_set()
+            assert semaphore.release_count == 1
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+            assert semaphore.release_count == 2
+            await _assert_exact_single_permit_capacity(semaphore)
+            assert _pending_tasks() == set()
+
+    _run(scenario())
+
+
+def test_outer_cancellation_during_body_read_closes_and_releases_slot() -> None:
+    async def scenario() -> None:
+        semaphore = _ObservableSemaphore(1)
+        payload = _mock_success_bytes()
+        stream = _ControlledAsyncStream(
+            [payload[:10], payload[10:]],
+            block_before_index=1,
+        )
+        call_count = 0
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return (
+                _mock_success_response(stream=stream)
+                if call_count == 1
+                else _mock_success_response()
+            )
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_semaphore=semaphore,
+            )
+            invocation = asyncio.create_task(
+                adapter.invoke(_generation_request(), CancellationToken())
+            )
+            await stream.chunk_waiting.wait()
+            invocation.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await invocation
+            assert stream.closed.is_set()
+            assert semaphore.release_count == 1
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+            assert semaphore.release_count == 2
+            await _assert_exact_single_permit_capacity(semaphore)
+            assert _pending_tasks() == set()
+
+    _run(scenario())
+
+
+def test_repeated_outer_cancellation_cannot_interrupt_request_cleanup() -> None:
+    async def scenario() -> None:
+        semaphore = _ObservableSemaphore(1)
+        request_entered = asyncio.Event()
+        cleanup_entered = asyncio.Event()
+        release_cleanup = asyncio.Event()
+        cleanup_completed = asyncio.Event()
+        call_count = 0
+
+        async def handler(_: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                return _mock_success_response()
+            request_entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cleanup_entered.set()
+                await release_cleanup.wait()
+                cleanup_completed.set()
+            return _mock_success_response()
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_semaphore=semaphore,
+            )
+            invocation = asyncio.create_task(
+                adapter.invoke(_generation_request(), CancellationToken())
+            )
+            await request_entered.wait()
+            invocation.cancel()
+            await cleanup_entered.wait()
+            invocation.cancel()
+            release_cleanup.set()
+            with pytest.raises(asyncio.CancelledError):
+                await invocation
+
+            assert cleanup_completed.is_set()
+            assert semaphore.release_count == 1
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+            assert semaphore.release_count == 2
+            await _assert_exact_single_permit_capacity(semaphore)
+            assert _pending_tasks() == set()
+
+    _run(scenario())
+
+
+def test_provider_failure_releases_exactly_one_permit_for_next_request() -> None:
+    async def scenario() -> None:
+        semaphore = _ObservableSemaphore(1)
+        call_count = 0
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return httpx.Response(503)
+            return _mock_success_response()
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_semaphore=semaphore,
+            )
+            error = await _provider_error(
+                adapter.invoke(_generation_request(), CancellationToken())
+            )
+            assert error.category == ProviderErrorCategory.UPSTREAM_SERVER_ERROR
+            assert semaphore.release_count == 1
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+            assert call_count == 2
+            assert semaphore.release_count == 2
+            await _assert_exact_single_permit_capacity(semaphore)
+            assert _pending_tasks() == set()
+
+    _run(scenario())
 
 
 @pytest.mark.parametrize(("block_before_index", "expected_yielded"), [(1, 1), (2, 2)])
@@ -755,17 +1055,15 @@ def test_production_client_factory_ignores_proxy_and_tls_environment(
         "NO_PROXY": "*",
         "SSL_CERT_FILE": "/tmp/attacker-ca.pem",
         "SSL_CERT_DIR": "/tmp/attacker-ca-directory",
+        "SSLKEYLOGFILE": "/tmp/synthetic-provider-tls-keylog",
     }.items():
         monkeypatch.setenv(name, value)
 
     observed_client: dict[str, Any] = {}
-    observed_tls: dict[str, Any] = {}
     original_client = httpx.AsyncClient
-    original_context_factory = ssl.create_default_context
 
-    def capture_context(*args: Any, **kwargs: Any) -> ssl.SSLContext:
-        observed_tls.update(kwargs)
-        return original_context_factory(*args, **kwargs)
+    def reject_default_context(*args: Any, **kwargs: Any) -> ssl.SSLContext:
+        raise AssertionError("production TLS must not call ssl.create_default_context")
 
     def capture_client(**kwargs: Any) -> httpx.AsyncClient:
         observed_client.update(kwargs)
@@ -773,7 +1071,7 @@ def test_production_client_factory_ignores_proxy_and_tls_environment(
             transport=httpx.MockTransport(lambda _: _mock_success_response()), **kwargs
         )
 
-    monkeypatch.setattr(ssl, "create_default_context", capture_context)
+    monkeypatch.setattr(ssl, "create_default_context", reject_default_context)
     monkeypatch.setattr(httpx, "AsyncClient", capture_client)
     client = provider_adapters._create_production_client()
     _run(client.aclose())
@@ -787,7 +1085,41 @@ def test_production_client_factory_ignores_proxy_and_tls_environment(
     assert isinstance(context, ssl.SSLContext)
     assert context.check_hostname is True
     assert context.verify_mode == ssl.CERT_REQUIRED
-    assert observed_tls["cafile"] == certifi.where()
+    assert context.keylog_filename is None
+
+
+def test_provider_tls_context_loads_only_certifi_with_protocol_tls_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, Any] = {}
+
+    class FakeTLSContext:
+        check_hostname = False
+        verify_mode = ssl.CERT_NONE
+        keylog_filename = None
+
+        def load_verify_locations(self, *, cafile: str) -> None:
+            observed["cafile"] = cafile
+
+    def capture_context(protocol: Any) -> FakeTLSContext:
+        observed["protocol"] = protocol
+        return FakeTLSContext()
+
+    def reject_default_context(*args: Any, **kwargs: Any) -> ssl.SSLContext:
+        raise AssertionError("production TLS must not call ssl.create_default_context")
+
+    monkeypatch.setenv("SSLKEYLOGFILE", "/tmp/synthetic-provider-tls-keylog")
+    monkeypatch.setattr(ssl, "SSLContext", capture_context)
+    monkeypatch.setattr(ssl, "create_default_context", reject_default_context)
+    context = provider_adapters._provider_tls_context()
+
+    assert observed == {
+        "protocol": ssl.PROTOCOL_TLS_CLIENT,
+        "cafile": certifi.where(),
+    }
+    assert context.check_hostname is True
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.keylog_filename is None
 
 
 def test_mock_transport_is_test_only_and_redirects_do_not_forward_authorization() -> None:

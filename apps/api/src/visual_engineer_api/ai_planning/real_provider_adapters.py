@@ -154,10 +154,32 @@ class _CancellationBridge:
             self._thread.join()
 
 
+class _SemaphorePermitLease:
+    """Record semaphore ownership inside the acquisition task before it completes."""
+
+    def __init__(self, semaphore: asyncio.Semaphore) -> None:
+        self._semaphore = semaphore
+        self._owned = False
+
+    async def acquire(self) -> None:
+        await self._semaphore.acquire()
+        # There is deliberately no await between successful acquisition and the
+        # ownership write. Task cancellation can therefore observe either an
+        # unfinished acquire or an owned lease, never an unowned consumed permit.
+        self._owned = True
+
+    def release(self) -> None:
+        if not self._owned:
+            return
+        self._owned = False
+        self._semaphore.release()
+
+
 def _provider_tls_context() -> ssl.SSLContext:
-    context = ssl.create_default_context(cafile=certifi.where())
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.check_hostname = True
     context.verify_mode = ssl.CERT_REQUIRED
+    context.load_verify_locations(cafile=certifi.where())
     return context
 
 
@@ -231,16 +253,15 @@ class RealProviderAdapter(ABC):
         call_policy = policy or ProviderCallPolicy()
         deadline_at = started_at + call_policy.total_deadline_seconds
         bridge = _CancellationBridge(cancellation)
-        acquired = False
+        permit = _SemaphorePermitLease(self._concurrency)
         try:
             self._checkpoint(cancellation, deadline_at)
             await self._await_controlled(
-                self._concurrency.acquire(),
+                permit.acquire(),
                 cancellation=cancellation,
                 cancellation_event=bridge.event,
                 deadline_at=deadline_at,
             )
-            acquired = True
             self._checkpoint(cancellation, deadline_at)
             if self._test_client is not None:
                 return await self._invoke_with_client(
@@ -265,8 +286,7 @@ class RealProviderAdapter(ABC):
                     deadline_at,
                 )
         finally:
-            if acquired:
-                self._concurrency.release()
+            permit.release()
             bridge.close()
 
     async def _invoke_with_client(
@@ -398,40 +418,79 @@ class RealProviderAdapter(ABC):
                 {operation_task, cancellation_task, deadline_task},
                 return_when=asyncio.FIRST_COMPLETED,
             )
+            if operation_task in done:
+                cancelled_during_cleanup = await self._settle_controlled_tasks(
+                    cancellation_task,
+                    deadline_task,
+                )
+                if cancelled_during_cleanup:
+                    raise asyncio.CancelledError
+                return operation_task.result()
+
+            cancelled_during_cleanup = await self._settle_controlled_tasks(
+                operation_task,
+                cancellation_task,
+                deadline_task,
+                response=response,
+                completed_response_task=operation_task,
+            )
+            if cancelled_during_cleanup:
+                raise asyncio.CancelledError
+            if cancellation.cancelled or cancellation_task in done:
+                raise ProviderError(
+                    ProviderErrorCategory.CANCELLED,
+                    "provider_cancelled",
+                    "Provider generation was cancelled",
+                )
+            raise ProviderError(
+                ProviderErrorCategory.TIMEOUT,
+                "provider_total_deadline_exceeded",
+                "The selected Provider exceeded its total deadline",
+            )
         except BaseException:
-            operation_task.cancel()
-            await asyncio.gather(operation_task, return_exceptions=True)
+            await self._settle_controlled_tasks(
+                operation_task,
+                cancellation_task,
+                deadline_task,
+                response=response,
+                completed_response_task=operation_task,
+            )
+            raise
+
+    async def _settle_controlled_tasks(
+        self,
+        *tasks: asyncio.Future[Any],
+        response: httpx.Response | None = None,
+        completed_response_task: asyncio.Future[Any] | None = None,
+    ) -> bool:
+        async def settle() -> None:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             if response is not None:
                 await self._close_response(response)
-            await self._cancel_tasks(cancellation_task, deadline_task)
-            raise
-        if operation_task in done:
-            await self._cancel_tasks(cancellation_task, deadline_task)
-            return await operation_task
+            if (
+                completed_response_task is not None
+                and completed_response_task.done()
+                and not completed_response_task.cancelled()
+            ):
+                try:
+                    completed_result = completed_response_task.result()
+                except BaseException:
+                    return
+                if isinstance(completed_result, httpx.Response):
+                    await self._close_response(completed_result)
 
-        operation_task.cancel()
-        await asyncio.gather(operation_task, return_exceptions=True)
-        if response is not None:
-            await self._close_response(response)
-        await self._cancel_tasks(cancellation_task, deadline_task)
-        if cancellation.cancelled or cancellation_task in done:
-            raise ProviderError(
-                ProviderErrorCategory.CANCELLED,
-                "provider_cancelled",
-                "Provider generation was cancelled",
-            )
-        raise ProviderError(
-            ProviderErrorCategory.TIMEOUT,
-            "provider_total_deadline_exceeded",
-            "The selected Provider exceeded its total deadline",
-        )
-
-    @staticmethod
-    async def _cancel_tasks(*tasks: asyncio.Task[Any]) -> None:
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        cleanup_task = asyncio.create_task(settle())
+        cancelled_during_cleanup = False
+        while not cleanup_task.done():
+            try:
+                await asyncio.shield(cleanup_task)
+            except asyncio.CancelledError:
+                cancelled_during_cleanup = True
+        cleanup_task.result()
+        return cancelled_during_cleanup
 
     @staticmethod
     async def _close_response(response: httpx.Response) -> None:
