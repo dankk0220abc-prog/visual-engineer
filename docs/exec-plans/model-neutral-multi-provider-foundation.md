@@ -1,6 +1,6 @@
 # Model-neutral multi-Provider foundation
 
-Status: IMPLEMENTATION COMPLETE — DRAFT PR/CI PENDING
+Status: SECURITY REMEDIATION IN PROGRESS — FOCUSED VALIDATION PENDING
 
 ## Goal
 
@@ -96,6 +96,31 @@ compatibility.
 - Draft PR creation and Fast/Heavy CI inspection remain pending. No live Provider
   request, key handling, merge, tag, release, deployment, License work, or
   Dependabot work was performed.
+- 2026-08-08 remediation preflight matched the required main/candidate
+  SHAs/trees, clean Git state, local/remote parity, backup refs, PR #16
+  OPEN/DRAFT/CLEAN state, and prior Fast/Heavy success.
+- Preserved independent findings `VE-MPF-FSR-001`, `VE-MPF-FSR-002`, and
+  `VE-MPF-FSR-003` as Blocking Medium; the earlier total-deadline claim is
+  explicitly recorded as inaccurate before remediation.
+- Replaced the adapter transport boundary with one absolute monotonic deadline
+  spanning semaphore queueing, headers, every response chunk, bounded in-memory
+  normalization, and the final result checkpoint. Cancellation/expiry closes
+  responses, releases the single slot, and cannot retry or return a normalized
+  result.
+- Fixed the real-provider output ceiling at `4096` and protected the field from
+  Provider-specific overrides. Fixed the production HTTP client to the locked
+  CA bundle, no ambient proxy/TLS environment, and no redirects.
+- Replaced DOM/Secret matchers with the fixed-error Secret-safe helper. E2E and
+  the post-capture scan do not read Provider key environment values; the five
+  screenshots were not regenerated and their manifest hashes remain unchanged.
+- Remediation focused validation passed `57` Provider/Planning backend tests and
+  `23` Web tests; Python and Web format/lint/type checks and the evidence scan
+  passed. The first Provider-only no-build Playwright attempt used a stale image
+  and failed 4/4 on absent Provider UI while all invariance/cleanup checks
+  passed. A corrective API/Web-only build was then blocked before application
+  layers by base-image registry metadata `DeadlineExceeded`. It was not retried
+  and no network/test policy changed; current-code browser validation remains
+  `NOT VERIFIED`, so the remediation canonical aggregate was not run.
 
 ## Rollback
 

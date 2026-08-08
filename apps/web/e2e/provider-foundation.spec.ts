@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
@@ -8,6 +8,7 @@ import { expect, test } from "./support/fixtures";
 import type { E2eTestResources } from "./support/isolation";
 import { uniqueE2eLabel } from "./support/isolation";
 import { expectUiLocale, setUiLocale, switchUiLocale } from "./support/locale";
+import { enforceProviderEvidenceSafety } from "../src/lib/provider-evidence-safety";
 
 const repositoryLocator = "/repositories/e2e/adversarial";
 const apiBaseUrl = (
@@ -19,14 +20,6 @@ const evidenceDirectory = path.resolve(
     path.resolve(process.cwd(), "../.."),
   "docs/evidence/provider-foundation",
 );
-const providerSecretNames = [
-  "ZHIPU_API_KEY",
-  "QWEN_API_KEY",
-  "DEEPSEEK_API_KEY",
-  "DOUBAO_API_KEY",
-  "KIMI_API_KEY",
-] as const;
-
 test.use({ locale: "zh-CN" });
 
 async function createSnapshotReadyRun(
@@ -101,13 +94,10 @@ async function assertVisibleEvidenceSafe(page: Page) {
     /\b(?:ghp|github_pat|xox[baprs])_[A-Za-z0-9_-]{12,}\b/,
     /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   ];
-  for (const pattern of forbiddenPatterns)
-    expect(visibleText).not.toMatch(pattern);
-  for (const name of providerSecretNames) {
-    const value = process.env[name];
-    if (value && value.length >= 8) expect(visibleText).not.toContain(value);
-  }
-  return createHash("sha256").update(visibleText).digest("hex");
+  return enforceProviderEvidenceSafety(visibleText, {
+    forbiddenPatterns,
+    secretValues: [],
+  });
 }
 
 async function captureScreenshot(
@@ -116,7 +106,7 @@ async function captureScreenshot(
   filename: string,
 ) {
   if (!captureEvidence) return;
-  const visibleDomSha256 = await assertVisibleEvidenceSafe(page);
+  const safetyRecord = await assertVisibleEvidenceSafe(page);
   await mkdir(evidenceDirectory, { recursive: true });
   await target.screenshot({
     path: path.join(evidenceDirectory, filename),
@@ -125,19 +115,7 @@ async function captureScreenshot(
   const scenarioId = filename.replace(/\.png$/, "");
   await writeFile(
     path.join(evidenceDirectory, `${scenarioId}.capture-safety.json`),
-    `${JSON.stringify(
-      {
-        schema_version: 1,
-        scenario_id: scenarioId,
-        image_filename: filename,
-        visible_dom_sha256: visibleDomSha256,
-        forbidden_pattern_scan: "passed",
-        provider_environment_value_scan: "passed",
-        classification: "fixture_mock_not_live",
-      },
-      null,
-      2,
-    )}\n`,
+    `${JSON.stringify(safetyRecord, null, 2)}\n`,
     "utf8",
   );
 }

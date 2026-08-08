@@ -77,19 +77,17 @@ def committed_head() -> str:
     return revision
 
 
-def require_capture_record(scenario_id: str, image_path: Path) -> Path:
+def require_capture_record(scenario_id: str) -> Path:
     record_path = EVIDENCE_DIRECTORY / f"{scenario_id}.capture-safety.json"
     record = json.loads(record_path.read_text(encoding="utf-8"))
     expected = {
-        "scenario_id": scenario_id,
-        "image_filename": image_path.name,
-        "forbidden_pattern_scan": "passed",
-        "provider_environment_value_scan": "passed",
-        "classification": "fixture_mock_not_live",
+        "rule_id": "VE_PROVIDER_EVIDENCE_SECRET_LEAK",
+        "checked_value_count": 0,
+        "result": "passed",
+        "error_category": None,
     }
-    for key, value in expected.items():
-        if record.get(key) != value:
-            raise ValueError(f"Capture safety record {record_path.name} has invalid {key}")
+    if record != expected:
+        raise ValueError(f"Capture safety record {record_path.name} is invalid")
     return record_path
 
 
@@ -103,7 +101,7 @@ def build_manifest(scan_status: str) -> dict[str, Any]:
             raise FileNotFoundError(
                 f"Missing screenshot: {image_path.relative_to(REPOSITORY_ROOT)}"
             )
-        record_path = require_capture_record(scenario_id, image_path)
+        record_path = require_capture_record(scenario_id)
         screenshots.append(
             {
                 **scenario,

@@ -3,7 +3,6 @@
 
 import argparse
 import json
-import os
 import re
 from pathlib import Path
 
@@ -16,13 +15,6 @@ SCENARIO_IDS = (
     "provider-selector-desktop-zh",
     "provider-selector-mobile-en",
     "provider-unconfigured-error-desktop-zh",
-)
-PROVIDER_SECRET_NAMES = (
-    "ZHIPU_API_KEY",
-    "QWEN_API_KEY",
-    "DEEPSEEK_API_KEY",
-    "DOUBAO_API_KEY",
-    "KIMI_API_KEY",
 )
 FORBIDDEN_PATTERNS = (
     (
@@ -48,15 +40,13 @@ def fail(rule: str, path: Path) -> None:
 def validate_capture_record(scenario_id: str, record_path: Path) -> None:
     record = json.loads(record_path.read_text(encoding="utf-8"))
     expected = {
-        "scenario_id": scenario_id,
-        "image_filename": f"{scenario_id}.png",
-        "forbidden_pattern_scan": "passed",
-        "provider_environment_value_scan": "passed",
-        "classification": "fixture_mock_not_live",
+        "rule_id": "VE_PROVIDER_EVIDENCE_SECRET_LEAK",
+        "checked_value_count": 0,
+        "result": "passed",
+        "error_category": None,
     }
-    for key, value in expected.items():
-        if record.get(key) != value:
-            fail(f"invalid-capture-record-{key}", record_path)
+    if record != expected:
+        fail(f"invalid-capture-record-{scenario_id}", record_path)
 
 
 def main() -> int:
@@ -93,23 +83,16 @@ def main() -> int:
 
     artifacts.extend(sorted(EVIDENCE_DIRECTORY.glob("*.md")))
 
-    environment_values = [
-        value.encode()
-        for name in PROVIDER_SECRET_NAMES
-        if (value := os.environ.get(name)) is not None and len(value) >= 8
-    ]
     for artifact in artifacts:
         data = artifact.read_bytes()
         for rule, pattern in FORBIDDEN_PATTERNS:
             if pattern.search(data):
                 fail(rule, artifact)
-        if any(value in data for value in environment_values):
-            fail("provider-environment-value", artifact)
 
     print(
         "PROVIDER_EVIDENCE_SAFETY_SCAN "
         f"status=PASS artifacts={len(artifacts)} capture_records={len(SCENARIO_IDS)} "
-        f"provider_environment_values_checked={len(environment_values)}"
+        "provider_environment_values_checked=0"
     )
     return 0
 

@@ -1,14 +1,19 @@
+import asyncio
+import inspect
+import ipaddress
 import json
-from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from threading import Event
-from typing import Any
+import ssl
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
+from typing import Any, ClassVar, Literal
+from urllib.parse import urlsplit
 
+import certifi
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+import visual_engineer_api.ai_planning.real_provider_adapters as provider_adapters
 import visual_engineer_api.api.ai_planning as ai_planning_api
 from visual_engineer_api.ai_planning.contracts import (
     AIPlanGenerationRequest,
@@ -31,8 +36,10 @@ from visual_engineer_api.ai_planning.provider_registry import (
     ProviderStatusReason,
 )
 from visual_engineer_api.ai_planning.real_provider_adapters import (
+    PROVIDER_MAXIMUM_OUTPUT_TOKENS,
     REAL_PROVIDER_ADAPTERS,
     DeepSeekAdapter,
+    ProviderAdapterResult,
     ProviderCallPolicy,
     RealProviderAdapter,
 )
@@ -98,6 +105,40 @@ def _generation_request() -> AIPlanGenerationRequest:
 
 def _synthetic_credential() -> str:
     return "-".join(("synthetic", "credential", "contract", "only"))
+
+
+def _run[T](coroutine: Coroutine[Any, Any, T]) -> T:
+    return asyncio.run(coroutine)
+
+
+def _invoke_with_transport(
+    adapter_type: type[RealProviderAdapter],
+    handler: (
+        Callable[[httpx.Request], httpx.Response]
+        | Callable[[httpx.Request], Coroutine[None, None, httpx.Response]]
+    ),
+    *,
+    credential: str | None = None,
+    cancellation: CancellationToken | None = None,
+    policy: ProviderCallPolicy | None = None,
+    follow_redirects: bool = False,
+) -> ProviderAdapterResult:
+    async def invoke() -> ProviderAdapterResult:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            follow_redirects=follow_redirects,
+        ) as client:
+            adapter = adapter_type(
+                SecretStr(credential or _synthetic_credential()),
+                _test_client=client,
+            )
+            return await adapter.invoke(
+                _generation_request(),
+                cancellation or CancellationToken(),
+                policy=policy,
+            )
+
+    return _run(invoke())
 
 
 def test_registry_is_closed_ordered_and_secret_safe() -> None:
@@ -201,12 +242,12 @@ def test_real_adapters_map_requests_and_normalize_structured_responses(
             },
         )
 
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        result = adapter_type(SecretStr(credential), client=client).invoke(
-            _generation_request(),
-            CancellationToken(),
-            policy=ProviderCallPolicy(maximum_output_tokens=2048),
-        )
+    result = _invoke_with_transport(
+        adapter_type,
+        handler,
+        credential=credential,
+        policy=ProviderCallPolicy(maximum_output_tokens=2048),
+    )
 
     assert observed["url"] == adapter_type.endpoint
     assert observed["authorization"] == f"Bearer {credential}"
@@ -250,10 +291,8 @@ def test_adapter_maps_upstream_errors_without_returning_bodies(
             json={"error": {"message": f"upstream echoed {credential}"}},
         )
 
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        adapter = DeepSeekAdapter(SecretStr(credential), client=client)
-        with pytest.raises(ProviderError) as caught:
-            adapter.invoke(_generation_request(), CancellationToken())
+    with pytest.raises(ProviderError) as caught:
+        _invoke_with_transport(DeepSeekAdapter, handler, credential=credential)
 
     assert caught.value.category == category
     assert caught.value.code == code
@@ -264,10 +303,8 @@ def test_malformed_response_maps_to_structured_error() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"choices": []})
 
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        adapter = DeepSeekAdapter(SecretStr(_synthetic_credential()), client=client)
-        with pytest.raises(ProviderError) as caught:
-            adapter.invoke(_generation_request(), CancellationToken())
+    with pytest.raises(ProviderError) as caught:
+        _invoke_with_transport(DeepSeekAdapter, handler)
 
     assert caught.value.category == ProviderErrorCategory.STRUCTURED_OUTPUT_INVALID
     assert caught.value.code == "provider_structured_output_invalid"
@@ -281,10 +318,8 @@ def test_transport_assertion_does_not_leak_secret_or_fragments() -> None:
             f"header contained {credential}, prefix={credential[:9]}, suffix={credential[-9:]}"
         )
 
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        adapter = DeepSeekAdapter(SecretStr(credential), client=client)
-        with pytest.raises(ProviderError) as caught:
-            adapter.invoke(_generation_request(), CancellationToken())
+    with pytest.raises(ProviderError) as caught:
+        _invoke_with_transport(DeepSeekAdapter, handler, credential=credential)
 
     assert caught.value.category == ProviderErrorCategory.TRANSPORT_ERROR
     assert caught.value.code == "provider_transport_error"
@@ -315,10 +350,8 @@ def test_cancelled_request_fails_before_transport() -> None:
 
     cancellation = CancellationToken()
     cancellation.cancel()
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        adapter = DeepSeekAdapter(SecretStr(_synthetic_credential()), client=client)
-        with pytest.raises(ProviderError) as caught:
-            adapter.invoke(_generation_request(), cancellation)
+    with pytest.raises(ProviderError) as caught:
+        _invoke_with_transport(DeepSeekAdapter, handler, cancellation=cancellation)
 
     assert caught.value.category == ProviderErrorCategory.CANCELLED
     assert caught.value.code == "provider_cancelled"
@@ -334,10 +367,8 @@ def test_transport_timeout_is_sanitized_and_not_retryable() -> None:
         call_count += 1
         raise httpx.ReadTimeout(f"upstream echoed {credential}", request=request)
 
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        adapter = DeepSeekAdapter(SecretStr(credential), client=client)
-        with pytest.raises(ProviderError) as caught:
-            adapter.invoke(_generation_request(), CancellationToken())
+    with pytest.raises(ProviderError) as caught:
+        _invoke_with_transport(DeepSeekAdapter, handler, credential=credential)
 
     assert call_count == 1
     assert caught.value.category == ProviderErrorCategory.TIMEOUT
@@ -351,54 +382,446 @@ def test_response_byte_budget_stops_stream_before_normalization() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"x" * 4097)
 
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        adapter = DeepSeekAdapter(SecretStr(_synthetic_credential()), client=client)
-        with pytest.raises(ProviderError) as caught:
-            adapter.invoke(
-                _generation_request(),
-                CancellationToken(),
-                policy=ProviderCallPolicy(maximum_response_bytes=4096),
-            )
+    with pytest.raises(ProviderError) as caught:
+        _invoke_with_transport(
+            DeepSeekAdapter,
+            handler,
+            policy=ProviderCallPolicy(maximum_response_bytes=4096),
+        )
 
     assert caught.value.category == ProviderErrorCategory.BUDGET_EXCEEDED
     assert caught.value.code == "provider_response_budget_exceeded"
 
 
-def test_adapter_concurrency_limit_fails_closed_without_queueing() -> None:
-    request_entered = Event()
-    release_request = Event()
+def _mock_success_response(*, stream: httpx.AsyncByteStream | None = None) -> httpx.Response:
+    payload = {
+        "id": "mock-request",
+        "model": DeepSeekAdapter.model_id,
+        "choices": [{"message": {"content": json.dumps({"schema_version": 1})}}],
+        "usage": {},
+    }
+    if stream is not None:
+        return httpx.Response(200, stream=stream)
+    return httpx.Response(200, json=payload)
 
-    def handler(_: httpx.Request) -> httpx.Response:
-        request_entered.set()
-        if not release_request.wait(timeout=5):
-            raise AssertionError("concurrency barrier was not released")
-        return httpx.Response(
-            200,
-            json={
-                "id": "mock-concurrency-request",
-                "model": DeepSeekAdapter.model_id,
-                "choices": [{"message": {"content": json.dumps({"schema_version": 1})}}],
-                "usage": {},
-            },
+
+def _mock_success_bytes() -> bytes:
+    return json.dumps(
+        {
+            "id": "mock-request",
+            "model": DeepSeekAdapter.model_id,
+            "choices": [{"message": {"content": json.dumps({"schema_version": 1})}}],
+            "usage": {},
+        }
+    ).encode()
+
+
+class _ManualDeadlineClock:
+    def __init__(self) -> None:
+        self.current = 0.0
+        self.changed = asyncio.Event()
+
+    def monotonic(self) -> float:
+        return self.current
+
+    async def wait_until(self, deadline_at: float) -> None:
+        while self.current < deadline_at:
+            await self.changed.wait()
+            self.changed.clear()
+
+    def expire(self) -> None:
+        self.current += 1000.0
+        self.changed.set()
+
+
+class _ObservableSemaphore(asyncio.Semaphore):
+    def __init__(self, value: int) -> None:
+        super().__init__(value)
+        self.acquire_entered = asyncio.Event()
+
+    async def acquire(self) -> Literal[True]:
+        self.acquire_entered.set()
+        return await super().acquire()
+
+
+class _ControlledAsyncStream(httpx.AsyncByteStream):
+    def __init__(
+        self,
+        chunks: list[bytes],
+        *,
+        block_before_index: int | None = None,
+        expire_after_last: Callable[[], None] | None = None,
+        cancel_after_last: Callable[[], None] | None = None,
+    ) -> None:
+        self.chunks = chunks
+        self.block_before_index = block_before_index
+        self.expire_after_last = expire_after_last
+        self.cancel_after_last = cancel_after_last
+        self.chunk_waiting = asyncio.Event()
+        self.release_chunk = asyncio.Event()
+        self.closed = asyncio.Event()
+        self.requested_chunks = 0
+        self.yielded_chunks = 0
+        self.close_count = 0
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for index, chunk in enumerate(self.chunks):
+            self.requested_chunks += 1
+            if index == self.block_before_index:
+                self.chunk_waiting.set()
+                await self.release_chunk.wait()
+            self.yielded_chunks += 1
+            yield chunk
+        if self.expire_after_last is not None:
+            self.expire_after_last()
+        if self.cancel_after_last is not None:
+            self.cancel_after_last()
+
+    async def aclose(self) -> None:
+        self.close_count += 1
+        self.closed.set()
+
+
+async def _provider_error(awaitable: Awaitable[ProviderAdapterResult]) -> ProviderError:
+    try:
+        await awaitable
+    except ProviderError as error:
+        return error
+    raise AssertionError("Provider invocation unexpectedly succeeded")
+
+
+@pytest.mark.parametrize(("block_before_index", "expected_yielded"), [(1, 1), (2, 2)])
+def test_cancellation_interrupts_response_chunks_without_consuming_the_stream(
+    block_before_index: int,
+    expected_yielded: int,
+) -> None:
+    async def scenario() -> None:
+        payload = _mock_success_bytes()
+        stream = _ControlledAsyncStream(
+            [payload[:10], payload[10:20], payload[20:30], payload[30:]],
+            block_before_index=block_before_index,
+        )
+        call_count = 0
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return (
+                _mock_success_response(stream=stream)
+                if call_count == 1
+                else _mock_success_response()
+            )
+
+        cancellation = CancellationToken()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+            )
+            invocation = asyncio.create_task(adapter.invoke(_generation_request(), cancellation))
+            await stream.chunk_waiting.wait()
+            cancellation.cancel()
+            error = await _provider_error(invocation)
+            assert error.category == ProviderErrorCategory.CANCELLED
+            assert error.code == "provider_cancelled"
+            assert stream.yielded_chunks == expected_yielded
+            assert stream.requested_chunks == expected_yielded + 1
+            assert stream.requested_chunks < len(stream.chunks)
+            assert stream.closed.is_set()
+            assert stream.close_count >= 1
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+        assert call_count == 2
+
+    _run(scenario())
+
+
+def test_cancellation_interrupts_waiting_for_response_headers_without_retry() -> None:
+    async def scenario() -> None:
+        headers_entered = asyncio.Event()
+        headers_cancelled = asyncio.Event()
+        release_headers = asyncio.Event()
+        call_count = 0
+
+        async def handler(_: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                return _mock_success_response()
+            headers_entered.set()
+            try:
+                await release_headers.wait()
+            finally:
+                headers_cancelled.set()
+            return _mock_success_response()
+
+        cancellation = CancellationToken()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+            )
+            invocation = asyncio.create_task(adapter.invoke(_generation_request(), cancellation))
+            await headers_entered.wait()
+            cancellation.cancel()
+            error = await _provider_error(invocation)
+            assert error.category == ProviderErrorCategory.CANCELLED
+            assert headers_cancelled.is_set()
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+        assert call_count == 2
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("expiry", [False, True], ids=["cancellation", "deadline"])
+def test_waiting_for_semaphore_is_cancellable_and_deadline_bounded(expiry: bool) -> None:
+    async def scenario() -> None:
+        clock = _ManualDeadlineClock()
+        semaphore = _ObservableSemaphore(0)
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            return _mock_success_response()
+
+        cancellation = CancellationToken()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_clock=clock,
+                _test_semaphore=semaphore,
+            )
+            invocation = asyncio.create_task(adapter.invoke(_generation_request(), cancellation))
+            await semaphore.acquire_entered.wait()
+            if expiry:
+                clock.expire()
+            else:
+                cancellation.cancel()
+            error = await _provider_error(invocation)
+            assert error.category == (
+                ProviderErrorCategory.TIMEOUT if expiry else ProviderErrorCategory.CANCELLED
+            )
+            assert error.code == (
+                "provider_total_deadline_exceeded" if expiry else "provider_cancelled"
+            )
+            semaphore.release()
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+            assert semaphore.locked() is False
+
+    _run(scenario())
+
+
+def test_total_deadline_interrupts_response_body_closes_and_releases_slot() -> None:
+    async def scenario() -> None:
+        clock = _ManualDeadlineClock()
+        payload = _mock_success_bytes()
+        stream = _ControlledAsyncStream(
+            [payload[:10], payload[10:20], payload[20:]],
+            block_before_index=1,
+        )
+        call_count = 0
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return (
+                _mock_success_response(stream=stream)
+                if call_count == 1
+                else _mock_success_response()
+            )
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_clock=clock,
+            )
+            invocation = asyncio.create_task(
+                adapter.invoke(_generation_request(), CancellationToken())
+            )
+            await stream.chunk_waiting.wait()
+            clock.expire()
+            error = await _provider_error(invocation)
+            assert error.category == ProviderErrorCategory.TIMEOUT
+            assert error.code == "provider_total_deadline_exceeded"
+            assert stream.yielded_chunks == 1
+            assert stream.requested_chunks == 2
+            assert stream.requested_chunks < len(stream.chunks)
+            assert stream.closed.is_set()
+            assert stream.close_count >= 1
+            result = await adapter.invoke(_generation_request(), CancellationToken())
+            assert result.response_payload == {"schema_version": 1}
+            assert adapter._concurrency.locked() is False
+        assert call_count == 2
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("stop_kind", ["deadline", "cancellation"])
+def test_stop_after_last_chunk_discards_body_before_normalization(stop_kind: str) -> None:
+    async def scenario() -> None:
+        clock = _ManualDeadlineClock()
+        cancellation = CancellationToken()
+        normalize_count = 0
+
+        def after_normalize() -> None:
+            nonlocal normalize_count
+            normalize_count += 1
+
+        stream = _ControlledAsyncStream(
+            [_mock_success_bytes()],
+            expire_after_last=clock.expire if stop_kind == "deadline" else None,
+            cancel_after_last=cancellation.cancel if stop_kind == "cancellation" else None,
         )
 
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        adapter = DeepSeekAdapter(SecretStr(_synthetic_credential()), client=client)
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            first = executor.submit(
-                adapter.invoke,
-                _generation_request(),
-                CancellationToken(),
+        def handler(_: httpx.Request) -> httpx.Response:
+            return _mock_success_response(stream=stream)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_clock=clock,
+                _test_after_normalize=after_normalize,
             )
-            assert request_entered.wait(timeout=5)
-            try:
-                with pytest.raises(ProviderError) as caught:
-                    adapter.invoke(_generation_request(), CancellationToken())
-                assert caught.value.category == ProviderErrorCategory.BUDGET_EXCEEDED
-                assert caught.value.code == "provider_concurrency_limit"
-            finally:
-                release_request.set()
-            assert first.result(timeout=5).response_payload == {"schema_version": 1}
+            error = await _provider_error(adapter.invoke(_generation_request(), cancellation))
+        assert error.category == (
+            ProviderErrorCategory.TIMEOUT
+            if stop_kind == "deadline"
+            else ProviderErrorCategory.CANCELLED
+        )
+        assert normalize_count == 0
+        assert stream.closed.is_set()
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("stop_kind", ["deadline", "cancellation"])
+def test_stop_after_normalization_discards_normalized_result(stop_kind: str) -> None:
+    async def scenario() -> None:
+        clock = _ManualDeadlineClock()
+        cancellation = CancellationToken()
+        normalized = asyncio.Event()
+
+        def after_normalize() -> None:
+            normalized.set()
+            if stop_kind == "deadline":
+                clock.expire()
+            else:
+                cancellation.cancel()
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            return _mock_success_response()
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = DeepSeekAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+                _test_clock=clock,
+                _test_after_normalize=after_normalize,
+            )
+            error = await _provider_error(adapter.invoke(_generation_request(), cancellation))
+        assert normalized.is_set()
+        assert error.category == (
+            ProviderErrorCategory.TIMEOUT
+            if stop_kind == "deadline"
+            else ProviderErrorCategory.CANCELLED
+        )
+
+    _run(scenario())
+
+
+def test_output_token_contract_allows_4096_and_rejects_4097() -> None:
+    policy = ProviderCallPolicy(maximum_output_tokens=PROVIDER_MAXIMUM_OUTPUT_TOKENS)
+    body = DeepSeekAdapter(SecretStr(_synthetic_credential())).request_body(
+        _generation_request(), policy
+    )
+
+    assert body["max_tokens"] == 4096
+    schema = ProviderCallPolicy.model_json_schema()["properties"]["maximum_output_tokens"]
+    assert schema["maximum"] == 4096
+    with pytest.raises(ValueError):
+        ProviderCallPolicy(maximum_output_tokens=4097)
+
+
+def test_production_client_factory_ignores_proxy_and_tls_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, value in {
+        "HTTP_PROXY": "http://127.0.0.1:1",
+        "HTTPS_PROXY": "http://127.0.0.1:2",
+        "ALL_PROXY": "socks5://127.0.0.1:3",
+        "NO_PROXY": "*",
+        "SSL_CERT_FILE": "/tmp/attacker-ca.pem",
+        "SSL_CERT_DIR": "/tmp/attacker-ca-directory",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    observed_client: dict[str, Any] = {}
+    observed_tls: dict[str, Any] = {}
+    original_client = httpx.AsyncClient
+    original_context_factory = ssl.create_default_context
+
+    def capture_context(*args: Any, **kwargs: Any) -> ssl.SSLContext:
+        observed_tls.update(kwargs)
+        return original_context_factory(*args, **kwargs)
+
+    def capture_client(**kwargs: Any) -> httpx.AsyncClient:
+        observed_client.update(kwargs)
+        return original_client(
+            transport=httpx.MockTransport(lambda _: _mock_success_response()), **kwargs
+        )
+
+    monkeypatch.setattr(ssl, "create_default_context", capture_context)
+    monkeypatch.setattr(httpx, "AsyncClient", capture_client)
+    client = provider_adapters._create_production_client()
+    _run(client.aclose())
+
+    assert inspect.signature(provider_adapters._create_production_client).parameters == {}
+    assert observed_client["trust_env"] is False
+    assert observed_client["follow_redirects"] is False
+    assert "proxy" not in observed_client
+    assert "mounts" not in observed_client
+    context = observed_client["verify"]
+    assert isinstance(context, ssl.SSLContext)
+    assert context.check_hostname is True
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert observed_tls["cafile"] == certifi.where()
+
+
+def test_mock_transport_is_test_only_and_redirects_do_not_forward_authorization() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(307, headers={"Location": "http://127.0.0.1/private"})
+
+    with pytest.raises(ProviderError) as caught:
+        _invoke_with_transport(DeepSeekAdapter, handler, follow_redirects=False)
+
+    assert caught.value.category == ProviderErrorCategory.TRANSPORT_ERROR
+    assert len(requests) == 1
+    assert requests[0].headers["Authorization"].startswith("Bearer ")
+    assert (
+        "transport" not in inspect.signature(provider_adapters._create_production_client).parameters
+    )
+    with pytest.raises(ValueError):
+        ProviderCallPolicy.model_validate({"transport": "attacker-controlled"})
+
+
+def test_allowlisted_endpoints_exclude_local_file_and_private_networks() -> None:
+    for adapter_type in REAL_PROVIDER_ADAPTERS.values():
+        parsed = urlsplit(adapter_type.endpoint)
+        assert parsed.scheme == "https"
+        hostname = parsed.hostname
+        assert hostname not in {None, "localhost"}
+        assert hostname is not None
+        try:
+            address = ipaddress.ip_address(hostname)
+        except ValueError:
+            continue
+        assert address.is_global
 
 
 def test_arbitrary_endpoint_and_retry_configuration_are_rejected() -> None:
@@ -411,3 +834,12 @@ def test_arbitrary_endpoint_and_retry_configuration_are_rejected() -> None:
         ArbitraryEndpointAdapter(SecretStr(_synthetic_credential()))
     with pytest.raises(ValueError):
         ProviderCallPolicy.model_validate({"maximum_retries": 1})
+
+    class OutputOverrideAdapter(RealProviderAdapter):
+        provider_id = ProviderId.ZHIPU
+        model_id = "fixed-model"
+        endpoint = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        request_overrides: ClassVar[dict[str, Any]] = {"max_tokens": 32_768}
+
+    with pytest.raises(RuntimeError, match="protected fields"):
+        OutputOverrideAdapter(SecretStr(_synthetic_credential()))

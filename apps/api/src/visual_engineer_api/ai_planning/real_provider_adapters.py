@@ -1,9 +1,14 @@
+import asyncio
 import json
+import ssl
 import threading
 import time
 from abc import ABC
-from typing import Any, ClassVar, Literal, cast
+from collections.abc import Awaitable, Callable
+from contextlib import suppress
+from typing import Any, ClassVar, Literal, Protocol, TypeVar, cast
 
+import certifi
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
@@ -18,6 +23,8 @@ from visual_engineer_api.ai_planning.provider import (
 )
 from visual_engineer_api.ai_planning.provider_registry import ProviderId
 
+PROVIDER_MAXIMUM_OUTPUT_TOKENS = 4096
+
 
 class ProviderCallPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -25,8 +32,12 @@ class ProviderCallPolicy(BaseModel):
     connect_timeout_seconds: float = Field(default=5.0, ge=0.1, le=30.0)
     read_timeout_seconds: float = Field(default=30.0, ge=0.1, le=120.0)
     total_deadline_seconds: float = Field(default=35.0, ge=0.2, le=150.0)
-    maximum_output_tokens: int = Field(default=4096, ge=256, le=32_768)
-    maximum_response_bytes: int = Field(default=1024 * 1024, ge=4096, le=4 * 1024 * 1024)
+    maximum_output_tokens: int = Field(
+        default=PROVIDER_MAXIMUM_OUTPUT_TOKENS,
+        ge=256,
+        le=PROVIDER_MAXIMUM_OUTPUT_TOKENS,
+    )
+    maximum_response_bytes: int = Field(default=1024 * 1024, ge=4096, le=1024 * 1024)
     maximum_retries: Literal[0] = 0
     concurrency_limit: Literal[1] = 1
 
@@ -86,6 +97,76 @@ _ALLOWED_ENDPOINTS = frozenset(
         "https://api.moonshot.cn/v1/chat/completions",
     }
 )
+_PROTECTED_REQUEST_FIELDS = frozenset(
+    {"max_tokens", "messages", "model", "response_format", "stream"}
+)
+_CANCELLATION_BRIDGE_INTERVAL_SECONDS = 0.01
+
+_T = TypeVar("_T")
+
+
+class _DeadlineClock(Protocol):
+    def monotonic(self) -> float: ...
+
+    async def wait_until(self, deadline_at: float) -> None: ...
+
+
+class _SystemDeadlineClock:
+    def monotonic(self) -> float:
+        return time.monotonic()
+
+    async def wait_until(self, deadline_at: float) -> None:
+        remaining = deadline_at - self.monotonic()
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+
+
+class _CancellationBridge:
+    """Bridge the existing thread-safe token into one invocation's event loop."""
+
+    def __init__(self, cancellation: CancellationToken) -> None:
+        self.event = asyncio.Event()
+        self._cancellation = cancellation
+        self._loop = asyncio.get_running_loop()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        if cancellation.cancelled:
+            self.event.set()
+            return
+        self._thread = threading.Thread(
+            target=self._watch,
+            name="provider-cancellation-bridge",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _watch(self) -> None:
+        while not self._stop.is_set():
+            if self._cancellation.cancelled:
+                with suppress(RuntimeError):
+                    self._loop.call_soon_threadsafe(self.event.set)
+                return
+            self._stop.wait(_CANCELLATION_BRIDGE_INTERVAL_SECONDS)
+
+    def close(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join()
+
+
+def _provider_tls_context() -> ssl.SSLContext:
+    context = ssl.create_default_context(cafile=certifi.where())
+    context.check_hostname = True
+    context.verify_mode = ssl.CERT_REQUIRED
+    return context
+
+
+def _create_production_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        verify=_provider_tls_context(),
+        trust_env=False,
+        follow_redirects=False,
+    )
 
 
 class RealProviderAdapter(ABC):
@@ -94,9 +175,19 @@ class RealProviderAdapter(ABC):
     endpoint: ClassVar[str]
     request_overrides: ClassVar[dict[str, Any]] = {}
 
-    def __init__(self, api_key: SecretStr, *, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        api_key: SecretStr,
+        *,
+        _test_client: httpx.AsyncClient | None = None,
+        _test_clock: _DeadlineClock | None = None,
+        _test_semaphore: asyncio.Semaphore | None = None,
+        _test_after_normalize: Callable[[], None] | None = None,
+    ) -> None:
         if self.endpoint not in _ALLOWED_ENDPOINTS:
             raise RuntimeError("Provider endpoint is outside the built-in allowlist")
+        if self.request_overrides.keys() & _PROTECTED_REQUEST_FIELDS:
+            raise RuntimeError("Provider request overrides cannot replace protected fields")
         if not api_key.get_secret_value().strip():
             raise ProviderError(
                 ProviderErrorCategory.PROVIDER_NOT_CONFIGURED,
@@ -104,8 +195,10 @@ class RealProviderAdapter(ABC):
                 "The selected Provider is missing its local API key",
             )
         self._api_key = api_key
-        self._client = client
-        self._concurrency = threading.BoundedSemaphore(value=1)
+        self._test_client = _test_client
+        self._clock = _test_clock or _SystemDeadlineClock()
+        self._concurrency = _test_semaphore or asyncio.Semaphore(value=1)
+        self._test_after_normalize = _test_after_normalize
 
     def request_body(
         self,
@@ -113,6 +206,7 @@ class RealProviderAdapter(ABC):
         policy: ProviderCallPolicy,
     ) -> dict[str, Any]:
         return {
+            **self.request_overrides,
             "model": self.model_id,
             "messages": [
                 {"role": "system", "content": _SYSTEM_MESSAGE},
@@ -124,44 +218,106 @@ class RealProviderAdapter(ABC):
             "max_tokens": policy.maximum_output_tokens,
             "response_format": {"type": "json_object"},
             "stream": False,
-            **self.request_overrides,
         }
 
-    def invoke(
+    async def invoke(
         self,
         request: AIPlanGenerationRequest,
         cancellation: CancellationToken,
         *,
         policy: ProviderCallPolicy | None = None,
     ) -> ProviderAdapterResult:
+        started_at = self._clock.monotonic()
         call_policy = policy or ProviderCallPolicy()
-        cancellation.raise_if_cancelled()
-        if not self._concurrency.acquire(blocking=False):
-            raise ProviderError(
-                ProviderErrorCategory.BUDGET_EXCEEDED,
-                "provider_concurrency_limit",
-                "The selected Provider concurrency limit is active",
-            )
-        started = time.perf_counter()
+        deadline_at = started_at + call_policy.total_deadline_seconds
+        bridge = _CancellationBridge(cancellation)
+        acquired = False
         try:
-            response = self._post(request, call_policy)
-            cancellation.raise_if_cancelled()
-            latency_ms = round((time.perf_counter() - started) * 1000, 3)
-            if latency_ms > call_policy.total_deadline_seconds * 1000:
-                raise ProviderError(
-                    ProviderErrorCategory.TIMEOUT,
-                    "provider_total_deadline_exceeded",
-                    "The selected Provider exceeded its total deadline",
+            self._checkpoint(cancellation, deadline_at)
+            await self._await_controlled(
+                self._concurrency.acquire(),
+                cancellation=cancellation,
+                cancellation_event=bridge.event,
+                deadline_at=deadline_at,
+            )
+            acquired = True
+            self._checkpoint(cancellation, deadline_at)
+            if self._test_client is not None:
+                return await self._invoke_with_client(
+                    self._test_client,
+                    request,
+                    cancellation,
+                    bridge.event,
+                    call_policy,
+                    started_at,
+                    deadline_at,
                 )
-            self._raise_for_status(response)
-            return self._normalize(response, latency_ms)
+            self._checkpoint(cancellation, deadline_at)
+            async with _create_production_client() as client:
+                self._checkpoint(cancellation, deadline_at)
+                return await self._invoke_with_client(
+                    client,
+                    request,
+                    cancellation,
+                    bridge.event,
+                    call_policy,
+                    started_at,
+                    deadline_at,
+                )
         finally:
-            self._concurrency.release()
+            if acquired:
+                self._concurrency.release()
+            bridge.close()
 
-    def _post(
+    async def _invoke_with_client(
         self,
+        client: httpx.AsyncClient,
         request: AIPlanGenerationRequest,
+        cancellation: CancellationToken,
+        cancellation_event: asyncio.Event,
         policy: ProviderCallPolicy,
+        started_at: float,
+        deadline_at: float,
+    ) -> ProviderAdapterResult:
+        try:
+            response = await self._post(
+                client,
+                request,
+                cancellation,
+                cancellation_event,
+                policy,
+                deadline_at,
+            )
+            self._checkpoint(cancellation, deadline_at)
+            result = self._normalize(response, latency_ms=0)
+            if self._test_after_normalize is not None:
+                self._test_after_normalize()
+            self._checkpoint(cancellation, deadline_at)
+            latency_ms = round((self._clock.monotonic() - started_at) * 1000, 3)
+            return result.model_copy(update={"latency_ms": latency_ms})
+        except ProviderError:
+            raise
+        except httpx.TimeoutException:
+            raise ProviderError(
+                ProviderErrorCategory.TIMEOUT,
+                "provider_timeout",
+                "The selected Provider request timed out",
+            ) from None
+        except Exception:
+            raise ProviderError(
+                ProviderErrorCategory.TRANSPORT_ERROR,
+                "provider_transport_error",
+                "The selected Provider transport failed safely",
+            ) from None
+
+    async def _post(
+        self,
+        client: httpx.AsyncClient,
+        request: AIPlanGenerationRequest,
+        cancellation: CancellationToken,
+        cancellation_event: asyncio.Event,
+        policy: ProviderCallPolicy,
+        deadline_at: float,
     ) -> httpx.Response:
         timeout = httpx.Timeout(
             connect=policy.connect_timeout_seconds,
@@ -173,46 +329,39 @@ class RealProviderAdapter(ABC):
             "Authorization": f"Bearer {self._api_key.get_secret_value()}",
             "Content-Type": "application/json",
         }
-        failure: ProviderError | None = None
-        try:
-            if self._client is not None:
-                return self._bounded_post(self._client, request, policy, headers, timeout)
-            with httpx.Client(follow_redirects=False) as client:
-                return self._bounded_post(client, request, policy, headers, timeout)
-        except ProviderError:
-            raise
-        except httpx.TimeoutException:
-            failure = ProviderError(
-                ProviderErrorCategory.TIMEOUT,
-                "provider_timeout",
-                "The selected Provider request timed out",
-            )
-        except Exception:
-            failure = ProviderError(
-                ProviderErrorCategory.TRANSPORT_ERROR,
-                "provider_transport_error",
-                "The selected Provider transport failed safely",
-            )
-        assert failure is not None
-        raise failure
-
-    def _bounded_post(
-        self,
-        client: httpx.Client,
-        request: AIPlanGenerationRequest,
-        policy: ProviderCallPolicy,
-        headers: dict[str, str],
-        timeout: httpx.Timeout,
-    ) -> httpx.Response:
-        with client.stream(
+        self._checkpoint(cancellation, deadline_at)
+        prepared = client.build_request(
             "POST",
             self.endpoint,
             headers=headers,
             json=self.request_body(request, policy),
             timeout=timeout,
-        ) as streamed:
+        )
+        self._checkpoint(cancellation, deadline_at)
+        streamed: httpx.Response | None = None
+        try:
+            streamed = await self._await_controlled(
+                client.send(prepared, stream=True),
+                cancellation=cancellation,
+                cancellation_event=cancellation_event,
+                deadline_at=deadline_at,
+            )
+            self._checkpoint(cancellation, deadline_at)
+            self._raise_for_status(streamed)
             content = bytearray()
-            for chunk in streamed.iter_bytes():
+            iterator = streamed.aiter_bytes()
+            while True:
+                try:
+                    chunk = await self._await_controlled(
+                        iterator.__anext__(),
+                        cancellation=cancellation,
+                        cancellation_event=cancellation_event,
+                        deadline_at=deadline_at,
+                        response=streamed,
+                    )
+                except StopAsyncIteration:
+                    break
+                self._checkpoint(cancellation, deadline_at)
                 if len(content) + len(chunk) > policy.maximum_response_bytes:
                     raise ProviderError(
                         ProviderErrorCategory.BUDGET_EXCEEDED,
@@ -220,11 +369,82 @@ class RealProviderAdapter(ABC):
                         "The selected Provider response exceeded its byte budget",
                     )
                 content.extend(chunk)
+            self._checkpoint(cancellation, deadline_at)
             return httpx.Response(
                 streamed.status_code,
                 headers=streamed.headers,
                 content=bytes(content),
                 request=streamed.request,
+            )
+        finally:
+            if streamed is not None:
+                await self._close_response(streamed)
+
+    async def _await_controlled(
+        self,
+        operation: Awaitable[_T],
+        *,
+        cancellation: CancellationToken,
+        cancellation_event: asyncio.Event,
+        deadline_at: float,
+        response: httpx.Response | None = None,
+    ) -> _T:
+        self._checkpoint(cancellation, deadline_at)
+        operation_task = asyncio.ensure_future(operation)
+        cancellation_task = asyncio.create_task(cancellation_event.wait())
+        deadline_task = asyncio.create_task(self._clock.wait_until(deadline_at))
+        try:
+            done, _ = await asyncio.wait(
+                {operation_task, cancellation_task, deadline_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        except BaseException:
+            operation_task.cancel()
+            await asyncio.gather(operation_task, return_exceptions=True)
+            if response is not None:
+                await self._close_response(response)
+            await self._cancel_tasks(cancellation_task, deadline_task)
+            raise
+        if operation_task in done:
+            await self._cancel_tasks(cancellation_task, deadline_task)
+            return await operation_task
+
+        operation_task.cancel()
+        await asyncio.gather(operation_task, return_exceptions=True)
+        if response is not None:
+            await self._close_response(response)
+        await self._cancel_tasks(cancellation_task, deadline_task)
+        if cancellation.cancelled or cancellation_task in done:
+            raise ProviderError(
+                ProviderErrorCategory.CANCELLED,
+                "provider_cancelled",
+                "Provider generation was cancelled",
+            )
+        raise ProviderError(
+            ProviderErrorCategory.TIMEOUT,
+            "provider_total_deadline_exceeded",
+            "The selected Provider exceeded its total deadline",
+        )
+
+    @staticmethod
+    async def _cancel_tasks(*tasks: asyncio.Task[Any]) -> None:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    @staticmethod
+    async def _close_response(response: httpx.Response) -> None:
+        with suppress(Exception):
+            await response.aclose()
+
+    def _checkpoint(self, cancellation: CancellationToken, deadline_at: float) -> None:
+        cancellation.raise_if_cancelled()
+        if deadline_at - self._clock.monotonic() <= 0:
+            raise ProviderError(
+                ProviderErrorCategory.TIMEOUT,
+                "provider_total_deadline_exceeded",
+                "The selected Provider exceeded its total deadline",
             )
 
     @staticmethod
