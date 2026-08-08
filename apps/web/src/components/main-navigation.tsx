@@ -11,6 +11,7 @@ export function MainNavigation() {
   const t = useTranslations("navigation");
   const links = [
     { href: "/", label: t("tasks") },
+    { href: "/providers", label: t("providers") },
     { href: "/runners", label: t("runners") },
     { href: "/repositories", label: t("repositories") },
     { href: "/execution-grants", label: t("executionGrants") },

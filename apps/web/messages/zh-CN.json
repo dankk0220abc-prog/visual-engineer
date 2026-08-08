@@ -6,6 +6,7 @@
   "navigation": {
     "label": "主导航",
     "tasks": "任务",
+    "providers": "AI Provider",
     "runners": "Runner",
     "repositories": "仓库智能",
     "executionGrants": "执行授权",
@@ -59,6 +60,7 @@
       "discarded": "已丢弃",
       "expired": "已过期",
       "failed": "失败",
+      "fixture_validated": "Fixture 已验证",
       "fresh": "新鲜",
       "generated": "已生成",
       "generating": "生成中",
@@ -97,6 +99,7 @@
       "unavailable": "不可用",
       "unknown": "未知",
       "not_ready": "尚未就绪",
+      "not_performed": "未执行",
       "unknownWithCode": "未知状态（{code}）"
     },
     "fields": {
@@ -433,6 +436,66 @@
     "noEvents": "尚无事件。",
     "eventMetadata": "{type} 事件元数据"
   },
+  "providerFoundation": {
+    "title": "AI Provider 基础层",
+    "description": "用于受治理计划生成的封闭、模型中立注册表。本切片只启用确定性 Fixture；真实 Provider 适配器在完成本地配置与独立在线验证前保持可见但不可用。",
+    "fixtureDefault": "Fixture 是安全默认项",
+    "secretBoundary": "Secret 是否存在只在服务端判定。界面不会收到 API Key、环境变量名、密钥值或前后缀、文件路径以及鉴权材料。",
+    "authorityBoundary": "选择 Provider 只能请求计划提案，不能签发执行授权、运行 shell、修改工作区、批准审查、授权交付或部署。",
+    "evidenceLabel": "Fixture / Mock 证据 · 非真实 Provider 调用",
+    "loading": "正在加载封闭 Provider 注册表…",
+    "loadFailed": "无法加载 Provider 状态",
+    "registryTitle": "已注册的计划 Provider",
+    "registryDescription": "按固定顺序展示六个 Provider 身份。可用性采用 fail-closed，能力声明明确标出所有尚未验证的项目。",
+    "providerCount": "共 {count} 个 Provider",
+    "available": "可用",
+    "notConfigured": "未配置",
+    "configuration": "配置",
+    "configured": "已在本地配置",
+    "runtime": "计划运行时",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "liveValidation": "在线验证",
+    "fixtureValidated": "Fixture 已验证",
+    "liveNotPerformed": "尚未执行真实 Provider 在线验证",
+    "fixtureDescription": "本地确定性 Fixture，不使用凭据、网络访问或可计费调用。",
+    "adapterDescription": "固定端点适配器基础层。请求不能传入自定义 Base URL、模型覆盖、Header、工具或重试参数。",
+    "officialDocumentation": "Provider 官方文档",
+    "capabilities": "声明的能力",
+    "selectorTitle": "计划 Provider",
+    "selectorDescription": "只能选择注册表中已启用的条目。禁用项仍会显示，并给出明确原因。",
+    "viewStatus": "查看 Provider 状态",
+    "selectAria": "选择 {name}",
+    "providerName": {
+      "deterministicFixture": "Deterministic Fixture",
+      "zhipu": "智谱 GLM · Zhipu GLM",
+      "qwen": "通义千问 · Qwen",
+      "deepseek": "DeepSeek",
+      "doubao": "豆包 · Doubao",
+      "kimi": "Kimi"
+    },
+    "reason": {
+      "available": "可用于确定性、无网络的计划生成。",
+      "missing_local_api_key": "因未配置所需的本地 API Key 而禁用。",
+      "live_validation_not_performed": "已检测到本地 Secret，但因尚未执行在线验证，此 Provider 仍保持禁用。"
+    },
+    "capability": {
+      "structured_output": "结构化输出",
+      "tool_calling": "工具调用",
+      "streaming": "流式输出",
+      "reasoning": "推理模式",
+      "token_usage_reporting": "Token 用量报告",
+      "request_id": "请求 ID",
+      "configurable_timeout": "可配置超时",
+      "model_availability": "模型可用性",
+      "maximum_output_control": "最大输出控制"
+    },
+    "support": {
+      "supported": "支持",
+      "unsupported": "不支持",
+      "not_verified": "尚未验证"
+    }
+  },
   "runConsole": {
     "noneRecorded": "暂无记录。",
     "packageScript": "包脚本：{workspace} · {script}",
@@ -518,9 +581,8 @@
     "emptyIntelligenceHelp": "创建快照会读取 allowlisted Git repository 的 committed HEAD，不会读取未提交文件内容。",
     "snapshotting": "正在创建快照…",
     "createSnapshot": "创建 committed-HEAD 快照",
-    "firstSlice": "第一纵向切片",
     "emptyAiPlan": "受治理 AI 计划为空",
-    "aiPlanHelp": "使用受限仓库智能、版本化提示词与确定性 fake Provider 生成严格结构化计划。无需 API Key，也不会调用网络或修改工作区。",
+    "aiPlanHelp": "从封闭 Provider 注册表中选择并请求严格结构化计划。当前仅启用确定性 Fixture，不使用 API Key、网络调用或工作区修改；真实 Provider 在完成独立在线验证前保持禁用。",
     "interfaceOutputBoundary": "界面语言不会翻译已生成的 AI 计划、追踪、评估或不可变证据。当前提示词绑定尚未包含 AI 输出语言。",
     "aiDeliveryPackage": "AI 计划交付包",
     "designImplementation": "设计实现",
@@ -779,6 +841,8 @@
   "errors": {
     "unexpected": "出现未预期的错误，请重试。",
     "network_error": "无法连接 API，请确认服务正在运行。",
+    "provider_disabled": "Fixture / Mock 证据 · 非真实 Provider 调用。此 Provider 已注册，但在独立验证门完成前保持禁用。请选择 Deterministic Fixture，或先完成本地配置与另行授权的在线验证门。",
+    "provider_not_configured": "Fixture / Mock 证据 · 非真实 Provider 调用。此 Provider 因缺少所需的本地配置而不可用。请选择 Deterministic Fixture，或先完成本地配置与另行授权的在线验证门。",
     "invalid_response": "API 返回了无法识别的响应。",
     "conflict": "状态已经变化。请刷新页面并检查最新的持久化状态。",
     "atomic_write_failed": "无法完成有界原子写入。",

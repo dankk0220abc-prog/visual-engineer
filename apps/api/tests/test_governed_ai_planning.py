@@ -30,7 +30,8 @@ from visual_engineer_api.ai_planning.provider import (
     ProviderInvocationResult,
     invoke_provider,
 )
-from visual_engineer_api.core.config import get_settings
+from visual_engineer_api.ai_planning.provider_registry import ProviderId
+from visual_engineer_api.core.config import Settings, get_settings
 from visual_engineer_api.models.ai_planning import (
     AIEvalResult,
     AIPlanDecision,
@@ -100,6 +101,85 @@ def _generate(client: TestClient, run_id: object, suffix: str) -> tuple[Any, dic
         json={"delivery_package": "frontend_quality_remediation"},
     )
     return response, cast(dict[str, Any], response.json())
+
+
+@pytest.mark.parametrize(
+    "provider_id",
+    [
+        ProviderId.ZHIPU,
+        ProviderId.QWEN,
+        ProviderId.DEEPSEEK,
+        ProviderId.DOUBAO,
+        ProviderId.KIMI,
+    ],
+)
+def test_unconfigured_real_provider_fails_before_artifact_or_authority_side_effects(
+    client: TestClient,
+    db_session: Session,
+    ai_repository: tuple[Path, str, str],
+    provider_id: ProviderId,
+) -> None:
+    repository, _, _ = ai_repository
+    _, run, _ = _prepare_snapshot(client, repository, f"unconfigured-{provider_id.value}")
+    service = AIPlanningService(
+        db_session,
+        settings=Settings(
+            zhipu_api_key="",
+            qwen_api_key="",
+            deepseek_api_key="",
+            doubao_api_key="",
+            kimi_api_key="",
+        ),
+    )
+
+    with pytest.raises(AIPlanningServiceError) as caught:
+        service.create_request(
+            uuid.UUID(run["id"]),
+            AIPlanRequestCreate(
+                delivery_package=DeliveryPackage.FRONTEND_QUALITY_REMEDIATION,
+                provider_id=provider_id,
+            ),
+            request_id=f"unconfigured-{provider_id.value}",
+            idempotency_key=f"unconfigured-{provider_id.value}",
+        )
+
+    assert caught.value.code == "provider_not_configured"
+    assert db_session.scalar(select(func.count()).select_from(AIPlanRequest)) == 0
+    assert db_session.scalar(select(func.count()).select_from(Plan)) == 0
+    assert db_session.scalar(select(func.count()).select_from(ExecutionGrant)) == 0
+    assert db_session.scalar(select(func.count()).select_from(ReviewDecision)) == 0
+    assert db_session.scalar(select(func.count()).select_from(DeliveryAuthorization)) == 0
+    stored_run = db_session.get(Run, uuid.UUID(run["id"]))
+    assert stored_run is not None
+    assert stored_run.status == "snapshot_ready"
+
+
+def test_configured_but_unvalidated_provider_still_fails_before_http_or_artifacts(
+    client: TestClient,
+    db_session: Session,
+    ai_repository: tuple[Path, str, str],
+) -> None:
+    repository, _, _ = ai_repository
+    _, run, _ = _prepare_snapshot(client, repository, "configured-unvalidated")
+    service = AIPlanningService(
+        db_session,
+        settings=Settings(zhipu_api_key="synthetic-local-contract-only"),
+    )
+
+    with pytest.raises(AIPlanningServiceError) as caught:
+        service.create_request(
+            uuid.UUID(run["id"]),
+            AIPlanRequestCreate(
+                delivery_package=DeliveryPackage.FRONTEND_QUALITY_REMEDIATION,
+                provider_id=ProviderId.ZHIPU,
+            ),
+            request_id="configured-unvalidated",
+            idempotency_key="configured-unvalidated",
+        )
+
+    assert caught.value.code == "provider_disabled"
+    assert db_session.scalar(select(func.count()).select_from(AIPlanRequest)) == 0
+    assert db_session.scalar(select(func.count()).select_from(Plan)) == 0
 
 
 def test_ai_plan_complete_flow_is_redacted_evaluated_idempotent_and_authority_free(

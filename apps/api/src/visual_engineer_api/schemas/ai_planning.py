@@ -12,6 +12,10 @@ from visual_engineer_api.ai_planning.contracts import (
     DeliveryPackage,
     ProviderCapabilityMetadata,
 )
+from visual_engineer_api.ai_planning.provider_registry import (
+    ProviderConfigurationStatus,
+    ProviderId,
+)
 
 
 class AIPlanRequestStatus(StrEnum):
@@ -29,6 +33,7 @@ class AIPlanRequestCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     delivery_package: DeliveryPackage
+    provider_id: ProviderId = ProviderId.DETERMINISTIC_FIXTURE
 
 
 class AIPlanDecisionCreate(BaseModel):
@@ -53,7 +58,7 @@ class AIProviderTraceResponse(BaseModel):
     ai_plan_request_id: uuid.UUID
     attempt_number: int
     status: Literal["succeeded", "failed", "timeout", "cancelled"]
-    provider_id: str
+    provider_id: ProviderId
     provider_metadata: ProviderCapabilityMetadata
     request_digest: str
     response_digest: str | None
@@ -111,7 +116,7 @@ class AIPlanRequestResponse(BaseModel):
     prompt_version: str
     prompt_digest: str
     prompt_payload: dict[str, Any]
-    provider_id: str
+    provider_id: ProviderId
     provider_metadata: ProviderCapabilityMetadata
     request_payload: AIPlanGenerationRequest
     request_digest: str
@@ -141,5 +146,5 @@ class AIPlanRequestListResponse(BaseModel):
 
 
 class AIProviderListResponse(BaseModel):
-    items: list[ProviderCapabilityMetadata]
+    items: list[ProviderConfigurationStatus]
     total: int = Field(ge=0)

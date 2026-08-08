@@ -1,0 +1,6 @@
+{
+  "rule_id": "VE_PROVIDER_EVIDENCE_SECRET_LEAK",
+  "checked_value_count": 0,
+  "result": "passed",
+  "error_category": null
+}

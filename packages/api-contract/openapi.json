@@ -397,6 +397,10 @@
         "properties": {
           "delivery_package": {
             "$ref": "#/components/schemas/DeliveryPackage"
+          },
+          "provider_id": {
+            "$ref": "#/components/schemas/ProviderId",
+            "default": "deterministic-fixture"
           }
         },
         "required": ["delivery_package"],
@@ -560,8 +564,7 @@
             "type": "string"
           },
           "provider_id": {
-            "title": "Provider Id",
-            "type": "string"
+            "$ref": "#/components/schemas/ProviderId"
           },
           "provider_metadata": {
             "$ref": "#/components/schemas/ProviderCapabilityMetadata"
@@ -669,7 +672,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/ProviderCapabilityMetadata"
+              "$ref": "#/components/schemas/ProviderConfigurationStatus"
             },
             "title": "Items",
             "type": "array"
@@ -754,8 +757,7 @@
             "type": "integer"
           },
           "provider_id": {
-            "title": "Provider Id",
-            "type": "string"
+            "$ref": "#/components/schemas/ProviderId"
           },
           "provider_metadata": {
             "$ref": "#/components/schemas/ProviderCapabilityMetadata"
@@ -1120,6 +1122,11 @@
           "workspace_git_commit_v1"
         ],
         "title": "Capability",
+        "type": "string"
+      },
+      "CapabilitySupport": {
+        "enum": ["supported", "unsupported", "not_verified"],
+        "title": "CapabilitySupport",
         "type": "string"
       },
       "ClaimRequest": {
@@ -4765,6 +4772,51 @@
         "title": "PromptBinding",
         "type": "object"
       },
+      "ProviderCapabilityDeclaration": {
+        "additionalProperties": false,
+        "properties": {
+          "configurable_timeout": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          },
+          "maximum_output_control": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          },
+          "model_availability": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          },
+          "request_id": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          },
+          "streaming": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          },
+          "structured_output": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          },
+          "token_usage_reporting": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          },
+          "tool_calling": {
+            "$ref": "#/components/schemas/CapabilitySupport"
+          }
+        },
+        "required": [
+          "structured_output",
+          "tool_calling",
+          "streaming",
+          "reasoning",
+          "token_usage_reporting",
+          "request_id",
+          "configurable_timeout",
+          "model_availability",
+          "maximum_output_control"
+        ],
+        "title": "ProviderCapabilityDeclaration",
+        "type": "object"
+      },
       "ProviderCapabilityMetadata": {
         "additionalProperties": false,
         "properties": {
@@ -4847,6 +4899,103 @@
         ],
         "title": "ProviderCapabilityMetadata",
         "type": "object"
+      },
+      "ProviderConfigurationStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ProviderCapabilityDeclaration"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "documentation_url": {
+            "title": "Documentation Url",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "live_validation_status": {
+            "$ref": "#/components/schemas/ProviderLiveValidationStatus"
+          },
+          "local_secret_required": {
+            "title": "Local Secret Required",
+            "type": "boolean"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "provider_id": {
+            "$ref": "#/components/schemas/ProviderId"
+          },
+          "reason_disabled": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderStatusReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status_description": {
+            "title": "Status Description",
+            "type": "string"
+          },
+          "status_reason": {
+            "$ref": "#/components/schemas/ProviderStatusReason"
+          }
+        },
+        "required": [
+          "provider_id",
+          "display_name",
+          "model_id",
+          "configured",
+          "enabled",
+          "live_validation_status",
+          "local_secret_required",
+          "status_reason",
+          "reason_disabled",
+          "status_description",
+          "documentation_url",
+          "capabilities"
+        ],
+        "title": "ProviderConfigurationStatus",
+        "type": "object"
+      },
+      "ProviderId": {
+        "enum": [
+          "deterministic-fixture",
+          "zhipu",
+          "qwen",
+          "deepseek",
+          "doubao",
+          "kimi"
+        ],
+        "title": "ProviderId",
+        "type": "string"
+      },
+      "ProviderLiveValidationStatus": {
+        "enum": ["fixture_validated", "not_performed"],
+        "title": "ProviderLiveValidationStatus",
+        "type": "string"
+      },
+      "ProviderStatusReason": {
+        "enum": [
+          "available",
+          "missing_local_api_key",
+          "live_validation_not_performed"
+        ],
+        "title": "ProviderStatusReason",
+        "type": "string"
       },
       "RegisterRequest": {
         "additionalProperties": false,
@@ -14976,7 +15125,7 @@
             "description": "Validation or policy denial"
           }
         },
-        "summary": "Generate and independently evaluate one governed deterministic AI Plan",
+        "summary": "Generate and independently evaluate one governed AI Plan",
         "tags": ["governed AI planning"]
       }
     },

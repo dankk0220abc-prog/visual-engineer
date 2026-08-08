@@ -715,7 +715,7 @@ export interface paths {
     /** List governed AI Plan requests for a Run */
     get: operations["list_ai_plan_requests_api_v1_runs__run_id__ai_plan_requests_get"];
     put?: never;
-    /** Generate and independently evaluate one governed deterministic AI Plan */
+    /** Generate and independently evaluate one governed AI Plan */
     post: operations["create_ai_plan_request_api_v1_runs__run_id__ai_plan_requests_post"];
     delete?: never;
     options?: never;
@@ -1487,6 +1487,8 @@ export interface components {
     /** AIPlanRequestCreate */
     AIPlanRequestCreate: {
       delivery_package: components["schemas"]["DeliveryPackage"];
+      /** @default deterministic-fixture */
+      provider_id: components["schemas"]["ProviderId"];
     };
     /** AIPlanRequestListResponse */
     AIPlanRequestListResponse: {
@@ -1542,8 +1544,7 @@ export interface components {
       prompt_template_id: string;
       /** Prompt Version */
       prompt_version: string;
-      /** Provider Id */
-      provider_id: string;
+      provider_id: components["schemas"]["ProviderId"];
       provider_metadata: components["schemas"]["ProviderCapabilityMetadata"];
       /** Redaction Record */
       redaction_record: {
@@ -1588,7 +1589,7 @@ export interface components {
     /** AIProviderListResponse */
     AIProviderListResponse: {
       /** Items */
-      items: components["schemas"]["ProviderCapabilityMetadata"][];
+      items: components["schemas"]["ProviderConfigurationStatus"][];
       /** Total */
       total: number;
     };
@@ -1633,8 +1634,7 @@ export interface components {
       latency_ms: number;
       /** Output Tokens */
       output_tokens: number;
-      /** Provider Id */
-      provider_id: string;
+      provider_id: components["schemas"]["ProviderId"];
       provider_metadata: components["schemas"]["ProviderCapabilityMetadata"];
       /** Redactions */
       redactions: {
@@ -1848,6 +1848,11 @@ export interface components {
       | "workspace_discard_v1"
       | "validation_execute_v1"
       | "workspace_git_commit_v1";
+    /**
+     * CapabilitySupport
+     * @enum {string}
+     */
+    CapabilitySupport: "supported" | "unsupported" | "not_verified";
     /** ClaimRequest */
     ClaimRequest: {
       /**
@@ -3591,6 +3596,18 @@ export interface components {
       /** Version */
       version: string;
     };
+    /** ProviderCapabilityDeclaration */
+    ProviderCapabilityDeclaration: {
+      configurable_timeout: components["schemas"]["CapabilitySupport"];
+      maximum_output_control: components["schemas"]["CapabilitySupport"];
+      model_availability: components["schemas"]["CapabilitySupport"];
+      reasoning: components["schemas"]["CapabilitySupport"];
+      request_id: components["schemas"]["CapabilitySupport"];
+      streaming: components["schemas"]["CapabilitySupport"];
+      structured_output: components["schemas"]["CapabilitySupport"];
+      token_usage_reporting: components["schemas"]["CapabilitySupport"];
+      tool_calling: components["schemas"]["CapabilitySupport"];
+    };
     /** ProviderCapabilityMetadata */
     ProviderCapabilityMetadata: {
       /**
@@ -3634,6 +3651,50 @@ export interface components {
        */
       structured_output: true;
     };
+    /** ProviderConfigurationStatus */
+    ProviderConfigurationStatus: {
+      capabilities: components["schemas"]["ProviderCapabilityDeclaration"];
+      /** Configured */
+      configured: boolean;
+      /** Display Name */
+      display_name: string;
+      /** Documentation Url */
+      documentation_url: string;
+      /** Enabled */
+      enabled: boolean;
+      live_validation_status: components["schemas"]["ProviderLiveValidationStatus"];
+      /** Local Secret Required */
+      local_secret_required: boolean;
+      /** Model Id */
+      model_id: string;
+      provider_id: components["schemas"]["ProviderId"];
+      reason_disabled: components["schemas"]["ProviderStatusReason"] | null;
+      /** Status Description */
+      status_description: string;
+      status_reason: components["schemas"]["ProviderStatusReason"];
+    };
+    /**
+     * ProviderId
+     * @enum {string}
+     */
+    ProviderId:
+      | "deterministic-fixture"
+      | "zhipu"
+      | "qwen"
+      | "deepseek"
+      | "doubao"
+      | "kimi";
+    /**
+     * ProviderLiveValidationStatus
+     * @enum {string}
+     */
+    ProviderLiveValidationStatus: "fixture_validated" | "not_performed";
+    /**
+     * ProviderStatusReason
+     * @enum {string}
+     */
+    ProviderStatusReason:
+      "available" | "missing_local_api_key" | "live_validation_not_performed";
     /** RegisterRequest */
     RegisterRequest: {
       /** Capabilities */

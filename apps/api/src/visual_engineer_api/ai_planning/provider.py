@@ -16,8 +16,18 @@ from visual_engineer_api.ai_planning.contracts import (
 
 
 class ProviderErrorCategory(StrEnum):
+    PROVIDER_NOT_CONFIGURED = "provider_not_configured"
+    PROVIDER_DISABLED = "provider_disabled"
+    AUTHENTICATION_FAILED = "authentication_failed"
+    RATE_LIMITED = "rate_limited"
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
+    MODEL_UNAVAILABLE = "model_unavailable"
+    UPSTREAM_SERVER_ERROR = "upstream_server_error"
+    REQUEST_REJECTED = "request_rejected"
+    BUDGET_EXCEEDED = "budget_exceeded"
+    TRANSPORT_ERROR = "transport_error"
+    STRUCTURED_OUTPUT_INVALID = "structured_output_invalid"
     UNAVAILABLE = "unavailable"
     INVALID_RESPONSE = "invalid_response"
     POLICY_DENIED = "policy_denied"
