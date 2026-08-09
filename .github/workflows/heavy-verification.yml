@@ -44,6 +44,11 @@ jobs:
           cache-dependency-glob: uv.lock
       - run: uv python install 3.12.13
       - run: uv sync --frozen
+      - name: Install fail-closed secret scanner dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ripgrep
+          rg --version
       - run: make workspace-security-check
       - run: make security-check
       - run: make eval

@@ -59,7 +59,9 @@ async function generateAIPlan(page: Page) {
     console.getByRole("heading", { name: "结构化 AI 计划" }),
   ).toBeVisible();
   await expect(console.getByText("已生成", { exact: true })).toBeVisible();
-  await expect(console.getByText("deterministic-fixture")).toBeVisible();
+  await expect(
+    console.getByText("deterministic-fixture", { exact: true }),
+  ).toHaveCount(2);
   await expect(console.getByText("系统所有的评估证据")).toBeVisible();
   await expect(console.getByText("schema_validity")).toBeVisible();
   await expect(console.getByText("approval_boundary_bypass")).toBeVisible();
