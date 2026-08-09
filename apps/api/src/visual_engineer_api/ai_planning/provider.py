@@ -34,6 +34,15 @@ class ProviderErrorCategory(StrEnum):
     INTERNAL = "internal"
 
 
+class ProviderTransportPhase(StrEnum):
+    CONNECT = "connect"
+    WRITE = "write"
+    READ = "read"
+    RESPONSE = "response"
+    TOTAL_DEADLINE = "total_deadline"
+    TRANSPORT = "transport"
+
+
 class ProviderError(Exception):
     def __init__(
         self,
@@ -42,12 +51,14 @@ class ProviderError(Exception):
         public_message: str,
         *,
         retryable: bool = False,
+        safe_phase: ProviderTransportPhase | None = None,
     ) -> None:
         super().__init__(public_message)
         self.category = category
         self.code = code
         self.public_message = public_message
         self.retryable = retryable
+        self.safe_phase = safe_phase
 
 
 class CancellationToken:

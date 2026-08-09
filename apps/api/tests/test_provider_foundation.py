@@ -14,7 +14,6 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 import visual_engineer_api.ai_planning.real_provider_adapters as provider_adapters
-import visual_engineer_api.api.ai_planning as ai_planning_api
 from visual_engineer_api.ai_planning.contracts import (
     AIPlanGenerationRequest,
     ContextBudget,
@@ -43,19 +42,6 @@ from visual_engineer_api.ai_planning.real_provider_adapters import (
     ProviderCallPolicy,
     RealProviderAdapter,
 )
-from visual_engineer_api.core.config import Settings
-
-
-def _settings(**overrides: Any) -> Settings:
-    values: dict[str, Any] = {
-        "zhipu_api_key": "",
-        "qwen_api_key": "",
-        "deepseek_api_key": "",
-        "doubao_api_key": "",
-        "kimi_api_key": "",
-        **overrides,
-    }
-    return Settings(_env_file=None, **values)
 
 
 def _generation_request() -> AIPlanGenerationRequest:
@@ -142,7 +128,7 @@ def _invoke_with_transport(
 
 
 def test_registry_is_closed_ordered_and_secret_safe() -> None:
-    statuses = ProviderRegistry(_settings()).list()
+    statuses = ProviderRegistry().list()
 
     assert [item.provider_id for item in statuses] == [
         ProviderId.DETERMINISTIC_FIXTURE,
@@ -166,22 +152,25 @@ def test_registry_is_closed_ordered_and_secret_safe() -> None:
     assert _synthetic_credential() not in serialized
 
 
-def test_configured_real_provider_stays_disabled_until_live_validation() -> None:
-    status = ProviderRegistry(_settings(zhipu_api_key=_synthetic_credential())).get(
-        ProviderId.ZHIPU
-    )
+def test_owner_environment_key_cannot_configure_product_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ZHIPU_API_KEY", _synthetic_credential())
+    status = ProviderRegistry().get(ProviderId.ZHIPU)
 
-    assert status.configured is True
+    assert status.configured is False
     assert status.enabled is False
-    assert status.status_reason == ProviderStatusReason.LIVE_VALIDATION_NOT_PERFORMED
-    assert status.reason_disabled == ProviderStatusReason.LIVE_VALIDATION_NOT_PERFORMED
+    assert status.status_reason == ProviderStatusReason.MISSING_LOCAL_API_KEY
+    assert status.reason_disabled == ProviderStatusReason.MISSING_LOCAL_API_KEY
+    assert "configure your own credential" in status.status_description
+    assert "never a product fallback" in status.status_description
 
 
 def test_provider_discovery_api_matches_registry_without_secret_metadata(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ai_planning_api, "get_settings", _settings)
+    monkeypatch.setenv("ZHIPU_API_KEY", _synthetic_credential())
 
     response = client.get("/api/v1/ai-providers")
 
@@ -191,6 +180,7 @@ def test_provider_discovery_api_matches_registry_without_secret_metadata(
     assert [item["provider_id"] for item in payload["items"]] == [
         item.provider_id.value for item in PROVIDER_DEFINITIONS
     ]
+    assert payload["items"][1]["configured"] is False
     serialized = response.text
     assert "API_KEY" not in serialized
     assert "Authorization" not in serialized
@@ -372,7 +362,7 @@ def test_transport_timeout_is_sanitized_and_not_retryable() -> None:
 
     assert call_count == 1
     assert caught.value.category == ProviderErrorCategory.TIMEOUT
-    assert caught.value.code == "provider_timeout"
+    assert caught.value.code == "provider_read_timeout"
     assert caught.value.retryable is False
     assert credential not in str(caught.value)
     assert caught.value.__cause__ is None

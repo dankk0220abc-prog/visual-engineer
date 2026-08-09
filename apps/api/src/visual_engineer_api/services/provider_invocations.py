@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 from collections.abc import Callable
@@ -62,6 +63,7 @@ class AdapterInvocationOutcome:
 
 
 PROVIDER_RECOVERY_SAFETY_MARGIN = timedelta(seconds=30)
+_TRANSPORT_LOGGER = logging.getLogger("visual_engineer.provider_transport")
 
 
 def minimum_stale_dispatch_age() -> timedelta:
@@ -392,6 +394,24 @@ class ProviderInvocationLifecycle:
         invocation.client_total_elapsed_ms = _elapsed_ms(timing.client_started, now)
         invocation.completed_at = datetime.now(UTC)
         self._session.commit()
+        if error.category in {
+            ProviderErrorCategory.TIMEOUT,
+            ProviderErrorCategory.TRANSPORT_ERROR,
+        }:
+            _TRANSPORT_LOGGER.warning(
+                "provider_transport_failure",
+                extra={
+                    "invocation_correlation": invocation.id.hex[:12],
+                    "provider": invocation.provider_id,
+                    "error_category": error.category.value,
+                    "error_code": error.code[:64],
+                    "safe_phase": (
+                        error.safe_phase.value if error.safe_phase is not None else "transport"
+                    ),
+                    "elapsed_ms": invocation.client_total_elapsed_ms,
+                    "lifecycle": status.value,
+                },
+            )
         return status
 
     def reconcile_stale_dispatching(

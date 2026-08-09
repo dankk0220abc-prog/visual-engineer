@@ -1,14 +1,18 @@
 import asyncio
+import errno
 import inspect
 import json
+import logging
 import os
+import socket
+import ssl
 import subprocess
 import uuid
 from collections import Counter
 from collections.abc import Callable, Generator, Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import httpx
 import pytest
@@ -50,6 +54,7 @@ from visual_engineer_api.models.runner import RunnerJob
 from visual_engineer_api.models.task import Task
 from visual_engineer_api.models.workspace import ExecutionGrant, Workspace
 from visual_engineer_api.services import zhipu_live_canary as canary_service
+from visual_engineer_api.services.ai_planning import AIPlanningService
 from visual_engineer_api.services.zhipu_live_canary import (
     LIVE_VALIDATION_AUTHORIZATION_ENV,
     USER_SECRET_PROVISION_REQUIRED,
@@ -274,6 +279,50 @@ def _authority_counts(session: Session) -> tuple[int, ...]:
     )
 
 
+_SECRET_NEGATIVE_FRAGMENTS = (
+    "fake-api-key-material",
+    "Authorization: Bearer fake-bearer-material",
+    "https://provider.invalid/private?token=fake-url-token",
+    'request_body={"prompt":"private-fake-prompt"}',
+    'response_body={"secret":"private-fake-response"}',
+)
+
+
+def _raise_transport_case(kind: str, request: httpx.Request) -> NoReturn:
+    sensitive = " | ".join(_SECRET_NEGATIVE_FRAGMENTS)
+    if kind == "dns":
+        raise httpx.ConnectError(sensitive, request=request) from socket.gaierror(
+            socket.EAI_NONAME, sensitive
+        )
+    if kind == "connection_refused":
+        raise httpx.ConnectError(sensitive, request=request) from ConnectionRefusedError(
+            errno.ECONNREFUSED, sensitive
+        )
+    if kind == "network_unreachable":
+        raise httpx.ConnectError(sensitive, request=request) from OSError(
+            errno.ENETUNREACH, sensitive
+        )
+    if kind == "tls_certificate":
+        raise httpx.ConnectError(sensitive, request=request) from ssl.SSLCertVerificationError(
+            1, sensitive
+        )
+    if kind == "tls_handshake":
+        raise httpx.ConnectError(sensitive, request=request) from ssl.SSLError(1, sensitive)
+    if kind == "connect_timeout":
+        raise httpx.ConnectTimeout(sensitive, request=request)
+    if kind == "read_timeout":
+        raise httpx.ReadTimeout(sensitive, request=request)
+    if kind == "write_error":
+        raise httpx.WriteError(sensitive, request=request)
+    if kind == "read_interruption":
+        raise httpx.ReadError(sensitive, request=request)
+    if kind == "remote_protocol":
+        raise httpx.RemoteProtocolError(sensitive, request=request)
+    if kind == "generic_network":
+        raise httpx.NetworkError(sensitive, request=request)
+    raise RuntimeError(sensitive)
+
+
 async def _invoke_with_mock(
     session: Session,
     handler: Callable[[httpx.Request], httpx.Response],
@@ -368,6 +417,19 @@ def test_environment_probe_distinguishes_existence_from_provider_value_read(
             _ = environment[ZHIPU_API_KEY_ENV]
         else:
             _ = environment.get(ZHIPU_API_KEY_ENV)
+
+
+def test_product_settings_source_never_reads_or_enumerates_owner_provider_keys() -> None:
+    provider_values = _synthetic_provider_environment()
+    environment = _EnvironmentValueAccessProbe(provider_values)
+
+    with _probe_process_environment(environment):
+        settings = Settings(_env_file=None)
+
+    assert settings.api_port == 8000
+    assert all(environment.value_reads[name] == 0 for name in _REAL_PROVIDER_ENV)
+    assert environment.enumeration_attempts == 0
+    assert "zhipu_api_key" not in Settings.model_fields
 
 
 def test_database_preflight_reads_database_only_and_executes_real_gate(
@@ -556,6 +618,143 @@ def test_error_matrix_is_single_request_with_reviewed_terminal_semantics(
     assert _synthetic_credential() not in json.dumps(
         {"error_category": invocation.error_category, "error_code": invocation.error_code}
     )
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_category", "expected_code", "expected_phase"),
+    [
+        ("dns", "transport_error", "provider_dns_resolution_failed", "connect"),
+        ("connection_refused", "transport_error", "provider_connection_refused", "connect"),
+        ("network_unreachable", "transport_error", "provider_network_unreachable", "connect"),
+        (
+            "tls_certificate",
+            "transport_error",
+            "provider_tls_certificate_verification_failed",
+            "connect",
+        ),
+        ("tls_handshake", "transport_error", "provider_tls_handshake_failed", "connect"),
+        ("connect_timeout", "timeout", "provider_connect_timeout", "connect"),
+        ("read_timeout", "timeout", "provider_read_timeout", "read"),
+        ("write_error", "transport_error", "provider_write_interrupted", "write"),
+        (
+            "read_interruption",
+            "transport_error",
+            "provider_response_read_interrupted",
+            "read",
+        ),
+        (
+            "remote_protocol",
+            "transport_error",
+            "provider_remote_protocol_error",
+            "response",
+        ),
+        ("generic_network", "transport_error", "provider_network_error", "transport"),
+        ("unknown", "transport_error", "provider_transport_error", "transport"),
+    ],
+)
+def test_safe_transport_classifier_matrix_is_durable_secret_negative_and_authority_free(
+    db_session: Session,
+    kind: str,
+    expected_category: str,
+    expected_code: str,
+    expected_phase: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    request_count = 0
+    authority_before = _authority_counts(db_session)
+    transport_records: list[logging.LogRecord] = []
+
+    class RecordCollector(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            transport_records.append(record)
+
+    transport_logger = logging.getLogger("visual_engineer.provider_transport")
+    collector = RecordCollector()
+    previous_level = transport_logger.level
+    previous_disabled = transport_logger.disabled
+    transport_logger.disabled = False
+    transport_logger.setLevel(logging.WARNING)
+    transport_logger.addHandler(collector)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        _raise_transport_case(kind, request)
+
+    try:
+        result = asyncio.run(_invoke_with_mock(db_session, handler))
+    finally:
+        transport_logger.removeHandler(collector)
+        transport_logger.setLevel(previous_level)
+        transport_logger.disabled = previous_disabled
+    invocation = db_session.get(AIProviderInvocation, result.invocation_id)
+    ai_request = db_session.get(AIPlanRequest, result.ai_plan_request_id)
+
+    assert request_count == 1
+    assert result.status == InvocationStatus.OUTCOME_UNKNOWN
+    assert invocation is not None
+    assert invocation.status == "outcome_unknown"
+    assert invocation.error_category == expected_category
+    assert invocation.error_code == expected_code
+    assert invocation.response_digest is None
+    assert ai_request is not None
+    assert ai_request.status == "failed"
+    assert ai_request.retry_count == 0
+    assert ai_request.response_payload is None
+    assert db_session.scalar(select(func.count()).select_from(AIProviderInvocation)) == 1
+    assert db_session.scalar(select(func.count()).select_from(Plan)) == 0
+    assert db_session.scalar(select(func.count()).select_from(AIEvalResult)) == 0
+    assert _authority_counts(db_session) == authority_before
+
+    api_serialized = AIPlanningService._invocation_response(invocation).model_dump_json()
+    database_serialized = json.dumps(
+        {
+            "request": {
+                column.name: getattr(ai_request, column.name)
+                for column in AIPlanRequest.__table__.columns
+            },
+            "invocation": {
+                column.name: getattr(invocation, column.name)
+                for column in AIProviderInvocation.__table__.columns
+            },
+        },
+        default=str,
+    )
+    captured = capsys.readouterr()
+    assert len(transport_records) == 1
+    record = transport_records[0]
+    assert record.getMessage() == "provider_transport_failure"
+    assert record.exc_info is None
+    assert record.args == ()
+    assert record.invocation_correlation == result.invocation_id.hex[:12]  # type: ignore[attr-defined]
+    assert record.provider == "zhipu"  # type: ignore[attr-defined]
+    assert record.error_category == expected_category  # type: ignore[attr-defined]
+    assert record.error_code == expected_code  # type: ignore[attr-defined]
+    assert record.safe_phase == expected_phase  # type: ignore[attr-defined]
+    assert record.lifecycle == "outcome_unknown"  # type: ignore[attr-defined]
+    assert isinstance(record.elapsed_ms, int)  # type: ignore[attr-defined]
+    log_serialized = json.dumps(
+        {
+            "message": record.getMessage(),
+            "invocation_correlation": record.invocation_correlation,  # type: ignore[attr-defined]
+            "provider": record.provider,  # type: ignore[attr-defined]
+            "error_category": record.error_category,  # type: ignore[attr-defined]
+            "error_code": record.error_code,  # type: ignore[attr-defined]
+            "safe_phase": record.safe_phase,  # type: ignore[attr-defined]
+            "elapsed_ms": record.elapsed_ms,  # type: ignore[attr-defined]
+            "lifecycle": record.lifecycle,  # type: ignore[attr-defined]
+        }
+    )
+    safe_surfaces = (
+        str(result),
+        api_serialized,
+        database_serialized,
+        captured.out,
+        captured.err,
+        log_serialized,
+    )
+    for fragment in _SECRET_NEGATIVE_FRAGMENTS:
+        assert all(fragment not in surface for surface in safe_surfaces)
 
 
 def test_pre_dispatch_cancellation_sends_zero_requests(db_session: Session) -> None:
@@ -942,15 +1141,11 @@ def test_cli_safe_output_and_settings_repr_never_expose_synthetic_key(
     output = capsys.readouterr()
     settings = Settings(
         _env_file=None,
-        zhipu_api_key=synthetic,
-        qwen_api_key="",
-        deepseek_api_key="",
-        doubao_api_key="",
-        kimi_api_key="",
         runner_bootstrap_token="",
     )
     combined = output.out + output.err + repr(settings)
     assert synthetic not in combined
+    assert "zhipu_api_key" not in Settings.model_fields
     assert "synthetic-upstream-request-id" not in combined
     assert "LIVE ZHIPU CANARY — ONE EXTERNAL REQUEST MAY BE SENT" in output.out
     assert "billing_status=live_billing_unknown" in output.out

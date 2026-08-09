@@ -1073,14 +1073,7 @@ def test_mock_adapter_success_persists_safe_invocation_then_allows_plan_creation
     assert stored_request is not None and stored_request.response_payload is not None
     safe_response = AIPlanningService(
         db_session,
-        settings=Settings(
-            _env_file=None,
-            zhipu_api_key="",
-            qwen_api_key="",
-            deepseek_api_key="",
-            doubao_api_key="",
-            kimi_api_key="",
-        ),
+        settings=Settings(_env_file=None),
     ).response(ai_request.id)
     assert safe_response is not None
     safe = safe_response.model_dump_json()

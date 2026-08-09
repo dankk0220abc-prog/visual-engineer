@@ -3,8 +3,6 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from visual_engineer_api.core.config import Settings
-
 
 class ProviderId(StrEnum):
     DETERMINISTIC_FIXTURE = "deterministic-fixture"
@@ -68,7 +66,7 @@ class ProviderDefinition:
     provider_id: ProviderId
     display_name: str
     model_id: str
-    secret_setting: str | None
+    local_secret_required: bool
     documentation_url: str
     enabled: bool
 
@@ -102,7 +100,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         provider_id=ProviderId.DETERMINISTIC_FIXTURE,
         display_name="Deterministic Fixture",
         model_id="fixture-planner-v1",
-        secret_setting=None,
+        local_secret_required=False,
         documentation_url="https://github.com/dankk0220abc-prog/visual-engineer",
         enabled=True,
     ),
@@ -110,7 +108,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         provider_id=ProviderId.ZHIPU,
         display_name="Zhipu GLM",
         model_id="glm-5.2",
-        secret_setting="zhipu_api_key",
+        local_secret_required=True,
         documentation_url="https://docs.bigmodel.cn/api-reference/模型-api/对话补全",
         enabled=False,
     ),
@@ -118,7 +116,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         provider_id=ProviderId.QWEN,
         display_name="Qwen",
         model_id="qwen3.8-max",
-        secret_setting="qwen_api_key",
+        local_secret_required=True,
         documentation_url="https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions",
         enabled=False,
     ),
@@ -126,7 +124,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         provider_id=ProviderId.DEEPSEEK,
         display_name="DeepSeek",
         model_id="deepseek-v4-pro",
-        secret_setting="deepseek_api_key",
+        local_secret_required=True,
         documentation_url="https://api-docs.deepseek.com/api/create-chat-completion",
         enabled=False,
     ),
@@ -134,7 +132,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         provider_id=ProviderId.DOUBAO,
         display_name="Doubao",
         model_id="doubao-seed-2-0-lite-260215",
-        secret_setting="doubao_api_key",
+        local_secret_required=True,
         documentation_url="https://www.volcengine.com/docs/82379/1795150",
         enabled=False,
     ),
@@ -142,7 +140,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         provider_id=ProviderId.KIMI,
         display_name="Kimi",
         model_id="kimi-k2.6",
-        secret_setting="kimi_api_key",
+        local_secret_required=True,
         documentation_url="https://platform.kimi.com/docs/api/chat",
         enabled=False,
     ),
@@ -152,9 +150,6 @@ _DEFINITIONS_BY_ID = {item.provider_id: item for item in PROVIDER_DEFINITIONS}
 
 
 class ProviderRegistry:
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
-
     def get(self, provider_id: ProviderId) -> ProviderConfigurationStatus:
         definition = _DEFINITIONS_BY_ID[provider_id]
         if definition.enabled:
@@ -175,24 +170,19 @@ class ProviderRegistry:
                 capabilities=_FIXTURE_CAPABILITIES,
             )
 
-        configured = self._has_secret(definition)
-        reason = (
-            ProviderStatusReason.LIVE_VALIDATION_NOT_PERFORMED
-            if configured
-            else ProviderStatusReason.MISSING_LOCAL_API_KEY
-        )
         return ProviderConfigurationStatus(
             provider_id=provider_id,
             display_name=definition.display_name,
             model_id=definition.model_id,
-            configured=configured,
+            configured=False,
             enabled=False,
             live_validation_status=ProviderLiveValidationStatus.NOT_PERFORMED,
-            local_secret_required=True,
-            status_reason=reason,
-            reason_disabled=reason,
+            local_secret_required=definition.local_secret_required,
+            status_reason=ProviderStatusReason.MISSING_LOCAL_API_KEY,
+            reason_disabled=ProviderStatusReason.MISSING_LOCAL_API_KEY,
             status_description=(
-                "Adapter foundation is mock-contract verified; live validation was not performed."
+                "Provider unavailable: configure your own credential when product BYOK is "
+                "available. The maintainer canary credential is never a product fallback."
             ),
             documentation_url=definition.documentation_url,
             capabilities=_UNVALIDATED_REAL_CAPABILITIES,
@@ -208,9 +198,3 @@ class ProviderRegistry:
     def is_enabled(provider_id: ProviderId) -> bool:
         """Return product enablement without reading any Provider credential."""
         return _DEFINITIONS_BY_ID[provider_id].enabled
-
-    def _has_secret(self, definition: ProviderDefinition) -> bool:
-        if definition.secret_setting is None:
-            return True
-        secret = getattr(self._settings, definition.secret_setting)
-        return bool(secret.get_secret_value().strip())

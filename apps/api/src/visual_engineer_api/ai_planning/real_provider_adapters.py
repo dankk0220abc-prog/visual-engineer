@@ -21,8 +21,12 @@ from visual_engineer_api.ai_planning.provider import (
     CancellationToken,
     ProviderError,
     ProviderErrorCategory,
+    ProviderTransportPhase,
 )
 from visual_engineer_api.ai_planning.provider_registry import ProviderId
+from visual_engineer_api.ai_planning.transport_observability import (
+    classify_transport_exception,
+)
 
 PROVIDER_MAXIMUM_OUTPUT_TOKENS = 4096
 PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS = 150.0
@@ -324,18 +328,8 @@ class RealProviderAdapter(ABC):
             return result.model_copy(update={"latency_ms": latency_ms})
         except ProviderError:
             raise
-        except httpx.TimeoutException:
-            raise ProviderError(
-                ProviderErrorCategory.TIMEOUT,
-                "provider_timeout",
-                "The selected Provider request timed out",
-            ) from None
-        except Exception:
-            raise ProviderError(
-                ProviderErrorCategory.TRANSPORT_ERROR,
-                "provider_transport_error",
-                "The selected Provider transport failed safely",
-            ) from None
+        except Exception as exception:
+            raise classify_transport_exception(exception) from None
 
     async def _post(
         self,
@@ -453,6 +447,7 @@ class RealProviderAdapter(ABC):
                 ProviderErrorCategory.TIMEOUT,
                 "provider_total_deadline_exceeded",
                 "The selected Provider exceeded its total deadline",
+                safe_phase=ProviderTransportPhase.TOTAL_DEADLINE,
             )
         except BaseException:
             await self._settle_controlled_tasks(
@@ -511,6 +506,7 @@ class RealProviderAdapter(ABC):
                 ProviderErrorCategory.TIMEOUT,
                 "provider_total_deadline_exceeded",
                 "The selected Provider exceeded its total deadline",
+                safe_phase=ProviderTransportPhase.TOTAL_DEADLINE,
             )
 
     @staticmethod
