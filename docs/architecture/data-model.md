@@ -67,7 +67,7 @@ A unique Plan constraint permits one final row. A database check requires a
 non-blank rejection reason. The service verifies that Run/Plan identities and
 latest-version state agree before insertion.
 
-## AIPlanRequest, AIProviderTrace, AIEvalResult, and AIPlanDecision
+## AIPlanRequest, AIProviderInvocation, AIEvalResult, and AIPlanDecision
 
 `AIPlanRequest` is a one-per-Run Provider lifecycle aggregate. Immutable
 bindings cover delivery package, revision, Snapshot, Prompt, Provider
@@ -75,9 +75,16 @@ capabilities, request/context digests and payloads, budgets, redactions, and
 idempotency. Its only legal transitions are the closed Phase 7 state machine;
 response/digest become write-once, and deletion is rejected in PostgreSQL.
 
-`AIProviderTrace` stores one append-only row per bounded attempt: Provider
-metadata, request/response digest, status, latency, deterministic token fields,
-zero synthetic cost, retry/error classification, and redaction record.
+`AIProviderInvocation` stores one guarded row per dispatch attempt. Immutable
+identity binds the Plan request, contract/adapter version, classification,
+Provider, requested model, and canonical outbound request digest. The closed
+`prepared`/`dispatching`/terminal lifecycle durably records dispatch intent
+before transport, preserves ambiguous outcomes without retry, and rejects every
+terminal update or delete in PostgreSQL. Safe normalized response digests,
+reported/unavailable model and upstream identities, nullable typed usage,
+integer monotonic queue/Provider/client latency, and non-estimated billing facts
+replace the former Fixture-only Trace fields. Ordinary API responses expose only
+a stable truncated upstream-ID fingerprint, never the full upstream value.
 `AIEvalResult` stores one append-only system-policy result per required Eval;
 Provider-authored self-evaluation is not accepted. `AIPlanDecision` stores the
 one append-only local-user approve/reject winner and optional approved handoff

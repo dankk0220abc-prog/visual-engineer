@@ -3,6 +3,11 @@ set -eu
 
 PATTERN='(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'
 
+if ! command -v rg >/dev/null 2>&1; then
+  echo "secret scanner dependency missing: rg" >&2
+  exit 2
+fi
+
 if rg -n --hidden \
   --glob '!.git/**' \
   --glob '!node_modules/**' \

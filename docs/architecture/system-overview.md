@@ -93,8 +93,9 @@ credential, or target-repository access.
 
 The Run surface also creates and renders one governed AI Plan request. It
 shows the structured Plan, context references, Prompt version/digests,
-redactions, Provider Trace, system-owned Eval results, freshness, terminal
-states, and human approve/reject controls at desktop and narrow widths. It
+redactions, the safe Provider Invocation audit projection, system-owned Eval
+results, freshness, terminal states, and human approve/reject controls at
+desktop and narrow widths. It
 contains no API-key, model, network, free-form operation, or execution control.
 
 The `/validations` surface lists the fixed Profiles and one immutable Suite,

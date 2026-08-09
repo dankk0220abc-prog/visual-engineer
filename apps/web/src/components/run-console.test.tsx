@@ -369,7 +369,7 @@ describe("RunConsole", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("System-owned Eval Evidence")).toBeInTheDocument();
     expect(screen.getByText(/schema_validity/)).toBeInTheDocument();
-    expect(screen.getByText("Provider Trace")).toBeInTheDocument();
+    expect(screen.getByText("Provider invocation audit")).toBeInTheDocument();
     expect(
       screen.getByText(
         /AI Plan Approval does not execute code or issue authority/,
@@ -502,7 +502,7 @@ describe("RunConsole", () => {
         status: "generating",
         plan: null,
         deterministic_digest: null,
-        traces: [],
+        invocations: [],
         eval_results: [],
       }),
     ]);
