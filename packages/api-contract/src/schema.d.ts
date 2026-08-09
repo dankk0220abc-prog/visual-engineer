@@ -3665,24 +3665,15 @@ export interface components {
     ProviderCapabilityMetadata: {
       /**
        * Billing Basis
-       * @constant
+       * @enum {string}
        */
-      billing_basis: "synthetic_not_billable";
-      /**
-       * Credentials Required
-       * @constant
-       */
-      credentials_required: false;
-      /**
-       * Deterministic
-       * @constant
-       */
-      deterministic: true;
-      /**
-       * Fixture Replay
-       * @constant
-       */
-      fixture_replay: true;
+      billing_basis: "synthetic_not_billable" | "live_billing_unknown";
+      /** Credentials Required */
+      credentials_required: boolean;
+      /** Deterministic */
+      deterministic: boolean;
+      /** Fixture Replay */
+      fixture_replay: boolean;
       /** Implementation Version */
       implementation_version: string;
       /** Max Context Bytes */
@@ -3691,11 +3682,8 @@ export interface components {
       max_output_bytes: number;
       /** Model Label */
       model_label: string;
-      /**
-       * Network Access
-       * @constant
-       */
-      network_access: false;
+      /** Network Access */
+      network_access: boolean;
       /** Provider Id */
       provider_id: string;
       /**

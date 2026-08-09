@@ -5016,22 +5016,19 @@
         "additionalProperties": false,
         "properties": {
           "billing_basis": {
-            "const": "synthetic_not_billable",
+            "enum": ["synthetic_not_billable", "live_billing_unknown"],
             "title": "Billing Basis",
             "type": "string"
           },
           "credentials_required": {
-            "const": false,
             "title": "Credentials Required",
             "type": "boolean"
           },
           "deterministic": {
-            "const": true,
             "title": "Deterministic",
             "type": "boolean"
           },
           "fixture_replay": {
-            "const": true,
             "title": "Fixture Replay",
             "type": "boolean"
           },
@@ -5062,7 +5059,6 @@
             "type": "string"
           },
           "network_access": {
-            "const": false,
             "title": "Network Access",
             "type": "boolean"
           },

@@ -1,5 +1,48 @@
 # Security Boundaries
 
+## Zhipu pre-live canary entrypoint boundary
+
+The only reviewed path that may eventually make one real Provider request is
+the local server-side `zhipu-live-canary run` command. It is not an HTTP route,
+background task, startup check, or product Provider activation path. Zhipu and
+all other real Providers remain disabled in the normal registry; the
+Deterministic Fixture remains the sole enabled/default Provider.
+
+The command fixes Zhipu, `glm-5.2`, the reviewed BigModel endpoint, Bearer
+authentication, non-streaming JSON-object output, thinking disabled, 1024
+maximum output tokens, concurrency one, and retry zero. CLI, HTTP, Settings,
+and database inputs cannot override Provider, model, endpoint, headers,
+Prompt, request body, path, output location, transport, or token budget.
+
+Preflight builds every Git subprocess environment from a fixed safe allowlist
+and loads only `DATABASE_URL` through a database-only Pydantic model. It never
+copies or enumerates the process environment. A production run checks the exact
+clean `main` checkout and local/origin alignment, database health and revision,
+disabled Provider registry, fixed scenario/adapter/scanner contracts, and then
+exact process authorization. Only after authorization succeeds does a
+Zhipu-only loader read `ZHIPU_API_KEY` into `SecretStr`; it never constructs the
+all-Provider Settings object. The no-argument production factory cannot accept
+a client or MockTransport; tests reach an internal-only seam with a synthetic
+credential.
+
+Every dispatch creates one `AIPlanRequest`, commits one
+`AIProviderInvocation` as `prepared`, commits `dispatching` immediately before
+send, performs the Provider call outside the transaction, and commits one
+reviewed terminal state. Timeout, transport ambiguity, or cancellation after
+dispatch is `outcome_unknown` and is never retried. A successful Provider
+response must validate into the fixed compact response contract, be normalized
+into the server-owned typed Plan, pass system-policy canary Evals, and stop at
+`generated`. It creates no approval, Execution Grant, Review Decision,
+Delivery Authorization, Runner Job, Workspace mutation, Git mutation, merge,
+release, or deployment authority.
+
+CLI output excludes the credential, Authorization, Prompt, raw response,
+complete upstream request ID, and complete Provider error body. Runtime Plan,
+Eval, and Invocation rows are not written to Git or Evidence by the run
+command. This implementation package used MockTransport only and is classified
+`pre_live_entrypoint_not_live`; it is not evidence that any account or key is
+compatible.
+
 ## Phase 7 governed AI planning boundary
 
 The first AI slice has a model-neutral Provider protocol but installs only one

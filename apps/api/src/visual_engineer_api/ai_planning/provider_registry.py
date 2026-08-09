@@ -70,6 +70,7 @@ class ProviderDefinition:
     model_id: str
     secret_setting: str | None
     documentation_url: str
+    enabled: bool
 
 
 _FIXTURE_CAPABILITIES = ProviderCapabilityDeclaration(
@@ -103,6 +104,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         model_id="fixture-planner-v1",
         secret_setting=None,
         documentation_url="https://github.com/dankk0220abc-prog/visual-engineer",
+        enabled=True,
     ),
     ProviderDefinition(
         provider_id=ProviderId.ZHIPU,
@@ -110,6 +112,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         model_id="glm-5.2",
         secret_setting="zhipu_api_key",
         documentation_url="https://docs.bigmodel.cn/api-reference/模型-api/对话补全",
+        enabled=False,
     ),
     ProviderDefinition(
         provider_id=ProviderId.QWEN,
@@ -117,6 +120,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         model_id="qwen3.8-max",
         secret_setting="qwen_api_key",
         documentation_url="https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions",
+        enabled=False,
     ),
     ProviderDefinition(
         provider_id=ProviderId.DEEPSEEK,
@@ -124,6 +128,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         model_id="deepseek-v4-pro",
         secret_setting="deepseek_api_key",
         documentation_url="https://api-docs.deepseek.com/api/create-chat-completion",
+        enabled=False,
     ),
     ProviderDefinition(
         provider_id=ProviderId.DOUBAO,
@@ -131,6 +136,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         model_id="doubao-seed-2-0-lite-260215",
         secret_setting="doubao_api_key",
         documentation_url="https://www.volcengine.com/docs/82379/1795150",
+        enabled=False,
     ),
     ProviderDefinition(
         provider_id=ProviderId.KIMI,
@@ -138,6 +144,7 @@ PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         model_id="kimi-k2.6",
         secret_setting="kimi_api_key",
         documentation_url="https://platform.kimi.com/docs/api/chat",
+        enabled=False,
     ),
 )
 
@@ -150,7 +157,7 @@ class ProviderRegistry:
 
     def get(self, provider_id: ProviderId) -> ProviderConfigurationStatus:
         definition = _DEFINITIONS_BY_ID[provider_id]
-        if provider_id == ProviderId.DETERMINISTIC_FIXTURE:
+        if definition.enabled:
             return ProviderConfigurationStatus(
                 provider_id=provider_id,
                 display_name=definition.display_name,
@@ -196,6 +203,11 @@ class ProviderRegistry:
 
     def definition(self, provider_id: ProviderId) -> ProviderDefinition:
         return _DEFINITIONS_BY_ID[provider_id]
+
+    @staticmethod
+    def is_enabled(provider_id: ProviderId) -> bool:
+        """Return product enablement without reading any Provider credential."""
+        return _DEFINITIONS_BY_ID[provider_id].enabled
 
     def _has_secret(self, definition: ProviderDefinition) -> bool:
         if definition.secret_setting is None:
