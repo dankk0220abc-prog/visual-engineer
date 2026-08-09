@@ -432,13 +432,13 @@ export function AIPlanConsole({
                     </div>
                     <dl className="mt-3 grid min-w-0 gap-2 text-slate-300 sm:grid-cols-2">
                       <div className="min-w-0">
-                        <dt className="text-slate-500">{t("provider")}</dt>
+                        <dt className="text-slate-400">{t("provider")}</dt>
                         <dd className="font-mono [overflow-wrap:anywhere]">
                           {invocation.provider_id}
                         </dd>
                       </div>
                       <div className="min-w-0">
-                        <dt className="text-slate-500">
+                        <dt className="text-slate-400">
                           {t("internalInvocation")}
                         </dt>
                         <dd className="font-mono [overflow-wrap:anywhere]">
@@ -446,7 +446,7 @@ export function AIPlanConsole({
                         </dd>
                       </div>
                       <div className="min-w-0">
-                        <dt className="text-slate-500">
+                        <dt className="text-slate-400">
                           {t("requestedModel")}
                         </dt>
                         <dd className="font-mono [overflow-wrap:anywhere]">
@@ -454,7 +454,7 @@ export function AIPlanConsole({
                         </dd>
                       </div>
                       <div className="min-w-0">
-                        <dt className="text-slate-500">
+                        <dt className="text-slate-400">
                           {t("effectiveModel")}
                         </dt>
                         <dd className="font-mono [overflow-wrap:anywhere]">
@@ -465,7 +465,7 @@ export function AIPlanConsole({
                         </dd>
                       </div>
                       <div className="min-w-0 sm:col-span-2">
-                        <dt className="text-slate-500">
+                        <dt className="text-slate-400">
                           {t("upstreamRequest")}
                         </dt>
                         <dd className="font-mono [overflow-wrap:anywhere]">
@@ -503,7 +503,7 @@ export function AIPlanConsole({
                         ? ` · ${invocation.cost_amount} ${invocation.cost_currency}`
                         : ""}
                     </p>
-                    <p className="mt-1 font-mono [overflow-wrap:anywhere] text-slate-500">
+                    <p className="mt-1 font-mono [overflow-wrap:anywhere] text-slate-400">
                       {new Date(invocation.created_at).toLocaleString(locale)}
                     </p>
                     {invocation.error_code ? (
