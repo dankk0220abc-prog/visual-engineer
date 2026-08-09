@@ -2,7 +2,7 @@
 
 Classification: `pre_live_entrypoint_not_live`
 
-Status: MOCK CONTRACT GREEN — INDEPENDENT SECURITY REVIEW REQUIRED
+Status: LOCAL CI REMEDIATION GREEN — NEW-CANDIDATE FAST/HEAVY RESEAL PENDING
 
 ## Candidate identity
 
@@ -111,10 +111,78 @@ Authorization, Prompt, raw response, complete upstream ID, and raw error body.
 | Real Provider outbound requests                    | `0`                                  |
 | Provider registry activation changes               | `0`                                  |
 | Live screenshot/evidence generation                | `0`                                  |
-| Remote CI for final candidate                      | PENDING draft PR                     |
+| Remote CI for final corrective candidate           | PENDING — no rerun of failed run     |
 
 The implementation run used only the explicit synthetic credential
 `synthetic-zhipu-live-canary-credential-only` inside tests. Test setup clears
 all real Provider environment variables before constructing controlled test
 configuration. MockTransport request counters prove the zero/one request
 boundary; no public network transport is used.
+
+## CI environment dependency remediation
+
+### Preserved prior CI evidence
+
+- Fast `31314553818` failed on candidate
+  `4d2fe752c9080ab46b1ed301b9daa727f7f5df6f`: its backend job ran
+  `make test-api-direct` and reported `1 failed, 513 passed`. The failing test
+  was `test_preflight_is_secret_blind_read_only_and_network_free`.
+- The failure was a real fail-closed result, not a Provider product failure:
+  Fast had no `rg` runtime prerequisite, while canary preflight correctly
+  rejects an unavailable Secret scanner with `secret_scanner_unavailable`.
+  No skip, warning, mock, PATH workaround, retry, or relaxation of the
+  scanner/preflight contract was used.
+- Heavy `31314553827` succeeded for the prior candidate. Its `security-eval`
+  job explicitly installed Debian package `ripgrep` using `apt-get`, then ran
+  `rg --version` before `make security-check`. This successful old run is
+  retained as provenance only; it cannot seal the corrective candidate.
+- The failed Fast run was not rerun. The remedy is a new commit and new Fast
+  and Heavy runs bound to that commit.
+
+### Corrective CI contract
+
+The Fast `backend` job now uses the identical, already-canonical Heavy
+provisioning mechanism before API checks: `apt-get update`,
+`apt-get install --yes --no-install-recommends ripgrep`, and `rg --version`.
+The two canonical jobs that require this dependency are therefore explicit:
+Fast `backend` runs the canary preflight test; Heavy `security-eval` invokes
+`scripts/check-secrets.sh` through `make security-check`.
+
+The scanner remains fail closed: missing `rg` emits its fixed
+dependency-missing error and exits nonzero without a clean conclusion. There
+is no existing workflow-contract test framework in this repository, so this
+minimal workflow change is protected by YAML parsing, the existing CI policy
+check, scanner tests, and new remote Fast/Heavy evidence rather than a new
+text-coupled parser.
+
+### Local remediation validation
+
+- `./scripts/check-secrets.sh`: PASS with `rg` present.
+- `./scripts/test-check-secrets.sh`: PASS for missing-`rg`, inaccessible-root,
+  clean, and synthetic-positive cases; it verified nonzero failure and no
+  secret-body disclosure for the synthetic match.
+- Original Fast failure test: PASS — `1 passed`.
+- Canary focused PostgreSQL/MockTransport suite: PASS — `36 passed`.
+- Both workflow YAML files parsed successfully; the existing
+  `check_phase4_findings.py` policy check reported repair controls present;
+  `git diff --check` passed.
+- The focused test database was the repository's isolated tmpfs `test-db`.
+  No full backend aggregate, Web suite, Playwright run, Docker image build,
+  migration roundtrip, or live-canary command was repeated for this
+  CI-environment-only diff.
+- Real Provider API Key access: `0`; live Provider outbound requests: `0`;
+  registry activation changes: `0`. Fixture remains the sole enabled/default
+  Provider and Zhipu, Qwen, DeepSeek, Doubao, and Kimi remain disabled.
+
+### Secret-scan and repository isolation record
+
+A previous root Secret scan read ignored runner configuration within its scan
+scope. It did not print or persist any value and found no Provider Key
+material. This remediation does not directly open `.env.runner.local`; a root
+scanner may process ignored local configuration within its defined scan scope,
+but it does not print matching values.
+
+No CreativeDeploy content was listed or read in this remediation. A prior
+session did observe the path name `CreativeDeploy/AGENTS.md` without reading
+its contents. This metadata deviation is retained here and must not be
+restated as though CreativeDeploy metadata had never been observed.
