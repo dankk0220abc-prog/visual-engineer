@@ -2,7 +2,7 @@
 
 Classification: `pre_live_entrypoint_not_live`
 
-Status: LOCAL CI REMEDIATION GREEN — NEW-CANDIDATE FAST/HEAVY RESEAL PENDING
+Status: VE-ZLC-FSR-001 LOCAL REMEDIATION GREEN — NEW FAST/HEAVY SEAL PENDING
 
 ## Candidate identity
 
@@ -10,6 +10,14 @@ Status: LOCAL CI REMEDIATION GREEN — NEW-CANDIDATE FAST/HEAVY RESEAL PENDING
 - Base tree: `ec0ce4c3478ff8b253b0a0b855981f19c950fbc2`.
 - Branch: `codex/feat/zhipu-live-canary-entrypoint`.
 - Implementation commit: `07adc9b35fcf5c5ba0b0d9e6211475bfb15d37bf`.
+- Independently reviewed pre-remediation candidate:
+  `8407589a19062cef0756b940c23bc8474cc69cb5`, tree
+  `ffc1b468f878919badde4778d80c7c925a58dbc8`.
+- Reviewed pre-remediation CI: Fast `31315473943` and Heavy `31315473954`,
+  attempt 1, successful on that exact candidate. These runs preserve candidate
+  provenance but cannot seal the corrective candidate.
+- Corrective commit/candidate: the commit containing this Evidence update;
+  exact SHA/tree are bound in PR #18 and the new Fast/Heavy sealing record.
 - Alembic head: `20260809_0016`; no migration added.
 - Base canonical CI: Fast `31311718732`, Heavy `31311718708`, both successful
   on the exact base SHA.
@@ -51,20 +59,51 @@ request body, max tokens, transport, or output file.
 
 ## Authorization and Secret ordering
 
+### Preserved independent finding history
+
+The first implementation and this Evidence originally stated that preflight
+did not read Provider Secrets. Independent review then used a synthetic
+environment value-access probe and proved that statement false:
+
+- `_secret_blind_environment()` copied the complete process environment before
+  deleting known Secret keys, so each copied Provider Secret value had already
+  been read;
+- pre-authorization `CanaryDatabaseSettings()` used the BaseSettings environment
+  source, which enumerated the complete process environment even though the
+  caller needed only `DATABASE_URL`.
+
+This remains permanently recorded as blocking finding `VE-ZLC-FSR-001`. The
+prior false assurance and its reviewed reproduction are not deleted or
+reclassified by the remediation.
+
+### Corrective contract
+
 The production order is fixed:
 
 1. exact command;
-2. exact clean main checkout and app contract;
-3. local PostgreSQL health and Alembic revision;
-4. `VISUALENGINEER_LIVE_VALIDATION_AUTHORIZED=1`;
-5. Zhipu and every other real Provider still disabled;
-6. fixed scenario, adapter, scanner, and Settings field contracts;
-7. only then read `Settings.zhipu_api_key` from `ZHIPU_API_KEY`.
+2. fixed scenario and closed CLI validation;
+3. exact clean main checkout through Git subprocesses whose environments are
+   built only from the fixed safe allowlist `PATH`, `HOME`, `TMPDIR`, `LANG`,
+   `LC_ALL`, and `LC_CTYPE`, plus fixed Git safety variables;
+4. local PostgreSQL health and Alembic revision through the database-only
+   `CanaryDatabasePreflightConfig`, which reads only `DATABASE_URL`;
+5. Zhipu and every other real Provider still disabled, plus fixed scenario,
+   adapter, and scanner contracts;
+6. read and validate `VISUALENGINEER_LIVE_VALIDATION_AUTHORIZED=1`;
+7. only then use the Zhipu-only loader to read `ZHIPU_API_KEY` into
+   `SecretStr`; no all-Provider Settings object is constructed;
+8. construct the production Zhipu adapter and proceed toward one dispatch.
 
-`preflight` stops before steps 4 and 7, does not inspect either value, and
-returns `USER_SECRET_PROVISION_REQUIRED` after all non-Secret gates pass. The
-operator must provision the Secret only in the local terminal, never in chat or
-a tracked `.env` file.
+Unknown environment variables are denied by default; there is no copy-then-
+filter path. `preflight` stops before steps 6 and 7, does not inspect either
+value, and emits only `USER_SECRET_PROVISION_REQUIRED` plus the safe variable
+name `ZHIPU_API_KEY` after all non-Secret gates pass. It does not report whether
+the Secret is configured.
+
+The deterministic probe mapping separately records key-existence checks and
+value access through `__getitem__` and `.get()`. It fails with only
+`PROVIDER_SECRET_VALUE_READ_BEFORE_AUTHORIZATION` and the safe key name; it
+never includes the synthetic value.
 
 ## Invocation and typed Plan contract
 
@@ -99,7 +138,7 @@ typed statuses, safe upstream fingerprint, nullable usage/latency, billing,
 error code, and generated AI Plan request ID. It excludes credentials,
 Authorization, Prompt, raw response, complete upstream ID, and raw error body.
 
-## Verification ledger
+## Preserved pre-remediation verification ledger
 
 | Gate                                               | Result                               |
 | -------------------------------------------------- | ------------------------------------ |
@@ -107,7 +146,7 @@ Authorization, Prompt, raw response, complete upstream ID, and raw error body.
 | Canary plus governed system Eval subset            | PASS — `53 passed`                   |
 | Canonical backend aggregate                        | PASS — `514 passed`, 84.75% coverage |
 | Contract/format/lint/type and Secret scanner       | PASS                                 |
-| Real Provider credential access                    | `0`                                  |
+| Real Provider credential access                    | CLAIMED `0` — disproved by `VE-ZLC-FSR-001` |
 | Real Provider outbound requests                    | `0`                                  |
 | Provider registry activation changes               | `0`                                  |
 | Live screenshot/evidence generation                | `0`                                  |
@@ -118,6 +157,55 @@ The implementation run used only the explicit synthetic credential
 all real Provider environment variables before constructing controlled test
 configuration. MockTransport request counters prove the zero/one request
 boundary; no public network transport is used.
+
+## VE-ZLC-FSR-001 remediation verification ledger
+
+| Gate                                     | Result  |
+| ---------------------------------------- | ------- |
+| Fixed Git child-environment access probe | PASS — Provider reads `0` |
+| Real database preflight access probe     | PASS — only `DATABASE_URL` read |
+| Full preflight production-order probe    | PASS — Provider reads `0` |
+| Missing-authorization production probe   | PASS — Provider reads `0` |
+| False-authorization production probe     | PASS — Provider reads `0` |
+| Authorized missing-Zhipu-key probe       | PASS — Zhipu read `1`, other reads `0` |
+| Authorized synthetic-key MockTransport   | PASS — Zhipu read `1`, request `1` |
+| Other-Provider value reads               | PASS — Qwen/DeepSeek/Doubao/Kimi each `0` |
+| Pre-authorization DB mutation / HTTP     | PASS — `0` / `0` |
+| Canary focused suite                     | PASS — `37 passed` |
+| Changed-scope static/security checks     | PASS |
+| One canonical backend aggregate          | PASS — `515 passed`, 85.04% coverage |
+| Corrective-candidate Fast / Heavy         | PENDING — new exact candidate required |
+
+No real Provider environment value is read by this verification. Synthetic
+values are installed only in the access-probe mapping, and the mapping's
+failure diagnostics contain only a fixed code and safe environment key name.
+
+The successful synthetic-key production-order probe used the no-argument
+production factory and replaced only the adapter's internal production-client
+constructor with MockTransport. It produced one typed Plan and the reviewed
+Invocation lifecycle. Database deltas were exactly one Task, Run, Snapshot,
+AIPlanRequest, and AIProviderInvocation plus eight system-policy Eval rows;
+Approval, Grant, Review, Delivery, Runner, Workspace, and Plan authority deltas
+were all zero. Missing/false authorization, preflight, and authorized
+missing-key cases each had zero database mutation and zero HTTP request.
+
+The focused-batch attempt record is retained. Attempt 1 exposed a test-harness
+scope error because the value-access mapping remained installed during pytest
+teardown (`4 passed`, `67 errors`); no product assertion failed. Attempt 2
+executed the production repository gate and exposed Git's platform-specific
+absent-ref status (`32 passed`, `5 failed`): `show-ref --verify refs/stash`
+returned 128 when no stash existed. The fail-closed repair uses
+`for-each-ref --format=%(refname) refs/stash`, which returns empty success only
+for absence, returns the ref when present, and still rejects Git command
+failure. Attempt 3 passed `37/37`. No Provider value or live HTTP request was
+used in any attempt.
+
+Changed-scope validation passed Ruff format, Ruff lint, mypy for four changed
+Python files, generated API contract drift, the root location-only Secret
+scanner, the missing-rg fail-closed regression, and `git diff --check`. The one
+canonical backend aggregate then passed `515/515` with 85.04% coverage and exit
+code 0. No Web unit, ESLint, TypeScript, Playwright, migration roundtrip, Docker
+rebuild, or live-canary command was run.
 
 ## CI environment dependency remediation
 

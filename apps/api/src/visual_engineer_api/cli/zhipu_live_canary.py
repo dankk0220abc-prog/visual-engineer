@@ -4,9 +4,7 @@ from collections.abc import Sequence
 
 from visual_engineer_api.ai_planning.invocation_contract import InvocationStatus
 from visual_engineer_api.ai_planning.zhipu_live_canary import (
-    ZHIPU_LIVE_CANARY_MODEL_ID,
     ZHIPU_LIVE_CANARY_SCENARIO_ID,
-    ZHIPU_LIVE_CANARY_SCENARIO_VERSION,
 )
 from visual_engineer_api.services.zhipu_live_canary import (
     LIVE_CANARY_WARNING,
@@ -29,14 +27,8 @@ def _preflight() -> int:
     except ZhipuLiveCanaryError as error:
         print(f"ZHIPU_LIVE_CANARY_PREFLIGHT_FAILED code={error.code}", file=sys.stderr)
         return 1
-    print(f"scenario_id={ZHIPU_LIVE_CANARY_SCENARIO_ID}")
-    print(f"scenario_version={ZHIPU_LIVE_CANARY_SCENARIO_VERSION}")
-    print("provider=zhipu")
-    print(f"requested_model={ZHIPU_LIVE_CANARY_MODEL_ID}")
-    print(f"secret_variable={ZHIPU_API_KEY_ENV}")
-    print("Configure the secret only in the local terminal after independent review.")
-    print("Do not paste it into chat or place it in a tracked .env file.")
     print(USER_SECRET_PROVISION_REQUIRED)
+    print(f"secret_variable={ZHIPU_API_KEY_ENV}")
     return 0
 
 

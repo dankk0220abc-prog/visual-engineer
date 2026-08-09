@@ -3,13 +3,12 @@ import os
 import shutil
 import subprocess
 import uuid
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import SecretStr, ValidationError
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError, field_validator
 from sqlalchemy import Engine, create_engine, func, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -33,7 +32,11 @@ from visual_engineer_api.ai_planning.provider import (
     ProviderError,
     ProviderErrorCategory,
 )
-from visual_engineer_api.ai_planning.provider_registry import ProviderId, ProviderRegistry
+from visual_engineer_api.ai_planning.provider_registry import (
+    PROVIDER_DEFINITIONS,
+    ProviderId,
+    ProviderRegistry,
+)
 from visual_engineer_api.ai_planning.real_provider_adapters import (
     REAL_PROVIDER_ADAPTERS,
     ProviderAdapterResult,
@@ -60,7 +63,11 @@ from visual_engineer_api.ai_planning.zhipu_live_canary import (
     build_zhipu_live_canary_plan,
     evaluate_zhipu_live_canary_plan,
 )
-from visual_engineer_api.core.config import Settings
+from visual_engineer_api.core.config import (
+    DEFAULT_DATABASE_URL,
+    Settings,
+    validate_database_url,
+)
 from visual_engineer_api.models.ai_planning import (
     AIEvalResult,
     AIPlanDecision,
@@ -91,14 +98,26 @@ ZHIPU_LIVE_CANARY_POLICY = ProviderCallPolicy(
     concurrency_limit=1,
 )
 
-_PROVIDER_SECRET_ENV_NAMES = (
-    "ZHIPU_API_KEY",
-    "QWEN_API_KEY",
-    "DEEPSEEK_API_KEY",
-    "DOUBAO_API_KEY",
-    "KIMI_API_KEY",
-    "RUNNER_BOOTSTRAP_TOKEN",
+_REAL_PROVIDER_SECRET_ENV_NAMES = tuple(
+    definition.secret_setting.upper()
+    for definition in PROVIDER_DEFINITIONS
+    if definition.secret_setting is not None
 )
+_SECRET_BLIND_ENV_ALLOWLIST = (
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+)
+_FIXED_GIT_ENVIRONMENT = {
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_OPTIONAL_LOCKS": "0",
+    "GIT_TERMINAL_PROMPT": "0",
+    "GCM_INTERACTIVE": "never",
+}
 _AUTHORITY_MODELS = (
     Plan,
     ApprovalDecision,
@@ -111,14 +130,17 @@ _AUTHORITY_MODELS = (
 )
 
 
-class CanaryDatabaseSettings(BaseSettings):
-    """Secret-blind settings used before live-validation authorization."""
+class CanaryDatabasePreflightConfig(BaseModel):
+    """Database-only configuration loaded from an explicit environment allowlist."""
 
-    model_config = SettingsConfigDict(env_file=None, extra="ignore", case_sensitive=False)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-    database_url: str = (
-        "postgresql+psycopg://visualengineer:visualengineer-local@localhost:5432/visualengineer"
-    )
+    database_url: str = DEFAULT_DATABASE_URL
+
+    @field_validator("database_url")
+    @classmethod
+    def require_postgresql_psycopg(cls, value: str) -> str:
+        return validate_database_url(value)
 
 
 class ZhipuLiveCanaryError(Exception):
@@ -162,21 +184,20 @@ def repository_root() -> Path:
     return Path(__file__).resolve().parents[5]
 
 
-def _secret_blind_environment() -> dict[str, str]:
-    environment = dict(os.environ)
-    for name in _PROVIDER_SECRET_ENV_NAMES:
-        environment.pop(name, None)
-    environment.update(
-        {
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_TERMINAL_PROMPT": "0",
-            "GCM_INTERACTIVE": "never",
-        }
-    )
-    return environment
+def _secret_blind_environment(
+    environment: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    source = os.environ if environment is None else environment
+    child_environment: dict[str, str] = {}
+    for name in _SECRET_BLIND_ENV_ALLOWLIST:
+        value = source.get(name)
+        if value is not None:
+            child_environment[name] = value
+    child_environment.update(_FIXED_GIT_ENVIRONMENT)
+    return child_environment
 
 
-def _git(root: Path, *arguments: str, allow_absent: bool = False) -> str:
+def _git(root: Path, *arguments: str) -> str:
     completed = subprocess.run(
         ["git", *arguments],
         cwd=root,
@@ -188,8 +209,6 @@ def _git(root: Path, *arguments: str, allow_absent: bool = False) -> str:
         check=False,
     )
     if completed.returncode != 0:
-        if allow_absent and completed.returncode == 1:
-            return ""
         raise ZhipuLiveCanaryError("repository_contract_unavailable")
     return completed.stdout.strip()
 
@@ -205,7 +224,7 @@ def verify_repository_contract() -> None:
         raise ZhipuLiveCanaryError("repository_main_drift")
     if _git(root, "status", "--porcelain=v1", "--untracked-files=all"):
         raise ZhipuLiveCanaryError("repository_worktree_not_clean")
-    if _git(root, "show-ref", "--verify", "refs/stash", allow_absent=True):
+    if _git(root, "for-each-ref", "--format=%(refname)", "refs/stash"):
         raise ZhipuLiveCanaryError("repository_stash_present")
     git_dir = Path(_git(root, "rev-parse", "--absolute-git-dir"))
     markers = (
@@ -221,9 +240,20 @@ def verify_repository_contract() -> None:
         raise ZhipuLiveCanaryError("repository_git_operation_active")
 
 
-def _database_engine() -> Engine:
-    settings = CanaryDatabaseSettings()
-    url = make_url(settings.database_url)
+def _load_canary_database_preflight_config(
+    environment: Mapping[str, str] | None = None,
+) -> CanaryDatabasePreflightConfig:
+    source = os.environ if environment is None else environment
+    database_url = source.get("DATABASE_URL")
+    values = {} if database_url is None else {"database_url": database_url}
+    try:
+        return CanaryDatabasePreflightConfig.model_validate(values)
+    except ValidationError:
+        raise ZhipuLiveCanaryError("database_contract_unavailable") from None
+
+
+def _database_engine(config: CanaryDatabasePreflightConfig) -> Engine:
+    url = make_url(config.database_url)
     if url.drivername != "postgresql+psycopg" or url.host not in {
         None,
         "localhost",
@@ -232,11 +262,12 @@ def _database_engine() -> Engine:
         "db",
     }:
         raise ZhipuLiveCanaryError("local_database_required")
-    return create_engine(settings.database_url, pool_pre_ping=True)
+    return create_engine(config.database_url, pool_pre_ping=True)
 
 
-def verify_database_contract() -> None:
-    engine = _database_engine()
+def verify_database_contract() -> CanaryDatabasePreflightConfig:
+    config = _load_canary_database_preflight_config()
+    engine = _database_engine(config)
     try:
         with engine.connect() as connection:
             if connection.scalar(text("SELECT 1")) != 1:
@@ -250,6 +281,7 @@ def verify_database_contract() -> None:
         raise ZhipuLiveCanaryError("database_contract_unavailable") from None
     finally:
         engine.dispose()
+    return config
 
 
 def verify_provider_disabled_contract() -> None:
@@ -268,14 +300,17 @@ def verify_provider_disabled_contract() -> None:
         raise ZhipuLiveCanaryError("real_provider_enablement_drift")
 
 
-def verify_pre_live_safety_contract() -> None:
-    verify_provider_disabled_contract()
+def verify_fixed_scenario_contract() -> None:
     dispatch = build_zhipu_live_canary_dispatch()
     if (
         dispatch.scenario_id != ZHIPU_LIVE_CANARY_SCENARIO_ID
         or dispatch.scenario_version != ZHIPU_LIVE_CANARY_SCENARIO_VERSION
     ):
         raise ZhipuLiveCanaryError("canary_scenario_drift")
+
+
+def verify_pre_live_safety_contract() -> None:
+    verify_provider_disabled_contract()
     if REAL_PROVIDER_ADAPTERS.get(ProviderId.ZHIPU) is not ZhipuAdapter:
         raise ZhipuLiveCanaryError("zhipu_production_adapter_missing")
     if (
@@ -294,6 +329,7 @@ def verify_pre_live_safety_contract() -> None:
 
 
 def run_secret_blind_preflight() -> None:
+    verify_fixed_scenario_contract()
     verify_repository_contract()
     verify_database_contract()
     verify_pre_live_safety_contract()
@@ -304,37 +340,27 @@ def require_live_validation_authorization() -> None:
         raise LiveValidationAuthorizationRequired()
 
 
-def _load_authorized_runtime_settings() -> Settings:
+def _load_authorized_zhipu_secret() -> SecretStr:
     """Read only the Zhipu credential, after the caller has passed every safe gate."""
-    database_url = CanaryDatabaseSettings().database_url
     zhipu_value = os.environ.get(ZHIPU_API_KEY_ENV, "")
-    settings = Settings.model_validate(
-        {
-            "database_url": database_url,
-            "zhipu_api_key": SecretStr(zhipu_value),
-            "qwen_api_key": SecretStr(""),
-            "deepseek_api_key": SecretStr(""),
-            "doubao_api_key": SecretStr(""),
-            "kimi_api_key": SecretStr(""),
-            "runner_bootstrap_token": SecretStr(""),
-        }
-    )
-    if not settings.zhipu_api_key.get_secret_value().strip():
+    secret = SecretStr(zhipu_value)
+    if not secret.get_secret_value().strip():
         raise UserSecretProvisionRequired()
-    return settings
+    return secret
 
 
 @contextmanager
 def production_zhipu_live_canary_service() -> Generator["ZhipuLiveCanaryService", None, None]:
+    verify_fixed_scenario_contract()
     verify_repository_contract()
-    verify_database_contract()
-    require_live_validation_authorization()
+    database_config = verify_database_contract()
     verify_pre_live_safety_contract()
-    settings = _load_authorized_runtime_settings()
-    adapter = ZhipuAdapter(settings.zhipu_api_key)
+    require_live_validation_authorization()
+    zhipu_secret = _load_authorized_zhipu_secret()
+    adapter = ZhipuAdapter(zhipu_secret)
     if adapter.uses_injected_mock_transport:
         raise ZhipuLiveCanaryError("production_transport_injection_rejected")
-    engine = create_engine(settings.database_url, pool_pre_ping=True)
+    engine = create_engine(database_config.database_url, pool_pre_ping=True)
     try:
         with Session(engine) as session:
             yield ZhipuLiveCanaryService(session, adapter=adapter)

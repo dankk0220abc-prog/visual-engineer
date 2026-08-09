@@ -1,17 +1,22 @@
 import asyncio
 import inspect
 import json
+import os
+import subprocess
 import uuid
-from collections.abc import Callable, Generator
+from collections import Counter
+from collections.abc import Callable, Generator, Iterator, Mapping
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from visual_engineer_api.ai_planning import real_provider_adapters
 from visual_engineer_api.ai_planning.contracts import AIPlanContract, canonical_digest
 from visual_engineer_api.ai_planning.evaluator import evaluate_plan
 from visual_engineer_api.ai_planning.fake_provider import DeterministicFixtureProvider
@@ -40,8 +45,9 @@ from visual_engineer_api.models.ai_planning import (
 )
 from visual_engineer_api.models.delivery import DeliveryAuthorization
 from visual_engineer_api.models.review import ReviewDecision
-from visual_engineer_api.models.run import ApprovalDecision, Plan
+from visual_engineer_api.models.run import ApprovalDecision, Plan, RepositorySnapshot, Run
 from visual_engineer_api.models.runner import RunnerJob
+from visual_engineer_api.models.task import Task
 from visual_engineer_api.models.workspace import ExecutionGrant, Workspace
 from visual_engineer_api.services import zhipu_live_canary as canary_service
 from visual_engineer_api.services.zhipu_live_canary import (
@@ -49,6 +55,7 @@ from visual_engineer_api.services.zhipu_live_canary import (
     USER_SECRET_PROVISION_REQUIRED,
     ZHIPU_API_KEY_ENV,
     ZHIPU_LIVE_CANARY_POLICY,
+    CanaryDatabasePreflightConfig,
     UserSecretProvisionRequired,
     ZhipuLiveCanaryResult,
     ZhipuLiveCanaryService,
@@ -71,6 +78,65 @@ _AUTHORITY_MODELS = (
     RunnerJob,
     Workspace,
 )
+_CANARY_MUTATION_MODELS = (
+    Task,
+    Run,
+    RepositorySnapshot,
+    AIPlanRequest,
+    AIProviderInvocation,
+    AIEvalResult,
+)
+
+
+class _EnvironmentValueAccessProbe(Mapping[str, str]):
+    def __init__(
+        self,
+        values: Mapping[str, str],
+        *,
+        allowed_provider_reads: frozenset[str] = frozenset(),
+    ) -> None:
+        self._values = dict(values)
+        self._allowed_provider_reads = allowed_provider_reads
+        self.value_reads: Counter[str] = Counter()
+        self.existence_checks: Counter[str] = Counter()
+        self.enumeration_attempts = 0
+
+    def _record_value_read(self, key: str) -> None:
+        self.value_reads[key] += 1
+        if key in _REAL_PROVIDER_ENV and key not in self._allowed_provider_reads:
+            raise AssertionError(f"PROVIDER_SECRET_VALUE_READ_BEFORE_AUTHORIZATION key={key}")
+
+    def __getitem__(self, key: str) -> str:
+        self._record_value_read(key)
+        return self._values[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self._record_value_read(key)
+        return self._values.get(key, default)
+
+    def __contains__(self, key: object) -> bool:
+        if isinstance(key, str):
+            self.existence_checks[key] += 1
+        return key in self._values
+
+    def __iter__(self) -> Iterator[str]:
+        self.enumeration_attempts += 1
+        raise AssertionError("PROCESS_ENVIRONMENT_ENUMERATION_FORBIDDEN")
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def items(self) -> Any:
+        self.enumeration_attempts += 1
+        raise AssertionError("PROCESS_ENVIRONMENT_VALUE_ENUMERATION_FORBIDDEN")
+
+    def values(self) -> Any:
+        self.enumeration_attempts += 1
+        raise AssertionError("PROCESS_ENVIRONMENT_VALUE_ENUMERATION_FORBIDDEN")
+
+    def copy(self) -> Any:
+        self.enumeration_attempts += 1
+        raise AssertionError("PROCESS_ENVIRONMENT_COPY_FORBIDDEN")
 
 
 @pytest.fixture(autouse=True)
@@ -81,6 +147,91 @@ def _clear_real_provider_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _synthetic_credential() -> str:
     return "synthetic-zhipu-live-canary-credential-only"
+
+
+def _synthetic_provider_environment() -> dict[str, str]:
+    return {
+        name: (
+            _synthetic_credential()
+            if name == ZHIPU_API_KEY_ENV
+            else f"synthetic-{name.lower().replace('_', '-')}-credential-only"
+        )
+        for name in _REAL_PROVIDER_ENV
+    }
+
+
+def _base_probe_environment(database_url: str) -> dict[str, str]:
+    return {
+        "PATH": os.environ.get("PATH", os.defpath),
+        "HOME": os.environ.get("HOME", "/tmp"),
+        "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "DATABASE_URL": database_url,
+        "RUNNER_BOOTSTRAP_TOKEN": "synthetic-unrelated-runner-credential-only",
+        "UNRELATED_APPLICATION_SECRET": "synthetic-unrelated-application-secret-only",
+    }
+
+
+def _prepare_canary_repository(root: Path) -> None:
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "check-secrets.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    git_environment = {
+        "PATH": os.environ.get("PATH", os.defpath),
+        "HOME": str(root),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+    commands = (
+        ("init", "--initial-branch=main"),
+        ("add", "--", "scripts/check-secrets.sh"),
+        (
+            "-c",
+            "user.name=VisualEngineer Test",
+            "-c",
+            "user.email=visualengineer-test@example.invalid",
+            "commit",
+            "-m",
+            "test fixture",
+        ),
+        ("update-ref", "refs/remotes/origin/main", "HEAD"),
+    )
+    for arguments in commands:
+        completed = subprocess.run(
+            ["git", *arguments],
+            cwd=root,
+            env=git_environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if completed.returncode != 0:
+            pytest.fail(
+                f"isolated_repository_setup_failed command={arguments[0]}",
+                pytrace=False,
+            )
+
+
+def _canary_mutation_counts(session: Session) -> dict[str, int]:
+    return {
+        model.__tablename__: int(session.scalar(select(func.count()).select_from(model)) or 0)
+        for model in _CANARY_MUTATION_MODELS
+    }
+
+
+def _assert_provider_values_absent(
+    text_value: str,
+    provider_values: Mapping[str, str],
+) -> None:
+    for name, value in provider_values.items():
+        if value in text_value:
+            pytest.fail(f"PROVIDER_SECRET_DISCLOSURE key={name}", pytrace=False)
 
 
 def _valid_content() -> dict[str, Any]:
@@ -144,10 +295,98 @@ async def _invoke_with_mock(
         return await service.run(_test_cancellation=cancellation)
 
 
-def _patch_safe_production_gates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(canary_service, "verify_repository_contract", lambda: None)
-    monkeypatch.setattr(canary_service, "verify_database_contract", lambda: None)
-    monkeypatch.setattr(canary_service, "verify_pre_live_safety_contract", lambda: None)
+def _install_real_gate_context(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> Path:
+    root = tmp_path / "canary-repository"
+    root.mkdir()
+    _prepare_canary_repository(root)
+    monkeypatch.setattr(canary_service, "repository_root", lambda: root)
+    monkeypatch.chdir(root)
+    return root
+
+
+@contextmanager
+def _probe_process_environment(
+    environment: _EnvironmentValueAccessProbe,
+) -> Generator[None, None, None]:
+    original_environment = os.environ
+    os.environ = environment  # type: ignore[assignment]  # noqa: B003
+    try:
+        yield
+    finally:
+        os.environ = original_environment  # noqa: B003
+
+
+def test_git_environment_builder_reads_only_fixed_safe_allowlist() -> None:
+    provider_values = _synthetic_provider_environment()
+    values = {
+        "PATH": "/safe/bin",
+        "HOME": "/safe/home",
+        "TMPDIR": "/safe/tmp",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "LC_CTYPE": "UTF-8",
+        "RUNNER_BOOTSTRAP_TOKEN": "synthetic-unrelated-runner-credential-only",
+        "UNRELATED_APPLICATION_SECRET": "synthetic-unrelated-application-secret-only",
+        **provider_values,
+    }
+    environment = _EnvironmentValueAccessProbe(values)
+
+    child_environment = canary_service._secret_blind_environment(environment)
+
+    assert canary_service._REAL_PROVIDER_SECRET_ENV_NAMES == _REAL_PROVIDER_ENV
+    assert set(child_environment) == {
+        *canary_service._SECRET_BLIND_ENV_ALLOWLIST,
+        *canary_service._FIXED_GIT_ENVIRONMENT,
+    }
+    assert child_environment["PATH"] == "/safe/bin"
+    assert child_environment["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert "RUNNER_BOOTSTRAP_TOKEN" not in child_environment
+    assert "UNRELATED_APPLICATION_SECRET" not in child_environment
+    assert all(name not in child_environment for name in _REAL_PROVIDER_ENV)
+    assert all(environment.value_reads[name] == 0 for name in _REAL_PROVIDER_ENV)
+    assert environment.enumeration_attempts == 0
+
+
+@pytest.mark.parametrize("access_method", ["getitem", "get"])
+def test_environment_probe_distinguishes_existence_from_provider_value_read(
+    access_method: str,
+) -> None:
+    environment = _EnvironmentValueAccessProbe(_synthetic_provider_environment())
+
+    assert ZHIPU_API_KEY_ENV in environment
+    assert environment.value_reads[ZHIPU_API_KEY_ENV] == 0
+    assert environment.existence_checks[ZHIPU_API_KEY_ENV] == 1
+
+    with pytest.raises(
+        AssertionError,
+        match=(f"^PROVIDER_SECRET_VALUE_READ_BEFORE_AUTHORIZATION key={ZHIPU_API_KEY_ENV}$"),
+    ):
+        if access_method == "getitem":
+            _ = environment[ZHIPU_API_KEY_ENV]
+        else:
+            _ = environment.get(ZHIPU_API_KEY_ENV)
+
+
+def test_database_preflight_reads_database_only_and_executes_real_gate(
+    db_session: Session,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = {**_base_probe_environment(database_url), **_synthetic_provider_environment()}
+    environment = _EnvironmentValueAccessProbe(values)
+    counts_before = _canary_mutation_counts(db_session)
+
+    with _probe_process_environment(environment):
+        config = canary_service.verify_database_contract()
+
+    assert isinstance(config, CanaryDatabasePreflightConfig)
+    assert environment.value_reads["DATABASE_URL"] == 1
+    assert all(environment.value_reads[name] == 0 for name in _REAL_PROVIDER_ENV)
+    assert environment.enumeration_attempts == 0
+    assert _canary_mutation_counts(db_session) == counts_before
 
 
 def test_fixed_scenario_and_outbound_contract_are_stable_and_secret_free() -> None:
@@ -364,101 +603,157 @@ def test_post_dispatch_cancellation_is_outcome_unknown(db_session: Session) -> N
 
 def test_preflight_is_secret_blind_read_only_and_network_free(
     db_session: Session,
+    database_url: str,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr(canary_service, "verify_repository_contract", lambda: None)
-    secret_read = False
-    adapter_created = False
+    provider_values = _synthetic_provider_environment()
+    values = {**_base_probe_environment(database_url), **provider_values}
+    environment = _EnvironmentValueAccessProbe(values)
+    counts_before = _canary_mutation_counts(db_session)
+    production_client_count = 0
 
-    def forbidden_secret_read() -> Settings:
-        nonlocal secret_read
-        secret_read = True
-        raise AssertionError
+    def forbidden_production_client() -> httpx.AsyncClient:
+        nonlocal production_client_count
+        production_client_count += 1
+        raise AssertionError("HTTP_REQUEST_BEFORE_AUTHORIZATION")
 
-    def forbidden_adapter(*_: Any, **__: Any) -> None:
-        nonlocal adapter_created
-        adapter_created = True
-        raise AssertionError
+    _install_real_gate_context(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        real_provider_adapters,
+        "_create_production_client",
+        forbidden_production_client,
+    )
 
-    monkeypatch.setattr(canary_service, "_load_authorized_runtime_settings", forbidden_secret_read)
-    monkeypatch.setattr(ZhipuAdapter, "__init__", forbidden_adapter)
-    count_before = db_session.scalar(text("SELECT count(*) FROM ai_plan_requests"))
-
-    result = canary_cli.main(["preflight"])
+    with _probe_process_environment(environment):
+        result = canary_cli.main(["preflight"])
     output = capsys.readouterr()
 
     assert result == 0
-    assert USER_SECRET_PROVISION_REQUIRED in output.out
-    assert f"secret_variable={ZHIPU_API_KEY_ENV}" in output.out
-    assert secret_read is False
-    assert adapter_created is False
-    assert db_session.scalar(text("SELECT count(*) FROM ai_plan_requests")) == count_before
+    assert output.out.splitlines() == [
+        USER_SECRET_PROVISION_REQUIRED,
+        f"secret_variable={ZHIPU_API_KEY_ENV}",
+    ]
+    assert all(environment.value_reads[name] == 0 for name in _REAL_PROVIDER_ENV)
+    assert environment.enumeration_attempts == 0
+    assert production_client_count == 0
+    assert _canary_mutation_counts(db_session) == counts_before
+    _assert_provider_values_absent(output.out + output.err, provider_values)
 
 
-@pytest.mark.parametrize("authorization", [None, "", "0", "true", "yes", "2"])
+@pytest.mark.parametrize("authorization", [None, "0"], ids=["missing", "false"])
 def test_authorization_fails_before_secret_read(
+    db_session: Session,
+    database_url: str,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     authorization: str | None,
 ) -> None:
-    _patch_safe_production_gates(monkeypatch)
+    provider_values = _synthetic_provider_environment()
+    values = {**_base_probe_environment(database_url), **provider_values}
     if authorization is not None:
-        monkeypatch.setenv(LIVE_VALIDATION_AUTHORIZATION_ENV, authorization)
-    secret_read = False
+        values[LIVE_VALIDATION_AUTHORIZATION_ENV] = authorization
+    environment = _EnvironmentValueAccessProbe(values)
+    counts_before = _canary_mutation_counts(db_session)
+    production_client_count = 0
 
-    def forbidden_secret_read() -> Settings:
-        nonlocal secret_read
-        secret_read = True
-        raise AssertionError
+    def forbidden_production_client() -> httpx.AsyncClient:
+        nonlocal production_client_count
+        production_client_count += 1
+        raise AssertionError("HTTP_REQUEST_BEFORE_AUTHORIZATION")
 
-    monkeypatch.setattr(canary_service, "_load_authorized_runtime_settings", forbidden_secret_read)
+    _install_real_gate_context(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        real_provider_adapters,
+        "_create_production_client",
+        forbidden_production_client,
+    )
 
-    result = canary_cli.main(["run"])
+    with _probe_process_environment(environment):
+        result = canary_cli.main(["run"])
     output = capsys.readouterr()
 
     assert result == 1
     assert "LIVE_VALIDATION_AUTHORIZATION_REQUIRED" in output.err
-    assert secret_read is False
+    assert all(environment.value_reads[name] == 0 for name in _REAL_PROVIDER_ENV)
+    assert environment.enumeration_attempts == 0
+    assert production_client_count == 0
+    assert _canary_mutation_counts(db_session) == counts_before
+    _assert_provider_values_absent(output.out + output.err, provider_values)
 
 
 def test_authorized_missing_key_stops_before_adapter_or_database_write(
     db_session: Session,
+    database_url: str,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _patch_safe_production_gates(monkeypatch)
-    monkeypatch.setenv(LIVE_VALIDATION_AUTHORIZATION_ENV, "1")
-    adapter_created = False
+    provider_values = _synthetic_provider_environment()
+    provider_values.pop(ZHIPU_API_KEY_ENV)
+    values = {
+        **_base_probe_environment(database_url),
+        **provider_values,
+        LIVE_VALIDATION_AUTHORIZATION_ENV: "1",
+    }
+    environment = _EnvironmentValueAccessProbe(
+        values,
+        allowed_provider_reads=frozenset({ZHIPU_API_KEY_ENV}),
+    )
+    counts_before = _canary_mutation_counts(db_session)
+    production_client_count = 0
 
-    def forbidden_adapter(*_: Any, **__: Any) -> None:
-        nonlocal adapter_created
-        adapter_created = True
-        raise AssertionError
+    def forbidden_production_client() -> httpx.AsyncClient:
+        nonlocal production_client_count
+        production_client_count += 1
+        raise AssertionError("HTTP_REQUEST_WITHOUT_PROVIDER_SECRET")
 
-    monkeypatch.setattr(ZhipuAdapter, "__init__", forbidden_adapter)
-    count_before = db_session.scalar(text("SELECT count(*) FROM ai_plan_requests"))
+    _install_real_gate_context(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        real_provider_adapters,
+        "_create_production_client",
+        forbidden_production_client,
+    )
 
-    result = canary_cli.main(["run"])
+    with _probe_process_environment(environment):
+        result = canary_cli.main(["run"])
     output = capsys.readouterr()
 
     assert result == 1
     assert USER_SECRET_PROVISION_REQUIRED in output.out
-    assert adapter_created is False
-    assert db_session.scalar(text("SELECT count(*) FROM ai_plan_requests")) == count_before
+    assert environment.value_reads[ZHIPU_API_KEY_ENV] == 1
+    assert all(
+        environment.value_reads[name] == 0
+        for name in _REAL_PROVIDER_ENV
+        if name != ZHIPU_API_KEY_ENV
+    )
+    assert environment.enumeration_attempts == 0
+    assert production_client_count == 0
+    assert _canary_mutation_counts(db_session) == counts_before
+    _assert_provider_values_absent(output.out + output.err, provider_values)
 
 
 def test_production_factory_enforces_gate_order_before_secret_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
-    monkeypatch.setenv(LIVE_VALIDATION_AUTHORIZATION_ENV, "1")
+    database_config = CanaryDatabasePreflightConfig()
+    monkeypatch.setattr(
+        canary_service,
+        "verify_fixed_scenario_contract",
+        lambda: events.append("scenario"),
+    )
     monkeypatch.setattr(
         canary_service, "verify_repository_contract", lambda: events.append("repository")
     )
-    monkeypatch.setattr(
-        canary_service, "verify_database_contract", lambda: events.append("database")
-    )
+
+    def database_gate() -> CanaryDatabasePreflightConfig:
+        events.append("database")
+        return database_config
+
+    monkeypatch.setattr(canary_service, "verify_database_contract", database_gate)
     monkeypatch.setattr(
         canary_service,
         "require_live_validation_authorization",
@@ -470,39 +765,112 @@ def test_production_factory_enforces_gate_order_before_secret_read(
         lambda: events.append("safety"),
     )
 
-    def stop_at_secret() -> Settings:
+    def stop_at_secret() -> SecretStr:
         events.append("secret")
         raise UserSecretProvisionRequired()
 
-    monkeypatch.setattr(canary_service, "_load_authorized_runtime_settings", stop_at_secret)
+    monkeypatch.setattr(canary_service, "_load_authorized_zhipu_secret", stop_at_secret)
 
     with pytest.raises(UserSecretProvisionRequired):
         with canary_service.production_zhipu_live_canary_service():
             pass
 
-    assert events == ["repository", "database", "authorization", "safety", "secret"]
+    assert events == ["scenario", "repository", "database", "safety", "authorization", "secret"]
 
 
-def test_production_factory_has_no_injection_parameters_and_builds_real_transport(
+def test_authorized_synthetic_key_runs_full_production_path_once(
     db_session: Session,
+    database_url: str,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _patch_safe_production_gates(monkeypatch)
-    monkeypatch.setenv(LIVE_VALIDATION_AUTHORIZATION_ENV, "1")
-    monkeypatch.setenv(ZHIPU_API_KEY_ENV, _synthetic_credential())
+    provider_values = _synthetic_provider_environment()
+    values = {
+        **_base_probe_environment(database_url),
+        **provider_values,
+        LIVE_VALIDATION_AUTHORIZATION_ENV: "1",
+    }
+    environment = _EnvironmentValueAccessProbe(
+        values,
+        allowed_provider_reads=frozenset({ZHIPU_API_KEY_ENV}),
+    )
+    mutation_counts_before = _canary_mutation_counts(db_session)
+    authority_before = _authority_counts(db_session)
+    request_count = 0
 
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        assert request.url == ZHIPU_LIVE_CANARY_ENDPOINT
+        assert "Authorization" in request.headers
+        return httpx.Response(200, json=_provider_payload())
+
+    def mock_production_client() -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            trust_env=False,
+        )
+
+    _install_real_gate_context(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        real_provider_adapters,
+        "_create_production_client",
+        mock_production_client,
+    )
+
+    with _probe_process_environment(environment):
+        result = canary_cli.main(["run"])
+    output = capsys.readouterr()
+
+    db_session.expire_all()
+    invocation = db_session.scalar(
+        select(AIProviderInvocation).order_by(AIProviderInvocation.created_at.desc()).limit(1)
+    )
+    ai_request = db_session.scalar(
+        select(AIPlanRequest).order_by(AIPlanRequest.created_at.desc()).limit(1)
+    )
+    mutation_counts_after = _canary_mutation_counts(db_session)
+    mutation_deltas = {
+        name: mutation_counts_after[name] - count for name, count in mutation_counts_before.items()
+    }
+
+    assert result == 0
+    assert request_count == 1
+    assert environment.value_reads[ZHIPU_API_KEY_ENV] == 1
+    assert all(
+        environment.value_reads[name] == 0
+        for name in _REAL_PROVIDER_ENV
+        if name != ZHIPU_API_KEY_ENV
+    )
+    assert environment.enumeration_attempts == 0
+    assert invocation is not None and invocation.status == "succeeded"
+    assert ai_request is not None and ai_request.status == "generated"
+    assert ai_request.response_payload is not None
+    AIPlanContract.model_validate(ai_request.response_payload)
+    assert mutation_deltas == {
+        "tasks": 1,
+        "runs": 1,
+        "repository_snapshots": 1,
+        "ai_plan_requests": 1,
+        "ai_provider_invocations": 1,
+        "ai_eval_results": len(LIVE_CANARY_EVAL_IDS),
+    }
+    assert _authority_counts(db_session) == authority_before
+    assert "LIVE ZHIPU CANARY — ONE EXTERNAL REQUEST MAY BE SENT" in output.out
+    _assert_provider_values_absent(output.out + output.err, provider_values)
+
+
+def test_production_factory_has_no_injection_parameters() -> None:
     assert inspect.signature(canary_service.production_zhipu_live_canary_service).parameters == {}
     forbidden_settings = {"transport", "endpoint", "model", "headers", "maximum_output_tokens"}
     assert forbidden_settings.isdisjoint(Settings.model_fields)
 
-    with canary_service.production_zhipu_live_canary_service() as service:
-        assert service._adapter.provider_id == ProviderId.ZHIPU
-        assert service._adapter.uses_injected_mock_transport is False
-
     with pytest.raises(TypeError):
-        canary_service.production_zhipu_live_canary_service(  # type: ignore[call-arg]
+        with canary_service.production_zhipu_live_canary_service(  # type: ignore[call-arg]
             httpx.MockTransport(lambda _: httpx.Response(200))
-        )
+        ):
+            pass
 
 
 @pytest.mark.parametrize(

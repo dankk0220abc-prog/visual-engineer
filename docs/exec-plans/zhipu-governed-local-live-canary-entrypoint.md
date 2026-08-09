@@ -1,6 +1,6 @@
 # Zhipu governed local live-canary entrypoint
 
-Status: IMPLEMENTATION COMPLETE — INDEPENDENT SECURITY REVIEW REQUIRED
+Status: VE-ZLC-FSR-001 LOCAL REMEDIATION GREEN — NEW CI AND CLOSURE REQUIRED
 
 ## Goal
 
@@ -79,13 +79,27 @@ any real Provider, generate live evidence, merge, release, or deploy.
   planning tests passed `170/170` before the additive binding regression.
 - The one canonical backend aggregate passed `514/514` with `84.75%` coverage.
 - Scoped implementation commit: `07adc9b35fcf5c5ba0b0d9e6211475bfb15d37bf`.
+- Independent value-access review disproved the original preflight Secret-blind
+  claim and recorded blocking finding `VE-ZLC-FSR-001`: both complete Git child
+  environment copying and pre-authorization BaseSettings enumeration read
+  Provider Secret values before authorization.
+- The corrective implementation now builds Git child environments from a fixed
+  safe allowlist, loads only `DATABASE_URL` through a database-only model,
+  validates scenario/repository/database/safety before authorization, and then
+  reads only `ZHIPU_API_KEY` through a Zhipu-specific loader.
+- Production-order probes exercise the real isolated Git and PostgreSQL gates.
+  The final focused attempt passed `37/37`; earlier harness/Git absent-ref
+  attempts remain recorded in Evidence rather than being erased.
+- Changed-scope format, Ruff, mypy, contract drift, Secret scanner, missing-rg
+  regression, and diff checks passed. The one canonical backend aggregate
+  passed `515/515` with 85.04% coverage.
 
 ## Remaining gates
 
-- Secret scan, generated contract drift, Ruff, mypy (144 source files),
-  Prettier, ESLint, TypeScript, and `git diff --check` passed.
-- Exact-path commit, ordinary push, draft PR, and remote CI.
-- Independent final focused security review. No merge is authorized here.
+- Exact-path corrective commit, ordinary push to the existing draft PR, and new
+  exact-candidate Fast/Heavy CI.
+- One independent read-only closure check limited to `VE-ZLC-FSR-001`. No merge
+  is authorized by this remediation.
 
 ## Rollback
 

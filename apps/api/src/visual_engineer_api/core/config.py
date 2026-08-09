@@ -5,6 +5,16 @@ from pathlib import Path
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_DATABASE_URL = (
+    "postgresql+psycopg://visualengineer:visualengineer-local@localhost:5432/visualengineer"
+)
+
+
+def validate_database_url(value: str) -> str:
+    if not value.startswith("postgresql+psycopg://"):
+        raise ValueError("DATABASE_URL must use postgresql+psycopg")
+    return value
+
 
 class Settings(BaseSettings):
     """Typed configuration loaded from environment variables or safe local defaults."""
@@ -16,9 +26,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    database_url: str = (
-        "postgresql+psycopg://visualengineer:visualengineer-local@localhost:5432/visualengineer"
-    )
+    database_url: str = DEFAULT_DATABASE_URL
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8000, ge=1, le=65535)
     web_origin: str = "http://localhost:3000,http://127.0.0.1:3000"
@@ -55,9 +63,7 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def require_postgresql_psycopg(cls, value: str) -> str:
-        if not value.startswith("postgresql+psycopg://"):
-            raise ValueError("DATABASE_URL must use postgresql+psycopg")
-        return value
+        return validate_database_url(value)
 
     @field_validator("web_origin")
     @classmethod

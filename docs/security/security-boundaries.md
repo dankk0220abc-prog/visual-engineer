@@ -14,13 +14,16 @@ maximum output tokens, concurrency one, and retry zero. CLI, HTTP, Settings,
 and database inputs cannot override Provider, model, endpoint, headers,
 Prompt, request body, path, output location, transport, or token budget.
 
-Preflight uses a Secret-blind database settings type and strips Provider
-credential variables from every Git subprocess. A production run checks the
-exact clean `main` checkout and local/origin alignment, database health and
-revision, explicit process authorization, disabled Provider registry, fixed
-scenario/adapter/scanner contracts, and only then reads `Settings.zhipu_api_key`.
-The no-argument production factory cannot accept a client or MockTransport;
-tests reach an internal-only seam with a synthetic credential.
+Preflight builds every Git subprocess environment from a fixed safe allowlist
+and loads only `DATABASE_URL` through a database-only Pydantic model. It never
+copies or enumerates the process environment. A production run checks the exact
+clean `main` checkout and local/origin alignment, database health and revision,
+disabled Provider registry, fixed scenario/adapter/scanner contracts, and then
+exact process authorization. Only after authorization succeeds does a
+Zhipu-only loader read `ZHIPU_API_KEY` into `SecretStr`; it never constructs the
+all-Provider Settings object. The no-argument production factory cannot accept
+a client or MockTransport; tests reach an internal-only seam with a synthetic
+credential.
 
 Every dispatch creates one `AIPlanRequest`, commits one
 `AIProviderInvocation` as `prepared`, commits `dispatching` immediately before
