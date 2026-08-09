@@ -22,6 +22,8 @@ class InvocationStatus(StrEnum):
     FAILED = "failed"
     CANCELLED_BEFORE_DISPATCH = "cancelled_before_dispatch"
     OUTCOME_UNKNOWN = "outcome_unknown"
+    LEGACY_TIMEOUT = "timeout"
+    LEGACY_CANCELLED = "cancelled"
 
 
 class ReportedValueStatus(StrEnum):
@@ -42,6 +44,23 @@ class InvocationBillingStatus(StrEnum):
     MOCK_NOT_BILLABLE = "mock_not_billable"
     LIVE_BILLING_UNKNOWN = "live_billing_unknown"
     LIVE_COST_REPORTED = "live_cost_reported"
+    NOT_DISPATCHED = "not_dispatched"
+
+
+class RequestDigestKind(StrEnum):
+    LEGACY_GENERATION_REQUEST = "legacy_generation_request"
+    OUTBOUND_DISPATCH = "outbound_dispatch"
+
+
+class ResponseDigestKind(StrEnum):
+    LEGACY_PROVIDER_RESPONSE = "legacy_provider_response"
+    NORMALIZED_SAFE_RESPONSE = "normalized_safe_response"
+
+
+class DispatchBoundaryStatus(StrEnum):
+    LEGACY_UNAVAILABLE = "legacy_unavailable"
+    NOT_DISPATCHED = "not_dispatched"
+    DISPATCHED = "dispatched"
 
 
 def upstream_request_fingerprint(value: str | None) -> str | None:

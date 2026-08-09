@@ -422,6 +422,53 @@ describe("RunConsole", () => {
     );
   });
 
+  it("renders legacy timeout evidence without inventing a dispatch boundary", async () => {
+    const request = aiPlanRequestFixture();
+    const invocation = request.invocations[0];
+    mockedGetRun.mockResolvedValue(runFixture({ status: "failed" }));
+    mockedListPlans.mockResolvedValue([]);
+    mockedListAIPlanRequests.mockResolvedValue([
+      aiPlanRequestFixture({
+        status: "failed",
+        error_category: "provider",
+        error_code: "ai_plan_failed",
+        error_message: "Governed AI Plan failed.",
+        invocations: [
+          {
+            ...invocation,
+            contract_version: 0,
+            status: "timeout",
+            request_digest_kind: "legacy_generation_request",
+            response_digest: null,
+            response_digest_kind: "legacy_provider_response",
+            usage_status: "unavailable",
+            input_tokens: null,
+            output_tokens: null,
+            total_tokens: null,
+            queue_wait_ms: null,
+            provider_elapsed_ms: null,
+            client_total_elapsed_ms: null,
+            legacy_latency_ms: 9.6,
+            dispatch_boundary_status: "legacy_unavailable",
+            dispatch_started_at: null,
+          },
+        ],
+      }),
+    ]);
+
+    render(<RunConsole runId={runFixture().id} />);
+
+    expect(await screen.findByText(/Legacy Timeout/)).toBeVisible();
+    expect(
+      screen.getByText(/Legacy terminal trace · dispatch boundary unavailable/),
+    ).toBeVisible();
+    expect(screen.getByText(/Legacy measurement 9.6 ms/)).toBeVisible();
+    expect(
+      screen.queryByText(/Cancelled before dispatch/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Outcome unknown/)).not.toBeInTheDocument();
+  });
+
   it.each(["stale", "failed", "cancelled"] as const)(
     "renders the governed AI %s terminal state and blocks decisions",
     async (status) => {

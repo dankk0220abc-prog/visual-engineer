@@ -14,11 +14,14 @@ from visual_engineer_api.ai_planning.contracts import (
     ProviderCapabilityMetadata,
 )
 from visual_engineer_api.ai_planning.invocation_contract import (
+    DispatchBoundaryStatus,
     InvocationBillingStatus,
     InvocationClassification,
     InvocationStatus,
     InvocationUsageStatus,
     ReportedValueStatus,
+    RequestDigestKind,
+    ResponseDigestKind,
 )
 from visual_engineer_api.ai_planning.provider_registry import (
     ProviderConfigurationStatus,
@@ -74,7 +77,9 @@ class AIProviderInvocationResponse(BaseModel):
     upstream_request_id_status: ReportedValueStatus
     upstream_request_fingerprint: str | None
     request_digest: str
+    request_digest_kind: RequestDigestKind
     response_digest: str | None
+    response_digest_kind: ResponseDigestKind
     usage_status: InvocationUsageStatus
     input_tokens: int | None
     output_tokens: int | None
@@ -82,12 +87,14 @@ class AIProviderInvocationResponse(BaseModel):
     queue_wait_ms: int | None
     provider_elapsed_ms: int | None
     client_total_elapsed_ms: int | None
+    legacy_latency_ms: float | None
     billing_status: InvocationBillingStatus
     cost_amount: Decimal | None
     cost_currency: str | None
     error_category: str | None
     error_code: str | None
     created_at: datetime
+    dispatch_boundary_status: DispatchBoundaryStatus
     dispatch_started_at: datetime | None
     completed_at: datetime | None
 

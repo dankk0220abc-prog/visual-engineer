@@ -25,6 +25,7 @@ from visual_engineer_api.ai_planning.provider import (
 from visual_engineer_api.ai_planning.provider_registry import ProviderId
 
 PROVIDER_MAXIMUM_OUTPUT_TOKENS = 4096
+PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS = 150.0
 
 
 class ProviderCallPolicy(BaseModel):
@@ -32,7 +33,11 @@ class ProviderCallPolicy(BaseModel):
 
     connect_timeout_seconds: float = Field(default=5.0, ge=0.1, le=30.0)
     read_timeout_seconds: float = Field(default=30.0, ge=0.1, le=120.0)
-    total_deadline_seconds: float = Field(default=35.0, ge=0.2, le=150.0)
+    total_deadline_seconds: float = Field(
+        default=35.0,
+        ge=0.2,
+        le=PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS,
+    )
     maximum_output_tokens: int = Field(
         default=PROVIDER_MAXIMUM_OUTPUT_TOKENS,
         ge=256,

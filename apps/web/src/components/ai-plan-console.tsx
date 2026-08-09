@@ -84,6 +84,7 @@ function billingStatusLabel(
     mock_not_billable: t("billingMock"),
     live_billing_unknown: t("billingLiveUnknown"),
     live_cost_reported: t("billingLiveReported"),
+    not_dispatched: t("billingNotDispatched"),
   }[status];
 }
 
@@ -426,10 +427,27 @@ export function AIPlanConsole({
                       <span className="font-semibold">
                         {t("invocationAttempt", {
                           number: invocation.attempt_number,
-                          status: localizeStatus(invocation.status, statusT),
+                          status:
+                            invocation.contract_version === 0
+                              ? invocation.status === "timeout"
+                                ? t("legacyTimeout")
+                                : invocation.status === "cancelled"
+                                  ? t("legacyCancelled")
+                                  : t("legacyInvocationStatus", {
+                                      status: localizeStatus(
+                                        invocation.status,
+                                        statusT,
+                                      ),
+                                    })
+                              : localizeStatus(invocation.status, statusT),
                         })}
                       </span>
                     </div>
+                    {invocation.contract_version === 0 ? (
+                      <p className="mt-3 leading-5 text-amber-200">
+                        {t("legacyEvidenceNotice")}
+                      </p>
+                    ) : null}
                     <dl className="mt-3 grid min-w-0 gap-2 text-slate-300 sm:grid-cols-2">
                       <div className="min-w-0">
                         <dt className="text-slate-400">{t("provider")}</dt>
@@ -485,16 +503,23 @@ export function AIPlanConsole({
                       {tokens.length ? ` · ${tokens.join(" · ")}` : ""}
                     </p>
                     <p className="mt-1 leading-5 text-slate-400">
-                      {t("latencySummary", {
-                        queue:
-                          invocation.queue_wait_ms ?? t("metricUnavailable"),
-                        provider:
-                          invocation.provider_elapsed_ms ??
-                          t("metricUnavailable"),
-                        total:
-                          invocation.client_total_elapsed_ms ??
-                          t("metricUnavailable"),
-                      })}
+                      {invocation.contract_version === 0
+                        ? t("legacyLatencySummary", {
+                            latency:
+                              invocation.legacy_latency_ms ??
+                              t("metricUnavailable"),
+                          })
+                        : t("latencySummary", {
+                            queue:
+                              invocation.queue_wait_ms ??
+                              t("metricUnavailable"),
+                            provider:
+                              invocation.provider_elapsed_ms ??
+                              t("metricUnavailable"),
+                            total:
+                              invocation.client_total_elapsed_ms ??
+                              t("metricUnavailable"),
+                          })}
                     </p>
                     <p className="mt-1 leading-5 text-slate-400">
                       {billingStatusLabel(invocation.billing_status, t)}

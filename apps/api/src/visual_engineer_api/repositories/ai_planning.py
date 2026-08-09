@@ -57,16 +57,18 @@ class AIPlanningRepository:
         return self._session.scalar(statement)
 
     def stale_dispatching(
-        self, *, created_before: datetime, limit: int
+        self, *, dispatched_before: datetime, limit: int
     ) -> list[AIProviderInvocation]:
         return list(
             self._session.scalars(
                 select(AIProviderInvocation)
                 .where(
+                    AIProviderInvocation.contract_version == 1,
                     AIProviderInvocation.status == "dispatching",
-                    AIProviderInvocation.created_at < created_before,
+                    AIProviderInvocation.dispatch_started_at.is_not(None),
+                    AIProviderInvocation.dispatch_started_at < dispatched_before,
                 )
-                .order_by(AIProviderInvocation.created_at, AIProviderInvocation.id)
+                .order_by(AIProviderInvocation.dispatch_started_at, AIProviderInvocation.id)
                 .limit(limit)
                 .with_for_update(skip_locked=True)
             )

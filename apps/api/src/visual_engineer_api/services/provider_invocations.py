@@ -28,6 +28,7 @@ from visual_engineer_api.ai_planning.provider import (
     ProviderErrorCategory,
 )
 from visual_engineer_api.ai_planning.real_provider_adapters import (
+    PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS,
     ProviderAdapterResult,
     ProviderCallPolicy,
     RealProviderAdapter,
@@ -58,6 +59,15 @@ class AdapterInvocationOutcome:
     result: ProviderAdapterResult | None
     plan: AIPlanContract | None
     error: ProviderError | None
+
+
+PROVIDER_RECOVERY_SAFETY_MARGIN = timedelta(seconds=30)
+
+
+def minimum_stale_dispatch_age() -> timedelta:
+    return timedelta(seconds=PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS) + (
+        PROVIDER_RECOVERY_SAFETY_MARGIN
+    )
 
 
 def reported_usage_status(
@@ -140,7 +150,7 @@ async def invoke_mocked_adapter_contract(
             error=schema_error,
         )
 
-    usage_status = (
+    normalized_usage_status = (
         InvocationUsageStatus.REPORTED_INVALID
         if result.usage.reported_invalid
         else reported_usage_status(
@@ -148,6 +158,23 @@ async def invoke_mocked_adapter_contract(
             result.usage.output_tokens,
             result.usage.total_tokens,
         )
+    )
+    if classification == InvocationClassification.MOCK:
+        usage_status = (
+            InvocationUsageStatus.SYNTHETIC_COMPLETE
+            if normalized_usage_status == InvocationUsageStatus.REPORTED_COMPLETE
+            else InvocationUsageStatus.UNAVAILABLE
+        )
+    else:
+        usage_status = normalized_usage_status
+    persisted_input_tokens = (
+        result.usage.input_tokens if usage_status != InvocationUsageStatus.UNAVAILABLE else None
+    )
+    persisted_output_tokens = (
+        result.usage.output_tokens if usage_status != InvocationUsageStatus.UNAVAILABLE else None
+    )
+    persisted_total_tokens = (
+        result.usage.total_tokens if usage_status != InvocationUsageStatus.UNAVAILABLE else None
     )
     effective_status = (
         ReportedValueStatus.REPORTED
@@ -167,9 +194,9 @@ async def invoke_mocked_adapter_contract(
         upstream_request_id_status=upstream_status,
         upstream_request_id=result.provider_request_id,
         usage_status=usage_status,
-        input_tokens=result.usage.input_tokens,
-        output_tokens=result.usage.output_tokens,
-        total_tokens=result.usage.total_tokens,
+        input_tokens=persisted_input_tokens,
+        output_tokens=persisted_output_tokens,
+        total_tokens=persisted_total_tokens,
     )
     lifecycle.succeed(
         timing,
@@ -179,9 +206,9 @@ async def invoke_mocked_adapter_contract(
         upstream_request_id_status=upstream_status,
         upstream_request_id=result.provider_request_id,
         usage_status=usage_status,
-        input_tokens=result.usage.input_tokens,
-        output_tokens=result.usage.output_tokens,
-        total_tokens=result.usage.total_tokens,
+        input_tokens=persisted_input_tokens,
+        output_tokens=persisted_output_tokens,
+        total_tokens=persisted_total_tokens,
     )
     if on_validated_plan is not None:
         on_validated_plan(plan)
@@ -328,6 +355,20 @@ class ProviderInvocationLifecycle:
                 if error.category == ProviderErrorCategory.CANCELLED
                 else InvocationStatus.FAILED
             )
+            invocation.response_digest = None
+            invocation.effective_model_status = ReportedValueStatus.UNAVAILABLE.value
+            invocation.effective_model_id = None
+            invocation.upstream_request_id_status = ReportedValueStatus.UNAVAILABLE.value
+            invocation.upstream_request_id = None
+            invocation.usage_status = InvocationUsageStatus.UNAVAILABLE.value
+            invocation.input_tokens = None
+            invocation.output_tokens = None
+            invocation.total_tokens = None
+            invocation.queue_wait_ms = None
+            invocation.provider_elapsed_ms = None
+            invocation.billing_status = InvocationBillingStatus.NOT_DISPATCHED.value
+            invocation.cost_amount = None
+            invocation.cost_currency = None
         elif invocation.status == InvocationStatus.DISPATCHING.value:
             ambiguous = error.category in {
                 ProviderErrorCategory.TIMEOUT,
@@ -363,7 +404,7 @@ class ProviderInvocationLifecycle:
             raise ValueError("stale cutoff must be timezone-aware")
         recovered: list[uuid.UUID] = []
         for invocation in self._repository.stale_dispatching(
-            created_before=stale_before,
+            dispatched_before=stale_before,
             limit=limit,
         ):
             invocation.status = InvocationStatus.OUTCOME_UNKNOWN.value
@@ -375,8 +416,11 @@ class ProviderInvocationLifecycle:
         return recovered
 
     def reconcile_older_than(self, age: timedelta, *, limit: int = 100) -> list[uuid.UUID]:
-        if age <= timedelta(0):
-            raise ValueError("stale age must be positive")
+        minimum_age = minimum_stale_dispatch_age()
+        if age < minimum_age:
+            raise ValueError(
+                "stale age must cover the maximum Provider deadline and recovery margin"
+            )
         return self.reconcile_stale_dispatching(
             stale_before=datetime.now(UTC) - age,
             limit=limit,

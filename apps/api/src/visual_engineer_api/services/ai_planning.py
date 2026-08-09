@@ -24,9 +24,12 @@ from visual_engineer_api.ai_planning.evaluator import (
 )
 from visual_engineer_api.ai_planning.fake_provider import DeterministicFixtureProvider
 from visual_engineer_api.ai_planning.invocation_contract import (
+    DispatchBoundaryStatus,
     InvocationClassification,
     InvocationUsageStatus,
     ReportedValueStatus,
+    RequestDigestKind,
+    ResponseDigestKind,
     normalized_response_digest,
     upstream_request_fingerprint,
 )
@@ -314,6 +317,7 @@ class AIPlanningService:
     def _invocation_response(
         invocation: AIProviderInvocation,
     ) -> AIProviderInvocationResponse:
+        is_legacy = invocation.contract_version == 0
         return AIProviderInvocationResponse(
             id=invocation.id,
             ai_plan_request_id=invocation.ai_plan_request_id,
@@ -331,7 +335,17 @@ class AIPlanningService:
                 invocation.upstream_request_id
             ),
             request_digest=invocation.request_digest,
+            request_digest_kind=(
+                RequestDigestKind.LEGACY_GENERATION_REQUEST
+                if is_legacy
+                else RequestDigestKind.OUTBOUND_DISPATCH
+            ),
             response_digest=invocation.response_digest,
+            response_digest_kind=(
+                ResponseDigestKind.LEGACY_PROVIDER_RESPONSE
+                if is_legacy
+                else ResponseDigestKind.NORMALIZED_SAFE_RESPONSE
+            ),
             usage_status=invocation.usage_status,
             input_tokens=invocation.input_tokens,
             output_tokens=invocation.output_tokens,
@@ -339,12 +353,20 @@ class AIPlanningService:
             queue_wait_ms=invocation.queue_wait_ms,
             provider_elapsed_ms=invocation.provider_elapsed_ms,
             client_total_elapsed_ms=invocation.client_total_elapsed_ms,
+            legacy_latency_ms=invocation.legacy_latency_ms if is_legacy else None,
             billing_status=invocation.billing_status,
             cost_amount=invocation.cost_amount,
             cost_currency=invocation.cost_currency,
             error_category=invocation.error_category,
             error_code=invocation.error_code,
             created_at=invocation.created_at,
+            dispatch_boundary_status=(
+                DispatchBoundaryStatus.LEGACY_UNAVAILABLE
+                if is_legacy
+                else DispatchBoundaryStatus.DISPATCHED
+                if invocation.dispatch_started_at is not None
+                else DispatchBoundaryStatus.NOT_DISPATCHED
+            ),
             dispatch_started_at=invocation.dispatch_started_at,
             completed_at=invocation.completed_at,
         )

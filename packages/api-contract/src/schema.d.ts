@@ -1614,6 +1614,7 @@ export interface components {
        * Format: date-time
        */
       created_at: string;
+      dispatch_boundary_status: components["schemas"]["DispatchBoundaryStatus"];
       /** Dispatch Started At */
       dispatch_started_at: string | null;
       /** Effective Model Id */
@@ -1630,6 +1631,8 @@ export interface components {
       id: string;
       /** Input Tokens */
       input_tokens: number | null;
+      /** Legacy Latency Ms */
+      legacy_latency_ms: number | null;
       /** Output Tokens */
       output_tokens: number | null;
       /** Provider Elapsed Ms */
@@ -1639,10 +1642,12 @@ export interface components {
       queue_wait_ms: number | null;
       /** Request Digest */
       request_digest: string;
+      request_digest_kind: components["schemas"]["RequestDigestKind"];
       /** Requested Model Id */
       requested_model_id: string;
       /** Response Digest */
       response_digest: string | null;
+      response_digest_kind: components["schemas"]["ResponseDigestKind"];
       status: components["schemas"]["InvocationStatus"];
       /** Total Tokens */
       total_tokens: number | null;
@@ -2453,6 +2458,12 @@ export interface components {
        */
       started_at: string;
     };
+    /**
+     * DispatchBoundaryStatus
+     * @enum {string}
+     */
+    DispatchBoundaryStatus:
+      "legacy_unavailable" | "not_dispatched" | "dispatched";
     /** EligibleExecutionContextListResponse */
     EligibleExecutionContextListResponse: {
       /** Items */
@@ -3018,7 +3029,8 @@ export interface components {
       | "not_billable_fixture"
       | "mock_not_billable"
       | "live_billing_unknown"
-      | "live_cost_reported";
+      | "live_cost_reported"
+      | "not_dispatched";
     /**
      * InvocationClassification
      * @enum {string}
@@ -3034,7 +3046,9 @@ export interface components {
       | "succeeded"
       | "failed"
       | "cancelled_before_dispatch"
-      | "outcome_unknown";
+      | "outcome_unknown"
+      | "timeout"
+      | "cancelled";
     /**
      * InvocationUsageStatus
      * @enum {string}
@@ -4121,6 +4135,16 @@ export interface components {
        */
       kind: "repository_status_check";
     };
+    /**
+     * RequestDigestKind
+     * @enum {string}
+     */
+    RequestDigestKind: "legacy_generation_request" | "outbound_dispatch";
+    /**
+     * ResponseDigestKind
+     * @enum {string}
+     */
+    ResponseDigestKind: "legacy_provider_response" | "normalized_safe_response";
     /** ReviewDecisionCreate */
     ReviewDecisionCreate: {
       /**

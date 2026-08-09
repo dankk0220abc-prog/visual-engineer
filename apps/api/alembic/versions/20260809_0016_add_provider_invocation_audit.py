@@ -36,6 +36,21 @@ def upgrade() -> None:
     )
     op.rename_table("ai_provider_traces", "ai_provider_invocations")
 
+    for old_name, legacy_name in (
+        ("latency_ms", "legacy_latency_ms"),
+        ("input_tokens", "legacy_input_tokens"),
+        ("output_tokens", "legacy_output_tokens"),
+        ("total_tokens", "legacy_total_tokens"),
+        ("cost_estimate_microunits", "legacy_cost_estimate_microunits"),
+        ("cost_basis", "legacy_cost_basis"),
+        ("retryable", "legacy_retryable"),
+    ):
+        op.alter_column(
+            "ai_provider_invocations",
+            old_name,
+            new_column_name=legacy_name,
+        )
+
     op.add_column(
         "ai_provider_invocations", sa.Column("contract_version", sa.SmallInteger(), nullable=True)
     )
@@ -65,6 +80,8 @@ def upgrade() -> None:
     op.add_column(
         "ai_provider_invocations", sa.Column("usage_status", sa.String(24), nullable=True)
     )
+    for column in ("input_tokens", "output_tokens", "total_tokens"):
+        op.add_column("ai_provider_invocations", sa.Column(column, sa.BigInteger(), nullable=True))
     op.add_column(
         "ai_provider_invocations", sa.Column("queue_wait_ms", sa.BigInteger(), nullable=True)
     )
@@ -90,49 +107,46 @@ def upgrade() -> None:
     op.execute(
         """
         UPDATE ai_provider_invocations
-        SET contract_version = 1,
+        SET contract_version = 0,
             classification = 'fixture',
-            status = CASE
-                WHEN status = 'succeeded' THEN 'succeeded'
-                WHEN status = 'cancelled' THEN 'cancelled_before_dispatch'
-                ELSE 'failed'
-            END,
             adapter_version = COALESCE(
                 NULLIF(provider_metadata ->> 'implementation_version', ''),
-                'fixture-provider-v1'
+                'legacy-unknown'
             ),
             requested_model_id = COALESCE(
                 NULLIF(provider_metadata ->> 'model_label', ''),
-                'fixture-planner-v1'
+                'legacy-unknown'
             ),
             effective_model_status = 'unavailable',
             effective_model_id = NULL,
             upstream_request_id_status = 'unavailable',
             upstream_request_id = NULL,
-            usage_status = 'synthetic_complete',
-            queue_wait_ms = CASE WHEN status = 'cancelled' THEN NULL ELSE 0 END,
-            provider_elapsed_ms = CASE
-                WHEN status = 'cancelled' THEN NULL
-                ELSE GREATEST(0, round(latency_ms)::bigint)
+            usage_status = CASE
+                WHEN status = 'succeeded' THEN 'synthetic_complete'
+                ELSE 'unavailable'
             END,
-            client_total_elapsed_ms = GREATEST(0, round(latency_ms)::bigint),
+            input_tokens = CASE WHEN status = 'succeeded' THEN legacy_input_tokens END,
+            output_tokens = CASE WHEN status = 'succeeded' THEN legacy_output_tokens END,
+            total_tokens = CASE WHEN status = 'succeeded' THEN legacy_total_tokens END,
+            queue_wait_ms = NULL,
+            provider_elapsed_ms = NULL,
+            client_total_elapsed_ms = NULL,
             billing_status = 'not_billable_fixture',
             cost_amount = NULL,
             cost_currency = NULL,
-            dispatch_started_at = CASE WHEN status = 'cancelled' THEN NULL ELSE created_at END,
-            error_category = CASE
-                WHEN status = 'cancelled' THEN COALESCE(error_category, 'cancelled')
-                WHEN status IN ('failed', 'timeout') THEN COALESCE(error_category, 'internal')
-                ELSE NULL
-            END,
-            error_code = CASE
-                WHEN status = 'cancelled' THEN COALESCE(error_code, 'provider_cancelled')
-                WHEN status = 'timeout' THEN COALESCE(error_code, 'provider_timeout')
-                WHEN status = 'failed' THEN COALESCE(error_code, 'provider_failed')
-                ELSE NULL
-            END
+            dispatch_started_at = NULL
         """
     )
+    for column in (
+        "legacy_latency_ms",
+        "legacy_input_tokens",
+        "legacy_output_tokens",
+        "legacy_total_tokens",
+        "legacy_cost_estimate_microunits",
+        "legacy_cost_basis",
+        "legacy_retryable",
+    ):
+        op.alter_column("ai_provider_invocations", column, nullable=True)
 
     op.alter_column(
         "ai_provider_invocations",
@@ -142,16 +156,6 @@ def upgrade() -> None:
         existing_nullable=False,
         postgresql_using="attempt_number::smallint",
     )
-    for column in ("input_tokens", "output_tokens", "total_tokens"):
-        op.alter_column(
-            "ai_provider_invocations",
-            column,
-            existing_type=sa.Integer(),
-            type_=sa.BigInteger(),
-            existing_nullable=False,
-            nullable=True,
-            postgresql_using=f"{column}::bigint",
-        )
     op.alter_column(
         "ai_provider_invocations",
         "status",
@@ -178,9 +182,6 @@ def upgrade() -> None:
         "billing_status",
     ):
         op.alter_column("ai_provider_invocations", column, nullable=False)
-    for column in ("latency_ms", "cost_estimate_microunits", "cost_basis", "retryable"):
-        op.drop_column("ai_provider_invocations", column)
-
     _create_constraints_and_indexes()
     _install_invocation_guards()
 
@@ -202,16 +203,20 @@ def _create_constraints_and_indexes() -> None:
     op.create_check_constraint(
         "ck_ai_provider_invocations_version_attempt",
         "ai_provider_invocations",
-        "contract_version > 0 AND attempt_number BETWEEN 1 AND 32767",
+        "(contract_version = 0 AND attempt_number BETWEEN 1 AND 3) OR "
+        "(contract_version = 1 AND attempt_number BETWEEN 1 AND 32767)",
     )
     op.create_check_constraint(
         "ck_ai_provider_invocations_closed_identity",
         "ai_provider_invocations",
-        "classification IN ('fixture', 'mock', 'live') AND "
+        "(contract_version = 0 AND classification = 'fixture' AND "
+        "provider_id = 'deterministic-fixture' AND "
+        "status IN ('succeeded', 'failed', 'timeout', 'cancelled')) OR "
+        "(contract_version = 1 AND classification IN ('fixture', 'mock', 'live') AND "
         "status IN ('prepared', 'dispatching', 'succeeded', 'failed', "
         "'cancelled_before_dispatch', 'outcome_unknown') AND "
         "provider_id IN ('deterministic-fixture', 'zhipu', 'qwen', 'deepseek', "
-        "'doubao', 'kimi')",
+        "'doubao', 'kimi'))",
     )
     op.create_check_constraint(
         "ck_ai_provider_invocations_reported_identity",
@@ -223,7 +228,10 @@ def _create_constraints_and_indexes() -> None:
         "upstream_request_id_status IN ('reported', 'unavailable') AND "
         "((upstream_request_id_status = 'reported' AND upstream_request_id IS NOT NULL AND "
         "char_length(trim(upstream_request_id)) > 0) OR "
-        "(upstream_request_id_status = 'unavailable' AND upstream_request_id IS NULL))",
+        "(upstream_request_id_status = 'unavailable' AND upstream_request_id IS NULL)) AND "
+        "(contract_version = 1 OR (effective_model_status = 'unavailable' AND "
+        "effective_model_id IS NULL AND upstream_request_id_status = 'unavailable' AND "
+        "upstream_request_id IS NULL))",
     )
     op.create_check_constraint(
         "ck_ai_provider_invocations_usage",
@@ -243,18 +251,30 @@ def _create_constraints_and_indexes() -> None:
         "AND total_tokens IS NULL))",
     )
     op.create_check_constraint(
+        "ck_ai_provider_invocations_classification_facts",
+        "ai_provider_invocations",
+        "(classification = 'fixture' AND usage_status IN "
+        "('synthetic_complete', 'unavailable') AND billing_status IN "
+        "('not_billable_fixture', 'not_dispatched')) OR "
+        "(classification = 'mock' AND usage_status IN "
+        "('synthetic_complete', 'unavailable') AND billing_status IN "
+        "('mock_not_billable', 'not_dispatched')) OR "
+        "(classification = 'live' AND usage_status IN "
+        "('reported_complete', 'reported_partial', 'reported_invalid', 'unavailable') AND "
+        "billing_status IN ('live_billing_unknown', 'live_cost_reported', 'not_dispatched'))",
+    )
+    op.create_check_constraint(
         "ck_ai_provider_invocations_billing",
         "ai_provider_invocations",
         "billing_status IN ('not_billable_fixture', 'mock_not_billable', "
-        "'live_billing_unknown', 'live_cost_reported') AND ("
-        "(classification = 'fixture' AND billing_status = 'not_billable_fixture') OR "
-        "(classification = 'mock' AND billing_status = 'mock_not_billable') OR "
-        "(classification = 'live' AND "
-        "billing_status IN ('live_billing_unknown', 'live_cost_reported'))) AND ("
+        "'live_billing_unknown', 'live_cost_reported', 'not_dispatched') AND ("
         "(billing_status <> 'live_cost_reported' AND cost_amount IS NULL AND "
         "cost_currency IS NULL) OR "
         "(billing_status = 'live_cost_reported' AND cost_amount IS NOT NULL AND "
-        "cost_amount >= 0 AND cost_currency ~ '^[A-Z]{3}$'))",
+        "cost_amount >= 0 AND cost_currency ~ '^[A-Z]{3}$')) AND ("
+        "billing_status <> 'not_dispatched' OR (contract_version = 1 AND ("
+        "status = 'cancelled_before_dispatch' OR "
+        "(status = 'failed' AND dispatch_started_at IS NULL))))",
     )
     op.create_check_constraint(
         "ck_ai_provider_invocations_digests",
@@ -272,7 +292,11 @@ def _create_constraints_and_indexes() -> None:
     op.create_check_constraint(
         "ck_ai_provider_invocations_lifecycle",
         "ai_provider_invocations",
-        "(status = 'prepared' AND dispatch_started_at IS NULL AND completed_at IS NULL AND "
+        "(contract_version = 0 AND status IN ('succeeded', 'failed', 'timeout', 'cancelled') "
+        "AND dispatch_started_at IS NULL AND completed_at IS NOT NULL AND "
+        "queue_wait_ms IS NULL AND provider_elapsed_ms IS NULL AND "
+        "client_total_elapsed_ms IS NULL) OR (contract_version = 1 AND ((status = 'prepared' "
+        "AND dispatch_started_at IS NULL AND completed_at IS NULL AND "
         "queue_wait_ms IS NULL AND provider_elapsed_ms IS NULL AND "
         "client_total_elapsed_ms IS NULL) OR "
         "(status = 'dispatching' AND dispatch_started_at IS NOT NULL AND "
@@ -289,22 +313,24 @@ def _create_constraints_and_indexes() -> None:
         "(status = 'failed' AND completed_at IS NOT NULL AND "
         "client_total_elapsed_ms IS NOT NULL AND ((dispatch_started_at IS NULL AND "
         "provider_elapsed_ms IS NULL) OR (dispatch_started_at IS NOT NULL AND "
-        "queue_wait_ms IS NOT NULL AND provider_elapsed_ms IS NOT NULL)))",
+        "queue_wait_ms IS NOT NULL AND provider_elapsed_ms IS NOT NULL)))))",
     )
     op.create_check_constraint(
         "ck_ai_provider_invocations_terminal",
         "ai_provider_invocations",
-        "(status = 'succeeded' AND response_digest IS NOT NULL AND error_category IS NULL "
+        "contract_version = 0 OR (contract_version = 1 AND ((status = 'succeeded' AND "
+        "response_digest IS NOT NULL AND error_category IS NULL "
         "AND error_code IS NULL) OR "
         "(status IN ('failed', 'cancelled_before_dispatch', 'outcome_unknown') AND "
         "response_digest IS NULL AND error_category IS NOT NULL AND error_code IS NOT NULL) OR "
         "(status IN ('prepared', 'dispatching') AND response_digest IS NULL AND "
-        "error_category IS NULL AND error_code IS NULL)",
+        "error_category IS NULL AND error_code IS NULL)))",
     )
     op.create_check_constraint(
         "ck_ai_provider_invocations_error_category",
         "ai_provider_invocations",
-        "error_category IS NULL OR error_category IN ('provider_not_configured', "
+        "contract_version = 0 OR error_category IS NULL OR error_category IN "
+        "('provider_not_configured', "
         "'provider_disabled', 'authentication_failed', 'rate_limited', 'timeout', "
         "'cancelled', 'model_unavailable', 'upstream_server_error', 'request_rejected', "
         "'budget_exceeded', 'transport_error', 'structured_output_invalid', 'unavailable', "
@@ -313,12 +339,40 @@ def _create_constraints_and_indexes() -> None:
     op.create_check_constraint(
         "ck_ai_provider_invocations_nonterminal_audit",
         "ai_provider_invocations",
-        "status NOT IN ('prepared', 'dispatching') OR "
+        "contract_version = 0 OR status NOT IN ('prepared', 'dispatching') OR "
         "(effective_model_status = 'unavailable' AND effective_model_id IS NULL AND "
         "upstream_request_id_status = 'unavailable' AND upstream_request_id IS NULL AND "
         "usage_status = 'unavailable' AND input_tokens IS NULL AND "
-        "output_tokens IS NULL AND total_tokens IS NULL AND "
-        "(classification <> 'live' OR billing_status = 'live_billing_unknown'))",
+        "output_tokens IS NULL AND total_tokens IS NULL)",
+    )
+    op.create_check_constraint(
+        "ck_ai_provider_invocations_pre_dispatch_terminal",
+        "ai_provider_invocations",
+        "contract_version = 0 OR NOT (status = 'cancelled_before_dispatch' OR "
+        "(status = 'failed' AND dispatch_started_at IS NULL)) OR ("
+        "response_digest IS NULL AND effective_model_status = 'unavailable' AND "
+        "effective_model_id IS NULL AND upstream_request_id_status = 'unavailable' AND "
+        "upstream_request_id IS NULL AND usage_status = 'unavailable' AND "
+        "input_tokens IS NULL AND output_tokens IS NULL AND total_tokens IS NULL AND "
+        "queue_wait_ms IS NULL AND provider_elapsed_ms IS NULL AND "
+        "billing_status = 'not_dispatched' AND cost_amount IS NULL AND "
+        "cost_currency IS NULL)",
+    )
+    op.create_check_constraint(
+        "ck_ai_provider_invocations_legacy_provenance",
+        "ai_provider_invocations",
+        "(contract_version = 0 AND legacy_latency_ms IS NOT NULL AND "
+        "legacy_input_tokens IS NOT NULL AND legacy_output_tokens IS NOT NULL AND "
+        "legacy_total_tokens IS NOT NULL AND legacy_cost_estimate_microunits IS NOT NULL AND "
+        "legacy_cost_basis IS NOT NULL AND legacy_retryable IS NOT NULL AND "
+        "legacy_latency_ms >= 0 AND legacy_input_tokens >= 0 AND "
+        "legacy_output_tokens >= 0 AND legacy_total_tokens = legacy_input_tokens + "
+        "legacy_output_tokens AND legacy_cost_estimate_microunits = 0 AND "
+        "legacy_cost_basis = 'synthetic_not_billable') OR "
+        "(contract_version = 1 AND legacy_latency_ms IS NULL AND "
+        "legacy_input_tokens IS NULL AND legacy_output_tokens IS NULL AND "
+        "legacy_total_tokens IS NULL AND legacy_cost_estimate_microunits IS NULL AND "
+        "legacy_cost_basis IS NULL AND legacy_retryable IS NULL)",
     )
     op.create_index(
         "ix_ai_provider_invocations_provider_class_created",
@@ -328,8 +382,10 @@ def _create_constraints_and_indexes() -> None:
     op.create_index(
         "ix_ai_provider_invocations_recovery",
         "ai_provider_invocations",
-        ["status", "created_at"],
-        postgresql_where=sa.text("status IN ('prepared', 'dispatching')"),
+        ["status", "dispatch_started_at"],
+        postgresql_where=sa.text(
+            "contract_version = 1 AND status = 'dispatching' AND dispatch_started_at IS NOT NULL"
+        ),
     )
     op.create_index(
         "ix_ai_provider_invocations_upstream",
@@ -345,7 +401,7 @@ def _install_invocation_guards() -> None:
         CREATE FUNCTION guard_ai_provider_invocation_insert()
         RETURNS trigger AS $$
         BEGIN
-            IF NEW.status <> 'prepared' THEN
+            IF NEW.contract_version <> 1 OR NEW.status <> 'prepared' THEN
                 RAISE EXCEPTION 'Provider invocation must begin prepared'
                     USING ERRCODE = '55000';
             END IF;
@@ -356,7 +412,8 @@ def _install_invocation_guards() -> None:
         CREATE FUNCTION guard_ai_provider_invocation_update()
         RETURNS trigger AS $$
         BEGIN
-            IF OLD.status IN ('succeeded', 'failed', 'cancelled_before_dispatch',
+            IF OLD.contract_version <> 1
+                OR OLD.status IN ('succeeded', 'failed', 'cancelled_before_dispatch',
                     'outcome_unknown')
                 OR NEW.id IS DISTINCT FROM OLD.id
                 OR NEW.ai_plan_request_id IS DISTINCT FROM OLD.ai_plan_request_id
@@ -378,7 +435,19 @@ def _install_invocation_guards() -> None:
                     AND NEW.status IN ('failed', 'cancelled_before_dispatch')
                     AND (NEW.dispatch_started_at IS NOT NULL
                         OR NEW.queue_wait_ms IS NOT NULL
-                        OR NEW.provider_elapsed_ms IS NOT NULL))
+                        OR NEW.provider_elapsed_ms IS NOT NULL
+                        OR NEW.response_digest IS NOT NULL
+                        OR NEW.effective_model_status <> 'unavailable'
+                        OR NEW.effective_model_id IS NOT NULL
+                        OR NEW.upstream_request_id_status <> 'unavailable'
+                        OR NEW.upstream_request_id IS NOT NULL
+                        OR NEW.usage_status <> 'unavailable'
+                        OR NEW.input_tokens IS NOT NULL
+                        OR NEW.output_tokens IS NOT NULL
+                        OR NEW.total_tokens IS NOT NULL
+                        OR NEW.billing_status <> 'not_dispatched'
+                        OR NEW.cost_amount IS NOT NULL
+                        OR NEW.cost_currency IS NOT NULL))
                 OR NOT (
                     (OLD.status = 'prepared' AND NEW.status IN
                         ('dispatching', 'failed', 'cancelled_before_dispatch'))
@@ -415,29 +484,7 @@ def downgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM ai_provider_invocations
-                WHERE contract_version <> 1
-                    OR classification <> 'fixture'
-                    OR provider_id <> 'deterministic-fixture'
-                    OR status IN ('prepared', 'dispatching', 'outcome_unknown')
-                    OR usage_status <> 'synthetic_complete'
-                    OR billing_status <> 'not_billable_fixture'
-                    OR upstream_request_id_status <> 'unavailable'
-                    OR upstream_request_id IS NOT NULL
-                    OR cost_amount IS NOT NULL
-                    OR cost_currency IS NOT NULL
-                    OR adapter_version IS DISTINCT FROM COALESCE(
-                        NULLIF(provider_metadata ->> 'implementation_version', ''),
-                        'fixture-provider-v1'
-                    )
-                    OR requested_model_id IS DISTINCT FROM COALESCE(
-                        NULLIF(provider_metadata ->> 'model_label', ''),
-                        'fixture-planner-v1'
-                    )
-                    OR COALESCE(queue_wait_ms, 0) <> 0
-                    OR (status IN ('succeeded', 'failed') AND
-                        provider_elapsed_ms IS DISTINCT FROM client_total_elapsed_ms)
-                    OR (effective_model_status = 'reported'
-                        AND effective_model_id IS DISTINCT FROM requested_model_id)
+                WHERE contract_version <> 0
             ) THEN
                 RAISE EXCEPTION 'downgrade would lose provider invocation audit semantics'
                     USING ERRCODE = '55000';
@@ -458,6 +505,8 @@ def downgrade() -> None:
     ):
         op.drop_index(index, table_name="ai_provider_invocations")
     for constraint in (
+        "ck_ai_provider_invocations_legacy_provenance",
+        "ck_ai_provider_invocations_pre_dispatch_terminal",
         "ck_ai_provider_invocations_nonterminal_audit",
         "ck_ai_provider_invocations_error_category",
         "ck_ai_provider_invocations_terminal",
@@ -465,6 +514,7 @@ def downgrade() -> None:
         "ck_ai_provider_invocations_latency",
         "ck_ai_provider_invocations_digests",
         "ck_ai_provider_invocations_billing",
+        "ck_ai_provider_invocations_classification_facts",
         "ck_ai_provider_invocations_usage",
         "ck_ai_provider_invocations_reported_identity",
         "ck_ai_provider_invocations_closed_identity",
@@ -480,47 +530,31 @@ def downgrade() -> None:
         type_="foreignkey",
     )
 
-    op.add_column("ai_provider_invocations", sa.Column("latency_ms", sa.Float(), nullable=True))
-    op.add_column(
-        "ai_provider_invocations",
-        sa.Column("cost_estimate_microunits", sa.BigInteger(), nullable=True),
-    )
-    op.add_column("ai_provider_invocations", sa.Column("cost_basis", sa.String(40), nullable=True))
-    op.add_column("ai_provider_invocations", sa.Column("retryable", sa.Boolean(), nullable=True))
-    op.execute(
-        """
-        UPDATE ai_provider_invocations
-        SET status = CASE
-                WHEN status = 'cancelled_before_dispatch' THEN 'cancelled'
-                ELSE status
-            END,
-            latency_ms = COALESCE(
-                provider_elapsed_ms,
-                client_total_elapsed_ms,
-                0
-            )::double precision,
-            cost_estimate_microunits = 0,
-            cost_basis = 'synthetic_not_billable',
-            retryable = false,
-            completed_at = COALESCE(completed_at, created_at)
-        """
-    )
+    for column in ("input_tokens", "output_tokens", "total_tokens"):
+        op.drop_column("ai_provider_invocations", column)
     for column in (
-        "latency_ms",
-        "cost_estimate_microunits",
-        "cost_basis",
-        "retryable",
+        "legacy_latency_ms",
+        "legacy_input_tokens",
+        "legacy_output_tokens",
+        "legacy_total_tokens",
+        "legacy_cost_estimate_microunits",
+        "legacy_cost_basis",
+        "legacy_retryable",
     ):
         op.alter_column("ai_provider_invocations", column, nullable=False)
-    for column in ("input_tokens", "output_tokens", "total_tokens"):
+    for legacy_name, old_name in (
+        ("legacy_latency_ms", "latency_ms"),
+        ("legacy_input_tokens", "input_tokens"),
+        ("legacy_output_tokens", "output_tokens"),
+        ("legacy_total_tokens", "total_tokens"),
+        ("legacy_cost_estimate_microunits", "cost_estimate_microunits"),
+        ("legacy_cost_basis", "cost_basis"),
+        ("legacy_retryable", "retryable"),
+    ):
         op.alter_column(
             "ai_provider_invocations",
-            column,
-            existing_type=sa.BigInteger(),
-            type_=sa.Integer(),
-            existing_nullable=True,
-            nullable=False,
-            postgresql_using=f"{column}::integer",
+            legacy_name,
+            new_column_name=old_name,
         )
     op.alter_column(
         "ai_provider_invocations",

@@ -8,17 +8,39 @@ if ! command -v rg >/dev/null 2>&1; then
   exit 2
 fi
 
-if rg -n --hidden \
-  --glob '!.git/**' \
-  --glob '!node_modules/**' \
-  --glob '!.venv/**' \
-  --glob '!playwright-report/**' \
-  --glob '!test-results/**' \
-  --glob '!coverage/**' \
-  --glob '!htmlcov/**' \
-  "$PATTERN" .; then
-  echo "Potential secret material found." >&2
-  exit 1
-fi
+scan_root=${1:-.}
 
-echo "No high-confidence secret patterns found."
+set +e
+matches=$(
+  if ! cd "$scan_root" 2>/dev/null; then
+    exit 2
+  fi
+  rg --files-with-matches --hidden \
+    --glob '!.git/**' \
+    --glob '!node_modules/**' \
+    --glob '!.venv/**' \
+    --glob '!playwright-report/**' \
+    --glob '!test-results/**' \
+    --glob '!coverage/**' \
+    --glob '!htmlcov/**' \
+    "$PATTERN" . 2>/dev/null
+)
+scan_status=$?
+set -e
+
+case "$scan_status" in
+  0)
+    printf '%s\n' "$matches" | while IFS= read -r matched_path; do
+      [ -n "$matched_path" ] || continue
+      echo "HIGH-CONFIDENCE SECRET PATTERN FOUND: $matched_path" >&2
+    done
+    exit 1
+    ;;
+  1)
+    echo "No high-confidence secret patterns found."
+    ;;
+  *)
+    echo "secret scanner failed safely" >&2
+    exit 2
+    ;;
+esac

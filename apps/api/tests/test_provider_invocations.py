@@ -1,14 +1,18 @@
 import asyncio
 import json
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import SecretStr
-from sqlalchemy import select, text
+from sqlalchemy import create_engine, event, select, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -37,6 +41,7 @@ from visual_engineer_api.ai_planning.provider import (
     ProviderErrorCategory,
 )
 from visual_engineer_api.ai_planning.real_provider_adapters import (
+    PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS,
     ProviderCallPolicy,
     ZhipuAdapter,
 )
@@ -48,6 +53,7 @@ from visual_engineer_api.services.ai_planning import AIPlanningService
 from visual_engineer_api.services.provider_invocations import (
     ProviderInvocationLifecycle,
     invoke_mocked_adapter_contract,
+    minimum_stale_dispatch_age,
     reported_usage_status,
 )
 
@@ -200,6 +206,50 @@ def _stored_invocation(session: Session) -> AIProviderInvocation:
     return session.scalar(select(AIProviderInvocation))  # type: ignore[return-value]
 
 
+def _direct_prepared_invocation(
+    session: Session,
+    *,
+    created_at: datetime,
+) -> AIProviderInvocation:
+    ai_request = _create_request(session, _generation_request())
+    invocation = AIProviderInvocation(
+        ai_plan_request_id=ai_request.id,
+        attempt_number=1,
+        contract_version=1,
+        classification="mock",
+        status="prepared",
+        provider_id="zhipu",
+        provider_metadata={"mock_contract": True},
+        adapter_version="adapter-v1",
+        requested_model_id="model-v1",
+        effective_model_status="unavailable",
+        effective_model_id=None,
+        upstream_request_id_status="unavailable",
+        upstream_request_id=None,
+        request_digest="3" * 64,
+        response_digest=None,
+        usage_status="unavailable",
+        input_tokens=None,
+        output_tokens=None,
+        total_tokens=None,
+        queue_wait_ms=None,
+        provider_elapsed_ms=None,
+        client_total_elapsed_ms=None,
+        billing_status="mock_not_billable",
+        cost_amount=None,
+        cost_currency=None,
+        error_category=None,
+        error_code=None,
+        redactions=[],
+        created_at=created_at,
+        dispatch_started_at=None,
+        completed_at=None,
+    )
+    session.add(invocation)
+    session.commit()
+    return invocation
+
+
 def test_invocation_lifecycle_uses_integer_monotonic_latency_and_is_terminally_immutable(
     db_session: Session,
 ) -> None:
@@ -272,6 +322,79 @@ def test_database_rejects_illegal_transition_and_prepared_identity_mutation(
         db_session.rollback()
 
 
+@pytest.mark.parametrize(
+    "injected_fact",
+    [
+        "adapter_version = 'changed-in-terminal-update'",
+        "response_digest = repeat('a', 64)",
+        "effective_model_status = 'reported', effective_model_id = 'forged-model'",
+        "upstream_request_id_status = 'reported', upstream_request_id = 'forged-request'",
+        "usage_status = 'reported_complete', input_tokens = 1, output_tokens = 2, total_tokens = 3",
+        "billing_status = 'live_cost_reported', cost_amount = 1, cost_currency = 'USD'",
+    ],
+)
+def test_database_rejects_pre_dispatch_terminal_fact_injection_in_same_update(
+    db_session: Session,
+    injected_fact: str,
+) -> None:
+    _, _, _ = _prepare_lifecycle(
+        db_session,
+        classification=InvocationClassification.LIVE,
+    )
+    invocation_id = _stored_invocation(db_session).id
+    with pytest.raises(DBAPIError):
+        db_session.execute(
+            text(
+                "UPDATE ai_provider_invocations SET status = 'cancelled_before_dispatch', "
+                "completed_at = now(), client_total_elapsed_ms = 0, "
+                "billing_status = 'not_dispatched', error_category = 'cancelled', "
+                f"error_code = 'provider_cancelled', {injected_fact} WHERE id = :id"
+            ),
+            {"id": invocation_id},
+        )
+        db_session.commit()
+    db_session.rollback()
+
+
+@pytest.mark.parametrize(
+    "classification",
+    [
+        InvocationClassification.FIXTURE,
+        InvocationClassification.MOCK,
+        InvocationClassification.LIVE,
+    ],
+)
+def test_pre_dispatch_terminal_contract_is_consistent_for_every_classification(
+    db_session: Session,
+    classification: InvocationClassification,
+) -> None:
+    lifecycle, timing, _ = _prepare_lifecycle(db_session, classification=classification)
+    lifecycle.fail(
+        timing,
+        ProviderError(
+            ProviderErrorCategory.CANCELLED,
+            "provider_cancelled",
+            "Provider generation was cancelled",
+        ),
+    )
+    invocation = _stored_invocation(db_session)
+    assert invocation.status == "cancelled_before_dispatch"
+    assert invocation.dispatch_started_at is None
+    assert invocation.response_digest is None
+    assert invocation.effective_model_status == "unavailable"
+    assert invocation.effective_model_id is None
+    assert invocation.upstream_request_id_status == "unavailable"
+    assert invocation.upstream_request_id is None
+    assert invocation.usage_status == "unavailable"
+    assert invocation.input_tokens is None
+    assert invocation.output_tokens is None
+    assert invocation.total_tokens is None
+    assert invocation.provider_elapsed_ms is None
+    assert invocation.billing_status == "not_dispatched"
+    assert invocation.cost_amount is None
+    assert invocation.cost_currency is None
+
+
 def test_pre_dispatch_cancellation_has_no_dispatch_or_governance_side_effect(
     db_session: Session,
 ) -> None:
@@ -333,7 +456,40 @@ def test_post_dispatch_failure_classification_is_explicit(
     assert invocation.response_digest is None
 
 
-def test_stale_dispatch_reconciliation_marks_unknown_without_retry_or_fake_latency(
+def test_stale_dispatch_reconciliation_uses_dispatch_boundary_not_created_at(
+    db_session: Session,
+) -> None:
+    invocation = _direct_prepared_invocation(
+        db_session,
+        created_at=datetime.now(UTC) - timedelta(hours=1),
+    )
+    db_session.execute(
+        text(
+            "UPDATE ai_provider_invocations SET status = 'dispatching', "
+            "dispatch_started_at = now(), queue_wait_ms = 0 WHERE id = :id"
+        ),
+        {"id": invocation.id},
+    )
+    db_session.commit()
+    db_session.refresh(invocation)
+    assert invocation.dispatch_started_at is not None
+    lifecycle = ProviderInvocationLifecycle(db_session)
+    fresh = lifecycle.reconcile_stale_dispatching(stale_before=invocation.dispatch_started_at)
+    assert fresh == []
+    recovered = lifecycle.reconcile_stale_dispatching(
+        stale_before=invocation.dispatch_started_at + timedelta(microseconds=1)
+    )
+    assert recovered == [invocation.id]
+    db_session.refresh(invocation)
+    assert invocation.status == "outcome_unknown"
+    assert invocation.error_code == "provider_dispatch_stale_recovered"
+    assert invocation.provider_elapsed_ms is None
+    assert invocation.client_total_elapsed_ms is None
+    assert db_session.scalar(text("SELECT count(*) FROM ai_provider_invocations")) == 1
+    assert db_session.scalar(text("SELECT count(*) FROM plans")) == 0
+
+
+def test_recovery_threshold_rejects_active_deadline_and_accepts_safe_minimum(
     db_session: Session,
 ) -> None:
     lifecycle, timing, _ = _prepare_lifecycle(
@@ -341,16 +497,100 @@ def test_stale_dispatch_reconciliation_marks_unknown_without_retry_or_fake_laten
         classification=InvocationClassification.MOCK,
     )
     lifecycle.mark_dispatching(timing)
-    recovered = lifecycle.reconcile_stale_dispatching(
-        stale_before=datetime.now(UTC) + timedelta(seconds=1)
+    with pytest.raises(ValueError, match="maximum Provider deadline"):
+        lifecycle.reconcile_older_than(timedelta(seconds=PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS))
+    with pytest.raises(ValueError, match="maximum Provider deadline"):
+        lifecycle.reconcile_older_than(minimum_stale_dispatch_age() - timedelta(microseconds=1))
+    assert lifecycle.reconcile_older_than(minimum_stale_dispatch_age()) == []
+    assert _stored_invocation(db_session).status == "dispatching"
+
+
+def test_two_reconcilers_use_skip_locked_and_transition_once(db_session: Session) -> None:
+    invocation = _direct_prepared_invocation(
+        db_session,
+        created_at=datetime.now(UTC) - timedelta(hours=1),
     )
-    invocation = _stored_invocation(db_session)
-    assert recovered == [invocation.id]
-    assert invocation.status == "outcome_unknown"
-    assert invocation.error_code == "provider_dispatch_stale_recovered"
-    assert invocation.provider_elapsed_ms is None
-    assert invocation.client_total_elapsed_ms is None
+    dispatched_at = datetime.now(UTC) - minimum_stale_dispatch_age() - timedelta(seconds=1)
+    db_session.execute(
+        text(
+            "UPDATE ai_provider_invocations SET status = 'dispatching', "
+            "dispatch_started_at = :dispatched_at, queue_wait_ms = 0 WHERE id = :id"
+        ),
+        {"dispatched_at": dispatched_at, "id": invocation.id},
+    )
+    db_session.commit()
+
+    bind = db_session.get_bind()
+    engine_url = bind.url if isinstance(bind, Engine) else bind.engine.url
+    engine = create_engine(engine_url)
+    statements: list[str] = []
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def capture_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        if "ai_provider_invocations" in statement and "FOR UPDATE" in statement:
+            statements.append(statement)
+
+    barrier = threading.Barrier(2)
+
+    def reconcile() -> list[uuid.UUID]:
+        with Session(engine) as session:
+            barrier.wait()
+            return ProviderInvocationLifecycle(session).reconcile_stale_dispatching(
+                stale_before=datetime.now(UTC)
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: reconcile(), range(2)))
+    engine.dispose()
+    assert sum(result == [invocation.id] for result in results) == 1
+    assert sum(result == [] for result in results) == 1
+    assert any("SKIP LOCKED" in statement for statement in statements)
+    db_session.expire_all()
+    assert _stored_invocation(db_session).status == "outcome_unknown"
     assert db_session.scalar(text("SELECT count(*) FROM ai_provider_invocations")) == 1
+
+
+def test_api_startup_runs_one_shot_provider_reconciliation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from visual_engineer_api import main as main_module
+
+    calls = 0
+
+    def reconcile_once() -> list[uuid.UUID]:
+        nonlocal calls
+        calls += 1
+        return []
+
+    monkeypatch.setattr(main_module, "reconcile_stale_provider_invocations", reconcile_once)
+    with TestClient(main_module.create_app(), raise_server_exceptions=False):
+        pass
+    assert calls == 1
+
+
+def test_api_startup_recovery_failure_is_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from visual_engineer_api import main as main_module
+
+    def unavailable_database() -> list[uuid.UUID]:
+        raise RuntimeError("bounded startup recovery failure")
+
+    monkeypatch.setattr(
+        main_module,
+        "reconcile_stale_provider_invocations",
+        unavailable_database,
+    )
+    with pytest.raises(RuntimeError, match="bounded startup recovery failure"):
+        with TestClient(main_module.create_app(), raise_server_exceptions=False):
+            pass
 
 
 @pytest.mark.parametrize(
@@ -359,6 +599,33 @@ def test_stale_dispatch_reconciliation_marks_unknown_without_retry_or_fake_laten
         {"attempt_number": 0},
         {"provider_id": "outside-closed-registry"},
         {"classification": "fixture", "billing_status": "live_billing_unknown"},
+        {"billing_status": "not_dispatched"},
+        {
+            "classification": "fixture",
+            "usage_status": "reported_complete",
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "total_tokens": 3,
+        },
+        {
+            "classification": "mock",
+            "provider_id": "zhipu",
+            "billing_status": "mock_not_billable",
+            "usage_status": "reported_complete",
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "total_tokens": 3,
+        },
+        {
+            "classification": "live",
+            "provider_id": "zhipu",
+            "billing_status": "live_billing_unknown",
+            "usage_status": "synthetic_complete",
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "total_tokens": 3,
+        },
+        {"contract_version": 0},
         {"effective_model_status": "reported", "effective_model_id": None},
         {"upstream_request_id_status": "reported", "upstream_request_id": None},
         {"request_digest": "not-a-digest"},
@@ -539,7 +806,7 @@ def test_mock_adapter_success_persists_safe_invocation_then_allows_plan_creation
     assert call_count == 1
     assert invocation.classification == "mock"
     assert invocation.status == "succeeded"
-    assert invocation.usage_status == "reported_complete"
+    assert invocation.usage_status == "synthetic_complete"
     assert invocation.billing_status == "mock_not_billable"
     assert invocation.effective_model_id == ZhipuAdapter.model_id
     assert invocation.upstream_request_id == "mock-upstream-request-001"
@@ -727,17 +994,17 @@ def test_mock_contract_executor_rejects_injected_non_mock_transport(
     [
         (
             {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
-            "reported_complete",
+            "synthetic_complete",
             (2, 3, 5),
         ),
-        ({"prompt_tokens": 2}, "reported_partial", (2, None, None)),
+        ({"prompt_tokens": 2}, "unavailable", (None, None, None)),
         (
             {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 9},
-            "reported_invalid",
-            (2, 3, 9),
+            "unavailable",
+            (None, None, None),
         ),
         ({}, "unavailable", (None, None, None)),
-        ({"prompt_tokens": -1}, "reported_invalid", (None, None, None)),
+        ({"prompt_tokens": -1}, "unavailable", (None, None, None)),
     ],
 )
 def test_mock_adapter_usage_and_missing_identity_are_truthful(
