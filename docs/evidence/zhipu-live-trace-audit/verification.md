@@ -22,16 +22,54 @@ No Zhipu, Qwen, DeepSeek, Doubao, or Kimi live request was sent. The
 Deterministic Fixture remains the only enabled/default Provider; all five real
 Providers remain disabled with live validation `not_performed`.
 
+## Independent review failure retained
+
+The first independent review ended with:
+
+`VISUALENGINEER LIVE TRACE/AUDIT INDEPENDENT REVIEW FAIL — REMEDIATION REQUIRED`
+
+It found `MIGRATION-BACKFILL-001 — Blocking High`: the initial unpublished
+`20260809_0016` migration converted legacy `cancelled` to
+`cancelled_before_dispatch`, converted legacy `timeout` to `failed`, and used
+the old Trace `created_at` as `dispatch_started_at`. Those conversions changed
+unknown historical dispatch/cancellation facts into definite v1 facts. The
+review also found four blocking Medium issues:
+
+- `DB-CONTRACT-001`: a prepared-to-terminal UPDATE could inject impossible
+  Provider response, identity, usage, or billing facts.
+- `USAGE-001`: MockTransport usage was persisted as Provider-reported usage.
+- `RECOVERY-001`: stale recovery used `created_at`, accepted an unsafe age, and
+  had no production caller.
+- `SECRET-DIAGNOSTIC-001`: a positive scanner match printed the full matching
+  line, including secret material.
+
+This failure is permanent evidence. The migration was not lossless from the
+start. The corrective implementation below replaces the false backfill with
+versioned legacy evidence semantics and closes the four Medium findings without
+enabling a Provider or sending a live request.
+
 ## Migration and schema evidence
 
 Revision `20260809_0016` renames `ai_provider_traces` to
 `ai_provider_invocations` and preserves the existing UUID identity. Historical
-rows are honestly backfilled as `classification=fixture`,
-`usage_status=synthetic_complete`, and
-`billing_status=not_billable_fixture`, with no upstream request identity, live
-model identity, live billing, or live classification invented.
+rows are now `contract_version=0`, `classification=fixture`, Provider
+`deterministic-fixture`, and retain their exact legacy terminal status:
+`succeeded`, `failed`, `timeout`, or `cancelled`. All v0
+`dispatch_started_at`, queue, Provider-elapsed, and client-total fields are
+NULL. No upstream request identity, effective model, dispatch boundary, live
+billing, or live classification is invented.
 
-The new row is one dispatch attempt. Its immutable identity binds request,
+The original floating-point latency, old token columns, synthetic cost basis,
+retryability, timestamps, error fields, and digests remain in v0-only legacy
+provenance columns where necessary for exact downgrade. V1 rows must keep every
+legacy provenance column NULL. A legacy success may expose its contract-proven
+synthetic usage; failed, timeout, and cancelled rows expose
+`usage_status=unavailable` with NULL tokens even though the old NOT NULL schema
+stored zeroes. The zeroes remain downgrade-only evidence, not a claim of actual
+zero usage.
+
+The v1 row is one dispatch attempt and is always created as
+`contract_version=1`. Its immutable identity binds request,
 attempt, contract version, classification, closed Provider ID, adapter version,
 requested model, canonical outbound request digest, Provider metadata,
 redactions, and creation time. PostgreSQL checks close lifecycle, reported-value,
@@ -39,15 +77,16 @@ usage, billing, error, digest, latency, and terminal combinations. The foreign
 key is `ON DELETE RESTRICT`; recovery and reported-upstream partial indexes are
 present.
 
-The downgrade first inspects every row. Live, mock, prepared, dispatching,
-`outcome_unknown`, new usage/billing facts, upstream identity, reported cost,
-or any other state that cannot be faithfully represented by the old Fixture
-Trace causes PostgreSQL to fail with:
+The downgrade permits only v0 historical rows. Any v1 row, including fixture,
+live, mock, prepared, dispatching, `outcome_unknown`, new usage/billing facts,
+upstream identity, or reported cost, causes PostgreSQL to fail with:
 
 `downgrade would lose provider invocation audit semantics`
 
-Compatible historical Fixture data completes `upgrade -> downgrade -> upgrade`
-without losing the old Trace evidence semantics.
+The four real old-schema statuses complete `upgrade -> downgrade -> upgrade`
+with exact UUID, status, floating latency, token, cost, retryability, error,
+digest, and timestamp restoration. V0 rows cannot be inserted after migration,
+transitioned, updated, or deleted.
 
 ## Lifecycle and audit truthfulness
 
@@ -62,34 +101,54 @@ There is no automatic retry in this governed invocation path. Pre-dispatch
 cancellation is `cancelled_before_dispatch` and sends no HTTP request.
 Post-dispatch timeout, transport loss, cancellation, or internal ambiguity is
 `outcome_unknown`; definite HTTP/provider/validation outcomes are `failed` or
-`succeeded`. Stale `dispatching` reconciliation writes `outcome_unknown` with a
-bounded recovery code, preserves the row, invents no elapsed value, and never
-re-dispatches.
+`succeeded`. Stale reconciliation scans only v1 `dispatching` rows with a
+non-NULL `dispatch_started_at`, anchors age to that dispatch boundary, writes
+`outcome_unknown` with bounded code `provider_dispatch_stale_recovered`,
+preserves the row, invents no elapsed value, and never dispatches or retries.
 
-PostgreSQL insert/update/delete triggers require a `prepared` insert, enforce
-only legal transitions, reject forged dispatch fields on a direct pre-dispatch
-terminal transition, prevent immutable identity/redaction mutation, and reject
-every update or delete after a terminal state.
+The minimum recovery age is 180 seconds: the maximum configured Provider total
+deadline of 150 seconds plus an explicit 30-second safety margin. Smaller ages
+raise instead of clamping. API startup performs one reconciliation pass before
+serving; database failure follows existing fail-closed startup behavior, and no
+background polling loop was added. Concurrent reconcilers use
+`FOR UPDATE SKIP LOCKED`, so one row transitions once.
+
+PostgreSQL insert/update/delete triggers require a v1 `prepared` insert,
+enforce only legal transitions, reject same-UPDATE identity mutation, prevent
+immutable identity/redaction mutation, and reject every update or delete after
+a terminal state. A v1 pre-dispatch `failed` or
+`cancelled_before_dispatch` row must have unavailable/NULL response identity,
+effective model, upstream ID, usage, tokens, Provider latency, and cost, with
+`billing_status=not_dispatched`; direct SQL injection is rejected for fixture,
+mock, and live classifications.
 
 ## Digests, identity, usage, latency, and billing
 
-- `request_digest` hashes the actual canonical safe outbound JSON structure,
+- V1 `request_digest` hashes the actual canonical safe outbound JSON structure,
   including requested model, structured messages/request structure, output
   limit, structured-output controls, and non-secret options. No outbound body
-  copy, API key, Authorization header, or secret header is stored.
-- `response_digest` exists only after typed Plan validation and hashes the safe
+  copy, API key, Authorization header, or secret header is stored. V0
+  `request_digest_kind=legacy_generation_request` identifies the old stored
+  `AIPlanGenerationRequest` digest; it is never described as an outbound body.
+- V1 `response_digest` exists only after typed Plan validation and hashes the safe
   normalized envelope: Plan, reported/unavailable effective model,
   reported/unavailable upstream request identity, and normalized usage. Raw
   malformed/error bodies are neither hashed as a recoverable copy nor stored.
+  V0 uses `legacy_provider_response` provenance for its original digest.
 - Requested and effective model identity are separate. Upstream request identity
   uses explicit `reported`/`unavailable` pairing. Ordinary API responses omit
   the full upstream value and expose only a stable 24-hex SHA-256 prefix.
 - Nullable token fields preserve complete, partial, invalid, and unavailable
   reporting without manufacturing zeroes. Fixture usage is
-  `synthetic_complete`, never reported.
+  `synthetic_complete`, never reported. Mock persistence permits only controlled
+  `synthetic_complete` or `unavailable`; partial/invalid synthetic mock payloads
+  are unavailable. Adapter-normalizer tests retain their separate reported
+  usage parsing contract for future live responses.
 - Queue, Provider, and client-total elapsed values are non-negative `BIGINT`
   milliseconds from a monotonic client clock; adapter-reported latency does not
   overwrite them.
+- A database truth table rejects reported usage for fixture/mock, synthetic
+  usage for live, and classification-incompatible billing states.
 - Billing uses `NUMERIC(20,8)` plus uppercase three-character currency. Fixture
   and mock are explicitly non-billable. Live defaults to
   `live_billing_unknown`; no estimate or price table exists.
@@ -115,15 +174,20 @@ do not enable a real Provider.
 Generated OpenAPI and TypeScript schemas expose classification, lifecycle,
 Provider, requested/effective model semantics, upstream status and fingerprint,
 nullable typed usage, integer latency, billing/cost when reported, and
-timestamps. They do not expose the full upstream request ID, Provider body,
-Authorization material, keys, or private Prompt text.
+timestamps. Closed digest provenance and dispatch-boundary status distinguish
+v0 legacy evidence from v1 dispatch evidence. They do not expose the full
+upstream request ID, Provider body, Authorization material, keys, or private
+Prompt text.
 
 The existing AI Plan console received only a minimal bilingual audit-panel
 update. It renders `FIXTURE`/`MOCK`/`LIVE`, internal short correlation,
 requested/effective identity, upstream status/fingerprint, non-null tokens,
 three elapsed measures, billing, timestamp, and bounded error facts. Responsive
-wrapping is explicit at narrow widths; the Provider registry page was not
-redesigned.
+wrapping is explicit at narrow widths. V0 renders `Legacy Cancelled` or
+`Legacy Timeout`, states that the dispatch boundary is unavailable, labels the
+old latency as a legacy measurement, and never renders it as
+`Cancelled Before Dispatch` or `Outcome Unknown`. The Provider registry page
+was not redesigned.
 
 ## VE-MPF-R2-OBS-001 closure
 
@@ -133,22 +197,27 @@ to stderr, exits non-zero, and never prints the clean conclusion. The executable
 regression script proves both the installed and missing-`rg` branches and is
 part of `make security-check`. Heavy CI now installs the required scanner
 dependency explicitly; scanner behavior remains fail closed if installation or
-resolution fails.
+resolution fails. Positive matches now use `rg --files-with-matches` and emit
+only a fixed finding plus path. A synthetic positive-match regression proves
+stdout/stderr contain neither the credential, the matching line, nor a secret
+prefix/suffix. An inaccessible scan root also fails safely instead of emitting
+the clean conclusion.
 
 ## Verification record
 
-| Boundary                                         | Result                                                                                                                                                     |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Focused migration/invocation/provider regression | `107 passed`; later contract-hardening subset `67 passed`; explicit 401/403/429/503 matrix `8 passed`                                                      |
-| Canonical backend aggregate                      | `445 passed`; total coverage `84.94%`                                                                                                                      |
-| Real PostgreSQL migration                        | clean `base -> head -> base -> head`; backfill and lossy-downgrade rejection passed                                                                        |
-| Web unit/component                               | 17 files, `107 passed`                                                                                                                                     |
-| Python quality                                   | Ruff format/check passed; mypy passed for 139 source files                                                                                                 |
-| Web quality                                      | Prettier, ESLint, and TypeScript passed                                                                                                                    |
-| Generated contracts                              | `make contracts-check` passed                                                                                                                              |
-| Secret scanner                                   | clean scan passed; missing-`rg` fail-closed regression passed                                                                                              |
-| Diff integrity                                   | `git diff --check` passed before each commit                                                                                                               |
-| Local focused browser                            | `NOT VERIFIED`: Debian returned HTTP 502 for `libldap` while building Runner before service startup; task resources and Compose objects were fully cleaned |
+| Boundary                            | Result                                                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Final focused migration/invocation  | `62 passed`: four-status v0 history, exact downgrade, v1 refusal, DB facts/truth table, mock usage, recovery threshold/concurrency/startup |
+| Associated governed API focused set | `24 passed`                                                                                                                                |
+| Canonical backend aggregate         | `465 passed`; total coverage `85.04%`                                                                                                      |
+| Real PostgreSQL migration           | clean `base -> head -> base -> head`; succeeded/failed/timeout/cancelled and v1 lossy-downgrade refusal passed                             |
+| Web unit/component                  | 17 files, `108 passed`, including legacy timeout projection                                                                                |
+| Python quality                      | Ruff format/check passed; mypy passed for 139 source files                                                                                 |
+| Web quality                         | Prettier, ESLint, and TypeScript passed                                                                                                    |
+| Generated contracts                 | `make contracts-check` passed                                                                                                              |
+| Secret scanner                      | clean scan, missing-`rg`, inaccessible-root, and redacted positive synthetic match passed                                                  |
+| Diff integrity                      | `git diff --check` passed before commits                                                                                                   |
+| Local focused browser               | `NOT RERUN`: unchanged product logic does not justify local Playwright; remote Heavy remains the browser/Docker/Eval/Security authority    |
 
 The first remote code-candidate CI on exact SHA
 `9cff7280ceb0dfd32f2b4df99508f9f30ada4451` recorded:
@@ -162,7 +231,14 @@ The first remote code-candidate CI on exact SHA
   exact count assertion. All E2E source/workspace invariance and cleanup checks
   in the failed run passed.
 
-The CI result for the final evidence/CI-remediation commit is necessarily
+The later pre-remediation candidate HEAD
+`81efd52323c7baa918f3c7e5885c3fc7164211e4` had Fast `31303183735` and Heavy
+`31303183748` successful, but that green CI did not override the subsequent
+independent-review failure above. In particular, it did not prove historical
+backfill truthfulness, same-UPDATE terminal facts, mock usage provenance,
+deadline-safe startup recovery, or positive-match secret redaction.
+
+The CI result for the final historical-integrity remediation commit is necessarily
 recorded on draft PR #17 and in the implementation handoff because CI starts
 only after this document is committed. That final check set is the publication
 candidate evidence; this document does not pre-claim its result.
