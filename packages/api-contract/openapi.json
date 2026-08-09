@@ -536,6 +536,13 @@
             "title": "Id",
             "type": "string"
           },
+          "invocations": {
+            "items": {
+              "$ref": "#/components/schemas/AIProviderInvocationResponse"
+            },
+            "title": "Invocations",
+            "type": "array"
+          },
           "plan": {
             "anyOf": [
               {
@@ -604,13 +611,6 @@
           "status": {
             "$ref": "#/components/schemas/AIPlanRequestStatus"
           },
-          "traces": {
-            "items": {
-              "$ref": "#/components/schemas/AIProviderTraceResponse"
-            },
-            "title": "Traces",
-            "type": "array"
-          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -645,7 +645,7 @@
           "error_code",
           "error_message",
           "handoff_plan_id",
-          "traces",
+          "invocations",
           "eval_results",
           "decision",
           "created_at",
@@ -668,27 +668,12 @@
         "title": "AIPlanRequestStatus",
         "type": "string"
       },
-      "AIProviderListResponse": {
+      "AIProviderInvocationResponse": {
         "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ProviderConfigurationStatus"
-            },
-            "title": "Items",
-            "type": "array"
+          "adapter_version": {
+            "title": "Adapter Version",
+            "type": "string"
           },
-          "total": {
-            "minimum": 0.0,
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": ["items", "total"],
-        "title": "AIProviderListResponse",
-        "type": "object"
-      },
-      "AIProviderTraceResponse": {
-        "properties": {
           "ai_plan_request_id": {
             "format": "uuid",
             "title": "Ai Plan Request Id",
@@ -698,24 +683,92 @@
             "title": "Attempt Number",
             "type": "integer"
           },
+          "billing_status": {
+            "$ref": "#/components/schemas/InvocationBillingStatus"
+          },
+          "classification": {
+            "$ref": "#/components/schemas/InvocationClassification"
+          },
+          "client_total_elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Total Elapsed Ms"
+          },
           "completed_at": {
-            "format": "date-time",
-            "title": "Completed At",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
           },
-          "cost_basis": {
-            "const": "synthetic_not_billable",
-            "title": "Cost Basis",
-            "type": "string"
-          },
-          "cost_estimate_microunits": {
-            "title": "Cost Estimate Microunits",
+          "contract_version": {
+            "title": "Contract Version",
             "type": "integer"
+          },
+          "cost_amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Amount"
+          },
+          "cost_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Currency"
           },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "dispatch_started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatch Started At"
+          },
+          "effective_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Model Id"
+          },
+          "effective_model_status": {
+            "$ref": "#/components/schemas/ReportedValueStatus"
           },
           "error_category": {
             "anyOf": [
@@ -745,33 +798,58 @@
             "type": "string"
           },
           "input_tokens": {
-            "title": "Input Tokens",
-            "type": "integer"
-          },
-          "latency_ms": {
-            "title": "Latency Ms",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
           },
           "output_tokens": {
-            "title": "Output Tokens",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "provider_elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Elapsed Ms"
           },
           "provider_id": {
             "$ref": "#/components/schemas/ProviderId"
           },
-          "provider_metadata": {
-            "$ref": "#/components/schemas/ProviderCapabilityMetadata"
-          },
-          "redactions": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Redactions",
-            "type": "array"
+          "queue_wait_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Wait Ms"
           },
           "request_digest": {
             "title": "Request Digest",
+            "type": "string"
+          },
+          "requested_model_id": {
+            "title": "Requested Model Id",
             "type": "string"
           },
           "response_digest": {
@@ -785,43 +863,90 @@
             ],
             "title": "Response Digest"
           },
-          "retryable": {
-            "title": "Retryable",
-            "type": "boolean"
-          },
           "status": {
-            "enum": ["succeeded", "failed", "timeout", "cancelled"],
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/InvocationStatus"
           },
           "total_tokens": {
-            "title": "Total Tokens",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          },
+          "upstream_request_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Request Fingerprint"
+          },
+          "upstream_request_id_status": {
+            "$ref": "#/components/schemas/ReportedValueStatus"
+          },
+          "usage_status": {
+            "$ref": "#/components/schemas/InvocationUsageStatus"
           }
         },
         "required": [
           "id",
           "ai_plan_request_id",
           "attempt_number",
+          "contract_version",
+          "classification",
           "status",
           "provider_id",
-          "provider_metadata",
+          "adapter_version",
+          "requested_model_id",
+          "effective_model_status",
+          "effective_model_id",
+          "upstream_request_id_status",
+          "upstream_request_fingerprint",
           "request_digest",
           "response_digest",
-          "latency_ms",
+          "usage_status",
           "input_tokens",
           "output_tokens",
           "total_tokens",
-          "cost_estimate_microunits",
-          "cost_basis",
+          "queue_wait_ms",
+          "provider_elapsed_ms",
+          "client_total_elapsed_ms",
+          "billing_status",
+          "cost_amount",
+          "cost_currency",
           "error_category",
           "error_code",
-          "retryable",
-          "redactions",
           "created_at",
+          "dispatch_started_at",
           "completed_at"
         ],
-        "title": "AIProviderTraceResponse",
+        "title": "AIProviderInvocationResponse",
+        "type": "object"
+      },
+      "AIProviderListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderConfigurationStatus"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "AIProviderListResponse",
         "type": "object"
       },
       "AcceptanceCriterion": {
@@ -3537,6 +3662,44 @@
         "title": "HeartbeatResponse",
         "type": "object"
       },
+      "InvocationBillingStatus": {
+        "enum": [
+          "not_billable_fixture",
+          "mock_not_billable",
+          "live_billing_unknown",
+          "live_cost_reported"
+        ],
+        "title": "InvocationBillingStatus",
+        "type": "string"
+      },
+      "InvocationClassification": {
+        "enum": ["fixture", "mock", "live"],
+        "title": "InvocationClassification",
+        "type": "string"
+      },
+      "InvocationStatus": {
+        "enum": [
+          "prepared",
+          "dispatching",
+          "succeeded",
+          "failed",
+          "cancelled_before_dispatch",
+          "outcome_unknown"
+        ],
+        "title": "InvocationStatus",
+        "type": "string"
+      },
+      "InvocationUsageStatus": {
+        "enum": [
+          "synthetic_complete",
+          "reported_complete",
+          "reported_partial",
+          "reported_invalid",
+          "unavailable"
+        ],
+        "title": "InvocationUsageStatus",
+        "type": "string"
+      },
       "JobAssignment": {
         "additionalProperties": false,
         "properties": {
@@ -5222,6 +5385,11 @@
         "required": ["runner_id", "attempt_id", "lease_id"],
         "title": "RenewRequest",
         "type": "object"
+      },
+      "ReportedValueStatus": {
+        "enum": ["reported", "unavailable"],
+        "title": "ReportedValueStatus",
+        "type": "string"
       },
       "RepositoryAccess": {
         "enum": ["none", "isolated_workspace"],
@@ -11635,7 +11803,7 @@
             "description": "Validation or policy denial"
           }
         },
-        "summary": "Get structured Plan, Prompt, context, Trace, Eval, and decision evidence",
+        "summary": "Get structured Plan, Prompt, context, invocation, Eval, and decision evidence",
         "tags": ["governed AI planning"]
       }
     },

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
@@ -11,6 +12,13 @@ from visual_engineer_api.ai_planning.contracts import (
     ContextManifestEntry,
     DeliveryPackage,
     ProviderCapabilityMetadata,
+)
+from visual_engineer_api.ai_planning.invocation_contract import (
+    InvocationBillingStatus,
+    InvocationClassification,
+    InvocationStatus,
+    InvocationUsageStatus,
+    ReportedValueStatus,
 )
 from visual_engineer_api.ai_planning.provider_registry import (
     ProviderConfigurationStatus,
@@ -51,29 +59,37 @@ class AIPlanDecisionCreate(BaseModel):
         return self
 
 
-class AIProviderTraceResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class AIProviderInvocationResponse(BaseModel):
     id: uuid.UUID
     ai_plan_request_id: uuid.UUID
     attempt_number: int
-    status: Literal["succeeded", "failed", "timeout", "cancelled"]
+    contract_version: int
+    classification: InvocationClassification
+    status: InvocationStatus
     provider_id: ProviderId
-    provider_metadata: ProviderCapabilityMetadata
+    adapter_version: str
+    requested_model_id: str
+    effective_model_status: ReportedValueStatus
+    effective_model_id: str | None
+    upstream_request_id_status: ReportedValueStatus
+    upstream_request_fingerprint: str | None
     request_digest: str
     response_digest: str | None
-    latency_ms: float
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
-    cost_estimate_microunits: int
-    cost_basis: Literal["synthetic_not_billable"]
+    usage_status: InvocationUsageStatus
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    queue_wait_ms: int | None
+    provider_elapsed_ms: int | None
+    client_total_elapsed_ms: int | None
+    billing_status: InvocationBillingStatus
+    cost_amount: Decimal | None
+    cost_currency: str | None
     error_category: str | None
     error_code: str | None
-    retryable: bool
-    redactions: list[dict[str, Any]]
     created_at: datetime
-    completed_at: datetime
+    dispatch_started_at: datetime | None
+    completed_at: datetime | None
 
 
 class AIEvalResultResponse(BaseModel):
@@ -133,7 +149,7 @@ class AIPlanRequestResponse(BaseModel):
     error_code: str | None
     error_message: str | None
     handoff_plan_id: uuid.UUID | None
-    traces: list[AIProviderTraceResponse]
+    invocations: list[AIProviderInvocationResponse]
     eval_results: list[AIEvalResultResponse]
     decision: AIPlanDecisionResponse | None
     created_at: datetime

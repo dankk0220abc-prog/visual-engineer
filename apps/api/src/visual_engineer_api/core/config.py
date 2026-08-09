@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     ai_plan_context_max_bytes: int = Field(default=16 * 1024, ge=1024, le=256 * 1024)
     ai_plan_context_max_references: int = Field(default=64, ge=1, le=500)
     ai_provider_timeout_seconds: float = Field(default=2.0, ge=0.05, le=30.0)
-    ai_provider_max_attempts: int = Field(default=2, ge=1, le=3)
     zhipu_api_key: SecretStr = SecretStr("")
     qwen_api_key: SecretStr = SecretStr("")
     deepseek_api_key: SecretStr = SecretStr("")

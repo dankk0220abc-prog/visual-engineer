@@ -23,6 +23,13 @@ from visual_engineer_api.ai_planning.evaluator import (
     evaluate_plan,
 )
 from visual_engineer_api.ai_planning.fake_provider import DeterministicFixtureProvider
+from visual_engineer_api.ai_planning.invocation_contract import (
+    InvocationClassification,
+    InvocationUsageStatus,
+    ReportedValueStatus,
+    normalized_response_digest,
+    upstream_request_fingerprint,
+)
 from visual_engineer_api.ai_planning.prompt_registry import (
     PROMPT_DIGEST,
     PROMPT_TEMPLATE_ID,
@@ -34,6 +41,7 @@ from visual_engineer_api.ai_planning.prompt_registry import (
 from visual_engineer_api.ai_planning.provider import (
     CancellationToken,
     PlanningProvider,
+    ProviderError,
     ProviderErrorCategory,
     invoke_provider,
 )
@@ -47,7 +55,7 @@ from visual_engineer_api.models.ai_planning import (
     AIEvalResult,
     AIPlanDecision,
     AIPlanRequest,
-    AIProviderTrace,
+    AIProviderInvocation,
 )
 from visual_engineer_api.models.run import (
     ApprovalDecision,
@@ -67,8 +75,9 @@ from visual_engineer_api.schemas.ai_planning import (
     AIPlanDecisionResponse,
     AIPlanRequestCreate,
     AIPlanRequestResponse,
-    AIProviderTraceResponse,
+    AIProviderInvocationResponse,
 )
+from visual_engineer_api.services.provider_invocations import ProviderInvocationLifecycle
 from visual_engineer_api.services.run_state import transition_run
 
 
@@ -252,7 +261,7 @@ class AIPlanningService:
         ai_request = self._repository.get_request(ai_plan_request_id)
         if ai_request is None:
             self._not_found("ai_plan_request_not_found", "AI Plan request was not found")
-        traces = self._repository.traces(ai_request.id)
+        invocations = self._repository.invocations(ai_request.id)
         eval_results = self._repository.eval_results(ai_request.id)
         decision = self._repository.decision(ai_request.id)
         plan = (
@@ -288,7 +297,7 @@ class AIPlanningService:
             error_code=ai_request.error_code,
             error_message=ai_request.error_message,
             handoff_plan_id=ai_request.handoff_plan_id,
-            traces=[AIProviderTraceResponse.model_validate(item) for item in traces],
+            invocations=[self._invocation_response(item) for item in invocations],
             eval_results=[AIEvalResultResponse.model_validate(item) for item in eval_results],
             decision=AIPlanDecisionResponse.model_validate(decision) if decision else None,
             created_at=ai_request.created_at,
@@ -300,6 +309,45 @@ class AIPlanningService:
             self._not_found("run_not_found", "Run was not found")
         item = self._repository.get_by_run(run_id)
         return ([self.response(item.id)] if item is not None else []), int(item is not None)
+
+    @staticmethod
+    def _invocation_response(
+        invocation: AIProviderInvocation,
+    ) -> AIProviderInvocationResponse:
+        return AIProviderInvocationResponse(
+            id=invocation.id,
+            ai_plan_request_id=invocation.ai_plan_request_id,
+            attempt_number=invocation.attempt_number,
+            contract_version=invocation.contract_version,
+            classification=invocation.classification,
+            status=invocation.status,
+            provider_id=invocation.provider_id,
+            adapter_version=invocation.adapter_version,
+            requested_model_id=invocation.requested_model_id,
+            effective_model_status=invocation.effective_model_status,
+            effective_model_id=invocation.effective_model_id,
+            upstream_request_id_status=invocation.upstream_request_id_status,
+            upstream_request_fingerprint=upstream_request_fingerprint(
+                invocation.upstream_request_id
+            ),
+            request_digest=invocation.request_digest,
+            response_digest=invocation.response_digest,
+            usage_status=invocation.usage_status,
+            input_tokens=invocation.input_tokens,
+            output_tokens=invocation.output_tokens,
+            total_tokens=invocation.total_tokens,
+            queue_wait_ms=invocation.queue_wait_ms,
+            provider_elapsed_ms=invocation.provider_elapsed_ms,
+            client_total_elapsed_ms=invocation.client_total_elapsed_ms,
+            billing_status=invocation.billing_status,
+            cost_amount=invocation.cost_amount,
+            cost_currency=invocation.cost_currency,
+            error_category=invocation.error_category,
+            error_code=invocation.error_code,
+            created_at=invocation.created_at,
+            dispatch_started_at=invocation.dispatch_started_at,
+            completed_at=invocation.completed_at,
+        )
 
     def refresh_freshness(
         self, ai_plan_request_id: uuid.UUID, *, request_id: str
@@ -554,6 +602,17 @@ class AIPlanningService:
                 "ai_plan_run_state_conflict",
                 "AI Plan generation no longer has a snapshot_ready Run",
             )
+        generation_request = AIPlanGenerationRequest.model_validate(ai_request.request_payload)
+        invocation_request_digest = canonical_digest(
+            {
+                "provider_id": provider.capabilities.provider_id,
+                "adapter_version": provider.capabilities.implementation_version,
+                "requested_model_id": provider.capabilities.model_label,
+                "structured_output": True,
+                "maximum_output_bytes": provider.capabilities.max_output_bytes,
+                "request": generation_request.model_dump(mode="json"),
+            }
+        )
         ai_request.status = "generating"
         self._audit(
             run,
@@ -564,91 +623,54 @@ class AIPlanningService:
                 "provider_id": ai_request.provider_id,
             },
         )
-        self._session.commit()
-        generation_request = AIPlanGenerationRequest.model_validate(ai_request.request_payload)
+        lifecycle = ProviderInvocationLifecycle(self._session)
+        timing = lifecycle.prepare(
+            ai_plan_request_id=ai_request.id,
+            attempt_number=1,
+            classification=InvocationClassification.FIXTURE,
+            provider_id=provider.capabilities.provider_id,
+            provider_metadata=ai_request.provider_metadata,
+            adapter_version=provider.capabilities.implementation_version,
+            requested_model_id=provider.capabilities.model_label,
+            request_digest=invocation_request_digest,
+            redactions=ai_request.redaction_record,
+        )
         token = CancellationToken()
         _CANCELLATIONS.register(ai_request.id, token)
         try:
+            try:
+                token.raise_if_cancelled()
+            except ProviderError as error:
+                lifecycle.fail(timing, error, force_definite=True)
+                return
+            lifecycle.mark_dispatching(timing)
             provider_run = invoke_provider(
                 provider,
                 generation_request,
                 token,
                 timeout_seconds=self._settings.ai_provider_timeout_seconds,
-                max_attempts=self._settings.ai_provider_max_attempts,
+                max_attempts=1,
             )
         finally:
             _CANCELLATIONS.discard(ai_request.id)
 
-        locked = self._repository.get_request(ai_request.id, lock=True)
-        locked_run = self._runs.get(ai_request.run_id, lock=True)
-        if locked is None or locked_run is None:
-            return
-        for attempt in provider_run.attempts:
-            if attempt.result is not None:
-                usage = attempt.result.usage
-                trace_status = "succeeded"
-                try:
-                    response_digest = canonical_digest(attempt.result.response_payload)
-                except (TypeError, ValueError):
-                    response_digest = None
-                latency_ms = attempt.result.latency_ms
-                error_category = None
-                error_code = None
-                retryable = False
-                input_tokens = usage.input_tokens
-                output_tokens = usage.output_tokens
-                total_tokens = usage.total_tokens
-                cost = usage.cost_estimate_microunits
-                cost_basis = usage.cost_basis
-            else:
-                assert attempt.error is not None
-                trace_status = (
-                    "timeout"
-                    if attempt.error.category == ProviderErrorCategory.TIMEOUT
-                    else "cancelled"
-                    if attempt.error.category == ProviderErrorCategory.CANCELLED
-                    else "failed"
-                )
-                response_digest = None
-                latency_ms = attempt.observed_latency_ms
-                error_category = attempt.error.category.value
-                error_code = attempt.error.code
-                retryable = attempt.error.retryable
-                input_tokens = output_tokens = total_tokens = cost = 0
-                cost_basis = "synthetic_not_billable"
-            self._repository.add(
-                AIProviderTrace(
-                    ai_plan_request_id=locked.id,
-                    attempt_number=attempt.attempt_number,
-                    status=trace_status,
-                    provider_id=locked.provider_id,
-                    provider_metadata=locked.provider_metadata,
-                    request_digest=locked.request_digest,
-                    response_digest=response_digest,
-                    latency_ms=latency_ms,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    total_tokens=total_tokens,
-                    cost_estimate_microunits=cost,
-                    cost_basis=cost_basis,
-                    error_category=error_category,
-                    error_code=error_code,
-                    retryable=retryable,
-                    redactions=locked.redaction_record,
-                )
-            )
-        locked.retry_count = max(0, len(provider_run.attempts) - 1)
-        if locked.status == "cancelled":
-            self._session.commit()
-            return
         if provider_run.result is None:
-            error = provider_run.error
+            provider_error = provider_run.error
+            if provider_error is None:
+                provider_error = ProviderError(
+                    ProviderErrorCategory.INTERNAL,
+                    "provider_failed",
+                    "Provider generation failed safely",
+                )
+            lifecycle.fail(timing, provider_error)
+            locked = self._repository.get_request(ai_request.id, lock=True)
+            locked_run = self._runs.get(ai_request.run_id, lock=True)
+            if locked is None or locked_run is None or locked.status == "cancelled":
+                return
             locked.status = "failed"
-            locked.error_category = error.category.value if error else "internal"
-            locked.error_code = error.code if error else "provider_failed"
-            locked.error_message = (
-                error.public_message if error else "Provider generation failed safely"
-            )[:500]
+            locked.error_category = provider_error.category.value
+            locked.error_code = provider_error.code
+            locked.error_message = provider_error.public_message[:500]
             if locked_run.status == "snapshot_ready":
                 transition_run(locked_run, "failed")
                 locked_run.error_code = locked.error_code
@@ -660,16 +682,17 @@ class AIPlanningService:
                 {
                     "ai_plan_request_id": str(locked.id),
                     "reason_code": locked.error_code,
-                    "attempt_count": len(provider_run.attempts),
+                    "attempt_count": 1,
                 },
             )
             self._session.commit()
             return
 
+        provider_result = provider_run.result
         invalid_response_code: str | None = None
         invalid_response_message: str | None = None
         try:
-            response_bytes = len(canonical_json(provider_run.result.response_payload))
+            response_bytes = len(canonical_json(provider_result.response_payload))
         except (TypeError, ValueError):
             invalid_response_code = "provider_response_not_json"
             invalid_response_message = "Provider response was not canonical JSON"
@@ -678,13 +701,23 @@ class AIPlanningService:
                 invalid_response_code = "provider_output_budget_exceeded"
                 invalid_response_message = "Provider response exceeded its output budget"
         try:
-            plan = AIPlanContract.model_validate(provider_run.result.response_payload)
+            plan = AIPlanContract.model_validate(provider_result.response_payload)
         except ValidationError:
             invalid_response_code = invalid_response_code or "provider_schema_invalid"
             invalid_response_message = (
                 invalid_response_message or "Provider response did not match the AI Plan contract"
             )
         if invalid_response_code is not None:
+            invalid_error = ProviderError(
+                ProviderErrorCategory.INVALID_RESPONSE,
+                invalid_response_code,
+                invalid_response_message or "Provider response was invalid",
+            )
+            lifecycle.fail(timing, invalid_error, force_definite=True)
+            locked = self._repository.get_request(ai_request.id, lock=True)
+            locked_run = self._runs.get(ai_request.run_id, lock=True)
+            if locked is None or locked_run is None or locked.status == "cancelled":
+                return
             locked.status = "failed"
             locked.error_category = ProviderErrorCategory.INVALID_RESPONSE.value
             locked.error_code = invalid_response_code
@@ -700,7 +733,7 @@ class AIPlanningService:
                 {
                     "ai_plan_request_id": str(locked.id),
                     "reason_code": locked.error_code,
-                    "attempt_count": len(provider_run.attempts),
+                    "attempt_count": 1,
                 },
             )
             self._session.commit()
@@ -711,6 +744,35 @@ class AIPlanningService:
                 ai_plan_request_id=locked.id,
                 policy_denial_reason_code=locked.error_code,
             )
+            return
+        usage = provider_result.usage
+        response_payload = plan.model_dump(mode="json")
+        response_digest = normalized_response_digest(
+            plan_payload=response_payload,
+            effective_model_status=ReportedValueStatus.REPORTED,
+            effective_model_id=provider.capabilities.model_label,
+            upstream_request_id_status=ReportedValueStatus.UNAVAILABLE,
+            upstream_request_id=None,
+            usage_status=InvocationUsageStatus.SYNTHETIC_COMPLETE,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            total_tokens=usage.total_tokens,
+        )
+        lifecycle.succeed(
+            timing,
+            response_digest=response_digest,
+            effective_model_status=ReportedValueStatus.REPORTED,
+            effective_model_id=provider.capabilities.model_label,
+            upstream_request_id_status=ReportedValueStatus.UNAVAILABLE,
+            upstream_request_id=None,
+            usage_status=InvocationUsageStatus.SYNTHETIC_COMPLETE,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            total_tokens=usage.total_tokens,
+        )
+        locked = self._repository.get_request(ai_request.id, lock=True)
+        locked_run = self._runs.get(ai_request.run_id, lock=True)
+        if locked is None or locked_run is None or locked.status == "cancelled":
             return
         eval_results = evaluate_plan(
             generation_request,
@@ -733,7 +795,7 @@ class AIPlanningService:
                     evaluator_trust="system_policy",
                 )
             )
-        locked.response_payload = plan.model_dump(mode="json")
+        locked.response_payload = response_payload
         locked.deterministic_digest = plan.deterministic_digest
         if all(result.passed for result in eval_results):
             locked.status = "generated"

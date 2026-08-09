@@ -122,7 +122,7 @@ def list_ai_plan_requests(run_id: uuid.UUID, db: DatabaseSession) -> AIPlanReque
     "/ai-plan-requests/{ai_plan_request_id}",
     response_model=AIPlanRequestResponse,
     responses=STANDARD_ERRORS,
-    summary="Get structured Plan, Prompt, context, Trace, Eval, and decision evidence",
+    summary="Get structured Plan, Prompt, context, invocation, Eval, and decision evidence",
 )
 def get_ai_plan_request(
     ai_plan_request_id: uuid.UUID, db: DatabaseSession
