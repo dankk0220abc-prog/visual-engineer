@@ -93,6 +93,7 @@ def _evaluate_generation_binding(
     plan: AIPlanContract,
     prompt_payload: dict[str, Any],
     *,
+    expected_provider: Any,
     expected_source_revision: str,
     expected_snapshot_fingerprint: str,
 ) -> PolicyEvalResult:
@@ -127,6 +128,7 @@ def _evaluate_generation_binding(
             and prompt_payload.get("version") == authoritative.version
             and prompt_payload.get("digest") == authoritative.digest
         ),
+        "provider_capability_binding_matches": plan.provider == expected_provider,
     }
     passed = all(checks.values())
     return _result(
@@ -292,6 +294,7 @@ def evaluate_plan(
             request,
             plan,
             prompt_payload,
+            expected_provider=provider.capabilities,
             expected_source_revision=expected_source_revision,
             expected_snapshot_fingerprint=expected_snapshot_fingerprint,
         ),

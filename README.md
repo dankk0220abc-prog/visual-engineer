@@ -145,8 +145,10 @@ Runner bootstrap token without printing it, builds the local services, applies
 the current migration, waits for health checks, and seeds the fixture-only
 workspace path.
 
-No real Provider key is required or accepted by the implemented planning path.
-Do not create one for this setup.
+No real Provider key is required or accepted by the ordinary planning path.
+The separate local Zhipu live-canary CLI remains disabled behind independent
+review, exact preflight, and one-process authorization; do not create or enter
+a real credential for normal setup.
 
 Open:
 
@@ -163,6 +165,18 @@ For an isolated, deterministic AI planning walkthrough, follow
 [Fixture AI Planning Demo](docs/runbooks/fixture-ai-planning-demo.md). It uses
 only generated local fixtures, performs no network model call, and stops before
 any approval unless the human operator explicitly decides the plan.
+
+The pre-live canary contract can be inspected without reading a Provider
+credential:
+
+```sh
+make zhipu-live-canary-preflight
+```
+
+Do not run `make zhipu-live-canary-run` until the candidate has passed an
+independent security review and a later task explicitly authorizes one local
+external request. Zhipu and every other real Provider remain disabled in the
+normal product registry.
 
 ### Migration-only development path
 
@@ -233,8 +247,8 @@ pre-publication owner decision because no public security address exists.
 
 - Local, single-user development posture; no authentication, tenancy, CSRF
   design, public hardening, backup operations, or production SRE model.
-- No real Provider SDK, model network call, API key, real billing, or
-  Provider-specific evaluation.
+- No enabled real Provider product path or completed live validation. The
+  reviewed Zhipu canary entrypoint is pre-live, local-only, and not activation.
 - All mutation, validation, and local delivery capabilities are synthetic
   fixture-only.
 - No arbitrary shell, target repository commands, package installation, or

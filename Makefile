@@ -4,7 +4,7 @@ SHELL := /bin/sh
 TEST_DATABASE_URL ?= postgresql+psycopg://visualengineer:visualengineer-test-local@localhost:55433/visualengineer_test
 WORKSPACE_FIXTURE_REPOSITORY_PATH ?= $(CURDIR)/.runtime/workspace-fixture
 
-.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-runner test-web build build-web e2e eval verify platform-up platform-down platform-logs runner-status runner-smoke runner-chaos-check workspace-smoke workspace-chaos-check workspace-security-check workspace-security-audit workspace-security-repair-check phase4-findings-check source-invariance-check validation-security-check review-security-check up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
+.PHONY: help bootstrap db-up db-down migrate contracts contracts-check format format-check format-check-api format-check-web lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-api-direct test-runner test-web build build-web e2e eval verify platform-up platform-down platform-logs runner-status runner-smoke runner-chaos-check workspace-smoke workspace-chaos-check workspace-security-check workspace-security-audit workspace-security-repair-check phase4-findings-check source-invariance-check validation-security-check review-security-check zhipu-live-canary-preflight zhipu-live-canary-run up down logs migration-check docker-config security-check customer0-up customer0-down customer0-readonly-case
 
 help:
 	@echo "VisualEngineer Phase 5 commands: bootstrap platform-up validation-security-check verify platform-down"
@@ -21,6 +21,12 @@ db-down:
 
 migrate:
 	uv run alembic -c apps/api/alembic.ini upgrade head
+
+zhipu-live-canary-preflight:
+	PYTHONPATH=apps/api/src uv run python -m visual_engineer_api.cli.zhipu_live_canary preflight
+
+zhipu-live-canary-run:
+	PYTHONPATH=apps/api/src uv run python -m visual_engineer_api.cli.zhipu_live_canary run
 
 contracts:
 	pnpm --filter @visual-engineer/api-contract generate

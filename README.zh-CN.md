@@ -97,7 +97,8 @@ make platform-up
 
 `make bootstrap` 只安装 lockfile 已解析的项目依赖。`make platform-up` 会创建合成夹具、生成不会打印到终端且被 Git 忽略的 Runner bootstrap token、构建本地服务、应用当前 migration、等待健康检查，并写入夹具 Workspace 的演示数据。
 
-当前计划路径不需要、也不接受真实 Provider Key；请不要为本地启动创建任何真实模型凭据。
+普通计划路径不需要、也不接受真实 Provider Key。独立的本地 Zhipu
+live-canary CLI 仍受独立安全复审、精确 preflight 和单进程授权门约束；普通本地启动不应创建或输入真实凭据。
 
 访问地址：
 
@@ -109,6 +110,15 @@ make platform-up
 顶部语言选择器可在英文和简体中文之间切换。ID、digest、state、error code 等原始运行值不会被翻译隐藏。
 
 确定性 AI Planning 演示见[夹具 AI Planning 演示](docs/runbooks/fixture-ai-planning-demo.md)。该流程只使用本地生成的合成仓库，不发起模型网络请求；除非人工操作者主动决定，否则停在计划决策之前。
+
+可在不读取 Provider 凭据的前提下检查 pre-live canary 合同：
+
+```sh
+make zhipu-live-canary-preflight
+```
+
+在候选实现通过独立安全复审且后续任务明确授权一次本地外部请求之前，不得运行
+`make zhipu-live-canary-run`。普通产品 registry 中 Zhipu 及其他所有真实 Provider 仍为 disabled。
 
 ### 只启动数据库并迁移
 
@@ -161,7 +171,8 @@ make verify
 ## 当前限制
 
 - 本地单用户开发形态；没有 authentication、multi-tenancy、CSRF 设计、公网加固、备份运维或生产 SRE 模型。
-- 没有真实 Provider SDK、模型网络调用、API Key、真实计费或 Provider 专属 Eval。
+- 没有已启用的真实 Provider 产品路径，也尚未完成 live validation；已审查的 Zhipu canary
+  入口仍是 pre-live、仅本地，不等于 Provider activation。
 - 所有写入、验证与本地交付都仅限合成夹具。
 - 没有任意 shell、目标仓库命令、依赖安装或真实客户 Workspace。
 - 没有远程 clone/fetch/push、PR、merge、tag、release、GitHub Pages、公网托管或部署。

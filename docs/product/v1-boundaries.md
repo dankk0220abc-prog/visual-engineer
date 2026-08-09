@@ -79,8 +79,8 @@ software-engineering support.
 
 These remain deliberate future seams, not placeholder capabilities:
 
-- a real-model/Agents SDK planning runtime;
-- network model invocation, API-key isolation, and model-specific evaluation;
+- a normal product real-model/Agents SDK planning runtime;
+- Provider activation, routing, account compatibility, and production key isolation;
 - non-fixture isolated workspaces;
 - controlled target-repository install/build/test/lint/browser commands;
 - remote Git authorization, push, and pull request;
@@ -89,6 +89,12 @@ These remain deliberate future seams, not placeholder capabilities:
 The current AuditEvent timeline is governance evidence, not a complete Agent
 trace. Current plan string policy is Foundation validation, not a substitute
 for future typed tool schemas and runtime authorization.
+
+The reviewed Zhipu live-canary CLI is a separate pre-live validation seam. It
+does not enable a real Provider for product requests, add an HTTP endpoint, or
+authorize execution. Its implementation evidence is MockTransport-only until
+a later explicitly authorized local run creates a successful live
+`AIProviderInvocation`.
 
 ## Later versions
 

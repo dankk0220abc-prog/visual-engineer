@@ -73,12 +73,12 @@ class ProviderCapabilityMetadata(BaseModel):
     provider_id: Identifier
     implementation_version: Identifier
     model_label: Identifier
-    deterministic: Literal[True]
-    fixture_replay: Literal[True]
+    deterministic: bool
+    fixture_replay: bool
     structured_output: Literal[True]
-    network_access: Literal[False]
-    credentials_required: Literal[False]
-    billing_basis: Literal["synthetic_not_billable"]
+    network_access: bool
+    credentials_required: bool
+    billing_basis: Literal["synthetic_not_billable", "live_billing_unknown"]
     max_context_bytes: int = Field(ge=1024, le=256 * 1024)
     max_output_bytes: int = Field(ge=1024, le=256 * 1024)
 
