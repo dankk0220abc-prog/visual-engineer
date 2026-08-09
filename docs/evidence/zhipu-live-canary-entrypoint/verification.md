@@ -16,7 +16,10 @@ Status: VE-ZLC-FSR-001 LOCAL REMEDIATION GREEN — NEW FAST/HEAVY SEAL PENDING
 - Reviewed pre-remediation CI: Fast `31315473943` and Heavy `31315473954`,
   attempt 1, successful on that exact candidate. These runs preserve candidate
   provenance but cannot seal the corrective candidate.
-- Corrective commit/candidate: the commit containing this Evidence update;
+- Security corrective implementation commit:
+  `8cfee32007be768437aaff06fa14db358831299f`, tree
+  `900b0507561d162654ada41b3ec9320cfa5bcf55`.
+- Formatting follow-up candidate: the commit containing this Evidence update;
   exact SHA/tree are bound in PR #18 and the new Fast/Heavy sealing record.
 - Alembic head: `20260809_0016`; no migration added.
 - Base canonical CI: Fast `31311718732`, Heavy `31311718708`, both successful
@@ -140,17 +143,17 @@ Authorization, Prompt, raw response, complete upstream ID, and raw error body.
 
 ## Preserved pre-remediation verification ledger
 
-| Gate                                               | Result                               |
-| -------------------------------------------------- | ------------------------------------ |
-| New canary focused PostgreSQL/MockTransport matrix | PASS — `36 passed`                   |
-| Canary plus governed system Eval subset            | PASS — `53 passed`                   |
-| Canonical backend aggregate                        | PASS — `514 passed`, 84.75% coverage |
-| Contract/format/lint/type and Secret scanner       | PASS                                 |
+| Gate                                               | Result                                      |
+| -------------------------------------------------- | ------------------------------------------- |
+| New canary focused PostgreSQL/MockTransport matrix | PASS — `36 passed`                          |
+| Canary plus governed system Eval subset            | PASS — `53 passed`                          |
+| Canonical backend aggregate                        | PASS — `514 passed`, 84.75% coverage        |
+| Contract/format/lint/type and Secret scanner       | PASS                                        |
 | Real Provider credential access                    | CLAIMED `0` — disproved by `VE-ZLC-FSR-001` |
-| Real Provider outbound requests                    | `0`                                  |
-| Provider registry activation changes               | `0`                                  |
-| Live screenshot/evidence generation                | `0`                                  |
-| Remote CI for final corrective candidate           | PENDING — no rerun of failed run     |
+| Real Provider outbound requests                    | `0`                                         |
+| Provider registry activation changes               | `0`                                         |
+| Live screenshot/evidence generation                | `0`                                         |
+| Remote CI for final corrective candidate           | PENDING — no rerun of failed run            |
 
 The implementation run used only the explicit synthetic credential
 `synthetic-zhipu-live-canary-credential-only` inside tests. Test setup clears
@@ -160,21 +163,21 @@ boundary; no public network transport is used.
 
 ## VE-ZLC-FSR-001 remediation verification ledger
 
-| Gate                                     | Result  |
-| ---------------------------------------- | ------- |
-| Fixed Git child-environment access probe | PASS — Provider reads `0` |
-| Real database preflight access probe     | PASS — only `DATABASE_URL` read |
-| Full preflight production-order probe    | PASS — Provider reads `0` |
-| Missing-authorization production probe   | PASS — Provider reads `0` |
-| False-authorization production probe     | PASS — Provider reads `0` |
-| Authorized missing-Zhipu-key probe       | PASS — Zhipu read `1`, other reads `0` |
-| Authorized synthetic-key MockTransport   | PASS — Zhipu read `1`, request `1` |
+| Gate                                     | Result                                    |
+| ---------------------------------------- | ----------------------------------------- |
+| Fixed Git child-environment access probe | PASS — Provider reads `0`                 |
+| Real database preflight access probe     | PASS — only `DATABASE_URL` read           |
+| Full preflight production-order probe    | PASS — Provider reads `0`                 |
+| Missing-authorization production probe   | PASS — Provider reads `0`                 |
+| False-authorization production probe     | PASS — Provider reads `0`                 |
+| Authorized missing-Zhipu-key probe       | PASS — Zhipu read `1`, other reads `0`    |
+| Authorized synthetic-key MockTransport   | PASS — Zhipu read `1`, request `1`        |
 | Other-Provider value reads               | PASS — Qwen/DeepSeek/Doubao/Kimi each `0` |
-| Pre-authorization DB mutation / HTTP     | PASS — `0` / `0` |
-| Canary focused suite                     | PASS — `37 passed` |
-| Changed-scope static/security checks     | PASS |
-| One canonical backend aggregate          | PASS — `515 passed`, 85.04% coverage |
-| Corrective-candidate Fast / Heavy         | PENDING — new exact candidate required |
+| Pre-authorization DB mutation / HTTP     | PASS — `0` / `0`                          |
+| Canary focused suite                     | PASS — `37 passed`                        |
+| Changed-scope static/security checks     | PASS                                      |
+| One canonical backend aggregate          | PASS — `515 passed`, 85.04% coverage      |
+| Corrective-candidate Fast / Heavy        | PENDING — new exact candidate required    |
 
 No real Provider environment value is read by this verification. Synthetic
 values are installed only in the access-probe mapping, and the mapping's
@@ -206,6 +209,18 @@ scanner, the missing-rg fail-closed regression, and `git diff --check`. The one
 canonical backend aggregate then passed `515/515` with 85.04% coverage and exit
 code 0. No Web unit, ESLint, TypeScript, Playwright, migration roundtrip, Docker
 rebuild, or live-canary command was run.
+
+The first remote corrective candidate was not rerun. Fast `31320510992`,
+attempt 1, completed `failure` on exact SHA
+`8cfee32007be768437aaff06fa14db358831299f`. Its backend, contract, Runner, and
+repository-policy jobs passed; the sole failure was
+`make format-check-web`, which reported only this Evidence file as needing
+Prettier formatting. Heavy `31320510988`, attempt 1, completed `success` on the
+same exact SHA, but it cannot seal a candidate whose Fast run failed. Because
+the commit had already been published by ordinary push, rewriting it would
+require prohibited force push; the narrow follow-up contains this permanent
+attempt record plus the mechanical Prettier result, with no production or test
+change.
 
 ## CI environment dependency remediation
 
