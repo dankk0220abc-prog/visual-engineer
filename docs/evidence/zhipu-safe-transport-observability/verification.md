@@ -24,21 +24,21 @@ The machine-readable companion is
 
 The classifier preserves `error_category` and stores only bounded fixed codes:
 
-| Safe condition | Fixed error code | Category | Safe phase |
-| --- | --- | --- | --- |
-| DNS resolution | `provider_dns_resolution_failed` | `transport_error` | `connect` |
-| Connection refused | `provider_connection_refused` | `transport_error` | `connect` |
-| Network unreachable | `provider_network_unreachable` | `transport_error` | `connect` |
-| Other TCP/connect failure | `provider_connect_failed` | `transport_error` | `connect` |
-| TLS certificate verification | `provider_tls_certificate_verification_failed` | `transport_error` | `connect` |
-| TLS handshake | `provider_tls_handshake_failed` | `transport_error` | `connect` |
-| Connect timeout | `provider_connect_timeout` | `timeout` | `connect` |
-| Read timeout | `provider_read_timeout` | `timeout` | `read` |
-| Write interruption | `provider_write_interrupted` | `transport_error` | `write` |
-| Response read interruption | `provider_response_read_interrupted` | `transport_error` | `read` |
-| Remote protocol error | `provider_remote_protocol_error` | `transport_error` | `response` |
-| Generic network error | `provider_network_error` | `transport_error` | `transport` |
-| Unknown transport fallback | `provider_transport_error` | `transport_error` | `transport` |
+| Safe condition               | Fixed error code                               | Category          | Safe phase  |
+| ---------------------------- | ---------------------------------------------- | ----------------- | ----------- |
+| DNS resolution               | `provider_dns_resolution_failed`               | `transport_error` | `connect`   |
+| Connection refused           | `provider_connection_refused`                  | `transport_error` | `connect`   |
+| Network unreachable          | `provider_network_unreachable`                 | `transport_error` | `connect`   |
+| Other TCP/connect failure    | `provider_connect_failed`                      | `transport_error` | `connect`   |
+| TLS certificate verification | `provider_tls_certificate_verification_failed` | `transport_error` | `connect`   |
+| TLS handshake                | `provider_tls_handshake_failed`                | `transport_error` | `connect`   |
+| Connect timeout              | `provider_connect_timeout`                     | `timeout`         | `connect`   |
+| Read timeout                 | `provider_read_timeout`                        | `timeout`         | `read`      |
+| Write interruption           | `provider_write_interrupted`                   | `transport_error` | `write`     |
+| Response read interruption   | `provider_response_read_interrupted`           | `transport_error` | `read`      |
+| Remote protocol error        | `provider_remote_protocol_error`               | `transport_error` | `response`  |
+| Generic network error        | `provider_network_error`                       | `transport_error` | `transport` |
+| Unknown transport fallback   | `provider_transport_error`                     | `transport_error` | `transport` |
 
 Write/pool timeout and generic timeout retain dedicated bounded timeout codes;
 the separately reviewed total deadline remains
@@ -90,5 +90,7 @@ This is a truthful failure-evidence limitation, not a Live Validation PASS
 claim. A future successful canary screenshot set remains mandatory and must be
 read from one successful Invocation without another Provider request.
 
-Exact remote Draft PR head and naturally triggered Fast/Heavy attempt-1 results
-remain `NOT YET VERIFIED` until publication.
+For the first published Draft PR head, Fast run `31328875193` attempt 1 failed
+at `make format-check-web` because this file did not conform to Prettier; Heavy
+run `31328875273` attempt 1 succeeded. CI for the subsequent documentation-only
+corrective head is pending and `NOT YET VERIFIED`.
