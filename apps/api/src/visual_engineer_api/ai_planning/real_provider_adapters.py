@@ -16,6 +16,7 @@ from visual_engineer_api.ai_planning.contracts import (
     AIPlanGenerationRequest,
     canonical_json,
 )
+from visual_engineer_api.ai_planning.invocation_contract import REAL_PROVIDER_ADAPTER_VERSION
 from visual_engineer_api.ai_planning.provider import (
     CancellationToken,
     ProviderError,
@@ -24,6 +25,7 @@ from visual_engineer_api.ai_planning.provider import (
 from visual_engineer_api.ai_planning.provider_registry import ProviderId
 
 PROVIDER_MAXIMUM_OUTPUT_TOKENS = 4096
+PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS = 150.0
 
 
 class ProviderCallPolicy(BaseModel):
@@ -31,7 +33,11 @@ class ProviderCallPolicy(BaseModel):
 
     connect_timeout_seconds: float = Field(default=5.0, ge=0.1, le=30.0)
     read_timeout_seconds: float = Field(default=30.0, ge=0.1, le=120.0)
-    total_deadline_seconds: float = Field(default=35.0, ge=0.2, le=150.0)
+    total_deadline_seconds: float = Field(
+        default=35.0,
+        ge=0.2,
+        le=PROVIDER_MAXIMUM_TOTAL_DEADLINE_SECONDS,
+    )
     maximum_output_tokens: int = Field(
         default=PROVIDER_MAXIMUM_OUTPUT_TOKENS,
         ge=256,
@@ -56,24 +62,14 @@ class ProviderNormalizedUsage(BaseModel):
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
-
-    @model_validator(mode="after")
-    def validate_total(self) -> "ProviderNormalizedUsage":
-        if (
-            self.input_tokens is not None
-            and self.output_tokens is not None
-            and self.total_tokens is not None
-            and self.total_tokens != self.input_tokens + self.output_tokens
-        ):
-            raise ValueError("reported token totals are inconsistent")
-        return self
+    reported_invalid: bool = False
 
 
 class ProviderAdapterResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     provider_id: ProviderId
-    model_id: str
+    model_id: str | None
     provider_request_id: str | None
     response_payload: dict[str, Any]
     usage: ProviderNormalizedUsage
@@ -192,6 +188,7 @@ def _create_production_client() -> httpx.AsyncClient:
 
 
 class RealProviderAdapter(ABC):
+    adapter_version: ClassVar[str] = REAL_PROVIDER_ADAPTER_VERSION
     provider_id: ClassVar[ProviderId]
     model_id: ClassVar[str]
     endpoint: ClassVar[str]
@@ -222,6 +219,12 @@ class RealProviderAdapter(ABC):
         self._concurrency = _test_semaphore or asyncio.Semaphore(value=1)
         self._test_after_normalize = _test_after_normalize
 
+    @property
+    def uses_injected_mock_transport(self) -> bool:
+        if self._test_client is None:
+            return False
+        return isinstance(getattr(self._test_client, "_transport", None), httpx.MockTransport)
+
     def request_body(
         self,
         request: AIPlanGenerationRequest,
@@ -248,6 +251,7 @@ class RealProviderAdapter(ABC):
         cancellation: CancellationToken,
         *,
         policy: ProviderCallPolicy | None = None,
+        on_dispatch_ready: Callable[[], None] | None = None,
     ) -> ProviderAdapterResult:
         started_at = self._clock.monotonic()
         call_policy = policy or ProviderCallPolicy()
@@ -262,6 +266,9 @@ class RealProviderAdapter(ABC):
                 cancellation_event=bridge.event,
                 deadline_at=deadline_at,
             )
+            self._checkpoint(cancellation, deadline_at)
+            if on_dispatch_ready is not None:
+                on_dispatch_ready()
             self._checkpoint(cancellation, deadline_at)
             if self._test_client is not None:
                 return await self._invoke_with_client(
@@ -573,23 +580,47 @@ class RealProviderAdapter(ABC):
             structured = json.loads(content)
             if not isinstance(structured, dict):
                 raise TypeError
-            model_id = payload["model"]
-            if not isinstance(model_id, str) or not model_id:
+            model_id = payload.get("model")
+            if model_id is not None and (
+                not isinstance(model_id, str)
+                or not model_id.strip()
+                or len(model_id) > 120
+                or "\x00" in model_id
+            ):
                 raise TypeError
             request_id = payload.get("request_id", payload.get("id"))
-            if request_id is not None and not isinstance(request_id, str):
+            if request_id is not None and (
+                not isinstance(request_id, str)
+                or not request_id.strip()
+                or len(request_id) > 255
+                or "\x00" in request_id
+            ):
                 raise TypeError
             usage_payload = payload.get("usage", {})
             if not isinstance(usage_payload, dict):
                 raise TypeError
+            input_tokens, input_invalid = _optional_nonnegative_int(
+                usage_payload.get("prompt_tokens", usage_payload.get("input_tokens"))
+            )
+            output_tokens, output_invalid = _optional_nonnegative_int(
+                usage_payload.get("completion_tokens", usage_payload.get("output_tokens"))
+            )
+            total_tokens, total_invalid = _optional_nonnegative_int(
+                usage_payload.get("total_tokens")
+            )
+            inconsistent_total = (
+                input_tokens is not None
+                and output_tokens is not None
+                and total_tokens is not None
+                and total_tokens != input_tokens + output_tokens
+            )
             usage = ProviderNormalizedUsage(
-                input_tokens=_optional_int(
-                    usage_payload.get("prompt_tokens", usage_payload.get("input_tokens"))
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                reported_invalid=(
+                    input_invalid or output_invalid or total_invalid or inconsistent_total
                 ),
-                output_tokens=_optional_int(
-                    usage_payload.get("completion_tokens", usage_payload.get("output_tokens"))
-                ),
-                total_tokens=_optional_int(usage_payload.get("total_tokens")),
             )
         except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
             failure = ProviderError(
@@ -653,9 +684,11 @@ REAL_PROVIDER_ADAPTERS: dict[ProviderId, type[RealProviderAdapter]] = {
 }
 
 
-def _optional_int(value: Any) -> int | None:
+def _optional_nonnegative_int(value: Any) -> tuple[int | None, bool]:
     if value is None:
-        return None
+        return None, False
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError("token usage must be an integer")
-    return cast(int, value)
+    if value < 0:
+        return None, True
+    return cast(int, value), False

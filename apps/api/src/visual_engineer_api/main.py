@@ -27,6 +27,10 @@ from visual_engineer_api.api.validations import router as validations_router
 from visual_engineer_api.api.workspaces import router as workspaces_router
 from visual_engineer_api.core.config import get_settings
 from visual_engineer_api.db.session import get_engine
+from visual_engineer_api.services.provider_invocations import (
+    ProviderInvocationLifecycle,
+    minimum_stale_dispatch_age,
+)
 from visual_engineer_api.services.runner import RunnerService
 from visual_engineer_runner_protocol import (
     MAX_PROTOCOL_PAYLOAD_BYTES,
@@ -34,6 +38,13 @@ from visual_engineer_runner_protocol import (
 )
 
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+def reconcile_stale_provider_invocations() -> list[uuid.UUID]:
+    with Session(get_engine()) as session:
+        return ProviderInvocationLifecycle(session).reconcile_older_than(
+            minimum_stale_dispatch_age()
+        )
 
 
 def _request_id(request: Request) -> str:
@@ -85,6 +96,17 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         reaper_task: asyncio.Task[None] | None = None
+        recovered = await asyncio.to_thread(reconcile_stale_provider_invocations)
+        if recovered:
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "provider_invocation_startup_recovery",
+                        "recovered_count": len(recovered),
+                    },
+                    separators=(",", ":"),
+                )
+            )
         if settings.runner_reaper_enabled:
             reaper_task = asyncio.create_task(lease_reaper_loop())
         try:

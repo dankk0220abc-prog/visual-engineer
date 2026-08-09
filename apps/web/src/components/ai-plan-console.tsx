@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import type { AIPlanRequest } from "@/lib/api";
 import {
@@ -62,6 +62,32 @@ function statusTone(
   return "pending";
 }
 
+function usageStatusLabel(
+  status: AIPlanRequest["invocations"][number]["usage_status"],
+  t: ReturnType<typeof useTranslations>,
+): string {
+  return {
+    synthetic_complete: t("usageSyntheticComplete"),
+    reported_complete: t("usageReportedComplete"),
+    reported_partial: t("usageReportedPartial"),
+    reported_invalid: t("usageReportedInvalid"),
+    unavailable: t("usageUnavailable"),
+  }[status];
+}
+
+function billingStatusLabel(
+  status: AIPlanRequest["invocations"][number]["billing_status"],
+  t: ReturnType<typeof useTranslations>,
+): string {
+  return {
+    not_billable_fixture: t("billingFixture"),
+    mock_not_billable: t("billingMock"),
+    live_billing_unknown: t("billingLiveUnknown"),
+    live_cost_reported: t("billingLiveReported"),
+    not_dispatched: t("billingNotDispatched"),
+  }[status];
+}
+
 export function AIPlanConsole({
   request,
   busy,
@@ -78,6 +104,7 @@ export function AIPlanConsole({
     comment?: string,
   ) => Promise<void>;
 }) {
+  const locale = useLocale();
   const t = useTranslations("aiPlan");
   const statusT = useTranslations("common.status");
   const [rejectionReason, setRejectionReason] = useState("");
@@ -367,47 +394,154 @@ export function AIPlanConsole({
       </div>
 
       <div className="mt-7 grid gap-6 border-t border-slate-200 pt-6 lg:grid-cols-2">
-        <section aria-labelledby="ai-trace-heading">
-          <h3 id="ai-trace-heading" className="font-semibold text-slate-950">
-            {t("providerTrace")}
+        <section className="min-w-0" aria-labelledby="ai-invocation-heading">
+          <h3
+            id="ai-invocation-heading"
+            className="font-semibold text-slate-950"
+          >
+            {t("providerInvocation")}
           </h3>
-          {request.traces.length ? (
+          {request.invocations.length ? (
             <ol className="mt-3 space-y-3">
-              {request.traces.map((trace) => (
-                <li
-                  key={trace.id}
-                  className="rounded-xl bg-slate-950 p-4 text-xs text-slate-100"
-                >
-                  <p className="font-semibold">
-                    {t("traceAttempt", {
-                      number: trace.attempt_number,
-                      status: localizeStatus(trace.status, statusT),
-                    })}
-                  </p>
-                  <p className="mt-2 leading-5 text-slate-300">
-                    {t("traceUsage", {
-                      latency: trace.latency_ms,
-                      input: trace.input_tokens,
-                      output: trace.output_tokens,
-                      total: trace.total_tokens,
-                    })}
-                  </p>
-                  <p className="mt-1 text-slate-400">
-                    {t("traceCost", {
-                      cost: trace.cost_estimate_microunits,
-                      basis: trace.cost_basis,
-                    })}
-                  </p>
-                  {trace.error_code ? (
-                    <p className="mt-1 text-red-300">
-                      {trace.error_category} · {trace.error_code}
+              {request.invocations.map((invocation) => {
+                const tokens = [
+                  invocation.input_tokens !== null
+                    ? t("inputTokens", { value: invocation.input_tokens })
+                    : null,
+                  invocation.output_tokens !== null
+                    ? t("outputTokens", { value: invocation.output_tokens })
+                    : null,
+                  invocation.total_tokens !== null
+                    ? t("totalTokens", { value: invocation.total_tokens })
+                    : null,
+                ].filter((value): value is string => value !== null);
+                return (
+                  <li
+                    key={invocation.id}
+                    className="min-w-0 rounded-xl bg-slate-950 p-4 text-xs text-slate-100"
+                  >
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-slate-600 px-2 py-0.5 font-semibold tracking-wider">
+                        {invocation.classification.toUpperCase()}
+                      </span>
+                      <span className="font-semibold">
+                        {t("invocationAttempt", {
+                          number: invocation.attempt_number,
+                          status:
+                            invocation.contract_version === 0
+                              ? invocation.status === "timeout"
+                                ? t("legacyTimeout")
+                                : invocation.status === "cancelled"
+                                  ? t("legacyCancelled")
+                                  : t("legacyInvocationStatus", {
+                                      status: localizeStatus(
+                                        invocation.status,
+                                        statusT,
+                                      ),
+                                    })
+                              : localizeStatus(invocation.status, statusT),
+                        })}
+                      </span>
+                    </div>
+                    {invocation.contract_version === 0 ? (
+                      <p className="mt-3 leading-5 text-amber-200">
+                        {t("legacyEvidenceNotice")}
+                      </p>
+                    ) : null}
+                    <dl className="mt-3 grid min-w-0 gap-2 text-slate-300 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <dt className="text-slate-400">{t("provider")}</dt>
+                        <dd className="font-mono [overflow-wrap:anywhere]">
+                          {invocation.provider_id}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-slate-400">
+                          {t("internalInvocation")}
+                        </dt>
+                        <dd className="font-mono [overflow-wrap:anywhere]">
+                          {invocation.id.slice(0, 12)}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-slate-400">
+                          {t("requestedModel")}
+                        </dt>
+                        <dd className="font-mono [overflow-wrap:anywhere]">
+                          {invocation.requested_model_id}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-slate-400">
+                          {t("effectiveModel")}
+                        </dt>
+                        <dd className="font-mono [overflow-wrap:anywhere]">
+                          {invocation.effective_model_status === "reported" &&
+                          invocation.effective_model_id !== null
+                            ? invocation.effective_model_id
+                            : t("identityUnavailable")}
+                        </dd>
+                      </div>
+                      <div className="min-w-0 sm:col-span-2">
+                        <dt className="text-slate-400">
+                          {t("upstreamRequest")}
+                        </dt>
+                        <dd className="font-mono [overflow-wrap:anywhere]">
+                          {invocation.upstream_request_id_status ===
+                            "reported" &&
+                          invocation.upstream_request_fingerprint !== null
+                            ? t("upstreamReported", {
+                                fingerprint:
+                                  invocation.upstream_request_fingerprint,
+                              })
+                            : t("identityUnavailable")}
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="mt-3 leading-5 text-slate-300">
+                      {usageStatusLabel(invocation.usage_status, t)}
+                      {tokens.length ? ` · ${tokens.join(" · ")}` : ""}
                     </p>
-                  ) : null}
-                </li>
-              ))}
+                    <p className="mt-1 leading-5 text-slate-400">
+                      {invocation.contract_version === 0
+                        ? t("legacyLatencySummary", {
+                            latency:
+                              invocation.legacy_latency_ms ??
+                              t("metricUnavailable"),
+                          })
+                        : t("latencySummary", {
+                            queue:
+                              invocation.queue_wait_ms ??
+                              t("metricUnavailable"),
+                            provider:
+                              invocation.provider_elapsed_ms ??
+                              t("metricUnavailable"),
+                            total:
+                              invocation.client_total_elapsed_ms ??
+                              t("metricUnavailable"),
+                          })}
+                    </p>
+                    <p className="mt-1 leading-5 text-slate-400">
+                      {billingStatusLabel(invocation.billing_status, t)}
+                      {invocation.cost_amount !== null &&
+                      invocation.cost_currency !== null
+                        ? ` · ${invocation.cost_amount} ${invocation.cost_currency}`
+                        : ""}
+                    </p>
+                    <p className="mt-1 font-mono [overflow-wrap:anywhere] text-slate-400">
+                      {new Date(invocation.created_at).toLocaleString(locale)}
+                    </p>
+                    {invocation.error_code ? (
+                      <p className="mt-1 [overflow-wrap:anywhere] text-red-300">
+                        {invocation.error_category} · {invocation.error_code}
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ol>
           ) : (
-            <p className="mt-3 text-sm text-slate-500">{t("noTrace")}</p>
+            <p className="mt-3 text-sm text-slate-500">{t("noInvocation")}</p>
           )}
         </section>
 

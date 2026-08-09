@@ -11,7 +11,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get structured Plan, Prompt, context, Trace, Eval, and decision evidence */
+    /** Get structured Plan, Prompt, context, invocation, Eval, and decision evidence */
     get: operations["get_ai_plan_request_api_v1_ai_plan_requests__ai_plan_request_id__get"];
     put?: never;
     post?: never;
@@ -1533,6 +1533,8 @@ export interface components {
        * Format: uuid
        */
       id: string;
+      /** Invocations */
+      invocations: components["schemas"]["AIProviderInvocationResponse"][];
       plan: components["schemas"]["AIPlanContract"] | null;
       /** Prompt Digest */
       prompt_digest: string;
@@ -1565,8 +1567,6 @@ export interface components {
       /** Source Revision */
       source_revision: string;
       status: components["schemas"]["AIPlanRequestStatus"];
-      /** Traces */
-      traces: components["schemas"]["AIProviderTraceResponse"][];
       /**
        * Updated At
        * Format: date-time
@@ -1586,15 +1586,10 @@ export interface components {
       | "failed"
       | "cancelled"
       | "stale";
-    /** AIProviderListResponse */
-    AIProviderListResponse: {
-      /** Items */
-      items: components["schemas"]["ProviderConfigurationStatus"][];
-      /** Total */
-      total: number;
-    };
-    /** AIProviderTraceResponse */
-    AIProviderTraceResponse: {
+    /** AIProviderInvocationResponse */
+    AIProviderInvocationResponse: {
+      /** Adapter Version */
+      adapter_version: string;
       /**
        * Ai Plan Request Id
        * Format: uuid
@@ -1602,23 +1597,29 @@ export interface components {
       ai_plan_request_id: string;
       /** Attempt Number */
       attempt_number: number;
-      /**
-       * Completed At
-       * Format: date-time
-       */
-      completed_at: string;
-      /**
-       * Cost Basis
-       * @constant
-       */
-      cost_basis: "synthetic_not_billable";
-      /** Cost Estimate Microunits */
-      cost_estimate_microunits: number;
+      billing_status: components["schemas"]["InvocationBillingStatus"];
+      classification: components["schemas"]["InvocationClassification"];
+      /** Client Total Elapsed Ms */
+      client_total_elapsed_ms: number | null;
+      /** Completed At */
+      completed_at: string | null;
+      /** Contract Version */
+      contract_version: number;
+      /** Cost Amount */
+      cost_amount: string | null;
+      /** Cost Currency */
+      cost_currency: string | null;
       /**
        * Created At
        * Format: date-time
        */
       created_at: string;
+      dispatch_boundary_status: components["schemas"]["DispatchBoundaryStatus"];
+      /** Dispatch Started At */
+      dispatch_started_at: string | null;
+      /** Effective Model Id */
+      effective_model_id: string | null;
+      effective_model_status: components["schemas"]["ReportedValueStatus"];
       /** Error Category */
       error_category: string | null;
       /** Error Code */
@@ -1629,30 +1630,38 @@ export interface components {
        */
       id: string;
       /** Input Tokens */
-      input_tokens: number;
-      /** Latency Ms */
-      latency_ms: number;
+      input_tokens: number | null;
+      /** Legacy Latency Ms */
+      legacy_latency_ms: number | null;
       /** Output Tokens */
-      output_tokens: number;
+      output_tokens: number | null;
+      /** Provider Elapsed Ms */
+      provider_elapsed_ms: number | null;
       provider_id: components["schemas"]["ProviderId"];
-      provider_metadata: components["schemas"]["ProviderCapabilityMetadata"];
-      /** Redactions */
-      redactions: {
-        [key: string]: unknown;
-      }[];
+      /** Queue Wait Ms */
+      queue_wait_ms: number | null;
       /** Request Digest */
       request_digest: string;
+      request_digest_kind: components["schemas"]["RequestDigestKind"];
+      /** Requested Model Id */
+      requested_model_id: string;
       /** Response Digest */
       response_digest: string | null;
-      /** Retryable */
-      retryable: boolean;
-      /**
-       * Status
-       * @enum {string}
-       */
-      status: "succeeded" | "failed" | "timeout" | "cancelled";
+      response_digest_kind: components["schemas"]["ResponseDigestKind"];
+      status: components["schemas"]["InvocationStatus"];
       /** Total Tokens */
-      total_tokens: number;
+      total_tokens: number | null;
+      /** Upstream Request Fingerprint */
+      upstream_request_fingerprint: string | null;
+      upstream_request_id_status: components["schemas"]["ReportedValueStatus"];
+      usage_status: components["schemas"]["InvocationUsageStatus"];
+    };
+    /** AIProviderListResponse */
+    AIProviderListResponse: {
+      /** Items */
+      items: components["schemas"]["ProviderConfigurationStatus"][];
+      /** Total */
+      total: number;
     };
     /** AcceptanceCriterion */
     AcceptanceCriterion: {
@@ -2449,6 +2458,12 @@ export interface components {
        */
       started_at: string;
     };
+    /**
+     * DispatchBoundaryStatus
+     * @enum {string}
+     */
+    DispatchBoundaryStatus:
+      "legacy_unavailable" | "not_dispatched" | "dispatched";
     /** EligibleExecutionContextListResponse */
     EligibleExecutionContextListResponse: {
       /** Items */
@@ -3006,6 +3021,44 @@ export interface components {
       server_time: string;
       status: components["schemas"]["RunnerStatus"];
     };
+    /**
+     * InvocationBillingStatus
+     * @enum {string}
+     */
+    InvocationBillingStatus:
+      | "not_billable_fixture"
+      | "mock_not_billable"
+      | "live_billing_unknown"
+      | "live_cost_reported"
+      | "not_dispatched";
+    /**
+     * InvocationClassification
+     * @enum {string}
+     */
+    InvocationClassification: "fixture" | "mock" | "live";
+    /**
+     * InvocationStatus
+     * @enum {string}
+     */
+    InvocationStatus:
+      | "prepared"
+      | "dispatching"
+      | "succeeded"
+      | "failed"
+      | "cancelled_before_dispatch"
+      | "outcome_unknown"
+      | "timeout"
+      | "cancelled";
+    /**
+     * InvocationUsageStatus
+     * @enum {string}
+     */
+    InvocationUsageStatus:
+      | "synthetic_complete"
+      | "reported_complete"
+      | "reported_partial"
+      | "reported_invalid"
+      | "unavailable";
     /** JobAssignment */
     JobAssignment: {
       /**
@@ -3825,6 +3878,11 @@ export interface components {
       runner_id: string;
     };
     /**
+     * ReportedValueStatus
+     * @enum {string}
+     */
+    ReportedValueStatus: "reported" | "unavailable";
+    /**
      * RepositoryAccess
      * @enum {string}
      */
@@ -4077,6 +4135,16 @@ export interface components {
        */
       kind: "repository_status_check";
     };
+    /**
+     * RequestDigestKind
+     * @enum {string}
+     */
+    RequestDigestKind: "legacy_generation_request" | "outbound_dispatch";
+    /**
+     * ResponseDigestKind
+     * @enum {string}
+     */
+    ResponseDigestKind: "legacy_provider_response" | "normalized_safe_response";
     /** ReviewDecisionCreate */
     ReviewDecisionCreate: {
       /**

@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,7 +8,7 @@ from visual_engineer_api.models.ai_planning import (
     AIEvalResult,
     AIPlanDecision,
     AIPlanRequest,
-    AIProviderTrace,
+    AIProviderInvocation,
 )
 
 
@@ -17,7 +18,7 @@ class AIPlanningRepository:
 
     def add(
         self,
-        value: AIPlanRequest | AIProviderTrace | AIEvalResult | AIPlanDecision,
+        value: AIPlanRequest | AIProviderInvocation | AIEvalResult | AIPlanDecision,
     ) -> None:
         self._session.add(value)
 
@@ -38,12 +39,38 @@ class AIPlanningRepository:
             select(AIPlanRequest).where(AIPlanRequest.idempotency_key == key)
         )
 
-    def traces(self, request_id: uuid.UUID) -> list[AIProviderTrace]:
+    def invocations(self, request_id: uuid.UUID) -> list[AIProviderInvocation]:
         return list(
             self._session.scalars(
-                select(AIProviderTrace)
-                .where(AIProviderTrace.ai_plan_request_id == request_id)
-                .order_by(AIProviderTrace.attempt_number)
+                select(AIProviderInvocation)
+                .where(AIProviderInvocation.ai_plan_request_id == request_id)
+                .order_by(AIProviderInvocation.attempt_number)
+            )
+        )
+
+    def get_invocation(
+        self, invocation_id: uuid.UUID, *, lock: bool = False
+    ) -> AIProviderInvocation | None:
+        statement = select(AIProviderInvocation).where(AIProviderInvocation.id == invocation_id)
+        if lock:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
+    def stale_dispatching(
+        self, *, dispatched_before: datetime, limit: int
+    ) -> list[AIProviderInvocation]:
+        return list(
+            self._session.scalars(
+                select(AIProviderInvocation)
+                .where(
+                    AIProviderInvocation.contract_version == 1,
+                    AIProviderInvocation.status == "dispatching",
+                    AIProviderInvocation.dispatch_started_at.is_not(None),
+                    AIProviderInvocation.dispatch_started_at < dispatched_before,
+                )
+                .order_by(AIProviderInvocation.dispatch_started_at, AIProviderInvocation.id)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
             )
         )
 

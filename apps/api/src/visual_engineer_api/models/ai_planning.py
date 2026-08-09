@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    CHAR,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -11,9 +13,12 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
+    SmallInteger,
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -120,56 +125,244 @@ class AIPlanRequest(Base):
     )
 
 
-class AIProviderTrace(Base):
-    __tablename__ = "ai_provider_traces"
+class AIProviderInvocation(Base):
+    __tablename__ = "ai_provider_invocations"
     __table_args__ = (
         UniqueConstraint(
-            "ai_plan_request_id", "attempt_number", name="uq_ai_provider_traces_attempt"
-        ),
-        CheckConstraint("attempt_number BETWEEN 1 AND 3", name="ck_ai_provider_traces_attempt"),
-        CheckConstraint(
-            "status IN ('succeeded', 'failed', 'timeout', 'cancelled')",
-            name="ck_ai_provider_traces_status",
+            "ai_plan_request_id", "attempt_number", name="uq_ai_provider_invocations_attempt"
         ),
         CheckConstraint(
-            "input_tokens >= 0 AND output_tokens >= 0 AND total_tokens >= 0 AND "
-            "total_tokens = input_tokens + output_tokens AND cost_estimate_microunits >= 0",
-            name="ck_ai_provider_traces_usage",
+            "(contract_version = 0 AND attempt_number BETWEEN 1 AND 3) OR "
+            "(contract_version = 1 AND attempt_number BETWEEN 1 AND 32767)",
+            name="ck_ai_provider_invocations_version_attempt",
         ),
-        CheckConstraint("latency_ms >= 0", name="ck_ai_provider_traces_latency"),
         CheckConstraint(
-            "cost_basis = 'synthetic_not_billable' AND cost_estimate_microunits = 0",
-            name="ck_ai_provider_traces_synthetic_cost",
+            "(contract_version = 0 AND classification = 'fixture' AND "
+            "provider_id = 'deterministic-fixture' AND "
+            "status IN ('succeeded', 'failed', 'timeout', 'cancelled')) OR "
+            "(contract_version = 1 AND classification IN ('fixture', 'mock', 'live') AND "
+            "status IN ('prepared', 'dispatching', 'succeeded', 'failed', "
+            "'cancelled_before_dispatch', 'outcome_unknown') AND "
+            "provider_id IN ('deterministic-fixture', 'zhipu', 'qwen', 'deepseek', "
+            "'doubao', 'kimi'))",
+            name="ck_ai_provider_invocations_closed_identity",
         ),
-        Index("ix_ai_provider_traces_request_created", "ai_plan_request_id", "created_at"),
+        CheckConstraint(
+            "effective_model_status IN ('reported', 'unavailable') AND "
+            "((effective_model_status = 'reported' AND effective_model_id IS NOT NULL AND "
+            "char_length(trim(effective_model_id)) > 0) OR "
+            "(effective_model_status = 'unavailable' AND effective_model_id IS NULL)) AND "
+            "upstream_request_id_status IN ('reported', 'unavailable') AND "
+            "((upstream_request_id_status = 'reported' AND upstream_request_id IS NOT NULL AND "
+            "char_length(trim(upstream_request_id)) > 0) OR "
+            "(upstream_request_id_status = 'unavailable' AND upstream_request_id IS NULL)) AND "
+            "(contract_version = 1 OR (effective_model_status = 'unavailable' AND "
+            "effective_model_id IS NULL AND upstream_request_id_status = 'unavailable' AND "
+            "upstream_request_id IS NULL))",
+            name="ck_ai_provider_invocations_reported_identity",
+        ),
+        CheckConstraint(
+            "usage_status IN ('synthetic_complete', 'reported_complete', 'reported_partial', "
+            "'reported_invalid', 'unavailable') AND "
+            "(input_tokens IS NULL OR input_tokens >= 0) AND "
+            "(output_tokens IS NULL OR output_tokens >= 0) AND "
+            "(total_tokens IS NULL OR total_tokens >= 0) AND ("
+            "(usage_status IN ('synthetic_complete', 'reported_complete') AND "
+            "input_tokens IS NOT NULL AND output_tokens IS NOT NULL AND total_tokens IS NOT NULL "
+            "AND total_tokens = input_tokens + output_tokens) OR "
+            "(usage_status = 'reported_partial' AND "
+            "num_nonnulls(input_tokens, output_tokens, total_tokens) BETWEEN 1 AND 2) OR "
+            "usage_status = 'reported_invalid' OR "
+            "(usage_status = 'unavailable' AND "
+            "input_tokens IS NULL AND output_tokens IS NULL AND total_tokens IS NULL))",
+            name="ck_ai_provider_invocations_usage",
+        ),
+        CheckConstraint(
+            "(classification = 'fixture' AND usage_status IN "
+            "('synthetic_complete', 'unavailable') AND billing_status IN "
+            "('not_billable_fixture', 'not_dispatched')) OR "
+            "(classification = 'mock' AND usage_status IN "
+            "('synthetic_complete', 'unavailable') AND billing_status IN "
+            "('mock_not_billable', 'not_dispatched')) OR "
+            "(classification = 'live' AND usage_status IN "
+            "('reported_complete', 'reported_partial', 'reported_invalid', 'unavailable') AND "
+            "billing_status IN ('live_billing_unknown', 'live_cost_reported', "
+            "'not_dispatched'))",
+            name="ck_ai_provider_invocations_classification_facts",
+        ),
+        CheckConstraint(
+            "billing_status IN ('not_billable_fixture', 'mock_not_billable', "
+            "'live_billing_unknown', 'live_cost_reported', 'not_dispatched') AND ("
+            "(billing_status = 'live_cost_reported' AND contract_version = 1 AND "
+            "classification = 'live' AND status = 'succeeded' AND "
+            "dispatch_started_at IS NOT NULL AND cost_amount IS NOT NULL AND "
+            "cost_amount >= 0 AND cost_currency IS NOT NULL AND "
+            "cost_currency ~ '^[A-Z]{3}$') OR "
+            "(billing_status <> 'live_cost_reported' AND cost_amount IS NULL AND "
+            "cost_currency IS NULL)) AND ("
+            "billing_status <> 'not_dispatched' OR (contract_version = 1 AND ("
+            "status = 'cancelled_before_dispatch' OR "
+            "(status = 'failed' AND dispatch_started_at IS NULL))))",
+            name="ck_ai_provider_invocations_v1_temporal_billing",
+        ),
+        CheckConstraint(
+            "request_digest ~ '^[0-9a-f]{64}$' AND "
+            "(response_digest IS NULL OR response_digest ~ '^[0-9a-f]{64}$')",
+            name="ck_ai_provider_invocations_digests",
+        ),
+        CheckConstraint(
+            "(queue_wait_ms IS NULL OR queue_wait_ms >= 0) AND "
+            "(provider_elapsed_ms IS NULL OR provider_elapsed_ms >= 0) AND "
+            "(client_total_elapsed_ms IS NULL OR client_total_elapsed_ms >= 0)",
+            name="ck_ai_provider_invocations_latency",
+        ),
+        CheckConstraint(
+            "(contract_version = 0 AND status IN "
+            "('succeeded', 'failed', 'timeout', 'cancelled') AND "
+            "dispatch_started_at IS NULL AND completed_at IS NOT NULL AND "
+            "queue_wait_ms IS NULL AND provider_elapsed_ms IS NULL AND "
+            "client_total_elapsed_ms IS NULL) OR (contract_version = 1 AND ((status = "
+            "'prepared' AND dispatch_started_at IS NULL AND completed_at IS NULL AND "
+            "queue_wait_ms IS NULL AND provider_elapsed_ms IS NULL AND "
+            "client_total_elapsed_ms IS NULL) OR "
+            "(status = 'dispatching' AND dispatch_started_at IS NOT NULL AND "
+            "completed_at IS NULL AND queue_wait_ms IS NOT NULL AND "
+            "provider_elapsed_ms IS NULL AND client_total_elapsed_ms IS NULL) OR "
+            "(status = 'cancelled_before_dispatch' AND dispatch_started_at IS NULL AND "
+            "completed_at IS NOT NULL AND provider_elapsed_ms IS NULL AND "
+            "client_total_elapsed_ms IS NOT NULL) OR "
+            "(status = 'succeeded' AND dispatch_started_at IS NOT NULL AND "
+            "completed_at IS NOT NULL AND queue_wait_ms IS NOT NULL AND "
+            "provider_elapsed_ms IS NOT NULL AND client_total_elapsed_ms IS NOT NULL) OR "
+            "(status = 'outcome_unknown' AND dispatch_started_at IS NOT NULL AND "
+            "completed_at IS NOT NULL AND queue_wait_ms IS NOT NULL) OR "
+            "(status = 'failed' AND completed_at IS NOT NULL AND "
+            "client_total_elapsed_ms IS NOT NULL AND ((dispatch_started_at IS NULL AND "
+            "provider_elapsed_ms IS NULL) OR (dispatch_started_at IS NOT NULL AND "
+            "queue_wait_ms IS NOT NULL AND provider_elapsed_ms IS NOT NULL)))))",
+            name="ck_ai_provider_invocations_lifecycle",
+        ),
+        CheckConstraint(
+            "contract_version = 0 OR (contract_version = 1 AND ((status = 'succeeded' AND "
+            "response_digest IS NOT NULL AND error_category IS NULL "
+            "AND error_code IS NULL) OR "
+            "(status IN ('failed', 'cancelled_before_dispatch', 'outcome_unknown') AND "
+            "response_digest IS NULL AND error_category IS NOT NULL AND error_code IS NOT NULL) "
+            "OR (status IN ('prepared', 'dispatching') AND response_digest IS NULL AND "
+            "error_category IS NULL AND error_code IS NULL)))",
+            name="ck_ai_provider_invocations_terminal",
+        ),
+        CheckConstraint(
+            "contract_version = 0 OR error_category IS NULL OR error_category IN "
+            "('provider_not_configured', "
+            "'provider_disabled', 'authentication_failed', 'rate_limited', 'timeout', "
+            "'cancelled', 'model_unavailable', 'upstream_server_error', 'request_rejected', "
+            "'budget_exceeded', 'transport_error', 'structured_output_invalid', "
+            "'unavailable', 'invalid_response', 'policy_denied', 'internal')",
+            name="ck_ai_provider_invocations_error_category",
+        ),
+        CheckConstraint(
+            "contract_version = 0 OR status NOT IN ('prepared', 'dispatching') OR "
+            "(effective_model_status = 'unavailable' AND effective_model_id IS NULL AND "
+            "upstream_request_id_status = 'unavailable' AND upstream_request_id IS NULL AND "
+            "usage_status = 'unavailable' AND input_tokens IS NULL AND "
+            "output_tokens IS NULL AND total_tokens IS NULL)",
+            name="ck_ai_provider_invocations_nonterminal_audit",
+        ),
+        CheckConstraint(
+            "contract_version = 0 OR NOT (status = 'cancelled_before_dispatch' OR "
+            "(status = 'failed' AND dispatch_started_at IS NULL)) OR ("
+            "response_digest IS NULL AND effective_model_status = 'unavailable' AND "
+            "effective_model_id IS NULL AND upstream_request_id_status = 'unavailable' AND "
+            "upstream_request_id IS NULL AND usage_status = 'unavailable' AND "
+            "input_tokens IS NULL AND output_tokens IS NULL AND total_tokens IS NULL AND "
+            "queue_wait_ms IS NULL AND provider_elapsed_ms IS NULL AND "
+            "billing_status = 'not_dispatched' AND cost_amount IS NULL AND "
+            "cost_currency IS NULL)",
+            name="ck_ai_provider_invocations_pre_dispatch_terminal",
+        ),
+        CheckConstraint(
+            "(contract_version = 0 AND legacy_latency_ms IS NOT NULL AND "
+            "legacy_input_tokens IS NOT NULL AND legacy_output_tokens IS NOT NULL AND "
+            "legacy_total_tokens IS NOT NULL AND "
+            "legacy_cost_estimate_microunits IS NOT NULL AND legacy_cost_basis IS NOT NULL "
+            "AND legacy_retryable IS NOT NULL AND legacy_latency_ms >= 0 AND "
+            "legacy_input_tokens >= 0 AND legacy_output_tokens >= 0 AND "
+            "legacy_total_tokens = legacy_input_tokens + legacy_output_tokens AND "
+            "legacy_cost_estimate_microunits = 0 AND "
+            "legacy_cost_basis = 'synthetic_not_billable') OR "
+            "(contract_version = 1 AND legacy_latency_ms IS NULL AND "
+            "legacy_input_tokens IS NULL AND legacy_output_tokens IS NULL AND "
+            "legacy_total_tokens IS NULL AND legacy_cost_estimate_microunits IS NULL AND "
+            "legacy_cost_basis IS NULL AND legacy_retryable IS NULL)",
+            name="ck_ai_provider_invocations_legacy_provenance",
+        ),
+        Index(
+            "ix_ai_provider_invocations_provider_class_created",
+            "provider_id",
+            "classification",
+            "created_at",
+        ),
+        Index(
+            "ix_ai_provider_invocations_recovery",
+            "status",
+            "dispatch_started_at",
+            postgresql_where=text(
+                "contract_version = 1 AND status = 'dispatching' "
+                "AND dispatch_started_at IS NOT NULL"
+            ),
+        ),
+        Index(
+            "ix_ai_provider_invocations_upstream",
+            "provider_id",
+            "upstream_request_id",
+            postgresql_where=text("upstream_request_id_status = 'reported'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ai_plan_request_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("ai_plan_requests.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("ai_plan_requests.id", ondelete="RESTRICT"), nullable=False
     )
-    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    contract_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
+    classification: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="prepared")
     provider_id: Mapped[str] = mapped_column(String(120), nullable=False)
     provider_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    adapter_version: Mapped[str] = mapped_column(String(120), nullable=False)
+    requested_model_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    effective_model_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    effective_model_id: Mapped[str | None] = mapped_column(String(120))
+    upstream_request_id_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    upstream_request_id: Mapped[str | None] = mapped_column(String(255))
     request_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     response_digest: Mapped[str | None] = mapped_column(String(64))
-    latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
-    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    cost_estimate_microunits: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    cost_basis: Mapped[str] = mapped_column(String(40), nullable=False)
+    legacy_latency_ms: Mapped[float | None] = mapped_column(Float)
+    legacy_input_tokens: Mapped[int | None] = mapped_column(Integer)
+    legacy_output_tokens: Mapped[int | None] = mapped_column(Integer)
+    legacy_total_tokens: Mapped[int | None] = mapped_column(Integer)
+    legacy_cost_estimate_microunits: Mapped[int | None] = mapped_column(BigInteger)
+    legacy_cost_basis: Mapped[str | None] = mapped_column(String(40))
+    legacy_retryable: Mapped[bool | None] = mapped_column(Boolean)
+    usage_status: Mapped[str] = mapped_column(String(24), nullable=False)
+    input_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    output_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    total_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    queue_wait_ms: Mapped[int | None] = mapped_column(BigInteger)
+    provider_elapsed_ms: Mapped[int | None] = mapped_column(BigInteger)
+    client_total_elapsed_ms: Mapped[int | None] = mapped_column(BigInteger)
+    billing_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    cost_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    cost_currency: Mapped[str | None] = mapped_column(CHAR(3))
     error_category: Mapped[str | None] = mapped_column(String(32))
     error_code: Mapped[str | None] = mapped_column(String(64))
-    retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     redactions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    completed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    dispatch_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AIEvalResult(Base):

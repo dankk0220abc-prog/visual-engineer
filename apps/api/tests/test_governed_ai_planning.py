@@ -36,7 +36,7 @@ from visual_engineer_api.models.ai_planning import (
     AIEvalResult,
     AIPlanDecision,
     AIPlanRequest,
-    AIProviderTrace,
+    AIProviderInvocation,
 )
 from visual_engineer_api.models.delivery import DeliveryAuthorization
 from visual_engineer_api.models.review import ReviewDecision
@@ -239,13 +239,23 @@ def test_ai_plan_complete_flow_is_redacted_evaluated_idempotent_and_authority_fr
         "delivery_authorization_issued": False,
         "git_or_deployment_authority": False,
     }
-    assert len(ai_plan["traces"]) == 1
-    trace = ai_plan["traces"][0]
-    assert trace["status"] == "succeeded"
-    assert trace["latency_ms"] == 7.0
-    assert trace["total_tokens"] == trace["input_tokens"] + trace["output_tokens"]
-    assert trace["cost_estimate_microunits"] == 0
-    assert trace["cost_basis"] == "synthetic_not_billable"
+    assert len(ai_plan["invocations"]) == 1
+    invocation = ai_plan["invocations"][0]
+    assert invocation["classification"] == "fixture"
+    assert invocation["status"] == "succeeded"
+    assert invocation["requested_model_id"] == "fixture-planner-v1"
+    assert invocation["effective_model_status"] == "reported"
+    assert invocation["effective_model_id"] == "fixture-planner-v1"
+    assert invocation["upstream_request_id_status"] == "unavailable"
+    assert invocation["upstream_request_fingerprint"] is None
+    assert invocation["usage_status"] == "synthetic_complete"
+    assert invocation["total_tokens"] == (invocation["input_tokens"] + invocation["output_tokens"])
+    assert invocation["queue_wait_ms"] >= 0
+    assert invocation["provider_elapsed_ms"] >= 0
+    assert invocation["client_total_elapsed_ms"] >= invocation["provider_elapsed_ms"]
+    assert invocation["billing_status"] == "not_billable_fixture"
+    assert invocation["cost_amount"] is None
+    assert invocation["cost_currency"] is None
     assert len(ai_plan["eval_results"]) == len(MANDATORY_EVAL_IDS)
     assert all(item["passed"] for item in ai_plan["eval_results"])
     assert all(item["evaluator_trust"] == "system_policy" for item in ai_plan["eval_results"])
@@ -255,7 +265,7 @@ def test_ai_plan_complete_flow_is_redacted_evaluated_idempotent_and_authority_fr
     assert replay.headers["idempotent-replay"] == "true"
     assert replayed_plan["id"] == ai_plan["id"]
     assert replayed_plan["deterministic_digest"] == ai_plan["deterministic_digest"]
-    assert len(replayed_plan["traces"]) == 1
+    assert len(replayed_plan["invocations"]) == 1
 
     decision = client.post(
         f"/api/v1/ai-plan-requests/{ai_plan['id']}/decisions",
@@ -453,7 +463,7 @@ def test_provider_invocation_has_bounded_retry_and_stable_error_categories(
         ProviderErrorCategory.UNAVAILABLE,
         None,
     ]
-    assert db_session.scalar(select(func.count()).select_from(AIProviderTrace)) == 1
+    assert db_session.scalar(select(func.count()).select_from(AIProviderInvocation)) == 1
     assert db_session.scalar(select(func.count()).select_from(AIEvalResult)) == len(
         MANDATORY_EVAL_IDS
     )
@@ -607,8 +617,8 @@ def test_grounding_failure_is_durable_replay_stable_and_approval_blocking(
     assert failed.plan is not None
     assert failed.error_category == "evaluation"
     assert failed.error_code == "ai_plan_eval_failed"
-    assert len(failed.traces) == 1
-    assert failed.traces[0].response_digest == canonical_digest(failed.plan)
+    assert len(failed.invocations) == 1
+    assert failed.invocations[0].response_digest is not None
     evals = {item.eval_id: item for item in failed.eval_results}
     assert tuple(item.eval_id for item in failed.eval_results) == tuple(sorted(MANDATORY_EVAL_IDS))
     assert evals[failed_eval_id].passed is False
@@ -639,7 +649,7 @@ def test_grounding_failure_is_durable_replay_stable_and_approval_blocking(
     assert replayed.id == failed.id
     assert replayed.status == "failed"
     assert replayed.eval_results == failed.eval_results
-    assert replayed.traces == failed.traces
+    assert replayed.invocations == failed.invocations
     assert provider.calls == 2
     assert db_session.scalar(
         select(func.count())
@@ -649,8 +659,8 @@ def test_grounding_failure_is_durable_replay_stable_and_approval_blocking(
     assert (
         db_session.scalar(
             select(func.count())
-            .select_from(AIProviderTrace)
-            .where(AIProviderTrace.ai_plan_request_id == failed.id)
+            .select_from(AIProviderInvocation)
+            .where(AIProviderInvocation.ai_plan_request_id == failed.id)
         )
         == 1
     )
@@ -735,8 +745,8 @@ def test_provider_timeout_cancel_and_failed_status_are_explicit(
     assert failed.status == "failed"
     assert failed.error_category == ProviderErrorCategory.UNAVAILABLE.value
     assert failed.error_code == "fixture_unavailable"
-    assert failed.retry_count == 1
-    assert [trace.status for trace in failed.traces] == ["failed", "failed"]
+    assert failed.retry_count == 0
+    assert [invocation.status for invocation in failed.invocations] == ["failed"]
 
 
 def test_ai_planning_evidence_and_request_bindings_are_database_immutable(
@@ -755,8 +765,9 @@ def test_ai_planning_evidence_and_request_bindings_are_database_immutable(
 
     mutations = [
         (
-            "UPDATE ai_provider_traces SET latency_ms = latency_ms + 1 WHERE id = :id",
-            ai_plan["traces"][0]["id"],
+            "UPDATE ai_provider_invocations SET provider_elapsed_ms = "
+            "provider_elapsed_ms + 1 WHERE id = :id",
+            ai_plan["invocations"][0]["id"],
         ),
         (
             "UPDATE ai_eval_results SET passed = false WHERE id = :id",
@@ -808,9 +819,9 @@ def test_invalid_or_over_budget_provider_response_fails_with_trace_and_audit(
     assert failed.status == "failed"
     assert failed.error_category == ProviderErrorCategory.INVALID_RESPONSE.value
     assert failed.error_code == expected_code
-    assert len(failed.traces) == 1
-    assert failed.traces[0].status == "succeeded"
-    assert failed.traces[0].response_digest is not None
+    assert len(failed.invocations) == 1
+    assert failed.invocations[0].status == "failed"
+    assert failed.invocations[0].response_digest is None
     events = client.get(f"/api/v1/runs/{run['id']}/audit-events")
     assert events.status_code == 200
     assert any(

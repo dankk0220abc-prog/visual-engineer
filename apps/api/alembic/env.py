@@ -9,7 +9,7 @@ from visual_engineer_api.models import (  # noqa: F401
     AIEvalResult,
     AIPlanDecision,
     AIPlanRequest,
-    AIProviderTrace,
+    AIProviderInvocation,
     ApprovalDecision,
     AuditEvent,
     ExecutionGrant,

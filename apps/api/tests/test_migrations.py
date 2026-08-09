@@ -8,6 +8,12 @@ def test_initial_migration_round_trip(database_url: str) -> None:
     config = alembic_config()
     engine = create_engine(database_url)
 
+    if "ai_provider_invocations" in inspect(engine).get_table_names():
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "TRUNCATE TABLE ai_provider_invocations, ai_plan_requests, runs, tasks CASCADE"
+            )
+
     command.downgrade(config, "base")
     assert "tasks" not in inspect(engine).get_table_names()
 
@@ -20,7 +26,7 @@ def test_initial_migration_round_trip(database_url: str) -> None:
         "approval_decisions",
         "audit_events",
         "ai_plan_requests",
-        "ai_provider_traces",
+        "ai_provider_invocations",
         "ai_eval_results",
         "ai_plan_decisions",
         "runners",

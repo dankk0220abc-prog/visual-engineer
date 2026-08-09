@@ -84,6 +84,7 @@ docker-config:
 
 security-check:
 	./scripts/check-secrets.sh
+	./scripts/test-check-secrets.sh
 	uv run python scripts/check_runner_security.py
 	PYTHONPATH="apps/runner/src:packages/runner-protocol/src" uv run python scripts/check_phase4_findings.py
 	uv run pytest apps/api/tests/test_repository_scanner.py --no-cov -q

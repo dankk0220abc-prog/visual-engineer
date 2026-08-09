@@ -59,11 +59,29 @@ async function generateAIPlan(page: Page) {
     console.getByRole("heading", { name: "结构化 AI 计划" }),
   ).toBeVisible();
   await expect(console.getByText("已生成", { exact: true })).toBeVisible();
-  await expect(console.getByText("deterministic-fixture")).toBeVisible();
+  await expect(
+    console.getByText("deterministic-fixture", { exact: true }),
+  ).toHaveCount(2);
   await expect(console.getByText("系统所有的评估证据")).toBeVisible();
   await expect(console.getByText("schema_validity")).toBeVisible();
   await expect(console.getByText("approval_boundary_bypass")).toBeVisible();
+  const invocationAudit = console.locator(
+    'section[aria-labelledby="ai-invocation-heading"]',
+  );
+  await expect(invocationAudit.getByText("Provider 调用审计")).toBeVisible();
+  await expect(
+    invocationAudit.getByText("FIXTURE", { exact: true }),
+  ).toBeVisible();
   await expect(console.getByText("尝试 1 · 成功")).toBeVisible();
+  await expect(invocationAudit.getByText("fixture-planner-v1")).toHaveCount(2);
+  await expect(
+    invocationAudit.getByText("不可用（Provider 未报告）"),
+  ).toBeVisible();
+  await expect(invocationAudit.getByText(/合成完整用量/)).toBeVisible();
+  await expect(
+    invocationAudit.getByText(/排队 .* Provider .* 客户端总计/),
+  ).toBeVisible();
+  await expect(invocationAudit.getByText("Fixture · 不计费")).toBeVisible();
   await expect(console.getByText("建议的类型化操作")).toBeVisible();
   await expect(
     console.getByRole("heading", { name: "验收标准" }),
