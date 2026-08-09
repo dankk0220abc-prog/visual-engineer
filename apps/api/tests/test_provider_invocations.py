@@ -250,6 +250,69 @@ def _direct_prepared_invocation(
     return invocation
 
 
+_TEMPORAL_BILLING_CONSTRAINT = "ck_ai_provider_invocations_v1_temporal_billing"
+
+
+def _insert_live_prepared_direct_sql(
+    session: Session,
+    *,
+    billing_status: str = "live_billing_unknown",
+    cost_amount: Decimal | None = None,
+    cost_currency: str | None = None,
+) -> uuid.UUID:
+    ai_request = _create_request(session, _generation_request())
+    invocation_id = uuid.uuid4()
+    session.execute(
+        text(
+            """
+            INSERT INTO ai_provider_invocations (
+                id, ai_plan_request_id, attempt_number, contract_version,
+                classification, status, provider_id, provider_metadata,
+                adapter_version, requested_model_id, effective_model_status,
+                effective_model_id, upstream_request_id_status, upstream_request_id,
+                request_digest, response_digest, usage_status, input_tokens,
+                output_tokens, total_tokens, queue_wait_ms, provider_elapsed_ms,
+                client_total_elapsed_ms, billing_status, cost_amount, cost_currency,
+                error_category, error_code, redactions, dispatch_started_at, completed_at
+            ) VALUES (
+                :id, :request_id, 1, 1, 'live', 'prepared', 'zhipu',
+                CAST('{"direct_sql_temporal_billing": true}' AS jsonb),
+                'adapter-v1', 'model-v1', 'unavailable', NULL, 'unavailable', NULL,
+                :request_digest, NULL, 'unavailable', NULL, NULL, NULL, NULL, NULL,
+                NULL, :billing_status, :cost_amount, :cost_currency, NULL, NULL,
+                CAST('[]' AS jsonb), NULL, NULL
+            )
+            """
+        ),
+        {
+            "id": invocation_id,
+            "request_id": ai_request.id,
+            "request_digest": "7" * 64,
+            "billing_status": billing_status,
+            "cost_amount": cost_amount,
+            "cost_currency": cost_currency,
+        },
+    )
+    session.commit()
+    return invocation_id
+
+
+def _mark_dispatching_direct_sql(session: Session, invocation_id: uuid.UUID) -> None:
+    session.execute(
+        text(
+            "UPDATE ai_provider_invocations SET status = 'dispatching', "
+            "dispatch_started_at = now(), queue_wait_ms = 1 WHERE id = :id"
+        ),
+        {"id": invocation_id},
+    )
+    session.commit()
+
+
+def _assert_temporal_billing_constraint(error: DBAPIError) -> None:
+    diagnostic = getattr(error.orig, "diag", None)
+    assert getattr(diagnostic, "constraint_name", None) == _TEMPORAL_BILLING_CONSTRAINT
+
+
 def test_invocation_lifecycle_uses_integer_monotonic_latency_and_is_terminally_immutable(
     db_session: Session,
 ) -> None:
@@ -330,7 +393,6 @@ def test_database_rejects_illegal_transition_and_prepared_identity_mutation(
         "effective_model_status = 'reported', effective_model_id = 'forged-model'",
         "upstream_request_id_status = 'reported', upstream_request_id = 'forged-request'",
         "usage_status = 'reported_complete', input_tokens = 1, output_tokens = 2, total_tokens = 3",
-        "billing_status = 'live_cost_reported', cost_amount = 1, cost_currency = 'USD'",
     ],
 )
 def test_database_rejects_pre_dispatch_terminal_fact_injection_in_same_update(
@@ -354,6 +416,204 @@ def test_database_rejects_pre_dispatch_terminal_fact_injection_in_same_update(
         )
         db_session.commit()
     db_session.rollback()
+
+
+def test_database_rejects_prepared_live_reported_cost_insert(
+    db_session: Session,
+) -> None:
+    with pytest.raises(DBAPIError) as error:
+        _insert_live_prepared_direct_sql(
+            db_session,
+            billing_status="live_cost_reported",
+            cost_amount=Decimal("0.12500000"),
+            cost_currency="USD",
+        )
+    db_session.rollback()
+    _assert_temporal_billing_constraint(error.value)
+
+
+def test_database_rejects_prepared_to_dispatching_reported_cost_in_same_update(
+    db_session: Session,
+) -> None:
+    invocation_id = _insert_live_prepared_direct_sql(db_session)
+    with pytest.raises(DBAPIError) as error:
+        db_session.execute(
+            text(
+                "UPDATE ai_provider_invocations SET status = 'dispatching', "
+                "dispatch_started_at = now(), queue_wait_ms = 1, "
+                "billing_status = 'live_cost_reported', cost_amount = :cost_amount, "
+                "cost_currency = 'USD' WHERE id = :id"
+            ),
+            {"id": invocation_id, "cost_amount": Decimal("0.12500000")},
+        )
+        db_session.commit()
+    db_session.rollback()
+    _assert_temporal_billing_constraint(error.value)
+
+
+@pytest.mark.parametrize(
+    ("status", "error_category", "error_code"),
+    [
+        ("failed", "internal", "pre_dispatch_failed"),
+        ("cancelled_before_dispatch", "cancelled", "provider_cancelled"),
+    ],
+)
+def test_database_rejects_pre_dispatch_terminal_reported_cost_without_duplicate_assignment(
+    db_session: Session,
+    status: str,
+    error_category: str,
+    error_code: str,
+) -> None:
+    invocation_id = _insert_live_prepared_direct_sql(db_session)
+    with pytest.raises(DBAPIError) as error:
+        db_session.execute(
+            text(
+                "UPDATE ai_provider_invocations SET status = :status, completed_at = now(), "
+                "client_total_elapsed_ms = 1, billing_status = 'live_cost_reported', "
+                "cost_amount = :cost_amount, cost_currency = 'USD', "
+                "error_category = :error_category, error_code = :error_code WHERE id = :id"
+            ),
+            {
+                "id": invocation_id,
+                "status": status,
+                "cost_amount": Decimal("0.12500000"),
+                "error_category": error_category,
+                "error_code": error_code,
+            },
+        )
+        db_session.commit()
+    db_session.rollback()
+    assert getattr(error.value.orig, "sqlstate", None) == "55000"
+    assert "Provider invocation mutation is forbidden" in str(error.value.orig)
+
+
+@pytest.mark.parametrize("status", ["failed", "outcome_unknown"])
+def test_database_rejects_dispatched_non_success_terminal_reported_cost(
+    db_session: Session,
+    status: str,
+) -> None:
+    invocation_id = _insert_live_prepared_direct_sql(db_session)
+    _mark_dispatching_direct_sql(db_session, invocation_id)
+    with pytest.raises(DBAPIError) as error:
+        db_session.execute(
+            text(
+                "UPDATE ai_provider_invocations SET status = :status, completed_at = now(), "
+                "provider_elapsed_ms = 1, client_total_elapsed_ms = 2, "
+                "billing_status = 'live_cost_reported', cost_amount = :cost_amount, "
+                "cost_currency = 'USD', error_category = 'transport_error', "
+                "error_code = :error_code WHERE id = :id"
+            ),
+            {
+                "id": invocation_id,
+                "status": status,
+                "cost_amount": Decimal("0.12500000"),
+                "error_code": f"provider_{status}",
+            },
+        )
+        db_session.commit()
+    db_session.rollback()
+    _assert_temporal_billing_constraint(error.value)
+
+
+@pytest.mark.parametrize(
+    ("billing_status", "cost_amount", "cost_currency"),
+    [
+        ("live_billing_unknown", None, None),
+        ("live_cost_reported", Decimal("0.12500000"), "USD"),
+    ],
+)
+def test_database_accepts_only_terminal_succeeded_live_billing_facts(
+    db_session: Session,
+    billing_status: str,
+    cost_amount: Decimal | None,
+    cost_currency: str | None,
+) -> None:
+    invocation_id = _insert_live_prepared_direct_sql(db_session)
+    _mark_dispatching_direct_sql(db_session, invocation_id)
+    db_session.execute(
+        text(
+            "UPDATE ai_provider_invocations SET status = 'succeeded', completed_at = now(), "
+            "provider_elapsed_ms = 1, client_total_elapsed_ms = 2, "
+            "response_digest = :response_digest, billing_status = :billing_status, "
+            "cost_amount = :cost_amount, cost_currency = :cost_currency WHERE id = :id"
+        ),
+        {
+            "id": invocation_id,
+            "response_digest": "8" * 64,
+            "billing_status": billing_status,
+            "cost_amount": cost_amount,
+            "cost_currency": cost_currency,
+        },
+    )
+    db_session.commit()
+    stored = (
+        db_session.execute(
+            text(
+                "SELECT status, billing_status, cost_amount, cost_currency "
+                "FROM ai_provider_invocations WHERE id = :id"
+            ),
+            {"id": invocation_id},
+        )
+        .mappings()
+        .one()
+    )
+    assert stored["status"] == "succeeded"
+    assert stored["billing_status"] == billing_status
+    assert stored["cost_amount"] == cost_amount
+    assert stored["cost_currency"] == cost_currency
+
+
+@pytest.mark.parametrize(
+    ("billing_status", "cost_amount", "cost_currency"),
+    [
+        pytest.param("live_cost_reported", None, "USD", id="reported-missing-amount"),
+        pytest.param(
+            "live_cost_reported",
+            Decimal("0.12500000"),
+            None,
+            id="reported-missing-currency",
+        ),
+        pytest.param(
+            "live_billing_unknown",
+            Decimal("0.12500000"),
+            None,
+            id="nonreported-injected-amount",
+        ),
+        pytest.param(
+            "live_billing_unknown",
+            None,
+            "USD",
+            id="nonreported-injected-currency",
+        ),
+    ],
+)
+def test_database_rejects_incomplete_or_nonreported_cost_values(
+    db_session: Session,
+    billing_status: str,
+    cost_amount: Decimal | None,
+    cost_currency: str | None,
+) -> None:
+    invocation_id = _insert_live_prepared_direct_sql(db_session)
+    _mark_dispatching_direct_sql(db_session, invocation_id)
+    with pytest.raises(DBAPIError) as error:
+        db_session.execute(
+            text(
+                "UPDATE ai_provider_invocations SET status = 'succeeded', "
+                "completed_at = now(), provider_elapsed_ms = 1, client_total_elapsed_ms = 2, "
+                "response_digest = :response_digest, billing_status = :billing_status, "
+                "cost_amount = :cost_amount, cost_currency = :cost_currency WHERE id = :id"
+            ),
+            {
+                "id": invocation_id,
+                "response_digest": "9" * 64,
+                "billing_status": billing_status,
+                "cost_amount": cost_amount,
+                "cost_currency": cost_currency,
+            },
+        )
+        db_session.commit()
+    db_session.rollback()
+    _assert_temporal_billing_constraint(error.value)
 
 
 @pytest.mark.parametrize(
@@ -839,6 +1099,49 @@ def test_mock_adapter_success_persists_safe_invocation_then_allows_plan_creation
     assert _synthetic_credential() not in persisted
     assert "messages" not in persisted
     assert "Authorization" not in persisted
+
+
+def test_live_mock_transport_success_defaults_to_billing_unknown(
+    db_session: Session,
+) -> None:
+    request = _generation_request()
+    ai_request = _create_request(db_session, request)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_mock_success_payload(
+                request,
+                usage={"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18},
+            ),
+        )
+
+    async def scenario() -> Any:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = ZhipuAdapter(
+                SecretStr(_synthetic_credential()),
+                _test_client=client,
+            )
+            return await invoke_mocked_adapter_contract(
+                db_session,
+                ai_plan_request_id=ai_request.id,
+                adapter=adapter,
+                request=request,
+                cancellation=CancellationToken(),
+                provider_metadata={"mock_transport_live_classification": True},
+                redactions=[],
+                classification=InvocationClassification.LIVE,
+            )
+
+    outcome = asyncio.run(scenario())
+    invocation = _stored_invocation(db_session)
+    assert outcome.status == InvocationStatus.SUCCEEDED
+    assert invocation.classification == "live"
+    assert invocation.status == "succeeded"
+    assert invocation.usage_status == "reported_complete"
+    assert invocation.billing_status == "live_billing_unknown"
+    assert invocation.cost_amount is None
+    assert invocation.cost_currency is None
 
 
 @pytest.mark.parametrize(

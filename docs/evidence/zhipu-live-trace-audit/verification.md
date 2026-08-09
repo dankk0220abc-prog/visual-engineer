@@ -44,9 +44,48 @@ review also found four blocking Medium issues:
   line, including secret material.
 
 This failure is permanent evidence. The migration was not lossless from the
-start. The corrective implementation below replaces the false backfill with
-versioned legacy evidence semantics and closes the four Medium findings without
-enabling a Provider or sending a live request.
+start. The first corrective implementation replaced the false backfill with
+versioned legacy evidence semantics and attempted to close the four Medium
+findings without enabling a Provider or sending a live request. A later narrow
+review proved that `DB-CONTRACT-001` was not fully closed.
+
+## Final narrow re-review failure retained
+
+The final narrow re-review confirmed Historical v0 truthfulness, exact
+downgrade/v1 refusal, the classification/usage/billing matrix, Mock usage,
+recovery threshold/anchor/startup/concurrency, the secret scanner, and exact CI.
+It nevertheless ended `FAIL` with one remaining Blocking Medium finding:
+
+`DB-CONTRACT-001 remained open because PostgreSQL accepted live_cost_reported before dispatch.`
+
+Specifically, PostgreSQL accepted a valid v1 live `prepared` row with
+`billing_status=live_cost_reported` and valid amount/currency, and also accepted
+the same billing facts while moving `prepared -> dispatching`. The reviewed
+candidate was `4bc348854156e30e829698ed24d0ca4aa5adf7b0`; Fast
+`31307148684` and Heavy `31307148821` were exact-SHA attempt 1 successes. Green
+CI did not override the database exploit. This temporal billing contract was
+therefore not complete from the start.
+
+## Temporal billing remediation
+
+The unpublished `20260809_0016` migration now installs the explicitly named
+PostgreSQL CHECK `ck_ai_provider_invocations_v1_temporal_billing`. For v1,
+`live_cost_reported` requires `classification=live`, `status=succeeded`, a
+non-NULL `dispatch_started_at`, and paired non-NULL non-negative NUMERIC amount
+plus an uppercase three-character currency. Every non-reported billing status
+requires both cost fields to remain NULL. The same CHECK leaves v0 historical
+rows intact, while the existing update trigger remains the second-layer guard
+for pre-dispatch terminal transitions.
+
+Real PostgreSQL direct-SQL tests now prove prepared INSERT rejection,
+`prepared -> dispatching` same-UPDATE rejection, pre-dispatch failed/cancelled
+rejection, post-dispatch failed/`outcome_unknown` rejection, succeeded billing-
+unknown acceptance, succeeded reported-cost acceptance with `Decimal`, missing
+amount/currency rejection, and non-reported amount/currency injection rejection.
+All cases that reach a CHECK assert the exact constraint name. The earlier
+false-positive case that assigned `billing_status` twice in one UPDATE no
+longer exists; its replacement assigns reported billing exactly once and
+asserts the existing PostgreSQL trigger rejection.
 
 ## Migration and schema evidence
 
@@ -72,10 +111,10 @@ The v1 row is one dispatch attempt and is always created as
 `contract_version=1`. Its immutable identity binds request,
 attempt, contract version, classification, closed Provider ID, adapter version,
 requested model, canonical outbound request digest, Provider metadata,
-redactions, and creation time. PostgreSQL checks close lifecycle, reported-value,
-usage, billing, error, digest, latency, and terminal combinations. The foreign
-key is `ON DELETE RESTRICT`; recovery and reported-upstream partial indexes are
-present.
+redactions, and creation time. After the temporal billing remediation,
+PostgreSQL checks close lifecycle, reported-value, usage, billing, error,
+digest, latency, and terminal combinations. The foreign key is `ON DELETE
+RESTRICT`; recovery and reported-upstream partial indexes are present.
 
 The downgrade permits only v0 historical rows. Any v1 row, including fixture,
 live, mock, prepared, dispatching, `outcome_unknown`, new usage/billing facts,
@@ -205,19 +244,22 @@ the clean conclusion.
 
 ## Verification record
 
-| Boundary                            | Result                                                                                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Final focused migration/invocation  | `62 passed`: four-status v0 history, exact downgrade, v1 refusal, DB facts/truth table, mock usage, recovery threshold/concurrency/startup |
-| Associated governed API focused set | `24 passed`                                                                                                                                |
-| Canonical backend aggregate         | `465 passed`; total coverage `85.04%`                                                                                                      |
-| Real PostgreSQL migration           | clean `base -> head -> base -> head`; succeeded/failed/timeout/cancelled and v1 lossy-downgrade refusal passed                             |
-| Web unit/component                  | 17 files, `108 passed`, including legacy timeout projection                                                                                |
-| Python quality                      | Ruff format/check passed; mypy passed for 139 source files                                                                                 |
-| Web quality                         | Prettier, ESLint, and TypeScript passed                                                                                                    |
-| Generated contracts                 | `make contracts-check` passed                                                                                                              |
-| Secret scanner                      | clean scan, missing-`rg`, inaccessible-root, and redacted positive synthetic match passed                                                  |
-| Diff integrity                      | `git diff --check` passed before commits                                                                                                   |
-| Local focused browser               | `NOT RERUN`: unchanged product logic does not justify local Playwright; remote Heavy remains the browser/Docker/Eval/Security authority    |
+| Boundary                            | Result                                                                                                                                          |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Temporal billing direct SQL         | `12 passed`: exact prepared/dispatching/terminal/value matrix; reachable CHECK failures assert `ck_ai_provider_invocations_v1_temporal_billing` |
+| Related Invocation/billing service  | `23 passed`: existing constraint/lifecycle paths plus Fixture, Mock, Live reported cost, and Live MockTransport billing-unknown behavior        |
+| Temporal v0 historical regression   | `1 passed`: four exact legacy statuses, PostgreSQL constraint introspection, downgrade, and re-upgrade                                          |
+| Final focused migration/invocation  | `62 passed`: four-status v0 history, exact downgrade, v1 refusal, DB facts/truth table, mock usage, recovery threshold/concurrency/startup      |
+| Associated governed API focused set | `24 passed`                                                                                                                                     |
+| Canonical backend aggregate         | `478 passed`; total coverage `85.06%`; one run, no retry/rerun                                                                                  |
+| Real PostgreSQL migration           | clean `base -> head -> base -> head`; v0 history and downgrade behavior unchanged                                                               |
+| Web unit/component                  | 17 files, `108 passed`, including legacy timeout projection                                                                                     |
+| Python quality                      | Ruff format/check passed; mypy passed for 139 source files                                                                                      |
+| Web quality                         | Prettier, ESLint, and TypeScript passed                                                                                                         |
+| Generated contracts                 | `make contracts-check` passed                                                                                                                   |
+| Secret scanner                      | clean scan, missing-`rg`, inaccessible-root, and redacted positive synthetic match passed                                                       |
+| Diff integrity                      | `git diff --check` passed before commits                                                                                                        |
+| Local focused browser               | `NOT RERUN`: unchanged product logic does not justify local Playwright; remote Heavy remains the browser/Docker/Eval/Security authority         |
 
 The first remote code-candidate CI on exact SHA
 `9cff7280ceb0dfd32f2b4df99508f9f30ada4451` recorded:
@@ -238,10 +280,16 @@ independent-review failure above. In particular, it did not prove historical
 backfill truthfulness, same-UPDATE terminal facts, mock usage provenance,
 deadline-safe startup recovery, or positive-match secret redaction.
 
-The CI result for the final historical-integrity remediation commit is necessarily
+The historical-integrity candidate HEAD
+`4bc348854156e30e829698ed24d0ca4aa5adf7b0` had Fast `31307148684` and Heavy
+`31307148821` successful on attempt 1, but the subsequent final narrow re-review
+found the temporal billing exploit recorded above. Those green runs are not
+evidence for the corrected CHECK.
+
+The CI result for the temporal billing remediation commit is necessarily
 recorded on draft PR #17 and in the implementation handoff because CI starts
-only after this document is committed. That final check set is the publication
-candidate evidence; this document does not pre-claim its result.
+only after this document is committed. That exact-SHA Fast/Heavy result is the
+remaining candidate evidence; this document does not pre-claim it.
 
 ## Explicit non-claims
 

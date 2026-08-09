@@ -264,14 +264,17 @@ def _create_constraints_and_indexes() -> None:
         "billing_status IN ('live_billing_unknown', 'live_cost_reported', 'not_dispatched'))",
     )
     op.create_check_constraint(
-        "ck_ai_provider_invocations_billing",
+        "ck_ai_provider_invocations_v1_temporal_billing",
         "ai_provider_invocations",
         "billing_status IN ('not_billable_fixture', 'mock_not_billable', "
         "'live_billing_unknown', 'live_cost_reported', 'not_dispatched') AND ("
+        "(billing_status = 'live_cost_reported' AND contract_version = 1 AND "
+        "classification = 'live' AND status = 'succeeded' AND "
+        "dispatch_started_at IS NOT NULL AND cost_amount IS NOT NULL AND "
+        "cost_amount >= 0 AND cost_currency IS NOT NULL AND "
+        "cost_currency ~ '^[A-Z]{3}$') OR "
         "(billing_status <> 'live_cost_reported' AND cost_amount IS NULL AND "
-        "cost_currency IS NULL) OR "
-        "(billing_status = 'live_cost_reported' AND cost_amount IS NOT NULL AND "
-        "cost_amount >= 0 AND cost_currency ~ '^[A-Z]{3}$')) AND ("
+        "cost_currency IS NULL)) AND ("
         "billing_status <> 'not_dispatched' OR (contract_version = 1 AND ("
         "status = 'cancelled_before_dispatch' OR "
         "(status = 'failed' AND dispatch_started_at IS NULL))))",
@@ -513,7 +516,7 @@ def downgrade() -> None:
         "ck_ai_provider_invocations_lifecycle",
         "ck_ai_provider_invocations_latency",
         "ck_ai_provider_invocations_digests",
-        "ck_ai_provider_invocations_billing",
+        "ck_ai_provider_invocations_v1_temporal_billing",
         "ck_ai_provider_invocations_classification_facts",
         "ck_ai_provider_invocations_usage",
         "ck_ai_provider_invocations_reported_identity",

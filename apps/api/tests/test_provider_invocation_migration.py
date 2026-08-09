@@ -193,6 +193,15 @@ def test_provider_invocation_fixture_history_backfill_and_round_trip(
     command.upgrade(config, "head")
     assert "ai_provider_traces" not in inspect(engine).get_table_names()
     with engine.connect() as connection:
+        temporal_billing_definition = connection.scalar(
+            text(
+                """
+                SELECT pg_get_constraintdef(oid)
+                FROM pg_constraint
+                WHERE conname = 'ck_ai_provider_invocations_v1_temporal_billing'
+                """
+            )
+        )
         upgraded = (
             connection.execute(
                 text(
@@ -211,6 +220,16 @@ def test_provider_invocation_fixture_history_backfill_and_round_trip(
             .mappings()
             .all()
         )
+    assert temporal_billing_definition is not None
+    for required_fact in (
+        "contract_version = 1",
+        "(classification)::text = 'live'::text",
+        "(status)::text = 'succeeded'::text",
+        "dispatch_started_at IS NOT NULL",
+        "cost_amount IS NULL",
+        "cost_currency IS NULL",
+    ):
+        assert required_fact in temporal_billing_definition
     assert len(upgraded) == 4
     for upgraded_row, original in zip(upgraded, legacy_rows, strict=True):
         succeeded = original["status"] == "succeeded"
