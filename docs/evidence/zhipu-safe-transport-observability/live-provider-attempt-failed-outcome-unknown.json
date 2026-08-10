@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "evidence_type": "live_provider_attempt_failed_outcome_unknown",
+  "classification": "live",
+  "source_invocation_correlation": "59bd943ccb99",
+  "provider": "zhipu",
+  "requested_model": "glm-5.2",
+  "lifecycle": "outcome_unknown",
+  "error_category": "transport_error",
+  "error_code": "provider_transport_error",
+  "client_total_elapsed_ms": 10501,
+  "usage": {
+    "status": "unavailable",
+    "input_tokens": null,
+    "output_tokens": null,
+    "total_tokens": null
+  },
+  "billing": {
+    "status": "live_billing_unknown",
+    "cost_amount": null,
+    "cost_currency": null
+  },
+  "outbound_request_count": 1,
+  "retry": false,
+  "retry_count": 0,
+  "fallback": false,
+  "fallback_count": 0,
+  "governance_side_effect_count": 0,
+  "transport_diagnosis": {
+    "code": "H",
+    "summary": "Provider HTTP layer reachable but root transport exception unavailable",
+    "root_exception": "unavailable"
+  },
+  "observability_scope": "prospective_only",
+  "original_invocation_row_modified": false,
+  "live_validation_pass": false,
+  "live_pass_screenshot_generated": false,
+  "failure_screenshot": {
+    "count": 0,
+    "status": "not_captured_source_ui_incompatible",
+    "provider_request_generated_for_screenshot": false
+  },
+  "remediation_validation": {
+    "generated_at": "2026-08-09T18:20:19Z",
+    "focused_passed": 184,
+    "focused_deselected": 1,
+    "backend_canonical_passed": 528,
+    "backend_coverage_percent": 85.03,
+    "implementation_live_request_count": 0,
+    "no_real_provider_key_access": true
+  }
+}

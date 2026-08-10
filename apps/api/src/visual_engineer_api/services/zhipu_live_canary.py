@@ -33,7 +33,6 @@ from visual_engineer_api.ai_planning.provider import (
     ProviderErrorCategory,
 )
 from visual_engineer_api.ai_planning.provider_registry import (
-    PROVIDER_DEFINITIONS,
     ProviderId,
     ProviderRegistry,
 )
@@ -98,10 +97,12 @@ ZHIPU_LIVE_CANARY_POLICY = ProviderCallPolicy(
     concurrency_limit=1,
 )
 
-_REAL_PROVIDER_SECRET_ENV_NAMES = tuple(
-    definition.secret_setting.upper()
-    for definition in PROVIDER_DEFINITIONS
-    if definition.secret_setting is not None
+_REAL_PROVIDER_SECRET_ENV_NAMES = (
+    "ZHIPU_API_KEY",
+    "QWEN_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "DOUBAO_API_KEY",
+    "KIMI_API_KEY",
 )
 _SECRET_BLIND_ENV_ALLOWLIST = (
     "PATH",
@@ -319,8 +320,8 @@ def verify_pre_live_safety_contract() -> None:
         or ZhipuAdapter.request_overrides != {"thinking": {"type": "disabled"}}
     ):
         raise ZhipuLiveCanaryError("zhipu_production_contract_drift")
-    if "zhipu_api_key" not in Settings.model_fields:
-        raise ZhipuLiveCanaryError("zhipu_secret_setting_missing")
+    if "zhipu_api_key" in Settings.model_fields:
+        raise ZhipuLiveCanaryError("owner_secret_product_settings_exposure")
     scanner = repository_root() / "scripts" / "check-secrets.sh"
     if shutil.which("rg") is None or not scanner.is_file():
         raise ZhipuLiveCanaryError("secret_scanner_unavailable")

@@ -1,9 +1,9 @@
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
-from pydantic import Field, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 DEFAULT_DATABASE_URL = (
     "postgresql+psycopg://visualengineer:visualengineer-local@localhost:5432/visualengineer"
@@ -16,15 +16,10 @@ def validate_database_url(value: str) -> str:
     return value
 
 
-class Settings(BaseSettings):
+class Settings(BaseModel):
     """Typed configuration loaded from environment variables or safe local defaults."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        case_sensitive=False,
-    )
+    model_config = ConfigDict(extra="ignore")
 
     database_url: str = DEFAULT_DATABASE_URL
     api_host: str = "127.0.0.1"
@@ -43,11 +38,6 @@ class Settings(BaseSettings):
     ai_plan_context_max_bytes: int = Field(default=16 * 1024, ge=1024, le=256 * 1024)
     ai_plan_context_max_references: int = Field(default=64, ge=1, le=500)
     ai_provider_timeout_seconds: float = Field(default=2.0, ge=0.05, le=30.0)
-    zhipu_api_key: SecretStr = SecretStr("")
-    qwen_api_key: SecretStr = SecretStr("")
-    deepseek_api_key: SecretStr = SecretStr("")
-    doubao_api_key: SecretStr = SecretStr("")
-    kimi_api_key: SecretStr = SecretStr("")
     runner_bootstrap_token: SecretStr = SecretStr("")
     runner_online_threshold_seconds: int = Field(default=15, ge=3, le=300)
     runner_lease_seconds: int = Field(default=6, ge=2, le=60)
@@ -106,4 +96,9 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    values: dict[str, Any] = {}
+    for field_name in Settings.model_fields:
+        value = os.environ.get(field_name.upper())
+        if value is not None:
+            values[field_name] = value
+    return Settings.model_validate(values)

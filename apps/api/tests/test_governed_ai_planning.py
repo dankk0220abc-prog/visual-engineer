@@ -1,7 +1,9 @@
+import os
 import threading
 import time
 import uuid
-from collections.abc import Generator
+from collections import Counter
+from collections.abc import Generator, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, cast
@@ -12,6 +14,7 @@ from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+import visual_engineer_api.ai_planning.real_provider_adapters as provider_adapters
 from repository_fixture import create_adversarial_repository, run_git
 from visual_engineer_api.ai_planning.contracts import (
     AIPlanContract,
@@ -44,6 +47,26 @@ from visual_engineer_api.models.run import ApprovalDecision, Plan, Run
 from visual_engineer_api.models.workspace import ExecutionGrant
 from visual_engineer_api.schemas.ai_planning import AIPlanDecisionCreate, AIPlanRequestCreate
 from visual_engineer_api.services.ai_planning import AIPlanningService, AIPlanningServiceError
+
+
+class _OwnerKeyEnvironmentProbe(Mapping[str, str]):
+    def __init__(self, owner_value: str) -> None:
+        self._values = {"ZHIPU_API_KEY": owner_value}
+        self.value_reads: Counter[str] = Counter()
+
+    def __getitem__(self, key: str) -> str:
+        self.value_reads[key] += 1
+        return self._values[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self.value_reads[key] += 1
+        return self._values.get(key, default)
+
+    def __iter__(self) -> Iterator[str]:
+        raise AssertionError("PRODUCT_ENVIRONMENT_ENUMERATION_FORBIDDEN")
+
+    def __len__(self) -> int:
+        return len(self._values)
 
 
 @pytest.fixture
@@ -123,13 +146,7 @@ def test_unconfigured_real_provider_fails_before_artifact_or_authority_side_effe
     _, run, _ = _prepare_snapshot(client, repository, f"unconfigured-{provider_id.value}")
     service = AIPlanningService(
         db_session,
-        settings=Settings(
-            zhipu_api_key="",
-            qwen_api_key="",
-            deepseek_api_key="",
-            doubao_api_key="",
-            kimi_api_key="",
-        ),
+        settings=Settings(_env_file=None),
     )
 
     with pytest.raises(AIPlanningServiceError) as caught:
@@ -154,32 +171,53 @@ def test_unconfigured_real_provider_fails_before_artifact_or_authority_side_effe
     assert stored_run.status == "snapshot_ready"
 
 
-def test_configured_but_unvalidated_provider_still_fails_before_http_or_artifacts(
+def test_owner_key_isolation_rejects_ordinary_zhipu_before_http_or_artifacts(
     client: TestClient,
     db_session: Session,
     ai_repository: tuple[Path, str, str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository, _, _ = ai_repository
-    _, run, _ = _prepare_snapshot(client, repository, "configured-unvalidated")
-    service = AIPlanningService(
-        db_session,
-        settings=Settings(zhipu_api_key="synthetic-local-contract-only"),
-    )
+    _, run, _ = _prepare_snapshot(client, repository, "owner-key-isolation")
+    owner_value = "synthetic-owner-zhipu-canary-credential-only"
+    environment = _OwnerKeyEnvironmentProbe(owner_value)
+    outbound_request_count = 0
 
-    with pytest.raises(AIPlanningServiceError) as caught:
-        service.create_request(
-            uuid.UUID(run["id"]),
-            AIPlanRequestCreate(
-                delivery_package=DeliveryPackage.FRONTEND_QUALITY_REMEDIATION,
-                provider_id=ProviderId.ZHIPU,
-            ),
-            request_id="configured-unvalidated",
-            idempotency_key="configured-unvalidated",
-        )
+    def forbidden_production_client() -> None:
+        nonlocal outbound_request_count
+        outbound_request_count += 1
+        raise AssertionError("ORDINARY_PRODUCT_TRANSPORT_FORBIDDEN")
 
-    assert caught.value.code == "provider_disabled"
+    monkeypatch.setattr(provider_adapters, "_create_production_client", forbidden_production_client)
+    original_environment = os.environ
+    os.environ = environment  # type: ignore[assignment]  # noqa: B003
+    try:
+        service = AIPlanningService(db_session, settings=Settings(_env_file=None))
+        with pytest.raises(AIPlanningServiceError) as caught:
+            service.create_request(
+                uuid.UUID(run["id"]),
+                AIPlanRequestCreate(
+                    delivery_package=DeliveryPackage.FRONTEND_QUALITY_REMEDIATION,
+                    provider_id=ProviderId.ZHIPU,
+                ),
+                request_id="owner-key-isolation",
+                idempotency_key="owner-key-isolation",
+            )
+    finally:
+        os.environ = original_environment  # noqa: B003
+
+    assert caught.value.code == "provider_not_configured"
+    assert "configure your own credential" in caught.value.message
+    assert environment.value_reads["ZHIPU_API_KEY"] == 0
+    assert outbound_request_count == 0
     assert db_session.scalar(select(func.count()).select_from(AIPlanRequest)) == 0
+    assert db_session.scalar(select(func.count()).select_from(AIProviderInvocation)) == 0
     assert db_session.scalar(select(func.count()).select_from(Plan)) == 0
+    assert db_session.scalar(select(func.count()).select_from(ExecutionGrant)) == 0
+    assert db_session.scalar(select(func.count()).select_from(ReviewDecision)) == 0
+    assert db_session.scalar(select(func.count()).select_from(DeliveryAuthorization)) == 0
+    stored_run = db_session.get(Run, uuid.UUID(run["id"]))
+    assert stored_run is not None and stored_run.status == "snapshot_ready"
 
 
 def test_ai_plan_complete_flow_is_redacted_evaluated_idempotent_and_authority_free(

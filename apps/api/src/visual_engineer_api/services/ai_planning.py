@@ -129,7 +129,7 @@ class AIPlanningService:
         self._tasks = TaskRepository(session)
         self._settings = settings or get_settings()
         self._provider_override = provider
-        self._provider_registry = ProviderRegistry(self._settings)
+        self._provider_registry = ProviderRegistry()
 
     @property
     def provider(self) -> PlanningProvider:
@@ -1146,7 +1146,8 @@ class AIPlanningService:
         if not status.configured:
             raise AIPlanningServiceError(
                 "provider_not_configured",
-                "The selected Provider is missing its local API key",
+                "The selected Provider is unavailable; configure your own credential when "
+                "product BYOK is available",
                 category="policy",
             )
         if not status.enabled:

@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from visual_engineer_api.ai_planning.provider_registry import ProviderRegistry
-from visual_engineer_api.core.config import get_settings
 from visual_engineer_api.db.session import get_db
 from visual_engineer_api.schemas.ai_planning import (
     AIPlanDecisionCreate,
@@ -67,7 +66,7 @@ def _raise_service_error(error: AIPlanningServiceError) -> NoReturn:
     summary="List installed model-neutral planning Provider capabilities",
 )
 def list_ai_providers() -> AIProviderListResponse:
-    items = ProviderRegistry(get_settings()).list()
+    items = ProviderRegistry().list()
     return AIProviderListResponse(items=items, total=len(items))
 
 
