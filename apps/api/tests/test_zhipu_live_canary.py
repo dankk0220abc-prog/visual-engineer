@@ -29,6 +29,7 @@ from visual_engineer_api.ai_planning.provider import (
     CancellationToken,
     ProviderError,
     ProviderErrorCategory,
+    ProviderTransportPhase,
 )
 from visual_engineer_api.ai_planning.provider_registry import ProviderId, ProviderRegistry
 from visual_engineer_api.ai_planning.real_provider_adapters import ZhipuAdapter
@@ -319,6 +320,13 @@ def _raise_transport_case(kind: str, request: httpx.Request) -> NoReturn:
         raise httpx.ConnectTimeout(sensitive, request=request)
     if kind == "read_timeout":
         raise httpx.ReadTimeout(sensitive, request=request)
+    if kind == "total_deadline":
+        raise ProviderError(
+            ProviderErrorCategory.TIMEOUT,
+            "provider_total_deadline_exceeded",
+            "The selected Provider exceeded its total deadline",
+            safe_phase=ProviderTransportPhase.TOTAL_DEADLINE,
+        )
     if kind == "write_error":
         raise httpx.WriteError(sensitive, request=request)
     if kind == "read_interruption":
@@ -646,6 +654,12 @@ def test_error_matrix_is_single_request_with_reviewed_terminal_semantics(
         ("tls_handshake", "transport_error", "provider_tls_handshake_failed", "connect"),
         ("connect_timeout", "timeout", "provider_connect_timeout", "connect"),
         ("read_timeout", "timeout", "provider_read_timeout", "read"),
+        (
+            "total_deadline",
+            "timeout",
+            "provider_total_deadline_exceeded",
+            "total_deadline",
+        ),
         ("write_error", "transport_error", "provider_write_interrupted", "write"),
         (
             "read_interruption",
@@ -1110,26 +1124,58 @@ def test_response_stage_classification_codes_are_unique_and_never_generic_transp
     assert "provider_transport_error" not in classifications.values()
 
 
-def test_every_non_success_http_status_has_a_closed_non_transport_classification() -> None:
-    request = httpx.Request("GET", "https://example.invalid")
-    for status_code in range(100, 600):
-        if 200 <= status_code < 300:
-            continue
-        with pytest.raises(ProviderError) as caught:
-            ZhipuAdapter._raise_for_status(httpx.Response(status_code, request=request))
-        assert caught.value.code != "provider_transport_error"
-        if 400 <= status_code < 500:
-            assert caught.value.category in {
-                ProviderErrorCategory.AUTHENTICATION_FAILED,
-                ProviderErrorCategory.MODEL_UNAVAILABLE,
-                ProviderErrorCategory.RATE_LIMITED,
-                ProviderErrorCategory.REQUEST_REJECTED,
-                ProviderErrorCategory.TIMEOUT,
-            }
-        elif 500 <= status_code < 600:
-            assert caught.value.category == ProviderErrorCategory.UPSTREAM_SERVER_ERROR
-        else:
-            assert caught.value.category == ProviderErrorCategory.INVALID_RESPONSE
+@pytest.mark.parametrize(
+    ("status_code", "expected_category", "expected_code"),
+    [
+        (400, "request_rejected", "provider_request_rejected"),
+        (408, "request_rejected", "provider_request_rejected"),
+        (409, "request_rejected", "provider_request_rejected"),
+        (429, "rate_limited", "provider_rate_limited"),
+        (500, "upstream_server_error", "provider_upstream_server_error"),
+        (503, "upstream_server_error", "provider_upstream_server_error"),
+    ],
+)
+def test_representative_non_success_http_responses_are_definite_and_authority_free(
+    db_session: Session,
+    status_code: int,
+    expected_category: str,
+    expected_code: str,
+) -> None:
+    request_count = 0
+    authority_before = _authority_counts(db_session)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx.Response(status_code, text=f"raw {_synthetic_credential()}")
+
+    result = asyncio.run(_invoke_with_mock(db_session, handler))
+    invocation = db_session.get(AIProviderInvocation, result.invocation_id)
+    ai_request = db_session.get(AIPlanRequest, result.ai_plan_request_id)
+
+    assert request_count == 1
+    assert result.status == InvocationStatus.FAILED
+    assert invocation is not None
+    assert invocation.status == "failed"
+    assert invocation.error_category == expected_category
+    assert invocation.error_code == expected_code
+    assert invocation.provider_id == "zhipu"
+    assert invocation.attempt_number == 1
+    assert invocation.response_digest is None
+    assert ai_request is not None
+    assert ai_request.status == "failed"
+    assert ai_request.retry_count == 0
+    assert ai_request.response_payload is None
+    assert db_session.scalar(select(func.count()).select_from(AIProviderInvocation)) == 1
+    assert db_session.scalar(select(func.count()).select_from(Plan)) == 0
+    assert db_session.scalar(select(func.count()).select_from(AIEvalResult)) == 0
+    assert _authority_counts(db_session) == authority_before
+    assert _synthetic_credential() not in json.dumps(
+        {
+            "error_category": invocation.error_category,
+            "error_code": invocation.error_code,
+        }
+    )
 
 
 def test_pre_dispatch_cancellation_sends_zero_requests(db_session: Session) -> None:

@@ -555,9 +555,9 @@ class RealProviderAdapter(ABC):
                 "The selected Provider model is unavailable",
             ),
             408: (
-                ProviderErrorCategory.TIMEOUT,
-                "provider_timeout",
-                "The selected Provider request timed out",
+                ProviderErrorCategory.REQUEST_REJECTED,
+                "provider_request_rejected",
+                "The selected Provider rejected the request",
             ),
             422: (
                 ProviderErrorCategory.REQUEST_REJECTED,
