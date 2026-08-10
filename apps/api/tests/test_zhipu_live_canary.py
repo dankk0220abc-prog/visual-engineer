@@ -9,7 +9,7 @@ import ssl
 import subprocess
 import uuid
 from collections import Counter
-from collections.abc import Callable, Generator, Iterator, Mapping
+from collections.abc import AsyncIterator, Callable, Generator, Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, NoReturn
@@ -25,9 +25,16 @@ from visual_engineer_api.ai_planning.contracts import AIPlanContract, canonical_
 from visual_engineer_api.ai_planning.evaluator import evaluate_plan
 from visual_engineer_api.ai_planning.fake_provider import DeterministicFixtureProvider
 from visual_engineer_api.ai_planning.invocation_contract import InvocationStatus
-from visual_engineer_api.ai_planning.provider import CancellationToken
+from visual_engineer_api.ai_planning.provider import (
+    CancellationToken,
+    ProviderError,
+    ProviderErrorCategory,
+)
 from visual_engineer_api.ai_planning.provider_registry import ProviderId, ProviderRegistry
 from visual_engineer_api.ai_planning.real_provider_adapters import ZhipuAdapter
+from visual_engineer_api.ai_planning.transport_observability import (
+    classify_response_body_exception,
+)
 from visual_engineer_api.ai_planning.zhipu_live_canary import (
     LIVE_CANARY_EVAL_IDS,
     ZHIPU_LIVE_CANARY_ENDPOINT,
@@ -318,6 +325,10 @@ def _raise_transport_case(kind: str, request: httpx.Request) -> NoReturn:
         raise httpx.ReadError(sensitive, request=request)
     if kind == "remote_protocol":
         raise httpx.RemoteProtocolError(sensitive, request=request)
+    if kind == "local_protocol":
+        raise httpx.LocalProtocolError(sensitive, request=request)
+    if kind == "protocol":
+        raise httpx.ProtocolError(sensitive, request=request)
     if kind == "generic_network":
         raise httpx.NetworkError(sensitive, request=request)
     raise RuntimeError(sensitive)
@@ -648,6 +659,13 @@ def test_error_matrix_is_single_request_with_reviewed_terminal_semantics(
             "provider_remote_protocol_error",
             "response",
         ),
+        (
+            "local_protocol",
+            "transport_error",
+            "provider_local_protocol_error",
+            "transport",
+        ),
+        ("protocol", "transport_error", "provider_protocol_error", "transport"),
         ("generic_network", "transport_error", "provider_network_error", "transport"),
         ("unknown", "transport_error", "provider_transport_error", "transport"),
     ],
@@ -755,6 +773,363 @@ def test_safe_transport_classifier_matrix_is_durable_secret_negative_and_authori
     )
     for fragment in _SECRET_NEGATIVE_FRAGMENTS:
         assert all(fragment not in surface for surface in safe_surfaces)
+
+
+class _SyntheticResponseStream(httpx.AsyncByteStream):
+    def __init__(self, chunks: list[bytes], error: Exception | None = None) -> None:
+        self._chunks = chunks
+        self._error = error
+        self.closed = False
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for chunk in self._chunks:
+            yield chunk
+        if self._error is not None:
+            raise self._error
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def _response_path_exception(kind: str, request: httpx.Request) -> Exception:
+    sensitive = " | ".join(_SECRET_NEGATIVE_FRAGMENTS)
+    if kind == "decoding":
+        return httpx.DecodingError(sensitive, request=request)
+    if kind == "stream_closed":
+        error: Exception = httpx.StreamClosed()
+        error.__cause__ = RuntimeError(sensitive)
+        return error
+    if kind == "stream_consumed":
+        error = httpx.StreamConsumed()
+        error.__cause__ = RuntimeError(sensitive)
+        return error
+    if kind == "response_not_read":
+        error = httpx.ResponseNotRead()
+        error.__cause__ = RuntimeError(sensitive)
+        return error
+    if kind == "request_not_read":
+        error = httpx.RequestNotRead()
+        error.__cause__ = RuntimeError(sensitive)
+        return error
+    if kind == "stream_error":
+        return httpx.StreamError(sensitive)
+    if kind == "local_protocol":
+        return httpx.LocalProtocolError(sensitive, request=request)
+    if kind == "protocol":
+        return httpx.ProtocolError(sensitive, request=request)
+    return RuntimeError(sensitive)
+
+
+def _response_path_case(
+    case: str,
+    request: httpx.Request,
+) -> tuple[httpx.Response, _SyntheticResponseStream | None]:
+    valid = json.dumps(_provider_payload()).encode()
+    if case == "A":
+        return httpx.Response(200, content=valid), None
+    if case == "B":
+        stream = _SyntheticResponseStream([valid[:17], valid[17:71], valid[71:]])
+        return httpx.Response(200, stream=stream), stream
+    if case == "C":
+        stream = _SyntheticResponseStream(
+            [valid[:17]],
+            httpx.ReadError(" | ".join(_SECRET_NEGATIVE_FRAGMENTS), request=request),
+        )
+        return httpx.Response(200, stream=stream), stream
+    if case == "D":
+        stream = _SyntheticResponseStream(
+            [valid[:17]],
+            httpx.RemoteProtocolError(" | ".join(_SECRET_NEGATIVE_FRAGMENTS), request=request),
+        )
+        return httpx.Response(200, stream=stream), stream
+    if case == "E":
+        return httpx.Response(200, content=b'{"choices":'), None
+    if case == "F":
+        return httpx.Response(200, json={"choices": []}), None
+    if case == "G":
+        return httpx.Response(422, json={"error": {"message": "synthetic rejection"}}), None
+    if case == "H":
+        return httpx.Response(
+            200,
+            content=b"x" * (ZHIPU_LIVE_CANARY_MAXIMUM_RESPONSE_BYTES + 1),
+        ), None
+    if case == "I":
+        stream = _SyntheticResponseStream(
+            [valid[:17]],
+            RuntimeError(" | ".join(_SECRET_NEGATIVE_FRAGMENTS)),
+        )
+        return httpx.Response(200, stream=stream), stream
+    if case == "J":
+        stream = _SyntheticResponseStream(
+            [valid[:17]],
+            _response_path_exception("stream_closed", request),
+        )
+        return httpx.Response(200, stream=stream), stream
+    if case == "K":
+        stream = _SyntheticResponseStream([b"not-a-valid-gzip-stream"])
+        return httpx.Response(
+            200,
+            headers={"Content-Encoding": "gzip"},
+            stream=stream,
+        ), stream
+    if case == "L":
+        return httpx.Response(409, json={"error": {"message": "synthetic conflict"}}), None
+    raise AssertionError("unknown synthetic response-path case")
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_status", "expected_category", "expected_code"),
+    [
+        ("A", "succeeded", None, None),
+        ("B", "succeeded", None, None),
+        (
+            "C",
+            "outcome_unknown",
+            "transport_error",
+            "provider_response_read_interrupted",
+        ),
+        (
+            "D",
+            "outcome_unknown",
+            "transport_error",
+            "provider_remote_protocol_error",
+        ),
+        (
+            "E",
+            "failed",
+            "structured_output_invalid",
+            "provider_structured_output_invalid",
+        ),
+        (
+            "F",
+            "failed",
+            "structured_output_invalid",
+            "provider_structured_output_invalid",
+        ),
+        ("G", "failed", "request_rejected", "provider_request_rejected"),
+        ("H", "failed", "budget_exceeded", "provider_response_budget_exceeded"),
+        (
+            "I",
+            "outcome_unknown",
+            "transport_error",
+            "provider_response_body_processing_error",
+        ),
+        (
+            "J",
+            "outcome_unknown",
+            "transport_error",
+            "provider_response_stream_state_error",
+        ),
+        (
+            "K",
+            "outcome_unknown",
+            "transport_error",
+            "provider_response_decoding_failed",
+        ),
+        ("L", "failed", "request_rejected", "provider_request_rejected"),
+    ],
+    ids=lambda value: f"case-{value}" if isinstance(value, str) and len(value) == 1 else None,
+)
+def test_zhipu_response_path_a_to_l_matrix_is_closed_and_authority_free(
+    db_session: Session,
+    case: str,
+    expected_status: str,
+    expected_category: str | None,
+    expected_code: str | None,
+) -> None:
+    request_count = 0
+    authority_before = _authority_counts(db_session)
+    streams: list[_SyntheticResponseStream] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        response, stream = _response_path_case(case, request)
+        if stream is not None:
+            streams.append(stream)
+        return response
+
+    result = asyncio.run(_invoke_with_mock(db_session, handler))
+    invocation = db_session.get(AIProviderInvocation, result.invocation_id)
+    ai_request = db_session.get(AIPlanRequest, result.ai_plan_request_id)
+
+    assert request_count == 1
+    assert invocation is not None
+    assert invocation.status == expected_status
+    assert invocation.error_category == expected_category
+    assert invocation.error_code == expected_code
+    assert invocation.attempt_number == 1
+    assert ai_request is not None
+    assert ai_request.retry_count == 0
+    assert db_session.scalar(select(func.count()).select_from(AIProviderInvocation)) == 1
+    assert _authority_counts(db_session) == authority_before
+    assert all(stream.closed for stream in streams)
+    if expected_status == "succeeded":
+        assert ai_request.status == "generated"
+        assert ai_request.response_payload is not None
+    else:
+        assert ai_request.status == "failed"
+        assert ai_request.response_payload is None
+        assert db_session.scalar(select(func.count()).select_from(Plan)) == 0
+        assert db_session.scalar(select(func.count()).select_from(AIEvalResult)) == 0
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_code"),
+    [
+        ("decoding", "provider_response_decoding_failed"),
+        ("stream_closed", "provider_response_stream_state_error"),
+        ("stream_consumed", "provider_response_stream_state_error"),
+        ("response_not_read", "provider_response_stream_state_error"),
+        ("request_not_read", "provider_response_stream_state_error"),
+        ("stream_error", "provider_response_stream_state_error"),
+        ("runtime", "provider_response_body_processing_error"),
+        ("local_protocol", "provider_local_protocol_error"),
+        ("protocol", "provider_protocol_error"),
+    ],
+)
+def test_response_body_failures_are_durable_secret_negative_and_safe_logged(
+    db_session: Session,
+    kind: str,
+    expected_code: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    request_count = 0
+    authority_before = _authority_counts(db_session)
+    transport_records: list[logging.LogRecord] = []
+
+    class RecordCollector(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            transport_records.append(record)
+
+    transport_logger = logging.getLogger("visual_engineer.provider_transport")
+    collector = RecordCollector()
+    previous_level = transport_logger.level
+    previous_disabled = transport_logger.disabled
+    transport_logger.disabled = False
+    transport_logger.setLevel(logging.WARNING)
+    transport_logger.addHandler(collector)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        stream = _SyntheticResponseStream(
+            [b'{"partial":'],
+            _response_path_exception(kind, request),
+        )
+        return httpx.Response(200, stream=stream)
+
+    try:
+        result = asyncio.run(_invoke_with_mock(db_session, handler))
+    finally:
+        transport_logger.removeHandler(collector)
+        transport_logger.setLevel(previous_level)
+        transport_logger.disabled = previous_disabled
+    invocation = db_session.get(AIProviderInvocation, result.invocation_id)
+    ai_request = db_session.get(AIPlanRequest, result.ai_plan_request_id)
+
+    assert request_count == 1
+    assert result.status == InvocationStatus.OUTCOME_UNKNOWN
+    assert invocation is not None
+    assert invocation.status == "outcome_unknown"
+    assert invocation.error_category == "transport_error"
+    assert invocation.error_code == expected_code
+    assert invocation.attempt_number == 1
+    assert ai_request is not None
+    assert ai_request.retry_count == 0
+    assert ai_request.response_payload is None
+    assert db_session.scalar(select(func.count()).select_from(AIProviderInvocation)) == 1
+    assert _authority_counts(db_session) == authority_before
+
+    assert len(transport_records) == 1
+    record = transport_records[0]
+    assert record.getMessage() == "provider_transport_failure"
+    assert record.exc_info is None
+    assert record.error_code == expected_code  # type: ignore[attr-defined]
+    assert record.safe_phase == "response"  # type: ignore[attr-defined]
+    api_serialized = AIPlanningService._invocation_response(invocation).model_dump_json()
+    database_serialized = json.dumps(
+        {
+            "request": {
+                column.name: getattr(ai_request, column.name)
+                for column in AIPlanRequest.__table__.columns
+            },
+            "invocation": {
+                column.name: getattr(invocation, column.name)
+                for column in AIProviderInvocation.__table__.columns
+            },
+        },
+        default=str,
+    )
+    captured = capsys.readouterr()
+    log_serialized = json.dumps(
+        {
+            "message": record.getMessage(),
+            "invocation_correlation": record.invocation_correlation,  # type: ignore[attr-defined]
+            "provider": record.provider,  # type: ignore[attr-defined]
+            "error_category": record.error_category,  # type: ignore[attr-defined]
+            "error_code": record.error_code,  # type: ignore[attr-defined]
+            "safe_phase": record.safe_phase,  # type: ignore[attr-defined]
+            "elapsed_ms": record.elapsed_ms,  # type: ignore[attr-defined]
+            "lifecycle": record.lifecycle,  # type: ignore[attr-defined]
+        }
+    )
+    for fragment in _SECRET_NEGATIVE_FRAGMENTS:
+        assert fragment not in str(result)
+        assert fragment not in api_serialized
+        assert fragment not in database_serialized
+        assert fragment not in captured.out
+        assert fragment not in captured.err
+        assert fragment not in log_serialized
+
+
+def test_response_stage_classification_codes_are_unique_and_never_generic_transport() -> None:
+    request = httpx.Request("GET", "https://example.invalid")
+    classifications = {
+        "decode": classify_response_body_exception(
+            httpx.DecodingError("synthetic", request=request)
+        ).code,
+        "stream_state": classify_response_body_exception(httpx.StreamClosed()).code,
+        "body_processing": classify_response_body_exception(RuntimeError("synthetic")).code,
+        "protocol": classify_response_body_exception(
+            httpx.RemoteProtocolError("synthetic", request=request)
+        ).code,
+    }
+    with pytest.raises(ProviderError) as caught:
+        ZhipuAdapter._raise_for_status(httpx.Response(409, request=request))
+    classifications["http_rejection"] = caught.value.code
+
+    assert classifications == {
+        "decode": "provider_response_decoding_failed",
+        "stream_state": "provider_response_stream_state_error",
+        "body_processing": "provider_response_body_processing_error",
+        "protocol": "provider_remote_protocol_error",
+        "http_rejection": "provider_request_rejected",
+    }
+    assert len(set(classifications.values())) == len(classifications)
+    assert "provider_transport_error" not in classifications.values()
+
+
+def test_every_non_success_http_status_has_a_closed_non_transport_classification() -> None:
+    request = httpx.Request("GET", "https://example.invalid")
+    for status_code in range(100, 600):
+        if 200 <= status_code < 300:
+            continue
+        with pytest.raises(ProviderError) as caught:
+            ZhipuAdapter._raise_for_status(httpx.Response(status_code, request=request))
+        assert caught.value.code != "provider_transport_error"
+        if 400 <= status_code < 500:
+            assert caught.value.category in {
+                ProviderErrorCategory.AUTHENTICATION_FAILED,
+                ProviderErrorCategory.MODEL_UNAVAILABLE,
+                ProviderErrorCategory.RATE_LIMITED,
+                ProviderErrorCategory.REQUEST_REJECTED,
+                ProviderErrorCategory.TIMEOUT,
+            }
+        elif 500 <= status_code < 600:
+            assert caught.value.category == ProviderErrorCategory.UPSTREAM_SERVER_ERROR
+        else:
+            assert caught.value.category == ProviderErrorCategory.INVALID_RESPONSE
 
 
 def test_pre_dispatch_cancellation_sends_zero_requests(db_session: Session) -> None:

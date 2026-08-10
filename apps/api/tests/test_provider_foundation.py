@@ -1122,7 +1122,8 @@ def test_mock_transport_is_test_only_and_redirects_do_not_forward_authorization(
     with pytest.raises(ProviderError) as caught:
         _invoke_with_transport(DeepSeekAdapter, handler, follow_redirects=False)
 
-    assert caught.value.category == ProviderErrorCategory.TRANSPORT_ERROR
+    assert caught.value.category == ProviderErrorCategory.INVALID_RESPONSE
+    assert caught.value.code == "provider_unexpected_http_status"
     assert len(requests) == 1
     assert requests[0].headers["Authorization"].startswith("Bearer ")
     assert (

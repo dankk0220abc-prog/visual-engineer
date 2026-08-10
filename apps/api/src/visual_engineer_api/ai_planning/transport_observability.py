@@ -15,7 +15,9 @@ _HTTP_CORE_TRANSPORT_TYPES = frozenset(
     {
         "ConnectError",
         "ConnectTimeout",
+        "LocalProtocolError",
         "NetworkError",
+        "ProtocolError",
         "ReadError",
         "ReadTimeout",
         "RemoteProtocolError",
@@ -65,6 +67,14 @@ def classify_transport_exception(exception: Exception) -> ProviderError:
         chain, "RemoteProtocolError"
     ):
         return _transport("provider_remote_protocol_error", ProviderTransportPhase.RESPONSE)
+    if _contains_type(chain, httpx.LocalProtocolError) or _contains_httpcore_type(
+        chain, "LocalProtocolError"
+    ):
+        return _transport("provider_local_protocol_error", ProviderTransportPhase.TRANSPORT)
+    if _contains_type(chain, httpx.ProtocolError) or _contains_httpcore_type(
+        chain, "ProtocolError"
+    ):
+        return _transport("provider_protocol_error", ProviderTransportPhase.TRANSPORT)
     if _contains_type(chain, httpx.WriteError) or _contains_httpcore_type(chain, "WriteError"):
         return _transport("provider_write_interrupted", ProviderTransportPhase.WRITE)
     if _contains_type(chain, httpx.ReadError) or _contains_httpcore_type(chain, "ReadError"):
@@ -74,6 +84,42 @@ def classify_transport_exception(exception: Exception) -> ProviderError:
     if _contains_type(chain, httpx.NetworkError) or _contains_httpcore_type(chain, "NetworkError"):
         return _transport("provider_network_error", ProviderTransportPhase.TRANSPORT)
     return _transport("provider_transport_error", ProviderTransportPhase.TRANSPORT)
+
+
+def classify_response_body_exception(exception: Exception) -> ProviderError:
+    """Map failures after response headers to fixed codes without reading exception data."""
+    chain = tuple(_allowlisted_transport_chain(exception))
+
+    if _contains_type(chain, httpx.DecodingError):
+        return _transport(
+            "provider_response_decoding_failed",
+            ProviderTransportPhase.RESPONSE,
+        )
+    if _contains_type(chain, httpx.StreamError):
+        return _transport(
+            "provider_response_stream_state_error",
+            ProviderTransportPhase.RESPONSE,
+        )
+    if _contains_type(chain, httpx.ReadTimeout) or _contains_httpcore_type(chain, "ReadTimeout"):
+        return _timeout("provider_read_timeout", ProviderTransportPhase.READ)
+    if _contains_type(chain, httpx.RemoteProtocolError) or _contains_httpcore_type(
+        chain, "RemoteProtocolError"
+    ):
+        return _transport("provider_remote_protocol_error", ProviderTransportPhase.RESPONSE)
+    if _contains_type(chain, httpx.LocalProtocolError) or _contains_httpcore_type(
+        chain, "LocalProtocolError"
+    ):
+        return _transport("provider_local_protocol_error", ProviderTransportPhase.RESPONSE)
+    if _contains_type(chain, httpx.ProtocolError) or _contains_httpcore_type(
+        chain, "ProtocolError"
+    ):
+        return _transport("provider_protocol_error", ProviderTransportPhase.RESPONSE)
+    if _contains_type(chain, httpx.ReadError) or _contains_httpcore_type(chain, "ReadError"):
+        return _transport("provider_response_read_interrupted", ProviderTransportPhase.READ)
+    return _transport(
+        "provider_response_body_processing_error",
+        ProviderTransportPhase.RESPONSE,
+    )
 
 
 def _allowlisted_transport_chain(exception: Exception) -> Iterator[BaseException]:
@@ -93,7 +139,10 @@ def _allowlisted_transport_chain(exception: Exception) -> Iterator[BaseException
 
 
 def _is_allowlisted_chain_link(exception: BaseException) -> bool:
-    return isinstance(exception, (httpx.TransportError, OSError)) or (
+    return isinstance(
+        exception,
+        (httpx.DecodingError, httpx.StreamError, httpx.TransportError, OSError),
+    ) or (
         type(exception).__module__ == "httpcore"
         and type(exception).__name__ in _HTTP_CORE_TRANSPORT_TYPES
     )

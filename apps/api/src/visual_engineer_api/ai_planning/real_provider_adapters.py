@@ -25,6 +25,7 @@ from visual_engineer_api.ai_planning.provider import (
 )
 from visual_engineer_api.ai_planning.provider_registry import ProviderId
 from visual_engineer_api.ai_planning.transport_observability import (
+    classify_response_body_exception,
     classify_transport_exception,
 )
 
@@ -319,17 +320,26 @@ class RealProviderAdapter(ABC):
                 policy,
                 deadline_at,
             )
-            self._checkpoint(cancellation, deadline_at)
-            result = self._normalize(response, latency_ms=0)
-            if self._test_after_normalize is not None:
-                self._test_after_normalize()
-            self._checkpoint(cancellation, deadline_at)
-            latency_ms = round((self._clock.monotonic() - started_at) * 1000, 3)
-            return result.model_copy(update={"latency_ms": latency_ms})
         except ProviderError:
             raise
         except Exception as exception:
             raise classify_transport_exception(exception) from None
+        self._checkpoint(cancellation, deadline_at)
+        try:
+            result = self._normalize(response, latency_ms=0)
+        except ProviderError:
+            raise
+        except Exception:
+            raise ProviderError(
+                ProviderErrorCategory.STRUCTURED_OUTPUT_INVALID,
+                "provider_structured_output_invalid",
+                "The selected Provider returned an invalid structured response",
+            ) from None
+        if self._test_after_normalize is not None:
+            self._test_after_normalize()
+        self._checkpoint(cancellation, deadline_at)
+        latency_ms = round((self._clock.monotonic() - started_at) * 1000, 3)
+        return result.model_copy(update={"latency_ms": latency_ms})
 
     async def _post(
         self,
@@ -361,42 +371,52 @@ class RealProviderAdapter(ABC):
         self._checkpoint(cancellation, deadline_at)
         streamed: httpx.Response | None = None
         try:
-            streamed = await self._await_controlled(
-                client.send(prepared, stream=True),
-                cancellation=cancellation,
-                cancellation_event=cancellation_event,
-                deadline_at=deadline_at,
-            )
+            try:
+                streamed = await self._await_controlled(
+                    client.send(prepared, stream=True),
+                    cancellation=cancellation,
+                    cancellation_event=cancellation_event,
+                    deadline_at=deadline_at,
+                )
+            except ProviderError:
+                raise
+            except Exception as exception:
+                raise classify_transport_exception(exception) from None
             self._checkpoint(cancellation, deadline_at)
-            self._raise_for_status(streamed)
-            content = bytearray()
-            iterator = streamed.aiter_bytes()
-            while True:
-                try:
-                    chunk = await self._await_controlled(
-                        iterator.__anext__(),
-                        cancellation=cancellation,
-                        cancellation_event=cancellation_event,
-                        deadline_at=deadline_at,
-                        response=streamed,
-                    )
-                except StopAsyncIteration:
-                    break
+            try:
+                self._raise_for_status(streamed)
+                content = bytearray()
+                iterator = streamed.aiter_bytes()
+                while True:
+                    try:
+                        chunk = await self._await_controlled(
+                            iterator.__anext__(),
+                            cancellation=cancellation,
+                            cancellation_event=cancellation_event,
+                            deadline_at=deadline_at,
+                            response=streamed,
+                        )
+                    except StopAsyncIteration:
+                        break
+                    self._checkpoint(cancellation, deadline_at)
+                    if len(content) + len(chunk) > policy.maximum_response_bytes:
+                        raise ProviderError(
+                            ProviderErrorCategory.BUDGET_EXCEEDED,
+                            "provider_response_budget_exceeded",
+                            "The selected Provider response exceeded its byte budget",
+                        )
+                    content.extend(chunk)
                 self._checkpoint(cancellation, deadline_at)
-                if len(content) + len(chunk) > policy.maximum_response_bytes:
-                    raise ProviderError(
-                        ProviderErrorCategory.BUDGET_EXCEEDED,
-                        "provider_response_budget_exceeded",
-                        "The selected Provider response exceeded its byte budget",
-                    )
-                content.extend(chunk)
-            self._checkpoint(cancellation, deadline_at)
-            return httpx.Response(
-                streamed.status_code,
-                headers=streamed.headers,
-                content=bytes(content),
-                request=streamed.request,
-            )
+                return httpx.Response(
+                    streamed.status_code,
+                    headers=streamed.headers,
+                    content=bytes(content),
+                    request=streamed.request,
+                )
+            except ProviderError:
+                raise
+            except Exception as exception:
+                raise classify_response_body_exception(exception) from None
         finally:
             if streamed is not None:
                 await self._close_response(streamed)
@@ -513,7 +533,7 @@ class RealProviderAdapter(ABC):
     def _raise_for_status(response: httpx.Response) -> None:
         if response.is_success:
             return
-        category, code, message = {
+        known = {
             400: (
                 ProviderErrorCategory.REQUEST_REJECTED,
                 "provider_request_rejected",
@@ -549,20 +569,21 @@ class RealProviderAdapter(ABC):
                 "provider_rate_limited",
                 "The selected Provider rate limit was reached",
             ),
-        }.get(
-            response.status_code,
-            (
-                ProviderErrorCategory.UPSTREAM_SERVER_ERROR
-                if response.status_code >= 500
-                else ProviderErrorCategory.TRANSPORT_ERROR,
-                "provider_upstream_server_error"
-                if response.status_code >= 500
-                else "provider_transport_error",
-                "The selected Provider upstream service failed"
-                if response.status_code >= 500
-                else "The selected Provider transport failed safely",
-            ),
-        )
+        }.get(response.status_code)
+        if known is not None:
+            category, code, message = known
+        elif 400 <= response.status_code < 500:
+            category = ProviderErrorCategory.REQUEST_REJECTED
+            code = "provider_request_rejected"
+            message = "The selected Provider rejected the request"
+        elif 500 <= response.status_code < 600:
+            category = ProviderErrorCategory.UPSTREAM_SERVER_ERROR
+            code = "provider_upstream_server_error"
+            message = "The selected Provider upstream service failed"
+        else:
+            category = ProviderErrorCategory.INVALID_RESPONSE
+            code = "provider_unexpected_http_status"
+            message = "The selected Provider returned an unexpected HTTP status"
         raise ProviderError(category, code, message)
 
     def _normalize(self, response: httpx.Response, latency_ms: float) -> ProviderAdapterResult:
