@@ -101,6 +101,7 @@ _ALLOWED_ENDPOINTS = frozenset(
 _PROTECTED_REQUEST_FIELDS = frozenset(
     {"max_tokens", "messages", "model", "response_format", "stream"}
 )
+_PROTECTED_REQUEST_HEADERS = frozenset({"authorization", "content-type"})
 _CANCELLATION_BRIDGE_INTERVAL_SECONDS = 0.01
 
 _T = TypeVar("_T")
@@ -198,6 +199,8 @@ class RealProviderAdapter(ABC):
     model_id: ClassVar[str]
     endpoint: ClassVar[str]
     request_overrides: ClassVar[dict[str, Any]] = {}
+    request_header_overrides: ClassVar[dict[str, str]] = {}
+    strips_decoded_content_headers: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -212,6 +215,8 @@ class RealProviderAdapter(ABC):
             raise RuntimeError("Provider endpoint is outside the built-in allowlist")
         if self.request_overrides.keys() & _PROTECTED_REQUEST_FIELDS:
             raise RuntimeError("Provider request overrides cannot replace protected fields")
+        if {name.lower() for name in self.request_header_overrides} & _PROTECTED_REQUEST_HEADERS:
+            raise RuntimeError("Provider request header overrides cannot replace protected headers")
         if not api_key.get_secret_value().strip():
             raise ProviderError(
                 ProviderErrorCategory.PROVIDER_NOT_CONFIGURED,
@@ -359,6 +364,7 @@ class RealProviderAdapter(ABC):
         headers = {
             "Authorization": f"Bearer {self._api_key.get_secret_value()}",
             "Content-Type": "application/json",
+            **self.request_header_overrides,
         }
         self._checkpoint(cancellation, deadline_at)
         prepared = client.build_request(
@@ -407,9 +413,18 @@ class RealProviderAdapter(ABC):
                         )
                     content.extend(chunk)
                 self._checkpoint(cancellation, deadline_at)
+                response_headers = streamed.headers
+                if self.strips_decoded_content_headers:
+                    response_headers = httpx.Headers(
+                        [
+                            (name, value)
+                            for name, value in streamed.headers.multi_items()
+                            if name.lower() not in {"content-encoding", "content-length"}
+                        ]
+                    )
                 return httpx.Response(
                     streamed.status_code,
-                    headers=streamed.headers,
+                    headers=response_headers,
                     content=bytes(content),
                     request=streamed.request,
                 )
@@ -662,6 +677,8 @@ class ZhipuAdapter(RealProviderAdapter):
     model_id = "glm-5.2"
     endpoint = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
     request_overrides: ClassVar[dict[str, Any]] = {"thinking": {"type": "disabled"}}
+    request_header_overrides: ClassVar[dict[str, str]] = {"Accept-Encoding": "identity"}
+    strips_decoded_content_headers = True
 
 
 class QwenAdapter(RealProviderAdapter):

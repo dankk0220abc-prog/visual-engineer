@@ -1,5 +1,6 @@
 import asyncio
 import errno
+import gzip
 import inspect
 import json
 import logging
@@ -487,6 +488,7 @@ def test_fixed_scenario_and_outbound_contract_are_stable_and_secret_free() -> No
     assert body["stream"] is False
     assert body["thinking"] == {"type": "disabled"}
     assert adapter.endpoint == ZHIPU_LIVE_CANARY_ENDPOINT
+    assert adapter.request_header_overrides == {"Accept-Encoding": "identity"}
     assert _synthetic_credential() not in json.dumps(body)
     assert "Authorization" not in json.dumps(body)
     assert ZHIPU_LIVE_CANARY_POLICY.maximum_retries == 0
@@ -506,6 +508,9 @@ def test_success_persists_live_invocation_typed_plan_and_evals_only(
         request_count += 1
         sent_body = json.loads(request.content)
         assert request.url == ZHIPU_LIVE_CANARY_ENDPOINT
+        assert request.headers["Accept-Encoding"] == "identity"
+        assert request.headers["Content-Type"] == "application/json"
+        assert "Authorization" in request.headers
         return httpx.Response(200, json=_provider_payload())
 
     result = asyncio.run(_invoke_with_mock(db_session, handler))
@@ -561,6 +566,37 @@ def test_success_persists_live_invocation_typed_plan_and_evals_only(
     )
     assert _synthetic_credential() not in persisted
     assert "Authorization" not in persisted
+
+
+def test_identity_request_accepts_valid_compressed_success_response(
+    db_session: Session,
+) -> None:
+    request_count = 0
+    payload = gzip.compress(json.dumps(_provider_payload()).encode())
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        assert request.headers["Accept-Encoding"] == "identity"
+        return httpx.Response(
+            200,
+            headers={"Content-Encoding": "gzip", "Content-Type": "application/json"},
+            stream=_SyntheticResponseStream([payload]),
+        )
+
+    result = asyncio.run(_invoke_with_mock(db_session, handler))
+    invocation = db_session.get(AIProviderInvocation, result.invocation_id)
+    ai_request = db_session.get(AIPlanRequest, result.ai_plan_request_id)
+
+    assert request_count == 1
+    assert result.status == InvocationStatus.SUCCEEDED
+    assert result.requested_model_id == ZHIPU_LIVE_CANARY_MODEL_ID
+    assert result.effective_model_status == "reported"
+    assert result.upstream_request_id_status == "reported"
+    assert result.usage_status == "reported_complete"
+    assert invocation is not None and invocation.status == "succeeded"
+    assert ai_request is not None and ai_request.status == "generated"
+    assert ai_request.retry_count == 0
 
 
 def test_invalid_typed_content_is_failed_with_no_plan_or_eval(db_session: Session) -> None:
@@ -958,6 +994,7 @@ def test_zhipu_response_path_a_to_l_matrix_is_closed_and_authority_free(
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal request_count
         request_count += 1
+        assert request.headers["Accept-Encoding"] == "identity"
         response, stream = _response_path_case(case, request)
         if stream is not None:
             streams.append(stream)

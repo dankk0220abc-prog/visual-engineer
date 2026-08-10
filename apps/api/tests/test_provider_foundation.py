@@ -208,6 +208,7 @@ def test_real_adapters_map_requests_and_normalize_structured_responses(
     def handler(request: httpx.Request) -> httpx.Response:
         observed["url"] = str(request.url)
         observed["authorization"] = request.headers["Authorization"]
+        observed["accept_encoding"] = request.headers["Accept-Encoding"]
         observed["body"] = json.loads(request.content)
         return httpx.Response(
             200,
@@ -241,6 +242,10 @@ def test_real_adapters_map_requests_and_normalize_structured_responses(
 
     assert observed["url"] == adapter_type.endpoint
     assert observed["authorization"] == f"Bearer {credential}"
+    if provider_id == ProviderId.ZHIPU:
+        assert observed["accept_encoding"] == "identity"
+    else:
+        assert observed["accept_encoding"] != "identity"
     body = observed["body"]
     assert body["model"] == adapter_type.model_id
     assert body["stream"] is False
