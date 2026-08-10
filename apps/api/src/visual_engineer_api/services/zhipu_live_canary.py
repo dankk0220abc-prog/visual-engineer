@@ -84,7 +84,7 @@ from visual_engineer_api.services.provider_invocations import (
     reported_usage_status,
 )
 
-EXPECTED_ALEMBIC_HEAD = "20260809_0016"
+EXPECTED_ALEMBIC_HEAD = "20260810_0017"
 LIVE_VALIDATION_AUTHORIZATION_ENV = "VISUALENGINEER_LIVE_VALIDATION_AUTHORIZED"
 ZHIPU_API_KEY_ENV = "ZHIPU_API_KEY"
 LIVE_CANARY_WARNING = "LIVE ZHIPU CANARY — ONE EXTERNAL REQUEST MAY BE SENT"
@@ -512,6 +512,7 @@ class ZhipuLiveCanaryService:
         task = Task(
             **task_values,
             status="draft",
+            classification="live_canary",
             version=1,
             idempotency_key=f"zhipu-live-canary-task-{operation_id}",
             idempotency_request_hash=canonical_digest(task_values),

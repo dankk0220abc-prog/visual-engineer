@@ -42,6 +42,10 @@ from visual_engineer_api.ai_planning.real_provider_adapters import (
     ProviderCallPolicy,
     RealProviderAdapter,
 )
+from visual_engineer_api.services.provider_credentials import (
+    EphemeralProviderCredentialStore,
+    provider_credential_store,
+)
 
 
 def _generation_request() -> AIPlanGenerationRequest:
@@ -187,6 +191,50 @@ def test_provider_discovery_api_matches_registry_without_secret_metadata(
     assert "/Users/" not in serialized
 
 
+def test_byok_session_connects_without_echo_or_persistence(client: TestClient) -> None:
+    credential = _synthetic_credential()
+    provider_credential_store.clear()
+    try:
+        connected = client.post(
+            "/api/v1/ai-provider-sessions/zhipu/credential",
+            json={"api_key": credential},
+        )
+        assert connected.status_code == 200
+        assert connected.json()["connected"] is True
+        assert credential not in connected.text
+        assert "HttpOnly" in connected.headers["set-cookie"]
+
+        providers = client.get("/api/v1/ai-providers")
+        zhipu = providers.json()["items"][1]
+        assert zhipu["session_credential_status"] == "connected"
+        assert zhipu["enabled"] is True
+        assert credential not in providers.text
+
+        disconnected = client.delete("/api/v1/ai-provider-sessions/zhipu/credential")
+        assert disconnected.status_code == 200
+        assert disconnected.json()["connected"] is False
+        assert (
+            client.get("/api/v1/ai-providers").json()["items"][1]["session_credential_status"]
+            == "not_connected"
+        )
+    finally:
+        provider_credential_store.clear()
+
+
+def test_ephemeral_store_destroys_replaced_and_disconnected_bytes() -> None:
+    store = EphemeralProviderCredentialStore(ttl_seconds=60, max_sessions=2)
+    session_id, _ = store.connect(None, ProviderId.ZHIPU, SecretStr(_synthetic_credential()))
+    first = store._sessions[session_id][ProviderId.ZHIPU]
+
+    store.connect(session_id, ProviderId.ZHIPU, SecretStr("replacement-credential"))
+    assert set(first.value) == {0}
+    second = store._sessions[session_id][ProviderId.ZHIPU]
+
+    assert store.disconnect(session_id, ProviderId.ZHIPU) is True
+    assert set(second.value) == {0}
+    assert store.connected(session_id) == {}
+
+
 @pytest.mark.parametrize(
     ("provider_id", "expected_override"),
     [
@@ -251,6 +299,9 @@ def test_real_adapters_map_requests_and_normalize_structured_responses(
     assert body["stream"] is False
     assert body["max_tokens"] == 2048
     assert body["response_format"] == {"type": "json_object"}
+    user_payload = json.loads(body["messages"][1]["content"])
+    assert user_payload["response_instruction"].startswith("Return only one JSON object")
+    assert user_payload["response_contract"]["title"] == "AIPlanContract"
     assert body[expected_override[0]] == expected_override[1]
     assert "tools" not in body
     assert "base_url" not in body

@@ -80,6 +80,22 @@ type AIPlanDecisionOperation = OperationAt<
   "post"
 >;
 type AIProviderListOperation = OperationAt<"/api/v1/ai-providers", "get">;
+type AIProviderCredentialConnectOperation = OperationAt<
+  "/api/v1/ai-provider-sessions/{provider_id}/credential",
+  "post"
+>;
+type AIProviderCredentialDisconnectOperation = OperationAt<
+  "/api/v1/ai-provider-sessions/{provider_id}/credential",
+  "delete"
+>;
+type LiveProviderEvidenceListOperation = OperationAt<
+  "/api/v1/live-provider-evidence",
+  "get"
+>;
+type LiveProviderEvidenceDetailOperation = OperationAt<
+  "/api/v1/live-provider-evidence/{correlation}",
+  "get"
+>;
 type RunnerListOperation = OperationAt<"/api/v1/runners", "get">;
 type RunnerDetailOperation = OperationAt<"/api/v1/runners/{runner_id}", "get">;
 type RunnerRevokeOperation = OperationAt<
@@ -260,6 +276,20 @@ type CreatedAIPlanRequest = JsonResponse<AIPlanCreateOperation, 201>;
 type AIPlanListPayload = JsonResponse<AIPlanListOperation, 200>;
 type AIProviderListPayload = JsonResponse<AIProviderListOperation, 200>;
 export type AIProvider = AIProviderListPayload["items"][number];
+export type AIProviderCredentialStatus = JsonResponse<
+  AIProviderCredentialConnectOperation,
+  200
+>;
+type LiveProviderEvidenceListPayload = JsonResponse<
+  LiveProviderEvidenceListOperation,
+  200
+>;
+export type LiveProviderEvidenceSummary =
+  LiveProviderEvidenceListPayload["items"][number];
+export type LiveProviderEvidenceDetail = JsonResponse<
+  LiveProviderEvidenceDetailOperation,
+  200
+>;
 type AuditListPayload = JsonResponse<AuditListOperation, 200>;
 export type AuditEvent = AuditListPayload extends {
   items: Array<infer Item>;
@@ -417,7 +447,7 @@ async function parseError(response: Response): Promise<ApiError> {
     payload?.error?.message ??
     payload?.message ??
     validationMessage ??
-    `请求失败（HTTP ${response.status}）`;
+    `Request failed (HTTP ${response.status})`;
 
   return new ApiError(message, {
     status: response.status,
@@ -439,13 +469,14 @@ async function request<T>(
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
+      credentials: "include",
       headers: {
         Accept: "application/json",
         ...init?.headers,
       },
     });
   } catch {
-    throw new ApiError("无法连接 API，请确认服务正在运行。", {
+    throw new ApiError("The network request could not reach the API.", {
       status: 0,
       code: "network_error",
     });
@@ -660,6 +691,53 @@ export async function listAIProviders(): Promise<AIProvider[]> {
     },
   );
   return data.items;
+}
+
+export async function connectAIProviderCredential(
+  providerId: AIProvider["provider_id"],
+  apiKey: string,
+): Promise<AIProviderCredentialStatus> {
+  const { data } = await request<AIProviderCredentialStatus>(
+    `/api/v1/ai-provider-sessions/${encodeURIComponent(providerId)}/credential`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey }),
+    },
+  );
+  return data;
+}
+
+export async function disconnectAIProviderCredential(
+  providerId: AIProvider["provider_id"],
+): Promise<AIProviderCredentialStatus> {
+  const { data } = await request<
+    JsonResponse<AIProviderCredentialDisconnectOperation, 200>
+  >(
+    `/api/v1/ai-provider-sessions/${encodeURIComponent(providerId)}/credential`,
+    { method: "DELETE" },
+  );
+  return data;
+}
+
+export async function listLiveProviderEvidence(): Promise<
+  LiveProviderEvidenceSummary[]
+> {
+  const { data } = await request<LiveProviderEvidenceListPayload>(
+    "/api/v1/live-provider-evidence",
+    { cache: "no-store" },
+  );
+  return data.items;
+}
+
+export async function getLiveProviderEvidence(
+  correlation: string,
+): Promise<LiveProviderEvidenceDetail> {
+  const { data } = await request<LiveProviderEvidenceDetail>(
+    `/api/v1/live-provider-evidence/${encodeURIComponent(correlation)}`,
+    { cache: "no-store" },
+  );
+  return data;
 }
 
 export async function listAIPlanRequests(

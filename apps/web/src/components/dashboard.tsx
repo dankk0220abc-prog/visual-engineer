@@ -16,6 +16,7 @@ import { HealthPanel, type HealthState } from "./health-panel";
 import { StatusPill } from "./status-pill";
 import { TaskCard } from "./task-card";
 import { TaskForm } from "./task-form";
+import { TechnicalValue } from "./technical-value";
 
 export function Dashboard() {
   const t = useTranslations("dashboard");
@@ -31,6 +32,12 @@ export function Dashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createdTask, setCreatedTask] = useState<Task | null>(null);
+  const ordinaryTasks = tasks.filter((task) =>
+    ["user", "demo"].includes(task.classification),
+  );
+  const systemTasks = tasks.filter(
+    (task) => !["user", "demo"].includes(task.classification),
+  );
 
   const refreshTasks = useCallback(async () => {
     setListState("loading");
@@ -165,7 +172,9 @@ export function Dashboard() {
                 <p className="font-semibold">{t("createSucceeded")}</p>
                 <dl className="mt-2 grid gap-1 text-xs sm:grid-cols-[5rem_1fr]">
                   <dt className="font-semibold">{commonT("fields.id")}</dt>
-                  <dd className="font-mono break-all">{createdTask.id}</dd>
+                  <dd>
+                    <TechnicalValue value={createdTask.id} />
+                  </dd>
                   <dt className="font-semibold">{commonT("fields.status")}</dt>
                   <dd>
                     <StatusPill tone="neutral">{createdTask.status}</StatusPill>
@@ -239,7 +248,7 @@ export function Dashboard() {
           </div>
         ) : null}
 
-        {listState === "ready" && tasks.length === 0 ? (
+        {listState === "ready" && ordinaryTasks.length === 0 ? (
           <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
             <p className="font-semibold text-slate-800">{t("emptyTitle")}</p>
             <p className="mt-1 text-sm text-slate-600">
@@ -248,12 +257,28 @@ export function Dashboard() {
           </div>
         ) : null}
 
-        {listState === "ready" && tasks.length > 0 ? (
+        {listState === "ready" && ordinaryTasks.length > 0 ? (
           <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {tasks.map((task) => (
+            {ordinaryTasks.map((task) => (
               <TaskCard key={task.id} task={task} />
             ))}
           </div>
+        ) : null}
+
+        {listState === "ready" && systemTasks.length > 0 ? (
+          <details className="mt-6 rounded-2xl border border-slate-200 bg-slate-50">
+            <summary className="cursor-pointer rounded-2xl px-5 py-4 text-sm font-semibold text-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
+              {t("systemTasks", { count: systemTasks.length })}
+            </summary>
+            <p className="px-5 pb-4 text-sm leading-6 text-slate-600">
+              {t("systemTasksDescription")}
+            </p>
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">
+              {systemTasks.map((task) => (
+                <TaskCard key={task.id} task={task} />
+              ))}
+            </div>
+          </details>
         ) : null}
       </section>
     </main>

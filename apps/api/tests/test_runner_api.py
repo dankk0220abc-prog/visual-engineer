@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -14,7 +15,26 @@ from visual_engineer_api.models.runner import (
     RunnerJobAttempt,
     RunnerJobEvent,
 )
-from visual_engineer_api.services.runner import RunnerService
+from visual_engineer_api.services.runner import RESULT_ADAPTER, RunnerService
+
+
+def test_legacy_side_effect_result_is_projected_only_for_one_missing_permit() -> None:
+    legacy = {
+        "kind": "workspace_discard_v1",
+        "workspace_id": str(uuid.uuid4()),
+        "discarded": True,
+        "idempotent": False,
+    }
+    with pytest.raises(ValidationError) as captured:
+        RESULT_ADAPTER.validate_python(legacy)
+    assert RunnerService._is_incompatible_legacy_side_effect_result(legacy, captured.value)
+
+    invalid = {**legacy, "workspace_id": "not-a-uuid"}
+    with pytest.raises(ValidationError) as invalid_error:
+        RESULT_ADAPTER.validate_python(invalid)
+    assert not RunnerService._is_incompatible_legacy_side_effect_result(
+        invalid, invalid_error.value
+    )
 
 
 def register_runner(

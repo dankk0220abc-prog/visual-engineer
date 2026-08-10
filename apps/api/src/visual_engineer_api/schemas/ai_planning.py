@@ -4,7 +4,15 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from visual_engineer_api.ai_planning.contracts import (
     AIPlanContract,
@@ -38,6 +46,29 @@ class AIPlanRequestStatus(StrEnum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     STALE = "stale"
+
+
+class AIProviderCredentialCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: SecretStr
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, value: SecretStr) -> SecretStr:
+        raw = value.get_secret_value()
+        if raw != raw.strip() or not 8 <= len(raw) <= 512 or "\x00" in raw:
+            raise ValueError("a bounded non-blank credential is required")
+        return value
+
+
+class AIProviderCredentialStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_id: ProviderId
+    connected: bool
+    expires_at: datetime | None
+    persistence: Literal["process_memory_only"] = "process_memory_only"
 
 
 class AIPlanRequestCreate(BaseModel):
@@ -170,4 +201,70 @@ class AIPlanRequestListResponse(BaseModel):
 
 class AIProviderListResponse(BaseModel):
     items: list[ProviderConfigurationStatus]
+    total: int = Field(ge=0)
+
+
+class LiveProviderEvidenceOperation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str = Field(min_length=1, max_length=120)
+    target: str | None = Field(default=None, max_length=512)
+
+
+class LiveProviderEvidenceEvaluation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    eval_id: str = Field(min_length=1, max_length=120)
+    passed: bool
+    summary: str = Field(min_length=1, max_length=500)
+
+
+class LiveProviderGovernanceBoundary(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ai_plan_status: str
+    approval_status: Literal["not_decided", "approved", "rejected"]
+    execution_grant_status: Literal["not_issued", "present"]
+    runner_authority: Literal["not_granted", "present"]
+    review_status: Literal["not_created", "present"]
+    delivery_status: Literal["not_created", "present"]
+
+
+class LiveProviderEvidenceSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    correlation: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{12}$")]
+    provider_id: ProviderId
+    classification: Literal[InvocationClassification.LIVE]
+    lifecycle: Literal[InvocationStatus.SUCCEEDED]
+    requested_model_id: str
+    effective_model_status: ReportedValueStatus
+    effective_model_id: str | None
+    usage_status: InvocationUsageStatus
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    provider_elapsed_ms: int | None
+    client_total_elapsed_ms: int | None
+    billing_status: InvocationBillingStatus
+    cost_amount: Decimal | None
+    cost_currency: str | None
+    upstream_request_id_status: ReportedValueStatus
+    upstream_request_fingerprint: str | None
+    request_digest: str
+    response_digest: str
+    completed_at: datetime
+
+
+class LiveProviderEvidenceDetail(LiveProviderEvidenceSummary):
+    plan_summary: str = Field(min_length=1, max_length=4000)
+    operations: list[LiveProviderEvidenceOperation] = Field(max_length=100)
+    evaluations: list[LiveProviderEvidenceEvaluation] = Field(max_length=100)
+    task_classification: Literal["live_canary"]
+    public_task_context: str = Field(min_length=1, max_length=500)
+    governance: LiveProviderGovernanceBoundary
+
+
+class LiveProviderEvidenceListResponse(BaseModel):
+    items: list[LiveProviderEvidenceSummary]
     total: int = Field(ge=0)

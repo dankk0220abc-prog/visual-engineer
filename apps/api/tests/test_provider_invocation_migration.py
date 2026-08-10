@@ -390,7 +390,7 @@ def test_provider_invocation_downgrade_rejects_lossy_audit_semantics(
         command.downgrade(config, "20260801_0015")
     with engine.begin() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20260809_0016"
+            "20260810_0017"
         )
         _truncate_invocation_fixture(connection)
     engine.dispose()

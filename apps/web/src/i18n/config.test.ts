@@ -238,6 +238,33 @@ describe("locale resources", () => {
     }
   });
 
+  it("keeps primary governed workflow copy understandable in zh-CN", () => {
+    const primaryCopy = [
+      "executionGrants.createTitle",
+      "executionGrants.noContexts",
+      "reviews.boundary",
+      "delivery.description",
+      "delivery.createHelp",
+      "delivery.noCandidates",
+    ].map((key) => valueAt(zhCN, key));
+
+    expect(primaryCopy).toEqual([
+      "从符合条件的计划创建待审批授权",
+      "当前没有满足条件的授权上下文。请先批准与当前仓库版本一致的计划，并确保仓库可用。",
+      "审查批准仅是治理决定；它不会授予 commit、push、PR、merge、tag、deployment 或交付授权。基线或证据失效后，发布就绪判定会立即失效。",
+      "将当前有效、已批准且满足发布条件的审查基线绑定到一项独立的人工交付授权。派发前必须核对不可变清单并确认精确摘要；失败或取消后只能沿同一清单安全重试。",
+      "候选项必须仍是当前有效的审查世代，已有批准决定，并已获得发布就绪判定。授权会固定检查点、diff hash、branch ref 和 commit message。",
+      "当前没有满足交付条件的审查候选项。请先完成审查、取得批准，并确认审查基线仍然有效且满足发布条件。",
+    ]);
+
+    for (const copy of primaryCopy) {
+      expect(copy).toEqual(expect.any(String));
+      expect(copy).not.toMatch(
+        /\b(?:eligible|fresh|approved|ready)(?:\s+verdict)?\b/i,
+      );
+    }
+  });
+
   it("rejects invalid ICU even when a message is otherwise unused", () => {
     expect(() =>
       compileEveryMessage("en-US", {

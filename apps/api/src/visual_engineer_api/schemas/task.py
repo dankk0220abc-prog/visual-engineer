@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -14,6 +15,15 @@ class TaskStatus(StrEnum):
     DRAFT = "draft"
 
 
+class TaskClassification(StrEnum):
+    USER = "user"
+    DEMO = "demo"
+    SYSTEM_VALIDATION = "system_validation"
+    SECURITY_TEST = "security_test"
+    FIXTURE = "fixture"
+    LIVE_CANARY = "live_canary"
+
+
 class TaskCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -22,6 +32,9 @@ class TaskCreate(BaseModel):
     repository_kind: RepositoryKind
     repository_display_name: str = Field(min_length=1, max_length=120)
     repository_locator: str = Field(min_length=1, max_length=1024)
+    classification: Literal[TaskClassification.USER, TaskClassification.DEMO] = (
+        TaskClassification.USER
+    )
 
     @field_validator("title", "objective", "repository_display_name", "repository_locator")
     @classmethod
@@ -44,6 +57,8 @@ class TaskResponse(BaseModel):
     repository_display_name: str
     repository_locator: str
     status: TaskStatus
+    classification: TaskClassification
+    content_redacted: bool
     version: int
     created_at: datetime
     updated_at: datetime

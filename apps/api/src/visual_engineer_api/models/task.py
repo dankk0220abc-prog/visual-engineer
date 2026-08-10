@@ -27,9 +27,15 @@ class Task(Base):
             name="ck_tasks_repository_locator_length",
         ),
         CheckConstraint("status IN ('draft')", name="ck_tasks_status"),
+        CheckConstraint(
+            "classification IN ('user', 'demo', 'system_validation', 'security_test', "
+            "'fixture', 'live_canary')",
+            name="ck_tasks_classification",
+        ),
         CheckConstraint("version >= 1", name="ck_tasks_version"),
         Index("ix_tasks_created_at", "created_at"),
         Index("ix_tasks_status", "status"),
+        Index("ix_tasks_classification_created", "classification", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -39,6 +45,7 @@ class Task(Base):
     repository_display_name: Mapped[str] = mapped_column(String(120))
     repository_locator: Mapped[str] = mapped_column(String(1024))
     status: Mapped[str] = mapped_column(String(32), default="draft", server_default="draft")
+    classification: Mapped[str] = mapped_column(String(24), default="user", server_default="user")
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

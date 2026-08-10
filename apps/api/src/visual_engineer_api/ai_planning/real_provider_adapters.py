@@ -13,6 +13,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from visual_engineer_api.ai_planning.contracts import (
+    AIPlanContract,
     AIPlanGenerationRequest,
     canonical_json,
 )
@@ -240,6 +241,13 @@ class RealProviderAdapter(ABC):
         request: AIPlanGenerationRequest,
         policy: ProviderCallPolicy,
     ) -> dict[str, Any]:
+        request_payload = request.model_dump(mode="json")
+        if "response_contract" not in request_payload:
+            request_payload = {
+                **request_payload,
+                "response_instruction": ("Return only one JSON object matching response_contract."),
+                "response_contract": AIPlanContract.model_json_schema(),
+            }
         return {
             **self.request_overrides,
             "model": self.model_id,
@@ -247,7 +255,7 @@ class RealProviderAdapter(ABC):
                 {"role": "system", "content": _SYSTEM_MESSAGE},
                 {
                     "role": "user",
-                    "content": canonical_json(request).decode("utf-8"),
+                    "content": canonical_json(request_payload).decode("utf-8"),
                 },
             ],
             "max_tokens": policy.maximum_output_tokens,

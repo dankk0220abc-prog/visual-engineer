@@ -207,7 +207,7 @@ def test_owner_key_isolation_rejects_ordinary_zhipu_before_http_or_artifacts(
         os.environ = original_environment  # noqa: B003
 
     assert caught.value.code == "provider_not_configured"
-    assert "configure your own credential" in caught.value.message
+    assert "connect your own session credential" in caught.value.message
     assert environment.value_reads["ZHIPU_API_KEY"] == 0
     assert outbound_request_count == 0
     assert db_session.scalar(select(func.count()).select_from(AIPlanRequest)) == 0

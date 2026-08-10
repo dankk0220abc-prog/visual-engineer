@@ -33,7 +33,7 @@ export function MainNavigation() {
         >
           VisualEngineer
         </Link>
-        <div className="flex flex-wrap items-center justify-end gap-1">
+        <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-1 sm:w-auto sm:justify-end">
           {links.map((link) => {
             const current =
               link.href === "/"

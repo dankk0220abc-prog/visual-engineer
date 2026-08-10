@@ -107,6 +107,8 @@ export function TaskForm({
 }) {
   const t = useTranslations("taskForm");
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [repositoryKind, setRepositoryKind] =
+    useState<RepositoryKind>("local_path");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -174,9 +176,12 @@ export function TaskForm({
             </label>
             <select
               className={inputClasses}
-              defaultValue="local_path"
+              value={repositoryKind}
               id="repository_kind"
               name="repository_kind"
+              onChange={(event) =>
+                setRepositoryKind(event.currentTarget.value as RepositoryKind)
+              }
               {...errorProps("repository_kind")}
             >
               <option value="local_path">{t("localPath")}</option>
@@ -220,11 +225,17 @@ export function TaskForm({
             id="repository_locator"
             name="repository_locator"
             maxLength={1024}
-            placeholder={t("locatorPlaceholder")}
+            placeholder={
+              repositoryKind === "local_path"
+                ? t("localLocatorPlaceholder")
+                : t("githubLocatorPlaceholder")
+            }
             {...errorProps("repository_locator")}
           />
           <p className="mt-1.5 text-xs leading-5 text-slate-500">
-            {t("locatorHelp")}
+            {repositoryKind === "local_path"
+              ? t("localLocatorHelp")
+              : t("githubLocatorHelp")}
           </p>
           <ErrorMessage
             error={errors.repository_locator}
