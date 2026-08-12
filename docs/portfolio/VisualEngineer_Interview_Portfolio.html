@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>VisualEngineer - Interview Portfolio</title>
+    <style>
+      @page { size: 13.333in 7.5in; margin: 0; }
+      :root {
+        --ink: #0b1220;
+        --navy: #101a33;
+        --blue: #2d5bd1;
+        --blue-soft: #eaf0ff;
+        --sky: #f5f8ff;
+        --line: #d8e1f1;
+        --muted: #65718a;
+        --green: #16785b;
+        --green-soft: #e7f7ef;
+        --amber: #a85b0a;
+        --amber-soft: #fff4df;
+        --white: #ffffff;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #dfe7f4; color: var(--ink); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      .slide { position: relative; width: 13.333in; height: 7.5in; overflow: hidden; page-break-after: always; background: var(--white); padding: .52in .64in .42in; }
+      .slide:last-child { page-break-after: auto; }
+      .dark { background: var(--navy); color: var(--white); }
+      .eyebrow { color: var(--blue); text-transform: uppercase; letter-spacing: .12em; font-size: 10px; font-weight: 800; }
+      .dark .eyebrow { color: #95b4ff; }
+      h1, h2, h3, p { margin: 0; }
+      h1 { font-size: 47px; line-height: 1.02; letter-spacing: -.05em; max-width: 8.6in; }
+      h2 { font-size: 31px; line-height: 1.06; letter-spacing: -.035em; max-width: 8.5in; margin-top: 8px; }
+      h3 { font-size: 14px; line-height: 1.2; }
+      p { font-size: 13px; line-height: 1.42; }
+      .lede { color: var(--muted); font-size: 18px; line-height: 1.36; max-width: 7.2in; margin-top: 15px; }
+      .dark .lede { color: #c5d0e6; }
+      .footer { position: absolute; left: .64in; right: .64in; bottom: .18in; display: flex; justify-content: space-between; align-items: center; color: #78839a; font-size: 9px; letter-spacing: .03em; }
+      .dark .footer { color: #9facbf; }
+      .rule { height: 1px; background: var(--line); margin: 18px 0; }
+      .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+      .chip { border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-size: 10px; font-weight: 700; background: #fff; }
+      .chip.green { border-color: #bae7d5; color: var(--green); background: var(--green-soft); }
+      .chip.amber { border-color: #f4d6a8; color: var(--amber); background: var(--amber-soft); }
+      .chip.blue { border-color: #cbd9ff; color: #244fbf; background: var(--blue-soft); }
+      .cover-grid { display: grid; grid-template-columns: 1.04fr .96fr; gap: .4in; height: 100%; align-items: center; }
+      .cover-screenshot { height: 5.22in; border: 1px solid #38527e; border-radius: 18px; background: #fff; overflow: hidden; box-shadow: 0 18px 35px rgba(0,0,0,.22); }
+      .cover-screenshot img { width: 100%; height: 100%; object-fit: cover; object-position: top left; display: block; }
+      .cover-mark { display: inline-flex; align-items: center; gap: 8px; color: #c6d5f5; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: #74a0ff; }
+      .cover-meta { margin-top: 25px; font-size: 12px; color: #c6d5f5; line-height: 1.6; }
+      .cover-meta a { color: #c6d5f5; text-decoration: none; }
+      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: .34in; margin-top: .28in; }
+      .card { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 18px; }
+      .card.dark-card { border-color: #344563; background: #17233f; }
+      .card p { color: var(--muted); margin-top: 7px; }
+      .dark-card p { color: #bfcae0; }
+      .number { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+      .problem-grid { display: grid; grid-template-columns: .94fr 1.06fr; gap: .38in; align-items: stretch; margin-top: .34in; }
+      .statement { font-size: 29px; line-height: 1.13; letter-spacing: -.035em; }
+      .statement strong { color: #82a5ff; }
+      .principles { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+      .principles .card { min-height: 1.45in; }
+      .architecture { display: grid; grid-template-columns: 1.1fr .9fr; gap: .36in; margin-top: .24in; height: 5.35in; }
+      .diagram { border: 1px solid var(--line); border-radius: 17px; background: #f8faff; padding: 20px; display: flex; flex-direction: column; justify-content: center; }
+      .flow-row { display: flex; align-items: stretch; justify-content: space-between; gap: 6px; }
+      .flow-node { flex: 1; border: 1px solid #cfdaf0; border-radius: 9px; background: #fff; padding: 10px 7px; text-align: center; font-weight: 750; font-size: 11px; line-height: 1.22; }
+      .flow-node.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+      .flow-node.safe { background: var(--green-soft); border-color: #bbe5d4; color: #125840; }
+      .arrow { align-self: center; color: #7a8ba9; font-weight: 900; font-size: 17px; }
+      .flow-line { height: 20px; width: 1px; background: #9fb1d1; margin: 4px auto; position: relative; }
+      .flow-line:after { content: ""; position: absolute; left: -3px; bottom: -1px; width: 7px; height: 7px; border-right: 1px solid #9fb1d1; border-bottom: 1px solid #9fb1d1; transform: rotate(45deg); }
+      .arch-side { display: grid; grid-template-rows: auto 1fr; gap: 12px; }
+      .stack-list { display: grid; gap: 8px; }
+      .stack-item { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 10px; border-bottom: 1px solid var(--line); }
+      .stack-item:last-child { border-bottom: none; }
+      .stack-icon { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 7px; background: var(--blue-soft); color: var(--blue); font-weight: 900; font-size: 11px; }
+      .workflow { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 12px; align-items: center; margin-top: .32in; }
+      .workflow-block { border: 1px solid var(--line); border-radius: 14px; min-height: 1.55in; padding: 17px; background: #fff; }
+      .workflow-block strong { display: block; font-size: 16px; margin-bottom: 6px; }
+      .workflow-block p { font-size: 12px; }
+      .boundary { border: 2px solid #edbf78; border-radius: 17px; background: #fffaf1; padding: 18px; min-height: 2.12in; }
+      .boundary .equals { color: #a85b0a; font-size: 22px; font-weight: 900; margin-bottom: 8px; }
+      .evidence-img { width: 100%; height: 100%; display: block; object-fit: contain; object-position: center; }
+      .media-frame { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #edf1f8; }
+      .media-frame.dark-frame { border-color: #31415e; background: #0c1427; }
+      .providers { display: grid; grid-template-columns: 1.05fr .95fr; gap: .34in; margin-top: .25in; height: 5.55in; }
+      .provider-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+      .mini-fact { border: 1px solid var(--line); border-radius: 11px; padding: 12px; }
+      .mini-fact .label { font-size: 9px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .09em; }
+      .mini-fact .value { font-size: 14px; font-weight: 750; margin-top: 5px; line-height: 1.25; }
+      .live-grid { display: grid; grid-template-columns: .82fr 1.18fr; gap: .34in; margin-top: .24in; height: 5.42in; }
+      .metric { border-left: 3px solid var(--blue); padding: 10px 0 10px 13px; }
+      .metric .label { text-transform: uppercase; color: var(--muted); font-size: 9px; letter-spacing: .1em; font-weight: 800; }
+      .metric .value { font-size: 23px; font-weight: 800; margin-top: 3px; letter-spacing: -.03em; }
+      .metric .detail { font-size: 11px; color: var(--muted); margin-top: 2px; }
+      .timeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: .35in; }
+      .timeline .step { position: relative; min-height: 2.65in; border: 1px solid var(--line); border-radius: 13px; padding: 14px; background: #fff; }
+      .timeline .step:after { content: ""; position: absolute; height: 1px; width: 9px; top: 30px; right: -10px; background: #9aa9c0; }
+      .timeline .step:last-child:after { display: none; }
+      .step-n { color: var(--blue); font-weight: 900; font-size: 11px; letter-spacing: .08em; }
+      .step h3 { margin-top: 15px; }
+      .step p { margin-top: 8px; font-size: 11px; }
+      .step.success { border-color: #a9ddc9; background: #f4fcf8; }
+      .step.unknown { border-color: #ecd4b2; background: #fffaf0; }
+      .quote { margin-top: .22in; padding: 14px 17px; border-left: 3px solid var(--blue); background: var(--sky); color: #24334f; font-size: 14px; line-height: 1.4; }
+      .runner-layout { display: grid; grid-template-columns: 1.16fr .84fr; gap: .34in; margin-top: .25in; height: 5.45in; }
+      .runner-map { display: grid; grid-template-columns: 1fr 26px 1fr 26px 1fr; align-items: center; }
+      .runner-map .rnode { border: 1px solid var(--line); border-radius: 12px; min-height: 1.3in; padding: 13px; background: #fff; }
+      .runner-map .rnode h3 { font-size: 13px; }
+      .runner-map .rnode p { font-size: 10px; margin-top: 7px; }
+      .runner-map .rarr { text-align: center; color: var(--blue); font-weight: 900; }
+      .runner-checks { display: grid; gap: 8px; margin-top: 14px; }
+      .check { display: flex; align-items: baseline; gap: 9px; font-size: 12px; }
+      .check:before { content: "✓"; color: var(--green); font-weight: 900; }
+      .deadlock { display: grid; grid-template-columns: 1.05fr .95fr; gap: .34in; margin-top: .28in; height: 5.3in; }
+      .cycle { position: relative; height: 3.34in; border: 1px solid #efd9b9; border-radius: 15px; background: #fffaf0; padding: 19px; }
+      .cycle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px 26px; margin-top: 20px; }
+      .cycle-node { min-height: .86in; border: 1px solid #e9c98f; border-radius: 10px; background: #fff; padding: 10px; font-size: 11px; font-weight: 700; }
+      .cycle-node.good { border-color: #abdcca; background: #f3fcf7; }
+      .cycle-arrow { position: absolute; left: 50%; top: 49%; transform: translate(-50%, -50%); font-size: 32px; color: #b56c15; font-weight: 900; }
+      .deadlock-result { margin-top: 16px; padding: 12px 14px; background: var(--green-soft); border: 1px solid #b9e5d3; border-radius: 11px; color: #125840; font-size: 12px; font-weight: 700; }
+      .evidence-layout { display: grid; grid-template-columns: 1.04fr .96fr; gap: .36in; margin-top: .26in; height: 5.4in; }
+      .ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+      .ledger .card { padding: 14px; min-height: 1.16in; }
+      .ledger h3 { font-size: 12px; }
+      .ledger p { font-size: 10px; }
+      .product { display: grid; grid-template-columns: 1.24fr .76fr; gap: .3in; margin-top: .26in; height: 5.4in; }
+      .product-side { display: grid; grid-template-rows: 1fr 1fr; gap: 12px; }
+      .product-side .media-frame { min-height: 0; }
+      .stack { display: grid; grid-template-columns: 1.05fr .95fr; gap: .34in; margin-top: .28in; height: 4.2in; }
+      .stack-band { border-radius: 16px; padding: 20px; background: var(--sky); border: 1px solid var(--line); }
+      .stack-band h3 { color: var(--blue); text-transform: uppercase; font-size: 10px; letter-spacing: .1em; }
+      .stack-band p { margin-top: 9px; font-size: 14px; color: #24334f; font-weight: 700; }
+      .role { display: grid; grid-template-columns: .91fr 1.09fr; gap: .36in; margin-top: .34in; height: 5.25in; }
+      .role-list { display: grid; gap: 10px; margin-top: 14px; }
+      .role-line { display: grid; grid-template-columns: 112px 1fr; gap: 10px; border-bottom: 1px solid var(--line); padding: 10px 0; }
+      .role-line strong { font-size: 11px; color: var(--blue); text-transform: uppercase; letter-spacing: .06em; }
+      .role-line span { font-size: 12px; line-height: 1.35; }
+      .close-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .4in; height: 100%; align-items: center; }
+      .close-statement { font-size: 37px; line-height: 1.07; letter-spacing: -.045em; }
+      .scope-list { display: grid; gap: 9px; margin-top: 18px; }
+      .scope-list div { color: #c3cde2; font-size: 13px; line-height: 1.34; padding-left: 16px; position: relative; }
+      .scope-list div:before { content: "-"; position: absolute; left: 0; color: #8eacf6; }
+      .repo-link { margin-top: 26px; color: #9db9ff; font-weight: 750; font-size: 14px; }
+      .repo-link a { color: inherit; text-decoration: none; }
+      @media screen { .slide { margin: 20px auto; box-shadow: 0 10px 35px rgba(20, 35, 67, .18); } }
+    </style>
+  </head>
+  <body>
+    <article class="slide dark">
+      <div class="cover-grid">
+        <div>
+          <div class="cover-mark"><span class="dot"></span> Interview portfolio</div>
+          <div class="eyebrow" style="margin-top:30px">VisualEngineer</div>
+          <h1 style="margin-top:10px">Governed AI design-engineering and delivery.</h1>
+          <p class="lede">A local, single-user system that keeps AI planning, authorization, execution and evidence as distinct, reviewable decisions.</p>
+          <div class="cover-meta">Engineering case study<br /><a href="https://github.com/dankk0220abc-prog/visual-engineer">github.com/dankk0220abc-prog/visual-engineer</a></div>
+        </div>
+        <div class="cover-screenshot"><img src="assets/06-clean-dashboard-demo.png" alt="VisualEngineer governed frontend delivery task console" /></div>
+      </div>
+      <div class="footer"><span>VISUALENGINEER</span><span>01 / 14</span></div>
+    </article>
+
+    <article class="slide dark">
+      <div class="eyebrow">The problem</div>
+      <h2>AI can propose implementation work. It should not automatically gain authority to change a repository.</h2>
+      <div class="problem-grid">
+        <div class="statement">A useful plan is <strong>not</strong> permission to mutate a workspace, run a command, approve a review or ship a delivery.</div>
+        <div class="principles">
+          <div class="card dark-card"><div class="number">01 / SEPARATE</div><h3 style="margin-top:12px">Planning from authority</h3><p>Provider output is typed data. It enters a controlled lifecycle rather than becoming a tool call.</p></div>
+          <div class="card dark-card"><div class="number">02 / BOUND</div><h3 style="margin-top:12px">Execution to a grant</h3><p>A distinct scoped grant is required before eligible Runner work in a fixture workspace.</p></div>
+          <div class="card dark-card"><div class="number">03 / PRESERVE</div><h3 style="margin-top:12px">Uncertainty honestly</h3><p>Ambiguous external outcomes remain <code>outcome_unknown</code>; they are not auto-retried.</p></div>
+          <div class="card dark-card"><div class="number">04 / PROJECT</div><h3 style="margin-top:12px">Evidence safely</h3><p>Reviewable facts are projected without keys, raw traffic, full upstream IDs or billing material.</p></div>
+        </div>
+      </div>
+      <div class="footer"><span>WHY VISUALENGINEER</span><span>02 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">System architecture</div>
+      <h2>A control plane around a bounded AI proposal.</h2>
+      <div class="architecture">
+        <div class="diagram">
+          <div class="flow-row"><div class="flow-node">Web Console</div><div class="arrow">&rarr;</div><div class="flow-node primary">Control Plane API</div><div class="arrow">&rarr;</div><div class="flow-node">PostgreSQL</div></div>
+          <div class="flow-line"></div>
+          <div class="flow-row"><div class="flow-node">Repository<br />Intelligence</div><div class="arrow">&rarr;</div><div class="flow-node safe">Typed Plan +<br />Policy Evaluation</div><div class="arrow">&rarr;</div><div class="flow-node">Approval</div></div>
+          <div class="flow-line"></div>
+          <div class="flow-row"><div class="flow-node">Execution Grant</div><div class="arrow">&rarr;</div><div class="flow-node primary">Outbound Runner</div><div class="arrow">&rarr;</div><div class="flow-node">Isolated Workspace</div></div>
+          <div class="flow-line"></div>
+          <div class="flow-row"><div class="flow-node">Validation</div><div class="arrow">&rarr;</div><div class="flow-node">Review + Delivery</div><div class="arrow">&rarr;</div><div class="flow-node safe">Evidence / Audit</div></div>
+        </div>
+        <div class="arch-side">
+          <div class="card"><h3>Critical boundary</h3><p>The Provider Layer may return a typed planning artifact through the Control Plane. It receives no direct Runner or workspace authority.</p></div>
+          <div class="card"><h3>Responsibilities at a glance</h3><div class="stack-list">
+            <div class="stack-item"><div class="stack-icon">W</div><div><h3>Web Console</h3><p>Browser-first presentation, workflow and evidence surface.</p></div></div>
+            <div class="stack-item"><div class="stack-icon">A</div><div><h3>Control Plane</h3><p>Lifecycle, policy, authority transitions and safe projection.</p></div></div>
+            <div class="stack-item"><div class="stack-icon">R</div><div><h3>Local Runner</h3><p>Outbound consumer of closed typed jobs and grants.</p></div></div>
+            <div class="stack-item"><div class="stack-icon">E</div><div><h3>Evidence</h3><p>Audit facts suitable for review, without a secret archive.</p></div></div>
+          </div></div>
+        </div>
+      </div>
+      <div class="footer"><span>VERIFIED COMPONENTS ONLY</span><span>03 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">Governed workflow</div>
+      <h2>Plan Approval does not equal an Execution Grant.</h2>
+      <div class="workflow">
+        <div class="workflow-block"><strong>Provider proposal</strong><p>A typed Plan is created through the governed path and evaluated by system policy.</p><div class="chips" style="margin-top:15px"><span class="chip blue">Plan generated</span></div></div>
+        <div class="boundary"><div class="equals">!=</div><h3>Authority boundary</h3><p style="margin-top:7px">A successful proposal does not decide approval, issue a grant, grant Runner authority, create a review or authorize delivery.</p><div class="chips" style="margin-top:15px"><span class="chip amber">Human decision required</span><span class="chip amber">Separate scope required</span></div></div>
+        <div class="workflow-block"><strong>Runner work</strong><p>Only an eligible, separately granted typed job can reach a Runner-owned fixture workspace.</p><div class="chips" style="margin-top:15px"><span class="chip">Grant required</span></div></div>
+      </div>
+      <div class="two-col" style="margin-top:.28in">
+        <div class="card"><h3>What a Provider cannot do</h3><p>Issue a grant, run shell commands, mutate a workspace, approve review, authorize delivery, merge or deploy.</p></div>
+        <div class="media-frame" style="height:2.05in"><img class="evidence-img" src="assets/04-zhipu-live-governance-boundary.png" alt="Governance boundary showing generated plan and absent downstream authority" /></div>
+      </div>
+      <div class="footer"><span>AUTHORITY IS EXPLICIT, NOT INFERRED</span><span>04 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">Provider layer and BYOK</div>
+      <h2>Support, connection and live validation are separate facts.</h2>
+      <div class="providers">
+        <div>
+          <div class="card"><h3>Deterministic Fixture is the default</h3><p>Offline, non-network and non-billable. It is the safest reproducible mode for the product demo.</p><div class="chips" style="margin-top:15px"><span class="chip green">No credential required</span><span class="chip green">Fixture validated</span></div></div>
+          <div class="provider-facts">
+            <div class="mini-fact"><div class="label">One live-validated provider</div><div class="value">Zhipu / GLM-5.2</div></div>
+            <div class="mini-fact"><div class="label">Other displayed adapters</div><div class="value">Supported does not mean live validated</div></div>
+            <div class="mini-fact"><div class="label">BYOK handling</div><div class="value">Current-session volatile server memory</div></div>
+            <div class="mini-fact"><div class="label">Quota boundary</div><div class="value">No ordinary-user fallback to maintainer credentials</div></div>
+          </div>
+          <div class="quote">The credential is never returned or persisted and is cleared on disconnect, expiry or restart. This is not represented as a commercial multi-tenant secret vault.</div>
+        </div>
+        <div class="media-frame"><img class="evidence-img" style="object-position:top" src="assets/01-zhipu-live-provider-status.png" alt="Provider status distinguishing fixture default and Zhipu live validation" /></div>
+      </div>
+      <div class="footer"><span>FIXTURE-FIRST, LIVE CLAIMS KEPT NARROW</span><span>05 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">Sealed live validation</div>
+      <h2>One governed Zhipu / GLM-5.2 invocation succeeded.</h2>
+      <div class="live-grid">
+        <div>
+          <div class="metric"><div class="label">Correlation</div><div class="value">3a9c354f7a58</div><div class="detail">Safe evidence correlation</div></div>
+          <div class="metric"><div class="label">Reported usage</div><div class="value">2,016 tokens</div><div class="detail">1,362 input + 654 output</div></div>
+          <div class="metric"><div class="label">Measured latency</div><div class="value">11.55 s</div><div class="detail">11,543 ms provider; 11,553 ms client total</div></div>
+          <div class="metric"><div class="label">Billing</div><div class="value" style="font-size:19px">live_billing_unknown</div><div class="detail">No amount or billing certainty claimed</div></div>
+          <div class="chips" style="margin-top:14px"><span class="chip green">Lifecycle: succeeded</span><span class="chip blue">Typed Plan: 3 operations</span><span class="chip green">8 policy checks passed</span></div>
+        </div>
+        <div class="media-frame"><img class="evidence-img" src="assets/03-zhipu-live-invocation-audit.png" alt="Safe provider invocation audit with usage, latency and billing unknown" /></div>
+      </div>
+      <div class="footer"><span>SAFE AUDIT PROJECTION - NOT PRIVATE PROVIDER MATERIAL</span><span>06 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">Failure engineering story</div>
+      <h2>Unknown after dispatch is a fact, not a failure label to smooth over.</h2>
+      <div class="timeline">
+        <div class="step unknown"><div class="step-n">ATTEMPTS 01-02</div><h3>Transport ambiguity</h3><p>After dispatch, the system could not honestly determine the Provider outcome.</p><div class="chips" style="margin-top:15px"><span class="chip amber">outcome_unknown</span></div></div>
+        <div class="step unknown"><div class="step-n">ATTEMPT 03</div><h3>Response-path diagnosis</h3><p>A decoding issue was classified truthfully while the earlier immutable history stayed intact.</p><div class="chips" style="margin-top:15px"><span class="chip amber">no auto-retry</span></div></div>
+        <div class="step"><div class="step-n">NARROW REMEDIATION</div><h3>Compatibility, not authority expansion</h3><p>Safe transport observability plus identity content-encoding negotiation and decoded-response normalization.</p><div class="chips" style="margin-top:15px"><span class="chip blue">bounded change</span></div></div>
+        <div class="step success"><div class="step-n">ATTEMPT 04</div><h3>Separate successful event</h3><p>The fourth governed invocation succeeded. It still did not create downstream execution authority.</p><div class="chips" style="margin-top:15px"><span class="chip green">succeeded</span></div></div>
+      </div>
+      <div class="quote">Why no automatic retry? An ambiguous request may already have reached a billable or side-effecting external system. A later attempt must be a new, controlled event.</div>
+      <div class="footer"><span>IMMUTABLE HISTORY, HONEST UNCERTAINTY</span><span>07 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">Runner and workspace isolation</div>
+      <h2>The model never receives unrestricted shell authority.</h2>
+      <div class="runner-layout">
+        <div class="diagram">
+          <div class="runner-map"><div class="rnode"><h3>Control Plane</h3><p>Derives durable closed job envelopes and lifecycle transitions.</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Outbound Runner</h3><p>Polls and validates its typed envelope. No inbound browser control.</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Fixture Workspace</h3><p>Runner-owned, exact-revision isolated boundary for allowed work.</p></div></div>
+          <div class="flow-line" style="margin-top:26px"></div>
+          <div class="runner-map"><div class="rnode"><h3>Execution Grant</h3><p>Separate scope and eligibility check before a mutating path.</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Lease and fencing</h3><p>Locked claims and attempt identity prevent competing settlement.</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Validation and review</h3><p>Fixed profiles and later decisions create evidence.</p></div></div>
+        </div>
+        <div class="card"><h3>Controls retained at the boundary</h3><div class="runner-checks"><div class="check">Closed typed operations rather than arbitrary commands</div><div class="check">Exact-revision, runner-owned fixture workspace</div><div class="check">Independent Runner identity and outbound protocol</div><div class="check">Lease / fencing around job settlement</div><div class="check">Fixed validation profile and bounded evidence</div><div class="check">No direct Provider-to-Runner authority path</div></div><div class="rule"></div><p>Source repository, remote Git, merge, release and deployment authority are deliberately outside this demo path.</p></div>
+      </div>
+      <div class="footer"><span>TYPE, SCOPE AND IDENTITY LIMIT EXECUTION</span><span>08 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">PostgreSQL concurrency failure</div>
+      <h2>Fix the atomicity boundary; do not hide a half-write behind retries.</h2>
+      <div class="deadlock">
+        <div class="card"><h3>Observed red baseline</h3><p>Nested Runner creation committed before the child Validation Run binding was complete. A second transaction could see the partial state and compete for the child row.</p>
+          <div class="cycle"><div class="cycle-grid"><div class="cycle-node">Transaction A<br /><span style="font-weight:400">partial child and job become visible</span></div><div class="cycle-node">Transaction B<br /><span style="font-weight:400">replay reaches child-row competition</span></div><div class="cycle-node">PostgreSQL<br /><span style="font-weight:400">transactionid wait cycle</span></div><div class="cycle-node">Result<br /><span style="font-weight:400">DeadlockDetected / SQLSTATE 40P01</span></div></div><div class="cycle-arrow">&harr;</div></div>
+          <div class="chips"><span class="chip amber">10 / 10 deterministic real deadlocks</span></div>
+        </div>
+        <div class="card"><h3>Controlled remediation</h3><p>Keep Runner creation inside the outer Validation transaction. A competing transaction waits before it can enter the partially bound-child window.</p>
+          <div class="cycle" style="border-color:#b9e4d3;background:#f4fcf8"><div class="cycle-grid"><div class="cycle-node good">Outer transaction<br /><span style="font-weight:400">child and job remain invisible until bound</span></div><div class="cycle-node good">Concurrent caller<br /><span style="font-weight:400">waits at the atomic boundary</span></div><div class="cycle-node good">Recovery<br /><span style="font-weight:400">one suite, one child, one job</span></div><div class="cycle-node good">Result<br /><span style="font-weight:400">no database exception</span></div></div><div class="cycle-arrow" style="color:#16785b">&rarr;</div></div>
+          <div class="deadlock-result">10 / 10 controlled passes - zero unbound children - no blind retry.</div>
+        </div>
+      </div>
+      <div class="footer"><span>DATABASE INVARIANTS ARE THE FINAL SHARED GUARD</span><span>09 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">Evidence-first engineering</div>
+      <h2>Completion claims are backed by a ledger, not a green sentence.</h2>
+      <div class="evidence-layout">
+        <div class="card"><h3>Claims-to-evidence discipline</h3><p style="margin-top:8px">A claim is accepted only when its source is known and safe to project. Unknowns remain unknown.</p><div class="ledger">
+          <div class="card"><h3>Source identity</h3><p>Git SHA and tree establish the sealed repository state.</p></div>
+          <div class="card"><h3>Verification</h3><p>CI, tests, browser evidence and database proof answer different questions.</p></div>
+          <div class="card"><h3>Provider lifecycle</h3><p>Prepared, dispatching and terminal classification preserve external uncertainty.</p></div>
+          <div class="card"><h3>Secret-negative evidence</h3><p>Public-safe material excludes keys, private payloads and account or billing records.</p></div>
+          <div class="card"><h3>Failure history</h3><p>Earlier ambiguous attempts remain durable facts, not retroactive success.</p></div>
+          <div class="card"><h3>Scope limits</h3><p>Local demo proof is not restated as production deployment or customer use.</p></div>
+        </div></div>
+        <div class="media-frame"><img class="evidence-img" src="assets/03-zhipu-live-invocation-audit.png" alt="Safe audit projection" /></div>
+      </div>
+      <div class="footer"><span>FACT / INFERENCE / NOT VERIFIED ARE KEPT DISTINCT</span><span>10 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">Product experience</div>
+      <h2>A browser-first console that makes governance visible.</h2>
+      <div class="product">
+        <div class="media-frame"><img class="evidence-img" style="object-position:top" src="assets/06-clean-dashboard-demo.png" alt="VisualEngineer task console dashboard" /></div>
+        <div class="product-side">
+          <div class="media-frame"><img class="evidence-img" src="assets/02-zhipu-live-typed-plan.png" alt="Typed Plan and passed policy evaluations" /></div>
+          <div class="media-frame"><img class="evidence-img" src="assets/07-byok-provider-connect.png" alt="Empty BYOK provider connection dialog" /></div>
+        </div>
+      </div>
+      <div class="chips" style="margin-top:14px"><span class="chip blue">zh-CN / en-US</span><span class="chip blue">responsive behavior</span><span class="chip blue">typed Plan Evidence</span><span class="chip blue">Governance Evidence</span><span class="chip blue">Provider status</span><span class="chip blue">Fixture / Live distinction</span><span class="chip blue">BYOK entry</span></div>
+      <div class="footer"><span>PRODUCT UI USES ONLY PUBLIC-SAFE SCREENSHOTS</span><span>11 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">Engineering stack</div>
+      <h2>Typed boundaries from browser UI to persistence and proof.</h2>
+      <div class="stack">
+        <div class="stack-band"><h3>Web console</h3><p>Next.js App Router<br />React<br />TypeScript strict<br />Tailwind CSS<br />next-intl</p></div>
+        <div class="stack-band"><h3>Control plane</h3><p>Python<br />FastAPI<br />Pydantic<br />SQLAlchemy<br />Alembic</p></div>
+        <div class="stack-band"><h3>State and execution</h3><p>PostgreSQL<br />Independent Local Runner<br />Closed typed job protocol<br />Isolated fixture workspaces</p></div>
+        <div class="stack-band"><h3>Quality and evidence</h3><p>Vitest<br />Playwright<br />axe<br />Ruff and mypy<br />Git and CI evidence</p></div>
+      </div>
+      <div class="quote">The stack matters because every boundary is represented in a concrete contract: TypeScript at the client, OpenAPI at the API edge, typed Python services and PostgreSQL constraints for durable state.</div>
+      <div class="footer"><span>ONLY TECHNOLOGIES VERIFIED IN THE SEALED REPOSITORY</span><span>12 / 14</span></div>
+    </article>
+
+    <article class="slide">
+      <div class="eyebrow">My role and AI-assisted engineering</div>
+      <h2>Accountability for the system boundaries stayed human-owned.</h2>
+      <div class="role">
+        <div class="card"><h3>What I owned</h3><div class="role-list">
+          <div class="role-line"><strong>Product</strong><span>Problem definition, workflow, interface priorities and acceptance criteria.</span></div>
+          <div class="role-line"><strong>Architecture</strong><span>Authority boundaries, lifecycle rules, typed contracts and risk decisions.</span></div>
+          <div class="role-line"><strong>Validation</strong><span>Evidence strategy, test expectations, failure interpretation and final acceptance.</span></div>
+          <div class="role-line"><strong>Explanation</strong><span>Ability to discuss the architecture, state machines, failures, tradeoffs and scope limits.</span></div>
+        </div></div>
+        <div class="card"><h3>How ChatGPT + Codex accelerated the work</h3><p style="margin-top:9px">Repository investigation, implementation, tests, documentation and Git / CI work were accelerated with AI assistance under explicit constraints and review.</p><div class="rule"></div><h3>What this portfolio does not claim</h3><p style="margin-top:9px">It does not claim that every line was manually written. It does not transfer accountability for product choices, safety boundaries, validation or final acceptance to a model.</p><div class="quote" style="margin-top:18px">The strongest interview discussion is not "an AI wrote it." It is why the system makes authority, uncertainty and evidence legible.</div></div>
+      </div>
+      <div class="footer"><span>AI ACCELERATED DELIVERY; GOVERNANCE AND ACCEPTANCE REMAINED OWNED</span><span>13 / 14</span></div>
+    </article>
+
+    <article class="slide dark">
+      <div class="close-grid">
+        <div>
+          <div class="eyebrow">Scope and next step</div>
+          <div class="close-statement" style="margin-top:12px">A clear boundary is a better demo than an overstated claim.</div>
+          <div class="repo-link"><a href="https://github.com/dankk0220abc-prog/visual-engineer">github.com/dankk0220abc-prog/visual-engineer</a></div>
+        </div>
+        <div>
+          <div class="scope-list"><div>Main development is complete; final sealed evidence includes one successful Zhipu / GLM-5.2 live validation.</div><div>Other adapters must not be represented as live validated.</div><div>Fixture remains the safest reproducible demo mode.</div><div>Local, single-user proof only: no production deployment, customer, revenue, user-volume or performance-improvement claim.</div><div>BYOK is session-scoped volatile handling, not a commercial multi-tenant secret vault.</div></div>
+          <div class="rule" style="background:#3b4b6a;margin-top:22px"></div>
+          <p style="color:#c3cde2;font-size:13px">Interview focus: the Provider lifecycle, PostgreSQL invariants, Runner boundary, or evidence strategy.</p>
+        </div>
+      </div>
+      <div class="footer"><span>VISUALENGINEER - INTERVIEW PORTFOLIO</span><span>14 / 14</span></div>
+    </article>
+  </body>
+</html>
