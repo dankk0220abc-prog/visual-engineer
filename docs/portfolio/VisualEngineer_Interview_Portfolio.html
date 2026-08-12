@@ -6,7 +6,10 @@
     <meta name="color-scheme" content="light" />
     <title>VisualEngineer - 面试作品集</title>
     <style>
-      @page { size: 13.333in 7.5in; margin: 0; }
+      @page {
+        size: 13.333in 7.5in;
+        margin: 0;
+      }
       :root {
         --ink: #0b1220;
         --navy: #101a33;
@@ -21,130 +24,740 @@
         --amber-soft: #fff4df;
         --white: #ffffff;
       }
-      * { box-sizing: border-box; }
-      html, body { margin: 0; background: #dfe7f4; color: var(--ink); font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
-      .slide { position: relative; width: 13.333in; height: 7.5in; overflow: hidden; page-break-after: always; background: var(--white); padding: .52in .64in .42in; }
-      .slide:last-child { page-break-after: auto; }
-      .dark { background: var(--navy); color: var(--white); }
-      .eyebrow { color: var(--blue); text-transform: uppercase; letter-spacing: .12em; font-size: 10px; font-weight: 800; }
-      .dark .eyebrow { color: #95b4ff; }
-      h1, h2, h3, p { margin: 0; }
-      h1 { font-size: 47px; line-height: 1.02; letter-spacing: -.05em; max-width: 8.6in; }
-      h2 { font-size: 31px; line-height: 1.06; letter-spacing: -.035em; max-width: 8.5in; margin-top: 8px; }
-      h3 { font-size: 14px; line-height: 1.2; }
-      p { font-size: 13px; line-height: 1.42; }
-      .lede { color: var(--muted); font-size: 18px; line-height: 1.36; max-width: 7.2in; margin-top: 15px; }
-      .dark .lede { color: #c5d0e6; }
-      .footer { position: absolute; left: .64in; right: .64in; bottom: .18in; display: flex; justify-content: space-between; align-items: center; color: #78839a; font-size: 9px; letter-spacing: .03em; }
-      .dark .footer { color: #9facbf; }
-      .rule { height: 1px; background: var(--line); margin: 18px 0; }
-      .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-      .chip { border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-size: 10px; font-weight: 700; background: #fff; }
-      .chip.green { border-color: #bae7d5; color: var(--green); background: var(--green-soft); }
-      .chip.amber { border-color: #f4d6a8; color: var(--amber); background: var(--amber-soft); }
-      .chip.blue { border-color: #cbd9ff; color: #244fbf; background: var(--blue-soft); }
-      .cover-grid { display: grid; grid-template-columns: 1.04fr .96fr; gap: .4in; height: 100%; align-items: center; }
-      .cover-screenshot { height: 5.22in; border: 1px solid #38527e; border-radius: 18px; background: #fff; overflow: hidden; box-shadow: 0 18px 35px rgba(0,0,0,.22); }
-      .cover-screenshot img { width: 100%; height: 100%; object-fit: cover; object-position: top left; display: block; }
-      .cover-mark { display: inline-flex; align-items: center; gap: 8px; color: #c6d5f5; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-      .dot { width: 9px; height: 9px; border-radius: 50%; background: #74a0ff; }
-      .cover-meta { margin-top: 25px; font-size: 12px; color: #c6d5f5; line-height: 1.6; }
-      .cover-meta a { color: #c6d5f5; text-decoration: none; }
-      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: .34in; margin-top: .28in; }
-      .card { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 18px; }
-      .card.dark-card { border-color: #344563; background: #17233f; }
-      .card p { color: var(--muted); margin-top: 7px; }
-      .dark-card p { color: #bfcae0; }
-      .number { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
-      .problem-grid { display: grid; grid-template-columns: .94fr 1.06fr; gap: .38in; align-items: stretch; margin-top: .34in; }
-      .statement { font-size: 29px; line-height: 1.13; letter-spacing: -.035em; }
-      .statement strong { color: #82a5ff; }
-      .principles { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
-      .principles .card { min-height: 1.45in; }
-      .architecture { display: grid; grid-template-columns: 1.1fr .9fr; gap: .36in; margin-top: .24in; height: 5.35in; }
-      .diagram { border: 1px solid var(--line); border-radius: 17px; background: #f8faff; padding: 20px; display: flex; flex-direction: column; justify-content: center; }
-      .flow-row { display: flex; align-items: stretch; justify-content: space-between; gap: 6px; }
-      .flow-node { flex: 1; border: 1px solid #cfdaf0; border-radius: 9px; background: #fff; padding: 10px 7px; text-align: center; font-weight: 750; font-size: 11px; line-height: 1.22; }
-      .flow-node.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
-      .flow-node.safe { background: var(--green-soft); border-color: #bbe5d4; color: #125840; }
-      .arrow { align-self: center; color: #7a8ba9; font-weight: 900; font-size: 17px; }
-      .flow-line { height: 20px; width: 1px; background: #9fb1d1; margin: 4px auto; position: relative; }
-      .flow-line:after { content: ""; position: absolute; left: -3px; bottom: -1px; width: 7px; height: 7px; border-right: 1px solid #9fb1d1; border-bottom: 1px solid #9fb1d1; transform: rotate(45deg); }
-      .arch-side { display: grid; grid-template-rows: auto 1fr; gap: 12px; }
-      .stack-list { display: grid; gap: 8px; }
-      .stack-item { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 10px; border-bottom: 1px solid var(--line); }
-      .stack-item:last-child { border-bottom: none; }
-      .stack-icon { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 7px; background: var(--blue-soft); color: var(--blue); font-weight: 900; font-size: 11px; }
-      .workflow { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 12px; align-items: center; margin-top: .32in; }
-      .workflow-block { border: 1px solid var(--line); border-radius: 14px; min-height: 1.55in; padding: 17px; background: #fff; }
-      .workflow-block strong { display: block; font-size: 16px; margin-bottom: 6px; }
-      .workflow-block p { font-size: 12px; }
-      .boundary { border: 2px solid #edbf78; border-radius: 17px; background: #fffaf1; padding: 18px; min-height: 2.12in; }
-      .boundary .equals { color: #a85b0a; font-size: 22px; font-weight: 900; margin-bottom: 8px; }
-      .evidence-img { width: 100%; height: 100%; display: block; object-fit: contain; object-position: center; }
-      .media-frame { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #edf1f8; }
-      .media-frame.dark-frame { border-color: #31415e; background: #0c1427; }
-      .providers { display: grid; grid-template-columns: 1.05fr .95fr; gap: .34in; margin-top: .25in; height: 5.55in; }
-      .provider-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
-      .mini-fact { border: 1px solid var(--line); border-radius: 11px; padding: 12px; }
-      .mini-fact .label { font-size: 9px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .09em; }
-      .mini-fact .value { font-size: 14px; font-weight: 750; margin-top: 5px; line-height: 1.25; }
-      .live-grid { display: grid; grid-template-columns: .82fr 1.18fr; gap: .34in; margin-top: .24in; height: 5.42in; }
-      .metric { border-left: 3px solid var(--blue); padding: 10px 0 10px 13px; }
-      .metric .label { text-transform: uppercase; color: var(--muted); font-size: 9px; letter-spacing: .1em; font-weight: 800; }
-      .metric .value { font-size: 23px; font-weight: 800; margin-top: 3px; letter-spacing: -.03em; }
-      .metric .detail { font-size: 11px; color: var(--muted); margin-top: 2px; }
-      .timeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: .35in; }
-      .timeline .step { position: relative; min-height: 2.65in; border: 1px solid var(--line); border-radius: 13px; padding: 14px; background: #fff; }
-      .timeline .step:after { content: ""; position: absolute; height: 1px; width: 9px; top: 30px; right: -10px; background: #9aa9c0; }
-      .timeline .step:last-child:after { display: none; }
-      .step-n { color: var(--blue); font-weight: 900; font-size: 11px; letter-spacing: .08em; }
-      .step h3 { margin-top: 15px; }
-      .step p { margin-top: 8px; font-size: 11px; }
-      .step.success { border-color: #a9ddc9; background: #f4fcf8; }
-      .step.unknown { border-color: #ecd4b2; background: #fffaf0; }
-      .quote { margin-top: .22in; padding: 14px 17px; border-left: 3px solid var(--blue); background: var(--sky); color: #24334f; font-size: 14px; line-height: 1.4; }
-      .runner-layout { display: grid; grid-template-columns: 1.16fr .84fr; gap: .34in; margin-top: .25in; height: 5.45in; }
-      .runner-map { display: grid; grid-template-columns: 1fr 26px 1fr 26px 1fr; align-items: center; }
-      .runner-map .rnode { border: 1px solid var(--line); border-radius: 12px; min-height: 1.3in; padding: 13px; background: #fff; }
-      .runner-map .rnode h3 { font-size: 13px; }
-      .runner-map .rnode p { font-size: 10px; margin-top: 7px; }
-      .runner-map .rarr { text-align: center; color: var(--blue); font-weight: 900; }
-      .runner-checks { display: grid; gap: 8px; margin-top: 14px; }
-      .check { display: flex; align-items: baseline; gap: 9px; font-size: 12px; }
-      .check:before { content: "✓"; color: var(--green); font-weight: 900; }
-      .deadlock { display: grid; grid-template-columns: 1.05fr .95fr; gap: .34in; margin-top: .28in; height: 5.3in; }
-      .cycle { position: relative; height: 3.34in; border: 1px solid #efd9b9; border-radius: 15px; background: #fffaf0; padding: 19px; }
-      .cycle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px 26px; margin-top: 20px; }
-      .cycle-node { min-height: .86in; border: 1px solid #e9c98f; border-radius: 10px; background: #fff; padding: 10px; font-size: 11px; font-weight: 700; }
-      .cycle-node.good { border-color: #abdcca; background: #f3fcf7; }
-      .cycle-arrow { position: absolute; left: 50%; top: 49%; transform: translate(-50%, -50%); font-size: 32px; color: #b56c15; font-weight: 900; }
-      .deadlock-result { margin-top: 16px; padding: 12px 14px; background: var(--green-soft); border: 1px solid #b9e5d3; border-radius: 11px; color: #125840; font-size: 12px; font-weight: 700; }
-      .evidence-layout { display: grid; grid-template-columns: 1.04fr .96fr; gap: .36in; margin-top: .26in; height: 5.4in; }
-      .ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
-      .ledger .card { padding: 14px; min-height: 1.16in; }
-      .ledger h3 { font-size: 12px; }
-      .ledger p { font-size: 10px; }
-      .product { display: grid; grid-template-columns: 1.24fr .76fr; gap: .3in; margin-top: .26in; height: 5.4in; }
-      .product-side { display: grid; grid-template-rows: 1fr 1fr; gap: 12px; }
-      .product-side .media-frame { min-height: 0; }
-      .stack { display: grid; grid-template-columns: 1.05fr .95fr; gap: .34in; margin-top: .28in; height: 4.2in; }
-      .stack-band { border-radius: 16px; padding: 20px; background: var(--sky); border: 1px solid var(--line); }
-      .stack-band h3 { color: var(--blue); text-transform: uppercase; font-size: 10px; letter-spacing: .1em; }
-      .stack-band p { margin-top: 9px; font-size: 14px; color: #24334f; font-weight: 700; }
-      .role { display: grid; grid-template-columns: .91fr 1.09fr; gap: .36in; margin-top: .34in; height: 5.25in; }
-      .role-list { display: grid; gap: 10px; margin-top: 14px; }
-      .role-line { display: grid; grid-template-columns: 112px 1fr; gap: 10px; border-bottom: 1px solid var(--line); padding: 10px 0; }
-      .role-line strong { font-size: 11px; color: var(--blue); text-transform: uppercase; letter-spacing: .06em; }
-      .role-line span { font-size: 12px; line-height: 1.35; }
-      .close-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .4in; height: 100%; align-items: center; }
-      .close-statement { font-size: 37px; line-height: 1.07; letter-spacing: -.045em; }
-      .scope-list { display: grid; gap: 9px; margin-top: 18px; }
-      .scope-list div { color: #c3cde2; font-size: 13px; line-height: 1.34; padding-left: 16px; position: relative; }
-      .scope-list div:before { content: "-"; position: absolute; left: 0; color: #8eacf6; }
-      .repo-link { margin-top: 26px; color: #9db9ff; font-weight: 750; font-size: 14px; }
-      .repo-link a { color: inherit; text-decoration: none; }
-      @media screen { .slide { margin: 20px auto; box-shadow: 0 10px 35px rgba(20, 35, 67, .18); } }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #dfe7f4;
+        color: var(--ink);
+        font-family:
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Microsoft YaHei",
+          Inter,
+          ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Arial,
+          sans-serif;
+      }
+      .slide {
+        position: relative;
+        width: 13.333in;
+        height: 7.5in;
+        overflow: hidden;
+        page-break-after: always;
+        background: var(--white);
+        padding: 0.52in 0.64in 0.42in;
+      }
+      .slide:last-child {
+        page-break-after: auto;
+      }
+      .dark {
+        background: var(--navy);
+        color: var(--white);
+      }
+      .eyebrow {
+        color: var(--blue);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 10px;
+        font-weight: 800;
+      }
+      .dark .eyebrow {
+        color: #95b4ff;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: 47px;
+        line-height: 1.02;
+        letter-spacing: -0.05em;
+        max-width: 8.6in;
+      }
+      h2 {
+        font-size: 31px;
+        line-height: 1.06;
+        letter-spacing: -0.035em;
+        max-width: 8.5in;
+        margin-top: 8px;
+      }
+      h3 {
+        font-size: 14px;
+        line-height: 1.2;
+      }
+      p {
+        font-size: 13px;
+        line-height: 1.42;
+      }
+      .lede {
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.36;
+        max-width: 7.2in;
+        margin-top: 15px;
+      }
+      .dark .lede {
+        color: #c5d0e6;
+      }
+      .footer {
+        position: absolute;
+        left: 0.64in;
+        right: 0.64in;
+        bottom: 0.18in;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #78839a;
+        font-size: 9px;
+        letter-spacing: 0.03em;
+      }
+      .dark .footer {
+        color: #9facbf;
+      }
+      .rule {
+        height: 1px;
+        background: var(--line);
+        margin: 18px 0;
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 10px;
+        font-weight: 700;
+        background: #fff;
+      }
+      .chip.green {
+        border-color: #bae7d5;
+        color: var(--green);
+        background: var(--green-soft);
+      }
+      .chip.amber {
+        border-color: #f4d6a8;
+        color: var(--amber);
+        background: var(--amber-soft);
+      }
+      .chip.blue {
+        border-color: #cbd9ff;
+        color: #244fbf;
+        background: var(--blue-soft);
+      }
+      .cover-grid {
+        display: grid;
+        grid-template-columns: 1.04fr 0.96fr;
+        gap: 0.4in;
+        height: 100%;
+        align-items: center;
+      }
+      .cover-screenshot {
+        height: 5.22in;
+        border: 1px solid #38527e;
+        border-radius: 18px;
+        background: #fff;
+        overflow: hidden;
+        box-shadow: 0 18px 35px rgba(0, 0, 0, 0.22);
+      }
+      .cover-screenshot img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top left;
+        display: block;
+      }
+      .cover-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #c6d5f5;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #74a0ff;
+      }
+      .cover-meta {
+        margin-top: 25px;
+        font-size: 12px;
+        color: #c6d5f5;
+        line-height: 1.6;
+      }
+      .cover-meta a {
+        color: #c6d5f5;
+        text-decoration: none;
+      }
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.34in;
+        margin-top: 0.28in;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+        padding: 18px;
+      }
+      .card.dark-card {
+        border-color: #344563;
+        background: #17233f;
+      }
+      .card p {
+        color: var(--muted);
+        margin-top: 7px;
+      }
+      .dark-card p {
+        color: #bfcae0;
+      }
+      .number {
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+      }
+      .problem-grid {
+        display: grid;
+        grid-template-columns: 0.94fr 1.06fr;
+        gap: 0.38in;
+        align-items: stretch;
+        margin-top: 0.34in;
+      }
+      .statement {
+        font-size: 29px;
+        line-height: 1.13;
+        letter-spacing: -0.035em;
+      }
+      .statement strong {
+        color: #82a5ff;
+      }
+      .principles {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 11px;
+      }
+      .principles .card {
+        min-height: 1.45in;
+      }
+      .architecture {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 0.36in;
+        margin-top: 0.24in;
+        height: 5.35in;
+      }
+      .diagram {
+        border: 1px solid var(--line);
+        border-radius: 17px;
+        background: #f8faff;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .flow-row {
+        display: flex;
+        align-items: stretch;
+        justify-content: space-between;
+        gap: 6px;
+      }
+      .flow-node {
+        flex: 1;
+        border: 1px solid #cfdaf0;
+        border-radius: 9px;
+        background: #fff;
+        padding: 10px 7px;
+        text-align: center;
+        font-weight: 750;
+        font-size: 11px;
+        line-height: 1.22;
+      }
+      .flow-node.primary {
+        background: var(--blue);
+        color: #fff;
+        border-color: var(--blue);
+      }
+      .flow-node.safe {
+        background: var(--green-soft);
+        border-color: #bbe5d4;
+        color: #125840;
+      }
+      .arrow {
+        align-self: center;
+        color: #7a8ba9;
+        font-weight: 900;
+        font-size: 17px;
+      }
+      .flow-line {
+        height: 20px;
+        width: 1px;
+        background: #9fb1d1;
+        margin: 4px auto;
+        position: relative;
+      }
+      .flow-line:after {
+        content: "";
+        position: absolute;
+        left: -3px;
+        bottom: -1px;
+        width: 7px;
+        height: 7px;
+        border-right: 1px solid #9fb1d1;
+        border-bottom: 1px solid #9fb1d1;
+        transform: rotate(45deg);
+      }
+      .arch-side {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 12px;
+      }
+      .stack-list {
+        display: grid;
+        gap: 8px;
+      }
+      .stack-item {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 10px;
+        padding: 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      .stack-item:last-child {
+        border-bottom: none;
+      }
+      .stack-icon {
+        width: 25px;
+        height: 25px;
+        display: grid;
+        place-items: center;
+        border-radius: 7px;
+        background: var(--blue-soft);
+        color: var(--blue);
+        font-weight: 900;
+        font-size: 11px;
+      }
+      .workflow {
+        display: grid;
+        grid-template-columns: 1fr 1.4fr 1fr;
+        gap: 12px;
+        align-items: center;
+        margin-top: 0.32in;
+      }
+      .workflow-block {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        min-height: 1.55in;
+        padding: 17px;
+        background: #fff;
+      }
+      .workflow-block strong {
+        display: block;
+        font-size: 16px;
+        margin-bottom: 6px;
+      }
+      .workflow-block p {
+        font-size: 12px;
+      }
+      .boundary {
+        border: 2px solid #edbf78;
+        border-radius: 17px;
+        background: #fffaf1;
+        padding: 18px;
+        min-height: 2.12in;
+      }
+      .boundary .equals {
+        color: #a85b0a;
+        font-size: 22px;
+        font-weight: 900;
+        margin-bottom: 8px;
+      }
+      .evidence-img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: contain;
+        object-position: center;
+      }
+      .media-frame {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #edf1f8;
+      }
+      .media-frame.dark-frame {
+        border-color: #31415e;
+        background: #0c1427;
+      }
+      .providers {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 0.34in;
+        margin-top: 0.25in;
+        height: 5.55in;
+      }
+      .provider-facts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .mini-fact {
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        padding: 12px;
+      }
+      .mini-fact .label {
+        font-size: 9px;
+        font-weight: 800;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+      }
+      .mini-fact .value {
+        font-size: 14px;
+        font-weight: 750;
+        margin-top: 5px;
+        line-height: 1.25;
+      }
+      .live-grid {
+        display: grid;
+        grid-template-columns: 0.82fr 1.18fr;
+        gap: 0.34in;
+        margin-top: 0.24in;
+        height: 5.42in;
+      }
+      .metric {
+        border-left: 3px solid var(--blue);
+        padding: 10px 0 10px 13px;
+      }
+      .metric .label {
+        text-transform: uppercase;
+        color: var(--muted);
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        font-weight: 800;
+      }
+      .metric .value {
+        font-size: 23px;
+        font-weight: 800;
+        margin-top: 3px;
+        letter-spacing: -0.03em;
+      }
+      .metric .detail {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .timeline {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 9px;
+        margin-top: 0.35in;
+      }
+      .timeline .step {
+        position: relative;
+        min-height: 2.65in;
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        padding: 14px;
+        background: #fff;
+      }
+      .timeline .step:after {
+        content: "";
+        position: absolute;
+        height: 1px;
+        width: 9px;
+        top: 30px;
+        right: -10px;
+        background: #9aa9c0;
+      }
+      .timeline .step:last-child:after {
+        display: none;
+      }
+      .step-n {
+        color: var(--blue);
+        font-weight: 900;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+      }
+      .step h3 {
+        margin-top: 15px;
+      }
+      .step p {
+        margin-top: 8px;
+        font-size: 11px;
+      }
+      .step.success {
+        border-color: #a9ddc9;
+        background: #f4fcf8;
+      }
+      .step.unknown {
+        border-color: #ecd4b2;
+        background: #fffaf0;
+      }
+      .quote {
+        margin-top: 0.22in;
+        padding: 14px 17px;
+        border-left: 3px solid var(--blue);
+        background: var(--sky);
+        color: #24334f;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+      .runner-layout {
+        display: grid;
+        grid-template-columns: 1.16fr 0.84fr;
+        gap: 0.34in;
+        margin-top: 0.25in;
+        height: 5.45in;
+      }
+      .runner-map {
+        display: grid;
+        grid-template-columns: 1fr 26px 1fr 26px 1fr;
+        align-items: center;
+      }
+      .runner-map .rnode {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        min-height: 1.3in;
+        padding: 13px;
+        background: #fff;
+      }
+      .runner-map .rnode h3 {
+        font-size: 13px;
+      }
+      .runner-map .rnode p {
+        font-size: 10px;
+        margin-top: 7px;
+      }
+      .runner-map .rarr {
+        text-align: center;
+        color: var(--blue);
+        font-weight: 900;
+      }
+      .runner-checks {
+        display: grid;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .check {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        font-size: 12px;
+      }
+      .check:before {
+        content: "✓";
+        color: var(--green);
+        font-weight: 900;
+      }
+      .deadlock {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 0.34in;
+        margin-top: 0.28in;
+        height: 5.3in;
+      }
+      .cycle {
+        position: relative;
+        height: 3.34in;
+        border: 1px solid #efd9b9;
+        border-radius: 15px;
+        background: #fffaf0;
+        padding: 19px;
+      }
+      .cycle-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 36px 26px;
+        margin-top: 20px;
+      }
+      .cycle-node {
+        min-height: 0.86in;
+        border: 1px solid #e9c98f;
+        border-radius: 10px;
+        background: #fff;
+        padding: 10px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .cycle-node.good {
+        border-color: #abdcca;
+        background: #f3fcf7;
+      }
+      .cycle-arrow {
+        position: absolute;
+        left: 50%;
+        top: 49%;
+        transform: translate(-50%, -50%);
+        font-size: 32px;
+        color: #b56c15;
+        font-weight: 900;
+      }
+      .deadlock-result {
+        margin-top: 16px;
+        padding: 12px 14px;
+        background: var(--green-soft);
+        border: 1px solid #b9e5d3;
+        border-radius: 11px;
+        color: #125840;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .evidence-layout {
+        display: grid;
+        grid-template-columns: 1.04fr 0.96fr;
+        gap: 0.36in;
+        margin-top: 0.26in;
+        height: 5.4in;
+      }
+      .ledger {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .ledger .card {
+        padding: 14px;
+        min-height: 1.16in;
+      }
+      .ledger h3 {
+        font-size: 12px;
+      }
+      .ledger p {
+        font-size: 10px;
+      }
+      .product {
+        display: grid;
+        grid-template-columns: 1.24fr 0.76fr;
+        gap: 0.3in;
+        margin-top: 0.26in;
+        height: 5.4in;
+      }
+      .product-side {
+        display: grid;
+        grid-template-rows: 1fr 1fr;
+        gap: 12px;
+      }
+      .product-side .media-frame {
+        min-height: 0;
+      }
+      .stack {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 0.34in;
+        margin-top: 0.28in;
+        height: 4.2in;
+      }
+      .stack-band {
+        border-radius: 16px;
+        padding: 20px;
+        background: var(--sky);
+        border: 1px solid var(--line);
+      }
+      .stack-band h3 {
+        color: var(--blue);
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.1em;
+      }
+      .stack-band p {
+        margin-top: 9px;
+        font-size: 14px;
+        color: #24334f;
+        font-weight: 700;
+      }
+      .role {
+        display: grid;
+        grid-template-columns: 0.91fr 1.09fr;
+        gap: 0.36in;
+        margin-top: 0.34in;
+        height: 5.25in;
+      }
+      .role-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .role-line {
+        display: grid;
+        grid-template-columns: 112px 1fr;
+        gap: 10px;
+        border-bottom: 1px solid var(--line);
+        padding: 10px 0;
+      }
+      .role-line strong {
+        font-size: 11px;
+        color: var(--blue);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .role-line span {
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .close-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.4in;
+        height: 100%;
+        align-items: center;
+      }
+      .close-statement {
+        font-size: 37px;
+        line-height: 1.07;
+        letter-spacing: -0.045em;
+      }
+      .scope-list {
+        display: grid;
+        gap: 9px;
+        margin-top: 18px;
+      }
+      .scope-list div {
+        color: #c3cde2;
+        font-size: 13px;
+        line-height: 1.34;
+        padding-left: 16px;
+        position: relative;
+      }
+      .scope-list div:before {
+        content: "-";
+        position: absolute;
+        left: 0;
+        color: #8eacf6;
+      }
+      .repo-link {
+        margin-top: 26px;
+        color: #9db9ff;
+        font-weight: 750;
+        font-size: 14px;
+      }
+      .repo-link a {
+        color: inherit;
+        text-decoration: none;
+      }
+      @media screen {
+        .slide {
+          margin: 20px auto;
+          box-shadow: 0 10px 35px rgba(20, 35, 67, 0.18);
+        }
+      }
     </style>
   </head>
   <body>
@@ -152,12 +765,25 @@
       <div class="cover-grid">
         <div>
           <div class="cover-mark"><span class="dot"></span> 面试作品集</div>
-          <div class="eyebrow" style="margin-top:30px">VisualEngineer</div>
-          <h1 style="margin-top:10px">受治理的 AI 设计工程与交付。</h1>
-          <p class="lede">一个本地单用户系统，将 AI 规划、授权、执行与证据保持为彼此独立、可审查的决策。</p>
-          <div class="cover-meta">工程案例研究<br /><a href="https://github.com/dankk0220abc-prog/visual-engineer">github.com/dankk0220abc-prog/visual-engineer</a></div>
+          <div class="eyebrow" style="margin-top: 30px">VisualEngineer</div>
+          <h1 style="margin-top: 10px">受治理的 AI 设计工程与交付。</h1>
+          <p class="lede">
+            一个本地单用户系统，将 AI
+            规划、授权、执行与证据保持为彼此独立、可审查的决策。
+          </p>
+          <div class="cover-meta">
+            工程案例研究<br /><a
+              href="https://github.com/dankk0220abc-prog/visual-engineer"
+              >github.com/dankk0220abc-prog/visual-engineer</a
+            >
+          </div>
         </div>
-        <div class="cover-screenshot"><img src="assets/06-clean-dashboard-demo.png" alt="VisualEngineer governed frontend delivery task console" /></div>
+        <div class="cover-screenshot">
+          <img
+            src="assets/06-clean-dashboard-demo.png"
+            alt="VisualEngineer governed frontend delivery task console"
+          />
+        </div>
       </div>
       <div class="footer"><span>VISUALENGINEER</span><span>01 / 14</span></div>
     </article>
@@ -166,15 +792,42 @@
       <div class="eyebrow">问题</div>
       <h2>AI 可以提出实施建议，但不应自动获得修改代码仓库的权限。</h2>
       <div class="problem-grid">
-        <div class="statement">有价值的计划<strong>不是</strong>修改工作区、运行命令、批准评审或交付结果的权限。</div>
+        <div class="statement">
+          有价值的计划<strong>不是</strong>修改工作区、运行命令、批准评审或交付结果的权限。
+        </div>
         <div class="principles">
-          <div class="card dark-card"><div class="number">01 / 分离</div><h3 style="margin-top:12px">规划与权限分离</h3><p>Provider 输出是类型化数据，进入受控生命周期，而不是直接成为工具调用。</p></div>
-          <div class="card dark-card"><div class="number">02 / 限定</div><h3 style="margin-top:12px">执行受 Grant 约束</h3><p>只有获得独立范围授权，Runner 才可在 fixture 工作区中执行合格任务。</p></div>
-          <div class="card dark-card"><div class="number">03 / 保留</div><h3 style="margin-top:12px">如实保留不确定性</h3><p>模糊的外部结果保持为 <code>outcome_unknown</code>，不会自动重试。</p></div>
-          <div class="card dark-card"><div class="number">04 / 投影</div><h3 style="margin-top:12px">安全地呈现证据</h3><p>可审查事实不包含密钥、原始流量、完整上游 ID 或账单材料。</p></div>
+          <div class="card dark-card">
+            <div class="number">01 / 分离</div>
+            <h3 style="margin-top: 12px">规划与权限分离</h3>
+            <p>
+              Provider
+              输出是类型化数据，进入受控生命周期，而不是直接成为工具调用。
+            </p>
+          </div>
+          <div class="card dark-card">
+            <div class="number">02 / 限定</div>
+            <h3 style="margin-top: 12px">执行受 Grant 约束</h3>
+            <p>
+              只有获得独立范围授权，Runner 才可在 fixture 工作区中执行合格任务。
+            </p>
+          </div>
+          <div class="card dark-card">
+            <div class="number">03 / 保留</div>
+            <h3 style="margin-top: 12px">如实保留不确定性</h3>
+            <p>
+              模糊的外部结果保持为 <code>outcome_unknown</code>，不会自动重试。
+            </p>
+          </div>
+          <div class="card dark-card">
+            <div class="number">04 / 投影</div>
+            <h3 style="margin-top: 12px">安全地呈现证据</h3>
+            <p>可审查事实不包含密钥、原始流量、完整上游 ID 或账单材料。</p>
+          </div>
         </div>
       </div>
-      <div class="footer"><span>为何构建 VISUALENGINEER</span><span>02 / 14</span></div>
+      <div class="footer">
+        <span>为何构建 VISUALENGINEER</span><span>02 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
@@ -182,40 +835,140 @@
       <h2>围绕受限 AI 提案构建的控制平面。</h2>
       <div class="architecture">
         <div class="diagram">
-          <div class="flow-row"><div class="flow-node">Web 控制台</div><div class="arrow">&rarr;</div><div class="flow-node primary">控制平面 API</div><div class="arrow">&rarr;</div><div class="flow-node">PostgreSQL</div></div>
+          <div class="flow-row">
+            <div class="flow-node">Web 控制台</div>
+            <div class="arrow">&rarr;</div>
+            <div class="flow-node primary">控制平面 API</div>
+            <div class="arrow">&rarr;</div>
+            <div class="flow-node">PostgreSQL</div>
+          </div>
           <div class="flow-line"></div>
-          <div class="flow-row"><div class="flow-node">仓库<br />智能</div><div class="arrow">&rarr;</div><div class="flow-node safe">类型化计划 +<br />策略评估</div><div class="arrow">&rarr;</div><div class="flow-node">批准</div></div>
+          <div class="flow-row">
+            <div class="flow-node">仓库<br />智能</div>
+            <div class="arrow">&rarr;</div>
+            <div class="flow-node safe">类型化计划 +<br />策略评估</div>
+            <div class="arrow">&rarr;</div>
+            <div class="flow-node">批准</div>
+          </div>
           <div class="flow-line"></div>
-          <div class="flow-row"><div class="flow-node">执行 Grant</div><div class="arrow">&rarr;</div><div class="flow-node primary">出站 Runner</div><div class="arrow">&rarr;</div><div class="flow-node">隔离工作区</div></div>
+          <div class="flow-row">
+            <div class="flow-node">执行 Grant</div>
+            <div class="arrow">&rarr;</div>
+            <div class="flow-node primary">出站 Runner</div>
+            <div class="arrow">&rarr;</div>
+            <div class="flow-node">隔离工作区</div>
+          </div>
           <div class="flow-line"></div>
-          <div class="flow-row"><div class="flow-node">验证</div><div class="arrow">&rarr;</div><div class="flow-node">评审 + 交付</div><div class="arrow">&rarr;</div><div class="flow-node safe">证据 / 审计</div></div>
+          <div class="flow-row">
+            <div class="flow-node">验证</div>
+            <div class="arrow">&rarr;</div>
+            <div class="flow-node">评审 + 交付</div>
+            <div class="arrow">&rarr;</div>
+            <div class="flow-node safe">证据 / 审计</div>
+          </div>
         </div>
         <div class="arch-side">
-          <div class="card"><h3>关键边界</h3><p>Provider Layer 可通过控制平面返回类型化规划产物，但不拥有任何直接的 Runner 或工作区权限。</p></div>
-          <div class="card"><h3>职责概览</h3><div class="stack-list">
-            <div class="stack-item"><div class="stack-icon">W</div><div><h3>Web 控制台</h3><p>浏览器优先的呈现、工作流和证据界面。</p></div></div>
-            <div class="stack-item"><div class="stack-icon">A</div><div><h3>控制平面</h3><p>生命周期、策略、权限转换和安全投影。</p></div></div>
-            <div class="stack-item"><div class="stack-icon">R</div><div><h3>本地 Runner</h3><p>封闭类型化任务与 Grant 的出站消费者。</p></div></div>
-            <div class="stack-item"><div class="stack-icon">E</div><div><h3>证据</h3><p>适合评审的审计事实，而非秘密归档。</p></div></div>
-          </div></div>
+          <div class="card">
+            <h3>关键边界</h3>
+            <p>
+              Provider Layer
+              可通过控制平面返回类型化规划产物，但不拥有任何直接的 Runner
+              或工作区权限。
+            </p>
+          </div>
+          <div class="card">
+            <h3>职责概览</h3>
+            <div class="stack-list">
+              <div class="stack-item">
+                <div class="stack-icon">W</div>
+                <div>
+                  <h3>Web 控制台</h3>
+                  <p>浏览器优先的呈现、工作流和证据界面。</p>
+                </div>
+              </div>
+              <div class="stack-item">
+                <div class="stack-icon">A</div>
+                <div>
+                  <h3>控制平面</h3>
+                  <p>生命周期、策略、权限转换和安全投影。</p>
+                </div>
+              </div>
+              <div class="stack-item">
+                <div class="stack-icon">R</div>
+                <div>
+                  <h3>本地 Runner</h3>
+                  <p>封闭类型化任务与 Grant 的出站消费者。</p>
+                </div>
+              </div>
+              <div class="stack-item">
+                <div class="stack-icon">E</div>
+                <div>
+                  <h3>证据</h3>
+                  <p>适合评审的审计事实，而非秘密归档。</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="footer"><span>仅呈现已验证组件</span><span>03 / 14</span></div>
+      <div class="footer">
+        <span>仅呈现已验证组件</span><span>03 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
       <div class="eyebrow">受治理的工作流</div>
       <h2>计划批准不等于执行 Grant。</h2>
       <div class="workflow">
-        <div class="workflow-block"><strong>Provider 提案</strong><p>类型化 Plan 经受治理路径生成，并由系统策略进行评估。</p><div class="chips" style="margin-top:15px"><span class="chip blue">Plan 已生成</span></div></div>
-        <div class="boundary"><div class="equals">!=</div><h3>权限边界</h3><p style="margin-top:7px">成功的提案不会决定批准、签发 Grant、授予 Runner 权限、创建评审或授权交付。</p><div class="chips" style="margin-top:15px"><span class="chip amber">需要人工决策</span><span class="chip amber">需要独立范围</span></div></div>
-        <div class="workflow-block"><strong>Runner 工作</strong><p>只有获得独立 Grant 的合格类型化任务，才可到达 Runner 持有的 fixture 工作区。</p><div class="chips" style="margin-top:15px"><span class="chip">需要 Grant</span></div></div>
+        <div class="workflow-block">
+          <strong>Provider 提案</strong>
+          <p>类型化 Plan 经受治理路径生成，并由系统策略进行评估。</p>
+          <div class="chips" style="margin-top: 15px">
+            <span class="chip blue">Plan 已生成</span>
+          </div>
+        </div>
+        <div class="boundary">
+          <div class="equals">!=</div>
+          <h3>权限边界</h3>
+          <p style="margin-top: 7px">
+            成功的提案不会决定批准、签发 Grant、授予 Runner
+            权限、创建评审或授权交付。
+          </p>
+          <div class="chips" style="margin-top: 15px">
+            <span class="chip amber">需要人工决策</span
+            ><span class="chip amber">需要独立范围</span>
+          </div>
+        </div>
+        <div class="workflow-block">
+          <strong>Runner 工作</strong>
+          <p>
+            只有获得独立 Grant 的合格类型化任务，才可到达 Runner 持有的 fixture
+            工作区。
+          </p>
+          <div class="chips" style="margin-top: 15px">
+            <span class="chip">需要 Grant</span>
+          </div>
+        </div>
       </div>
-      <div class="two-col" style="margin-top:.28in">
-        <div class="card"><h3>Provider 无法执行的操作</h3><p>签发 Grant、运行 shell 命令、修改工作区、批准评审、授权交付、合并或部署。</p></div>
-        <div class="media-frame" style="height:2.05in"><img class="evidence-img" src="assets/04-zhipu-live-governance-boundary.png" alt="显示已生成计划与未产生下游权限的治理边界" /></div>
+      <div class="two-col" style="margin-top: 0.28in">
+        <div class="card">
+          <h3>Provider 无法执行的操作</h3>
+          <p>
+            签发 Grant、运行 shell
+            命令、修改工作区、批准评审、授权交付、合并或部署。
+          </p>
+        </div>
+        <div class="media-frame" style="height: 2.05in">
+          <img
+            class="evidence-img"
+            src="assets/04-zhipu-live-governance-boundary.png"
+            alt="显示已生成计划与未产生下游权限的治理边界"
+          />
+        </div>
       </div>
-      <div class="footer"><span>权限显式存在，而非由结果推断</span><span>04 / 14</span></div>
+      <div class="footer">
+        <span>权限显式存在，而非由结果推断</span><span>04 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
@@ -223,18 +976,48 @@
       <h2>支持、连接和 Live 验证是彼此独立的事实。</h2>
       <div class="providers">
         <div>
-          <div class="card"><h3>Deterministic Fixture 是默认选项</h3><p>离线、无网络、不可计费。它是产品演示中最安全、可复现的模式。</p><div class="chips" style="margin-top:15px"><span class="chip green">无需凭据</span><span class="chip green">Fixture 已验证</span></div></div>
-          <div class="provider-facts">
-            <div class="mini-fact"><div class="label">唯一 Live 已验证 Provider</div><div class="value">Zhipu / GLM-5.2</div></div>
-            <div class="mini-fact"><div class="label">其他显示的适配器</div><div class="value">已支持不等于已完成 Live 验证</div></div>
-            <div class="mini-fact"><div class="label">BYOK 处理方式</div><div class="value">当前会话的易失性服务器内存</div></div>
-            <div class="mini-fact"><div class="label">配额边界</div><div class="value">普通用户不会回退使用维护者凭据</div></div>
+          <div class="card">
+            <h3>Deterministic Fixture 是默认选项</h3>
+            <p>离线、无网络、不可计费。它是产品演示中最安全、可复现的模式。</p>
+            <div class="chips" style="margin-top: 15px">
+              <span class="chip green">无需凭据</span
+              ><span class="chip green">Fixture 已验证</span>
+            </div>
           </div>
-          <div class="quote">凭据不会被返回或持久化，并会在断开、到期或重启时清除。这不被表述为商业级多租户密钥库。</div>
+          <div class="provider-facts">
+            <div class="mini-fact">
+              <div class="label">唯一 Live 已验证 Provider</div>
+              <div class="value">Zhipu / GLM-5.2</div>
+            </div>
+            <div class="mini-fact">
+              <div class="label">其他显示的适配器</div>
+              <div class="value">已支持不等于已完成 Live 验证</div>
+            </div>
+            <div class="mini-fact">
+              <div class="label">BYOK 处理方式</div>
+              <div class="value">当前会话的易失性服务器内存</div>
+            </div>
+            <div class="mini-fact">
+              <div class="label">配额边界</div>
+              <div class="value">普通用户不会回退使用维护者凭据</div>
+            </div>
+          </div>
+          <div class="quote">
+            凭据不会被返回或持久化，并会在断开、到期或重启时清除。这不被表述为商业级多租户密钥库。
+          </div>
         </div>
-        <div class="media-frame"><img class="evidence-img" style="object-position:top" src="assets/01-zhipu-live-provider-status.png" alt="区分 Fixture 默认项与 Zhipu Live 验证的 Provider 状态" /></div>
+        <div class="media-frame">
+          <img
+            class="evidence-img"
+            style="object-position: top"
+            src="assets/01-zhipu-live-provider-status.png"
+            alt="区分 Fixture 默认项与 Zhipu Live 验证的 Provider 状态"
+          />
+        </div>
       </div>
-      <div class="footer"><span>FIXTURE 优先，严格限定 LIVE 声明</span><span>05 / 14</span></div>
+      <div class="footer">
+        <span>FIXTURE 优先，严格限定 LIVE 声明</span><span>05 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
@@ -242,28 +1025,90 @@
       <h2>一次受治理的 Zhipu / GLM-5.2 调用成功完成。</h2>
       <div class="live-grid">
         <div>
-          <div class="metric"><div class="label">关联标识</div><div class="value">3a9c354f7a58</div><div class="detail">安全证据关联标识</div></div>
-          <div class="metric"><div class="label">报告用量</div><div class="value">2,016 tokens</div><div class="detail">1,362 input + 654 output</div></div>
-          <div class="metric"><div class="label">测得延迟</div><div class="value">11.55 s</div><div class="detail">Provider 11,543 ms；客户端总计 11,553 ms</div></div>
-          <div class="metric"><div class="label">账单</div><div class="value" style="font-size:19px">live_billing_unknown</div><div class="detail">不主张金额或账单确定性</div></div>
-          <div class="chips" style="margin-top:14px"><span class="chip green">生命周期：succeeded</span><span class="chip blue">类型化 Plan：3 项操作</span><span class="chip green">8 项策略检查通过</span></div>
+          <div class="metric">
+            <div class="label">关联标识</div>
+            <div class="value">3a9c354f7a58</div>
+            <div class="detail">安全证据关联标识</div>
+          </div>
+          <div class="metric">
+            <div class="label">报告用量</div>
+            <div class="value">2,016 tokens</div>
+            <div class="detail">1,362 input + 654 output</div>
+          </div>
+          <div class="metric">
+            <div class="label">测得延迟</div>
+            <div class="value">11.55 s</div>
+            <div class="detail">Provider 11,543 ms；客户端总计 11,553 ms</div>
+          </div>
+          <div class="metric">
+            <div class="label">账单</div>
+            <div class="value" style="font-size: 19px">
+              live_billing_unknown
+            </div>
+            <div class="detail">不主张金额或账单确定性</div>
+          </div>
+          <div class="chips" style="margin-top: 14px">
+            <span class="chip green">生命周期：succeeded</span
+            ><span class="chip blue">类型化 Plan：3 项操作</span
+            ><span class="chip green">8 项策略检查通过</span>
+          </div>
         </div>
-        <div class="media-frame"><img class="evidence-img" src="assets/03-zhipu-live-invocation-audit.png" alt="包含用量、延迟和账单未知状态的安全 Provider 调用审计" /></div>
+        <div class="media-frame">
+          <img
+            class="evidence-img"
+            src="assets/03-zhipu-live-invocation-audit.png"
+            alt="包含用量、延迟和账单未知状态的安全 Provider 调用审计"
+          />
+        </div>
       </div>
-      <div class="footer"><span>安全审计投影 - 非私有 PROVIDER 材料</span><span>06 / 14</span></div>
+      <div class="footer">
+        <span>安全审计投影 - 非私有 PROVIDER 材料</span><span>06 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
       <div class="eyebrow">失败工程故事</div>
       <h2>派发后的未知状态是事实，不应被粉饰为简单的失败标签。</h2>
       <div class="timeline">
-        <div class="step unknown"><div class="step-n">第 01-02 次</div><h3>传输不确定性</h3><p>派发后，系统无法如实判定 Provider 的实际结果。</p><div class="chips" style="margin-top:15px"><span class="chip amber">outcome_unknown</span></div></div>
-        <div class="step unknown"><div class="step-n">第 03 次</div><h3>响应路径诊断</h3><p>如实分类解码问题，同时保留早期不可变历史。</p><div class="chips" style="margin-top:15px"><span class="chip amber">不自动重试</span></div></div>
-        <div class="step"><div class="step-n">窄范围修复</div><h3>修复兼容性，而非扩大权限</h3><p>增加安全传输可观测性、身份内容编码协商和解码响应归一化。</p><div class="chips" style="margin-top:15px"><span class="chip blue">受限变更</span></div></div>
-        <div class="step success"><div class="step-n">第 04 次</div><h3>独立的成功事件</h3><p>第四次受治理调用成功，但仍未产生下游执行权限。</p><div class="chips" style="margin-top:15px"><span class="chip green">succeeded</span></div></div>
+        <div class="step unknown">
+          <div class="step-n">第 01-02 次</div>
+          <h3>传输不确定性</h3>
+          <p>派发后，系统无法如实判定 Provider 的实际结果。</p>
+          <div class="chips" style="margin-top: 15px">
+            <span class="chip amber">outcome_unknown</span>
+          </div>
+        </div>
+        <div class="step unknown">
+          <div class="step-n">第 03 次</div>
+          <h3>响应路径诊断</h3>
+          <p>如实分类解码问题，同时保留早期不可变历史。</p>
+          <div class="chips" style="margin-top: 15px">
+            <span class="chip amber">不自动重试</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">窄范围修复</div>
+          <h3>修复兼容性，而非扩大权限</h3>
+          <p>增加安全传输可观测性、身份内容编码协商和解码响应归一化。</p>
+          <div class="chips" style="margin-top: 15px">
+            <span class="chip blue">受限变更</span>
+          </div>
+        </div>
+        <div class="step success">
+          <div class="step-n">第 04 次</div>
+          <h3>独立的成功事件</h3>
+          <p>第四次受治理调用成功，但仍未产生下游执行权限。</p>
+          <div class="chips" style="margin-top: 15px">
+            <span class="chip green">succeeded</span>
+          </div>
+        </div>
       </div>
-      <div class="quote">为何不自动重试？模糊请求可能已到达可计费或有副作用的外部系统。后续尝试必须作为新的、受控事件。</div>
-      <div class="footer"><span>不可变历史，如实保留不确定性</span><span>07 / 14</span></div>
+      <div class="quote">
+        为何不自动重试？模糊请求可能已到达可计费或有副作用的外部系统。后续尝试必须作为新的、受控事件。
+      </div>
+      <div class="footer">
+        <span>不可变历史，如实保留不确定性</span><span>07 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
@@ -271,104 +1116,353 @@
       <h2>模型绝不获得不受限制的 shell 权限。</h2>
       <div class="runner-layout">
         <div class="diagram">
-          <div class="runner-map"><div class="rnode"><h3>控制平面</h3><p>派生持久化的封闭任务信封和生命周期转换。</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>出站 Runner</h3><p>轮询并验证类型化信封，不接受浏览器入站控制。</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Fixture 工作区</h3><p>Runner 持有、精确修订、隔离的获准工作边界。</p></div></div>
-          <div class="flow-line" style="margin-top:26px"></div>
-          <div class="runner-map"><div class="rnode"><h3>执行 Grant</h3><p>进入变更路径前的独立范围和合格性检查。</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Lease 与 fencing</h3><p>锁定的认领和尝试身份避免竞争性结算。</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>验证与评审</h3><p>固定 Profile 与后续决策生成证据。</p></div></div>
+          <div class="runner-map">
+            <div class="rnode">
+              <h3>控制平面</h3>
+              <p>派生持久化的封闭任务信封和生命周期转换。</p>
+            </div>
+            <div class="rarr">&rarr;</div>
+            <div class="rnode">
+              <h3>出站 Runner</h3>
+              <p>轮询并验证类型化信封，不接受浏览器入站控制。</p>
+            </div>
+            <div class="rarr">&rarr;</div>
+            <div class="rnode">
+              <h3>Fixture 工作区</h3>
+              <p>Runner 持有、精确修订、隔离的获准工作边界。</p>
+            </div>
+          </div>
+          <div class="flow-line" style="margin-top: 26px"></div>
+          <div class="runner-map">
+            <div class="rnode">
+              <h3>执行 Grant</h3>
+              <p>进入变更路径前的独立范围和合格性检查。</p>
+            </div>
+            <div class="rarr">&rarr;</div>
+            <div class="rnode">
+              <h3>Lease 与 fencing</h3>
+              <p>锁定的认领和尝试身份避免竞争性结算。</p>
+            </div>
+            <div class="rarr">&rarr;</div>
+            <div class="rnode">
+              <h3>验证与评审</h3>
+              <p>固定 Profile 与后续决策生成证据。</p>
+            </div>
+          </div>
         </div>
-        <div class="card"><h3>在边界上保留的控制</h3><div class="runner-checks"><div class="check">封闭类型化操作，而非任意命令</div><div class="check">精确修订、Runner 持有的 fixture 工作区</div><div class="check">独立 Runner 身份和出站协议</div><div class="check">任务结算周围的 Lease / fencing</div><div class="check">固定验证 Profile 和受限证据</div><div class="check">不存在 Provider 直达 Runner 的权限路径</div></div><div class="rule"></div><p>源仓库、远程 Git、合并、发布和部署权限均被明确排除在本演示路径之外。</p></div>
+        <div class="card">
+          <h3>在边界上保留的控制</h3>
+          <div class="runner-checks">
+            <div class="check">封闭类型化操作，而非任意命令</div>
+            <div class="check">精确修订、Runner 持有的 fixture 工作区</div>
+            <div class="check">独立 Runner 身份和出站协议</div>
+            <div class="check">任务结算周围的 Lease / fencing</div>
+            <div class="check">固定验证 Profile 和受限证据</div>
+            <div class="check">不存在 Provider 直达 Runner 的权限路径</div>
+          </div>
+          <div class="rule"></div>
+          <p>
+            源仓库、远程 Git、合并、发布和部署权限均被明确排除在本演示路径之外。
+          </p>
+        </div>
       </div>
-      <div class="footer"><span>类型、范围与身份共同限制执行</span><span>08 / 14</span></div>
+      <div class="footer">
+        <span>类型、范围与身份共同限制执行</span><span>08 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
       <div class="eyebrow">POSTGRESQL 并发故障</div>
       <h2>修复原子性边界，而不是用重试掩盖半写入。</h2>
       <div class="deadlock">
-        <div class="card"><h3>观察到的 Red 基线</h3><p>嵌套的 Runner 创建在子 Validation Run 绑定完成前提交。第二个事务可以看到局部状态，并与子行竞争。</p>
-          <div class="cycle"><div class="cycle-grid"><div class="cycle-node">事务 A<br /><span style="font-weight:400">部分子记录和任务变为可见</span></div><div class="cycle-node">事务 B<br /><span style="font-weight:400">重放到达子行竞争点</span></div><div class="cycle-node">PostgreSQL<br /><span style="font-weight:400">transactionid 等待环</span></div><div class="cycle-node">结果<br /><span style="font-weight:400">DeadlockDetected / SQLSTATE 40P01</span></div></div><div class="cycle-arrow">&harr;</div></div>
-          <div class="chips"><span class="chip amber">10 / 10 次确定性的真实死锁</span></div>
+        <div class="card">
+          <h3>观察到的 Red 基线</h3>
+          <p>
+            嵌套的 Runner 创建在子 Validation Run
+            绑定完成前提交。第二个事务可以看到局部状态，并与子行竞争。
+          </p>
+          <div class="cycle">
+            <div class="cycle-grid">
+              <div class="cycle-node">
+                事务 A<br /><span style="font-weight: 400"
+                  >部分子记录和任务变为可见</span
+                >
+              </div>
+              <div class="cycle-node">
+                事务 B<br /><span style="font-weight: 400"
+                  >重放到达子行竞争点</span
+                >
+              </div>
+              <div class="cycle-node">
+                PostgreSQL<br /><span style="font-weight: 400"
+                  >transactionid 等待环</span
+                >
+              </div>
+              <div class="cycle-node">
+                结果<br /><span style="font-weight: 400"
+                  >DeadlockDetected / SQLSTATE 40P01</span
+                >
+              </div>
+            </div>
+            <div class="cycle-arrow">&harr;</div>
+          </div>
+          <div class="chips">
+            <span class="chip amber">10 / 10 次确定性的真实死锁</span>
+          </div>
         </div>
-        <div class="card"><h3>受控修复</h3><p>将 Runner 创建保持在外层 Validation 事务中。竞争事务会在进入部分绑定子记录窗口前等待。</p>
-          <div class="cycle" style="border-color:#b9e4d3;background:#f4fcf8"><div class="cycle-grid"><div class="cycle-node good">外层事务<br /><span style="font-weight:400">绑定前子记录和任务均不可见</span></div><div class="cycle-node good">并发调用方<br /><span style="font-weight:400">在原子性边界等待</span></div><div class="cycle-node good">恢复结果<br /><span style="font-weight:400">一个 suite、一个子记录、一个任务</span></div><div class="cycle-node good">结果<br /><span style="font-weight:400">无数据库异常</span></div></div><div class="cycle-arrow" style="color:#16785b">&rarr;</div></div>
-          <div class="deadlock-result">10 / 10 次受控通过 - 零未绑定子记录 - 不盲目重试。</div>
+        <div class="card">
+          <h3>受控修复</h3>
+          <p>
+            将 Runner 创建保持在外层 Validation
+            事务中。竞争事务会在进入部分绑定子记录窗口前等待。
+          </p>
+          <div class="cycle" style="border-color: #b9e4d3; background: #f4fcf8">
+            <div class="cycle-grid">
+              <div class="cycle-node good">
+                外层事务<br /><span style="font-weight: 400"
+                  >绑定前子记录和任务均不可见</span
+                >
+              </div>
+              <div class="cycle-node good">
+                并发调用方<br /><span style="font-weight: 400"
+                  >在原子性边界等待</span
+                >
+              </div>
+              <div class="cycle-node good">
+                恢复结果<br /><span style="font-weight: 400"
+                  >一个 suite、一个子记录、一个任务</span
+                >
+              </div>
+              <div class="cycle-node good">
+                结果<br /><span style="font-weight: 400">无数据库异常</span>
+              </div>
+            </div>
+            <div class="cycle-arrow" style="color: #16785b">&rarr;</div>
+          </div>
+          <div class="deadlock-result">
+            10 / 10 次受控通过 - 零未绑定子记录 - 不盲目重试。
+          </div>
         </div>
       </div>
-      <div class="footer"><span>数据库不变量是最终共享防线</span><span>09 / 14</span></div>
+      <div class="footer">
+        <span>数据库不变量是最终共享防线</span><span>09 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
       <div class="eyebrow">证据优先的工程实践</div>
       <h2>完成声明由证据账本支撑，而不是一句绿色状态。</h2>
       <div class="evidence-layout">
-        <div class="card"><h3>声明与证据纪律</h3><p style="margin-top:8px">只有来源已知且可安全投影的声明才会被接受。未知仍保持未知。</p><div class="ledger">
-          <div class="card"><h3>源身份</h3><p>Git SHA 与 tree 确立已封存的仓库状态。</p></div>
-          <div class="card"><h3>验证</h3><p>CI、测试、浏览器证据和数据库证明回答不同问题。</p></div>
-          <div class="card"><h3>Provider 生命周期</h3><p>prepared、dispatching 与终态分类保留外部不确定性。</p></div>
-          <div class="card"><h3>无秘密证据</h3><p>公开安全材料排除密钥、私有载荷、账户和账单记录。</p></div>
-          <div class="card"><h3>失败历史</h3><p>早期模糊尝试是持久事实，不会被追溯性改写为成功。</p></div>
-          <div class="card"><h3>范围限制</h3><p>本地演示证明不被重新表述为生产部署或客户使用。</p></div>
-        </div></div>
-        <div class="media-frame"><img class="evidence-img" src="assets/03-zhipu-live-invocation-audit.png" alt="安全审计投影" /></div>
+        <div class="card">
+          <h3>声明与证据纪律</h3>
+          <p style="margin-top: 8px">
+            只有来源已知且可安全投影的声明才会被接受。未知仍保持未知。
+          </p>
+          <div class="ledger">
+            <div class="card">
+              <h3>源身份</h3>
+              <p>Git SHA 与 tree 确立已封存的仓库状态。</p>
+            </div>
+            <div class="card">
+              <h3>验证</h3>
+              <p>CI、测试、浏览器证据和数据库证明回答不同问题。</p>
+            </div>
+            <div class="card">
+              <h3>Provider 生命周期</h3>
+              <p>prepared、dispatching 与终态分类保留外部不确定性。</p>
+            </div>
+            <div class="card">
+              <h3>无秘密证据</h3>
+              <p>公开安全材料排除密钥、私有载荷、账户和账单记录。</p>
+            </div>
+            <div class="card">
+              <h3>失败历史</h3>
+              <p>早期模糊尝试是持久事实，不会被追溯性改写为成功。</p>
+            </div>
+            <div class="card">
+              <h3>范围限制</h3>
+              <p>本地演示证明不被重新表述为生产部署或客户使用。</p>
+            </div>
+          </div>
+        </div>
+        <div class="media-frame">
+          <img
+            class="evidence-img"
+            src="assets/03-zhipu-live-invocation-audit.png"
+            alt="安全审计投影"
+          />
+        </div>
       </div>
-      <div class="footer"><span>事实 / 推断 / 未验证 严格区分</span><span>10 / 14</span></div>
+      <div class="footer">
+        <span>事实 / 推断 / 未验证 严格区分</span><span>10 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
       <div class="eyebrow">产品体验</div>
       <h2>让治理边界可见的浏览器优先控制台。</h2>
       <div class="product">
-        <div class="media-frame"><img class="evidence-img" style="object-position:top" src="assets/06-clean-dashboard-demo.png" alt="VisualEngineer 任务控制台仪表盘" /></div>
+        <div class="media-frame">
+          <img
+            class="evidence-img"
+            style="object-position: top"
+            src="assets/06-clean-dashboard-demo.png"
+            alt="VisualEngineer 任务控制台仪表盘"
+          />
+        </div>
         <div class="product-side">
-          <div class="media-frame"><img class="evidence-img" src="assets/02-zhipu-live-typed-plan.png" alt="类型化计划和通过的策略评估" /></div>
-          <div class="media-frame"><img class="evidence-img" src="assets/07-byok-provider-connect.png" alt="空的 BYOK Provider 连接对话框" /></div>
+          <div class="media-frame">
+            <img
+              class="evidence-img"
+              src="assets/02-zhipu-live-typed-plan.png"
+              alt="类型化计划和通过的策略评估"
+            />
+          </div>
+          <div class="media-frame">
+            <img
+              class="evidence-img"
+              src="assets/07-byok-provider-connect.png"
+              alt="空的 BYOK Provider 连接对话框"
+            />
+          </div>
         </div>
       </div>
-      <div class="chips" style="margin-top:14px"><span class="chip blue">zh-CN / en-US</span><span class="chip blue">响应式体验</span><span class="chip blue">类型化 Plan Evidence</span><span class="chip blue">Governance Evidence</span><span class="chip blue">Provider 状态</span><span class="chip blue">Fixture / Live 区分</span><span class="chip blue">BYOK 入口</span></div>
-      <div class="footer"><span>产品 UI 仅使用公开安全截图</span><span>11 / 14</span></div>
+      <div class="chips" style="margin-top: 14px">
+        <span class="chip blue">zh-CN / en-US</span
+        ><span class="chip blue">响应式体验</span
+        ><span class="chip blue">类型化 Plan Evidence</span
+        ><span class="chip blue">Governance Evidence</span
+        ><span class="chip blue">Provider 状态</span
+        ><span class="chip blue">Fixture / Live 区分</span
+        ><span class="chip blue">BYOK 入口</span>
+      </div>
+      <div class="footer">
+        <span>产品 UI 仅使用公开安全截图</span><span>11 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
       <div class="eyebrow">工程技术栈</div>
       <h2>从浏览器 UI 到持久化与证明的类型化边界。</h2>
       <div class="stack">
-        <div class="stack-band"><h3>Web 控制台</h3><p>Next.js App Router<br />React<br />TypeScript strict<br />Tailwind CSS<br />next-intl</p></div>
-        <div class="stack-band"><h3>控制平面</h3><p>Python<br />FastAPI<br />Pydantic<br />SQLAlchemy<br />Alembic</p></div>
-        <div class="stack-band"><h3>状态与执行</h3><p>PostgreSQL<br />独立本地 Runner<br />封闭类型化任务协议<br />隔离 fixture 工作区</p></div>
-        <div class="stack-band"><h3>质量与证据</h3><p>Vitest<br />Playwright<br />axe<br />Ruff 与 mypy<br />Git 与 CI 证据</p></div>
+        <div class="stack-band">
+          <h3>Web 控制台</h3>
+          <p>
+            Next.js App Router<br />React<br />TypeScript strict<br />Tailwind
+            CSS<br />next-intl
+          </p>
+        </div>
+        <div class="stack-band">
+          <h3>控制平面</h3>
+          <p>Python<br />FastAPI<br />Pydantic<br />SQLAlchemy<br />Alembic</p>
+        </div>
+        <div class="stack-band">
+          <h3>状态与执行</h3>
+          <p>
+            PostgreSQL<br />独立本地 Runner<br />封闭类型化任务协议<br />隔离
+            fixture 工作区
+          </p>
+        </div>
+        <div class="stack-band">
+          <h3>质量与证据</h3>
+          <p>
+            Vitest<br />Playwright<br />axe<br />Ruff 与 mypy<br />Git 与 CI
+            证据
+          </p>
+        </div>
       </div>
-      <div class="quote">技术栈的重要性在于，每一条边界都由具体契约表示：客户端的 TypeScript、API 边缘的 OpenAPI、类型化 Python 服务，以及保障持久状态的 PostgreSQL 约束。</div>
-      <div class="footer"><span>仅列出已在封存仓库中验证的技术</span><span>12 / 14</span></div>
+      <div class="quote">
+        技术栈的重要性在于，每一条边界都由具体契约表示：客户端的 TypeScript、API
+        边缘的 OpenAPI、类型化 Python 服务，以及保障持久状态的 PostgreSQL 约束。
+      </div>
+      <div class="footer">
+        <span>仅列出已在封存仓库中验证的技术</span><span>12 / 14</span>
+      </div>
     </article>
 
     <article class="slide">
       <div class="eyebrow">我的职责与 AI 辅助工程</div>
       <h2>系统边界的责任始终由人承担。</h2>
       <div class="role">
-        <div class="card"><h3>我负责的内容</h3><div class="role-list">
-          <div class="role-line"><strong>产品</strong><span>问题定义、工作流、界面优先级与验收标准。</span></div>
-          <div class="role-line"><strong>架构</strong><span>权限边界、生命周期规则、类型化契约与风险决策。</span></div>
-          <div class="role-line"><strong>验证</strong><span>证据策略、测试预期、失败解读与最终验收。</span></div>
-          <div class="role-line"><strong>说明</strong><span>能够讨论架构、状态机、故障、权衡与范围限制。</span></div>
-        </div></div>
-        <div class="card"><h3>ChatGPT + Codex 如何加速工作</h3><p style="margin-top:9px">在明确约束与审查下，AI 协助加速仓库调研、实现、测试、文档及 Git / CI 工作。</p><div class="rule"></div><h3>本作品集不作的声明</h3><p style="margin-top:9px">它不声称每一行代码都由人工编写，也不会将产品选择、安全边界、验证或最终验收的责任转移给模型。</p><div class="quote" style="margin-top:18px">最有价值的面试讨论不是“AI 写了它”，而是系统为何让权限、不确定性和证据清晰可见。</div></div>
+        <div class="card">
+          <h3>我负责的内容</h3>
+          <div class="role-list">
+            <div class="role-line">
+              <strong>产品</strong
+              ><span>问题定义、工作流、界面优先级与验收标准。</span>
+            </div>
+            <div class="role-line">
+              <strong>架构</strong
+              ><span>权限边界、生命周期规则、类型化契约与风险决策。</span>
+            </div>
+            <div class="role-line">
+              <strong>验证</strong
+              ><span>证据策略、测试预期、失败解读与最终验收。</span>
+            </div>
+            <div class="role-line">
+              <strong>说明</strong
+              ><span>能够讨论架构、状态机、故障、权衡与范围限制。</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>ChatGPT + Codex 如何加速工作</h3>
+          <p style="margin-top: 9px">
+            在明确约束与审查下，AI 协助加速仓库调研、实现、测试、文档及 Git / CI
+            工作。
+          </p>
+          <div class="rule"></div>
+          <h3>本作品集不作的声明</h3>
+          <p style="margin-top: 9px">
+            它不声称每一行代码都由人工编写，也不会将产品选择、安全边界、验证或最终验收的责任转移给模型。
+          </p>
+          <div class="quote" style="margin-top: 18px">
+            最有价值的面试讨论不是“AI
+            写了它”，而是系统为何让权限、不确定性和证据清晰可见。
+          </div>
+        </div>
       </div>
-      <div class="footer"><span>AI 加速交付；治理与验收责任仍由人承担</span><span>13 / 14</span></div>
+      <div class="footer">
+        <span>AI 加速交付；治理与验收责任仍由人承担</span><span>13 / 14</span>
+      </div>
     </article>
 
     <article class="slide dark">
       <div class="close-grid">
         <div>
           <div class="eyebrow">范围与下一步</div>
-          <div class="close-statement" style="margin-top:12px">清晰的边界，比夸大的声明更适合作为演示。</div>
-          <div class="repo-link"><a href="https://github.com/dankk0220abc-prog/visual-engineer">github.com/dankk0220abc-prog/visual-engineer</a></div>
+          <div class="close-statement" style="margin-top: 12px">
+            清晰的边界，比夸大的声明更适合作为演示。
+          </div>
+          <div class="repo-link">
+            <a href="https://github.com/dankk0220abc-prog/visual-engineer"
+              >github.com/dankk0220abc-prog/visual-engineer</a
+            >
+          </div>
         </div>
         <div>
-          <div class="scope-list"><div>主要开发已完成；最终封存证据包含一次成功的 Zhipu / GLM-5.2 Live 验证。</div><div>其他适配器不得被表述为已完成 Live 验证。</div><div>Fixture 仍是最安全、可复现的演示模式。</div><div>仅为本地单用户证明：不主张生产部署、客户、收入、用户规模或性能提升。</div><div>BYOK 是会话范围的易失性处理，而非商业级多租户密钥库。</div></div>
-          <div class="rule" style="background:#3b4b6a;margin-top:22px"></div>
-          <p style="color:#c3cde2;font-size:13px">面试讨论重点：Provider 生命周期、PostgreSQL 不变量、Runner 边界或证据策略。</p>
+          <div class="scope-list">
+            <div>
+              主要开发已完成；最终封存证据包含一次成功的 Zhipu / GLM-5.2 Live
+              验证。
+            </div>
+            <div>其他适配器不得被表述为已完成 Live 验证。</div>
+            <div>Fixture 仍是最安全、可复现的演示模式。</div>
+            <div>
+              仅为本地单用户证明：不主张生产部署、客户、收入、用户规模或性能提升。
+            </div>
+            <div>BYOK 是会话范围的易失性处理，而非商业级多租户密钥库。</div>
+          </div>
+          <div class="rule" style="background: #3b4b6a; margin-top: 22px"></div>
+          <p style="color: #c3cde2; font-size: 13px">
+            面试讨论重点：Provider 生命周期、PostgreSQL 不变量、Runner
+            边界或证据策略。
+          </p>
         </div>
       </div>
-      <div class="footer"><span>VISUALENGINEER - 面试作品集</span><span>14 / 14</span></div>
+      <div class="footer">
+        <span>VISUALENGINEER - 面试作品集</span><span>14 / 14</span>
+      </div>
     </article>
   </body>
 </html>
