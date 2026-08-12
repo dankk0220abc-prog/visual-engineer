@@ -668,6 +668,53 @@
         "title": "AIPlanRequestStatus",
         "type": "string"
       },
+      "AIProviderCredentialCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "format": "password",
+            "title": "Api Key",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": ["api_key"],
+        "title": "AIProviderCredentialCreate",
+        "type": "object"
+      },
+      "AIProviderCredentialStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "persistence": {
+            "const": "process_memory_only",
+            "default": "process_memory_only",
+            "title": "Persistence",
+            "type": "string"
+          },
+          "provider_id": {
+            "$ref": "#/components/schemas/ProviderId"
+          }
+        },
+        "required": ["provider_id", "connected", "expires_at"],
+        "title": "AIProviderCredentialStatus",
+        "type": "object"
+      },
       "AIProviderInvocationResponse": {
         "properties": {
           "adapter_version": {
@@ -3619,6 +3666,19 @@
         "title": "FailureCode",
         "type": "string"
       },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -3912,6 +3972,515 @@
           "cancel_requested"
         ],
         "title": "LeaseMutationResponse",
+        "type": "object"
+      },
+      "LiveProviderEvidenceDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "billing_status": {
+            "$ref": "#/components/schemas/InvocationBillingStatus"
+          },
+          "classification": {
+            "const": "live",
+            "title": "Classification",
+            "type": "string"
+          },
+          "client_total_elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Total Elapsed Ms"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "correlation": {
+            "pattern": "^[0-9a-f]{12}$",
+            "title": "Correlation",
+            "type": "string"
+          },
+          "cost_amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Amount"
+          },
+          "cost_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Currency"
+          },
+          "effective_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Model Id"
+          },
+          "effective_model_status": {
+            "$ref": "#/components/schemas/ReportedValueStatus"
+          },
+          "evaluations": {
+            "items": {
+              "$ref": "#/components/schemas/LiveProviderEvidenceEvaluation"
+            },
+            "maxItems": 100,
+            "title": "Evaluations",
+            "type": "array"
+          },
+          "governance": {
+            "$ref": "#/components/schemas/LiveProviderGovernanceBoundary"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "lifecycle": {
+            "const": "succeeded",
+            "title": "Lifecycle",
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/LiveProviderEvidenceOperation"
+            },
+            "maxItems": 100,
+            "title": "Operations",
+            "type": "array"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "plan_summary": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Plan Summary",
+            "type": "string"
+          },
+          "provider_elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Elapsed Ms"
+          },
+          "provider_id": {
+            "$ref": "#/components/schemas/ProviderId"
+          },
+          "public_task_context": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Public Task Context",
+            "type": "string"
+          },
+          "request_digest": {
+            "title": "Request Digest",
+            "type": "string"
+          },
+          "requested_model_id": {
+            "title": "Requested Model Id",
+            "type": "string"
+          },
+          "response_digest": {
+            "title": "Response Digest",
+            "type": "string"
+          },
+          "task_classification": {
+            "const": "live_canary",
+            "title": "Task Classification",
+            "type": "string"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          },
+          "upstream_request_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Request Fingerprint"
+          },
+          "upstream_request_id_status": {
+            "$ref": "#/components/schemas/ReportedValueStatus"
+          },
+          "usage_status": {
+            "$ref": "#/components/schemas/InvocationUsageStatus"
+          }
+        },
+        "required": [
+          "correlation",
+          "provider_id",
+          "classification",
+          "lifecycle",
+          "requested_model_id",
+          "effective_model_status",
+          "effective_model_id",
+          "usage_status",
+          "input_tokens",
+          "output_tokens",
+          "total_tokens",
+          "provider_elapsed_ms",
+          "client_total_elapsed_ms",
+          "billing_status",
+          "cost_amount",
+          "cost_currency",
+          "upstream_request_id_status",
+          "upstream_request_fingerprint",
+          "request_digest",
+          "response_digest",
+          "completed_at",
+          "plan_summary",
+          "operations",
+          "evaluations",
+          "task_classification",
+          "public_task_context",
+          "governance"
+        ],
+        "title": "LiveProviderEvidenceDetail",
+        "type": "object"
+      },
+      "LiveProviderEvidenceEvaluation": {
+        "additionalProperties": false,
+        "properties": {
+          "eval_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Eval Id",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "summary": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": ["eval_id", "passed", "summary"],
+        "title": "LiveProviderEvidenceEvaluation",
+        "type": "object"
+      },
+      "LiveProviderEvidenceListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LiveProviderEvidenceSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": ["items", "total"],
+        "title": "LiveProviderEvidenceListResponse",
+        "type": "object"
+      },
+      "LiveProviderEvidenceOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": ["kind"],
+        "title": "LiveProviderEvidenceOperation",
+        "type": "object"
+      },
+      "LiveProviderEvidenceSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "billing_status": {
+            "$ref": "#/components/schemas/InvocationBillingStatus"
+          },
+          "classification": {
+            "const": "live",
+            "title": "Classification",
+            "type": "string"
+          },
+          "client_total_elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Total Elapsed Ms"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "correlation": {
+            "pattern": "^[0-9a-f]{12}$",
+            "title": "Correlation",
+            "type": "string"
+          },
+          "cost_amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Amount"
+          },
+          "cost_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Currency"
+          },
+          "effective_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Model Id"
+          },
+          "effective_model_status": {
+            "$ref": "#/components/schemas/ReportedValueStatus"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "lifecycle": {
+            "const": "succeeded",
+            "title": "Lifecycle",
+            "type": "string"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "provider_elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Elapsed Ms"
+          },
+          "provider_id": {
+            "$ref": "#/components/schemas/ProviderId"
+          },
+          "request_digest": {
+            "title": "Request Digest",
+            "type": "string"
+          },
+          "requested_model_id": {
+            "title": "Requested Model Id",
+            "type": "string"
+          },
+          "response_digest": {
+            "title": "Response Digest",
+            "type": "string"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          },
+          "upstream_request_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Request Fingerprint"
+          },
+          "upstream_request_id_status": {
+            "$ref": "#/components/schemas/ReportedValueStatus"
+          },
+          "usage_status": {
+            "$ref": "#/components/schemas/InvocationUsageStatus"
+          }
+        },
+        "required": [
+          "correlation",
+          "provider_id",
+          "classification",
+          "lifecycle",
+          "requested_model_id",
+          "effective_model_status",
+          "effective_model_id",
+          "usage_status",
+          "input_tokens",
+          "output_tokens",
+          "total_tokens",
+          "provider_elapsed_ms",
+          "client_total_elapsed_ms",
+          "billing_status",
+          "cost_amount",
+          "cost_currency",
+          "upstream_request_id_status",
+          "upstream_request_fingerprint",
+          "request_digest",
+          "response_digest",
+          "completed_at"
+        ],
+        "title": "LiveProviderEvidenceSummary",
+        "type": "object"
+      },
+      "LiveProviderGovernanceBoundary": {
+        "additionalProperties": false,
+        "properties": {
+          "ai_plan_status": {
+            "title": "Ai Plan Status",
+            "type": "string"
+          },
+          "approval_status": {
+            "enum": ["not_decided", "approved", "rejected"],
+            "title": "Approval Status",
+            "type": "string"
+          },
+          "delivery_status": {
+            "enum": ["not_created", "present"],
+            "title": "Delivery Status",
+            "type": "string"
+          },
+          "execution_grant_status": {
+            "enum": ["not_issued", "present"],
+            "title": "Execution Grant Status",
+            "type": "string"
+          },
+          "review_status": {
+            "enum": ["not_created", "present"],
+            "title": "Review Status",
+            "type": "string"
+          },
+          "runner_authority": {
+            "enum": ["not_granted", "present"],
+            "title": "Runner Authority",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ai_plan_status",
+          "approval_status",
+          "execution_grant_status",
+          "runner_authority",
+          "review_status",
+          "delivery_status"
+        ],
+        "title": "LiveProviderGovernanceBoundary",
         "type": "object"
       },
       "LocalDeliveryManifest": {
@@ -4967,6 +5536,11 @@
         "title": "PromptBinding",
         "type": "object"
       },
+      "ProviderAdapterStatus": {
+        "enum": ["supported"],
+        "title": "ProviderAdapterStatus",
+        "type": "string"
+      },
       "ProviderCapabilityDeclaration": {
         "additionalProperties": false,
         "properties": {
@@ -5094,6 +5668,9 @@
       "ProviderConfigurationStatus": {
         "additionalProperties": false,
         "properties": {
+          "adapter_status": {
+            "$ref": "#/components/schemas/ProviderAdapterStatus"
+          },
           "capabilities": {
             "$ref": "#/components/schemas/ProviderCapabilityDeclaration"
           },
@@ -5137,6 +5714,9 @@
               }
             ]
           },
+          "session_credential_status": {
+            "$ref": "#/components/schemas/ProviderSessionCredentialStatus"
+          },
           "status_description": {
             "title": "Status Description",
             "type": "string"
@@ -5151,6 +5731,8 @@
           "model_id",
           "configured",
           "enabled",
+          "adapter_status",
+          "session_credential_status",
           "live_validation_status",
           "local_secret_required",
           "status_reason",
@@ -5175,14 +5757,21 @@
         "type": "string"
       },
       "ProviderLiveValidationStatus": {
-        "enum": ["fixture_validated", "not_performed"],
+        "enum": ["fixture_validated", "live_verified", "not_performed"],
         "title": "ProviderLiveValidationStatus",
+        "type": "string"
+      },
+      "ProviderSessionCredentialStatus": {
+        "enum": ["not_required", "not_connected", "connected"],
+        "title": "ProviderSessionCredentialStatus",
         "type": "string"
       },
       "ProviderStatusReason": {
         "enum": [
           "available",
-          "missing_local_api_key",
+          "missing_session_credential",
+          "missing_session_credential",
+          "connected_with_user_credential",
           "live_validation_not_performed"
         ],
         "title": "ProviderStatusReason",
@@ -7059,6 +7648,22 @@
             ],
             "title": "Result"
           },
+          "result_projection_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Projection Error Code"
+          },
+          "result_projection_status": {
+            "enum": ["not_available", "available", "incompatible_legacy"],
+            "title": "Result Projection Status",
+            "type": "string"
+          },
           "source_revision": {
             "anyOf": [
               {
@@ -7111,6 +7716,8 @@
           "attempt_count",
           "max_attempts",
           "result",
+          "result_projection_status",
+          "result_projection_error_code",
           "error_code",
           "error_message",
           "version",
@@ -7639,9 +8246,27 @@
         "title": "SystemDiagnosticJobSpec",
         "type": "object"
       },
+      "TaskClassification": {
+        "enum": [
+          "user",
+          "demo",
+          "system_validation",
+          "security_test",
+          "fixture",
+          "live_canary"
+        ],
+        "title": "TaskClassification",
+        "type": "string"
+      },
       "TaskCreate": {
         "additionalProperties": false,
         "properties": {
+          "classification": {
+            "default": "user",
+            "enum": ["user", "demo"],
+            "title": "Classification",
+            "type": "string"
+          },
           "objective": {
             "maxLength": 4000,
             "minLength": 1,
@@ -7708,6 +8333,13 @@
       },
       "TaskResponse": {
         "properties": {
+          "classification": {
+            "$ref": "#/components/schemas/TaskClassification"
+          },
+          "content_redacted": {
+            "title": "Content Redacted",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -7758,6 +8390,8 @@
           "repository_display_name",
           "repository_locator",
           "status",
+          "classification",
+          "content_redacted",
           "version",
           "created_at",
           "updated_at"
@@ -7799,6 +8433,42 @@
         },
         "required": ["relative_path", "size_bytes", "sha256"],
         "title": "ValidationArtifactEvidence",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError",
         "type": "object"
       },
       "ValidationEvidenceResponse": {
@@ -12048,6 +12718,92 @@
         "tags": ["governed AI planning"]
       }
     },
+    "/api/v1/ai-provider-sessions/{provider_id}/credential": {
+      "delete": {
+        "operationId": "disconnect_ai_provider_credential_api_v1_ai_provider_sessions__provider_id__credential_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProviderId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIProviderCredentialStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Destroy one process-local user Provider credential",
+        "tags": ["governed AI planning"]
+      },
+      "post": {
+        "operationId": "connect_ai_provider_credential_api_v1_ai_provider_sessions__provider_id__credential_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProviderId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIProviderCredentialCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIProviderCredentialStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid BYOK credential"
+          }
+        },
+        "summary": "Connect one process-local user Provider credential",
+        "tags": ["governed AI planning"]
+      }
+    },
     "/api/v1/ai-providers": {
       "get": {
         "operationId": "list_ai_providers_api_v1_ai_providers_get",
@@ -12878,6 +13634,86 @@
         },
         "summary": "Revoke a pending or approved Execution Grant",
         "tags": ["isolated workspaces"]
+      }
+    },
+    "/api/v1/live-provider-evidence": {
+      "get": {
+        "operationId": "list_live_provider_evidence_api_v1_live_provider_evidence_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveProviderEvidenceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List bounded successful Live Provider Evidence projections",
+        "tags": ["governed AI planning"]
+      }
+    },
+    "/api/v1/live-provider-evidence/{correlation}": {
+      "get": {
+        "operationId": "get_live_provider_evidence_api_v1_live_provider_evidence__correlation__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "correlation",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{12}$",
+              "title": "Correlation",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveProviderEvidenceDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State or idempotency conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or policy denial"
+          }
+        },
+        "summary": "Get one bounded successful Live Provider Evidence projection",
+        "tags": ["governed AI planning"]
       }
     },
     "/api/v1/repositories": {

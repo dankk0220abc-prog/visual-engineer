@@ -9,6 +9,7 @@ import { formatTimestamp } from "@/lib/format";
 import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
+import { TechnicalValue } from "./technical-value";
 
 function Detail({
   label,
@@ -40,6 +41,14 @@ export function TaskDetails({ taskId }: { taskId: string }) {
   const [message, setMessage] = useState("");
   const [isStarting, setIsStarting] = useState(false);
   const [startMessage, setStartMessage] = useState("");
+  const classificationLabels: Record<Task["classification"], string> = {
+    user: t("classificationValue.user"),
+    demo: t("classificationValue.demo"),
+    system_validation: t("classificationValue.system_validation"),
+    security_test: t("classificationValue.security_test"),
+    fixture: t("classificationValue.fixture"),
+    live_canary: t("classificationValue.live_canary"),
+  };
 
   const load = useCallback(async () => {
     setState("loading");
@@ -151,7 +160,10 @@ export function TaskDetails({ taskId }: { taskId: string }) {
 
             <dl className="mt-2">
               <Detail label={t("taskId")}>
-                <span className="font-mono text-xs">{task.id}</span>
+                <TechnicalValue value={task.id} />
+              </Detail>
+              <Detail label={t("classification")}>
+                {classificationLabels[task.classification]}
               </Detail>
               <Detail label={t("objective")}>{task.objective}</Detail>
               <Detail label={t("repository")}>

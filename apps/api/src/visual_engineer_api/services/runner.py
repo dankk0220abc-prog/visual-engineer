@@ -3231,15 +3231,23 @@ class RunnerService:
             None,
         )
         result: ResultPayload | None = None
+        result_projection_status = "not_available"
+        result_projection_error_code: str | None = None
         if job.result is not None:
             try:
                 result = RESULT_ADAPTER.validate_python(job.result)
             except ValidationError as exc:
-                raise RunnerServiceError(
-                    "stored_result_invalid",
-                    "Stored Runner result is invalid",
-                    category="internal",
-                ) from exc
+                if self._is_incompatible_legacy_side_effect_result(job.result, exc):
+                    result_projection_status = "incompatible_legacy"
+                    result_projection_error_code = "legacy_result_missing_side_effect_permit"
+                else:
+                    raise RunnerServiceError(
+                        "stored_result_invalid",
+                        "Stored Runner result is invalid",
+                        category="internal",
+                    ) from exc
+            else:
+                result_projection_status = "available"
         return RunnerJobResponse(
             id=job.id,
             kind=JobKind(job.kind),
@@ -3256,6 +3264,8 @@ class RunnerService:
             attempt_count=job.attempt_count,
             max_attempts=job.max_attempts,
             result=result,
+            result_projection_status=result_projection_status,
+            result_projection_error_code=result_projection_error_code,
             error_code=job.error_code,
             error_message=job.error_message,
             version=job.version,
@@ -3284,6 +3294,30 @@ class RunnerService:
                 self._attempt_response(active_attempt) if active_attempt is not None else None
             ),
             attempts=[self._attempt_response(item) for item in attempts],
+        )
+
+    @staticmethod
+    def _is_incompatible_legacy_side_effect_result(value: object, error: ValidationError) -> bool:
+        if not isinstance(value, dict) or "side_effect_permit_id" in value:
+            return False
+        legacy_kinds = {
+            JobKind.WORKSPACE_PREPARE_V1.value,
+            JobKind.WORKSPACE_WRITE_TEXT_V1.value,
+            JobKind.WORKSPACE_ROLLBACK_V1.value,
+            JobKind.WORKSPACE_DISCARD_V1.value,
+        }
+        kind = value.get("kind")
+        if kind not in legacy_kinds:
+            return False
+        errors = error.errors()
+        return (
+            len(errors) == 1
+            and errors[0]["loc"]
+            == (
+                kind,
+                "side_effect_permit_id",
+            )
+            and errors[0]["type"] == "missing"
         )
 
     @staticmethod

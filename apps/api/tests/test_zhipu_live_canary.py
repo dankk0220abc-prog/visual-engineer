@@ -64,6 +64,9 @@ from visual_engineer_api.models.task import Task
 from visual_engineer_api.models.workspace import ExecutionGrant, Workspace
 from visual_engineer_api.services import zhipu_live_canary as canary_service
 from visual_engineer_api.services.ai_planning import AIPlanningService
+from visual_engineer_api.services.live_provider_evidence import (
+    LiveProviderEvidenceService,
+)
 from visual_engineer_api.services.zhipu_live_canary import (
     LIVE_VALIDATION_AUTHORIZATION_ENV,
     USER_SECRET_PROVISION_REQUIRED,
@@ -566,6 +569,25 @@ def test_success_persists_live_invocation_typed_plan_and_evals_only(
     )
     assert _synthetic_credential() not in persisted
     assert "Authorization" not in persisted
+
+    evidence_service = LiveProviderEvidenceService(db_session)
+    summaries = evidence_service.list()
+    assert evidence_service.live_verified_provider_ids() == {ProviderId.ZHIPU}
+    assert len(summaries) == 1
+    assert summaries[0].correlation == result.invocation_id.hex[:12]
+    detail = evidence_service.detail(summaries[0].correlation)
+    assert detail.task_classification == "live_canary"
+    assert detail.governance.approval_status == "not_decided"
+    assert detail.governance.execution_grant_status == "not_issued"
+    assert detail.governance.runner_authority == "not_granted"
+    assert detail.governance.review_status == "not_created"
+    assert detail.governance.delivery_status == "not_created"
+    assert len(detail.evaluations) == len(LIVE_CANARY_EVAL_IDS)
+    assert AIPlanningService(db_session).response(ai_request.id).plan is not None
+    safe_evidence = detail.model_dump_json()
+    assert _synthetic_credential() not in safe_evidence
+    assert "Authorization" not in safe_evidence
+    assert "response_instruction" not in safe_evidence
 
 
 def test_identity_request_accepts_valid_compressed_success_response(

@@ -5,11 +5,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, 
 from sqlalchemy.orm import Session
 
 from visual_engineer_api.db.session import get_db
-from visual_engineer_api.models.task import Task
 from visual_engineer_api.repositories.task import TaskRepository
 from visual_engineer_api.schemas.error import ErrorResponse
 from visual_engineer_api.schemas.task import TaskCreate, TaskListResponse, TaskResponse
-from visual_engineer_api.services.task import IdempotencyConflictError, TaskService
+from visual_engineer_api.services.task import (
+    IdempotencyConflictError,
+    TaskService,
+    task_response,
+)
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
@@ -44,7 +47,7 @@ def create_task(
     response: Response,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=255)],
     db: DatabaseSession,
-) -> Task:
+) -> TaskResponse:
     key = normalize_idempotency_key(idempotency_key)
     try:
         task, replay = TaskService(db).create(payload, key)
@@ -59,7 +62,7 @@ def create_task(
     if replay:
         response.status_code = status.HTTP_200_OK
         response.headers["Idempotent-Replay"] = "true"
-    return task
+    return task_response(task)
 
 
 @router.get(
@@ -74,7 +77,12 @@ def list_tasks(
     offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> TaskListResponse:
     tasks, total = TaskRepository(db).list(limit=limit, offset=offset)
-    return TaskListResponse(items=tasks, total=total, limit=limit, offset=offset)
+    return TaskListResponse(
+        items=[task_response(task) for task in tasks],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -86,11 +94,11 @@ def list_tasks(
     },
     summary="Get a task by ID",
 )
-def get_task(task_id: uuid.UUID, db: DatabaseSession) -> Task:
+def get_task(task_id: uuid.UUID, db: DatabaseSession) -> TaskResponse:
     task = TaskRepository(db).get_by_id(task_id)
     if task is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "task_not_found", "message": "Task was not found"},
         )
-    return task
+    return task_response(task)

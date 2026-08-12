@@ -18,6 +18,7 @@ import { formatTimestamp } from "@/lib/format";
 import { localizeApiError } from "@/lib/localization";
 
 import { StatusPill } from "./status-pill";
+import { TechnicalValue } from "./technical-value";
 
 function runnerTone(
   status: Runner["status"],
@@ -183,6 +184,25 @@ export function RunnerConsole() {
 
       {loadState === "ready" ? (
         <>
+          {runners.every((runner) => runner.status !== "online") ? (
+            <aside
+              className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5"
+              role="status"
+            >
+              <p className="font-semibold text-amber-950">
+                {t("runnerUnavailableTitle")}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-amber-900">
+                {t("runnerUnavailableDescription")}
+              </p>
+              <details className="mt-2 text-xs text-amber-900">
+                <summary className="cursor-pointer font-semibold outline-none focus-visible:ring-2 focus-visible:ring-amber-700">
+                  {t("technicalDetails")}
+                </summary>
+                <code className="mt-2 block font-mono">runner_offline</code>
+              </details>
+            </aside>
+          ) : null}
           <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
             <section
               className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
@@ -230,9 +250,9 @@ export function RunnerConsole() {
                           <p className="font-semibold text-slate-950">
                             {runner.display_name}
                           </p>
-                          <p className="mt-1 font-mono text-xs break-all text-slate-500">
-                            {runner.id}
-                          </p>
+                          <div className="mt-1">
+                            <TechnicalValue value={runner.id} />
+                          </div>
                         </div>
                         <StatusPill tone={runnerTone(runner.status)}>
                           {runner.status}
@@ -483,9 +503,14 @@ export function RunnerConsole() {
                         {job.state}
                       </StatusPill>
                     </div>
-                    <p className="mt-2 font-mono text-xs break-all text-slate-500">
-                      {job.id}
-                    </p>
+                    <div className="mt-2">
+                      <TechnicalValue value={job.id} />
+                    </div>
+                    {job.result_projection_status === "incompatible_legacy" ? (
+                      <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                        {t("legacyResultUnavailable")}
+                      </p>
+                    ) : null}
                     <p className="mt-3 text-sm text-slate-600">
                       {t("attempts", {
                         current: job.attempt_count,

@@ -1,3 +1,4 @@
+import asyncio
 import threading
 import uuid
 from typing import Any, NoReturn
@@ -12,6 +13,7 @@ from visual_engineer_api.ai_planning.contracts import (
     ContextBudget,
     ContextManifestEntry,
     PromptBinding,
+    ProviderCapabilityMetadata,
     RepositoryBinding,
     canonical_digest,
     canonical_json,
@@ -24,6 +26,7 @@ from visual_engineer_api.ai_planning.evaluator import (
 )
 from visual_engineer_api.ai_planning.fake_provider import DeterministicFixtureProvider
 from visual_engineer_api.ai_planning.invocation_contract import (
+    REAL_PROVIDER_ADAPTER_VERSION,
     DispatchBoundaryStatus,
     InvocationClassification,
     InvocationUsageStatus,
@@ -46,11 +49,17 @@ from visual_engineer_api.ai_planning.provider import (
     PlanningProvider,
     ProviderError,
     ProviderErrorCategory,
+    ProviderInvocationResult,
     invoke_provider,
 )
 from visual_engineer_api.ai_planning.provider_registry import (
     ProviderId,
     ProviderRegistry,
+)
+from visual_engineer_api.ai_planning.real_provider_adapters import (
+    ProviderAdapterResult,
+    ProviderCallPolicy,
+    RealProviderAdapter,
 )
 from visual_engineer_api.core.config import Settings, get_settings
 from visual_engineer_api.core.observability import log_governance_event
@@ -80,7 +89,10 @@ from visual_engineer_api.schemas.ai_planning import (
     AIPlanRequestResponse,
     AIProviderInvocationResponse,
 )
-from visual_engineer_api.services.provider_invocations import ProviderInvocationLifecycle
+from visual_engineer_api.services.provider_invocations import (
+    ProviderInvocationLifecycle,
+    reported_usage_status,
+)
 from visual_engineer_api.services.run_state import transition_run
 
 
@@ -115,12 +127,41 @@ class _CancellationRegistry:
 _CANCELLATIONS = _CancellationRegistry()
 
 
+class _RealProviderPlanningBridge(PlanningProvider):
+    def __init__(self, adapter: RealProviderAdapter) -> None:
+        self.adapter = adapter
+        self._capabilities = ProviderCapabilityMetadata(
+            provider_id=adapter.provider_id.value,
+            implementation_version=REAL_PROVIDER_ADAPTER_VERSION,
+            model_label=adapter.model_id,
+            deterministic=False,
+            fixture_replay=False,
+            structured_output=True,
+            network_access=True,
+            credentials_required=True,
+            billing_basis="live_billing_unknown",
+            max_context_bytes=16 * 1024,
+            max_output_bytes=256 * 1024,
+        )
+
+    @property
+    def capabilities(self) -> ProviderCapabilityMetadata:
+        return self._capabilities
+
+    def generate(
+        self, request: AIPlanGenerationRequest, cancellation: CancellationToken
+    ) -> ProviderInvocationResult:
+        del request, cancellation
+        raise RuntimeError("real Provider generation uses the bounded async adapter path")
+
+
 class AIPlanningService:
     def __init__(
         self,
         session: Session,
         *,
         provider: PlanningProvider | None = None,
+        real_provider_adapter: RealProviderAdapter | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._session = session
@@ -129,6 +170,7 @@ class AIPlanningService:
         self._tasks = TaskRepository(session)
         self._settings = settings or get_settings()
         self._provider_override = provider
+        self._real_provider_adapter = real_provider_adapter
         self._provider_registry = ProviderRegistry()
 
     @property
@@ -272,6 +314,7 @@ class AIPlanningService:
             if ai_request.response_payload is not None
             else None
         )
+        request_payload = self._response_request_payload(ai_request)
         return AIPlanRequestResponse(
             id=ai_request.id,
             run_id=ai_request.run_id,
@@ -285,7 +328,7 @@ class AIPlanningService:
             prompt_payload=ai_request.prompt_payload,
             provider_id=ai_request.provider_id,
             provider_metadata=ai_request.provider_metadata,
-            request_payload=ai_request.request_payload,
+            request_payload=request_payload,
             request_digest=ai_request.request_digest,
             plan=plan,
             deterministic_digest=ai_request.deterministic_digest,
@@ -306,6 +349,22 @@ class AIPlanningService:
             created_at=ai_request.created_at,
             updated_at=ai_request.updated_at,
         )
+
+    def _response_request_payload(self, ai_request: AIPlanRequest) -> AIPlanGenerationRequest:
+        try:
+            return AIPlanGenerationRequest.model_validate(ai_request.request_payload)
+        except ValidationError:
+            run = self._runs.get(ai_request.run_id)
+            task = self._tasks.get_by_id(run.task_id) if run is not None else None
+            if task is None or task.classification != "live_canary":
+                raise
+            allowed_fields = AIPlanGenerationRequest.model_fields.keys()
+            projection = {
+                key: value
+                for key, value in ai_request.request_payload.items()
+                if key in allowed_fields
+            }
+            return AIPlanGenerationRequest.model_validate(projection)
 
     def list_for_run(self, run_id: uuid.UUID) -> tuple[list[AIPlanRequestResponse], int]:
         if self._runs.get(run_id) is None:
@@ -625,16 +684,25 @@ class AIPlanningService:
                 "AI Plan generation no longer has a snapshot_ready Run",
             )
         generation_request = AIPlanGenerationRequest.model_validate(ai_request.request_payload)
-        invocation_request_digest = canonical_digest(
-            {
-                "provider_id": provider.capabilities.provider_id,
-                "adapter_version": provider.capabilities.implementation_version,
-                "requested_model_id": provider.capabilities.model_label,
-                "structured_output": True,
-                "maximum_output_bytes": provider.capabilities.max_output_bytes,
-                "request": generation_request.model_dump(mode="json"),
-            }
-        )
+        real_policy: ProviderCallPolicy | None = None
+        if isinstance(provider, _RealProviderPlanningBridge):
+            real_policy = ProviderCallPolicy(
+                maximum_response_bytes=provider.capabilities.max_output_bytes
+            )
+            invocation_request_digest = canonical_digest(
+                provider.adapter.request_body(generation_request, real_policy)
+            )
+        else:
+            invocation_request_digest = canonical_digest(
+                {
+                    "provider_id": provider.capabilities.provider_id,
+                    "adapter_version": provider.capabilities.implementation_version,
+                    "requested_model_id": provider.capabilities.model_label,
+                    "structured_output": True,
+                    "maximum_output_bytes": provider.capabilities.max_output_bytes,
+                    "request": generation_request.model_dump(mode="json"),
+                }
+            )
         ai_request.status = "generating"
         self._audit(
             run,
@@ -649,7 +717,11 @@ class AIPlanningService:
         timing = lifecycle.prepare(
             ai_plan_request_id=ai_request.id,
             attempt_number=1,
-            classification=InvocationClassification.FIXTURE,
+            classification=(
+                InvocationClassification.LIVE
+                if isinstance(provider, _RealProviderPlanningBridge)
+                else InvocationClassification.FIXTURE
+            ),
             provider_id=provider.capabilities.provider_id,
             provider_metadata=ai_request.provider_metadata,
             adapter_version=provider.capabilities.implementation_version,
@@ -659,25 +731,43 @@ class AIPlanningService:
         )
         token = CancellationToken()
         _CANCELLATIONS.register(ai_request.id, token)
+        real_result: ProviderAdapterResult | None = None
+        fixture_result: ProviderInvocationResult | None = None
+        provider_error: ProviderError | None = None
         try:
-            try:
-                token.raise_if_cancelled()
-            except ProviderError as error:
-                lifecycle.fail(timing, error, force_definite=True)
-                return
-            lifecycle.mark_dispatching(timing)
-            provider_run = invoke_provider(
-                provider,
-                generation_request,
-                token,
-                timeout_seconds=self._settings.ai_provider_timeout_seconds,
-                max_attempts=1,
-            )
+            if isinstance(provider, _RealProviderPlanningBridge):
+                assert real_policy is not None
+                try:
+                    real_result = asyncio.run(
+                        provider.adapter.invoke(
+                            generation_request,
+                            token,
+                            policy=real_policy,
+                            on_dispatch_ready=lambda: lifecycle.mark_dispatching(timing),
+                        )
+                    )
+                except ProviderError as error:
+                    provider_error = error
+            else:
+                try:
+                    token.raise_if_cancelled()
+                except ProviderError as error:
+                    lifecycle.fail(timing, error, force_definite=True)
+                    return
+                lifecycle.mark_dispatching(timing)
+                provider_run = invoke_provider(
+                    provider,
+                    generation_request,
+                    token,
+                    timeout_seconds=self._settings.ai_provider_timeout_seconds,
+                    max_attempts=1,
+                )
+                fixture_result = provider_run.result
+                provider_error = provider_run.error
         finally:
             _CANCELLATIONS.discard(ai_request.id)
 
-        if provider_run.result is None:
-            provider_error = provider_run.error
+        if real_result is None and fixture_result is None:
             if provider_error is None:
                 provider_error = ProviderError(
                     ProviderErrorCategory.INTERNAL,
@@ -710,11 +800,18 @@ class AIPlanningService:
             self._session.commit()
             return
 
-        provider_result = provider_run.result
+        provider_payload = (
+            real_result.response_payload
+            if real_result is not None
+            else fixture_result.response_payload
+            if fixture_result is not None
+            else {}
+        )
+        safe_provider_payload, provider_redactions = redact_structured_payload(provider_payload)
         invalid_response_code: str | None = None
         invalid_response_message: str | None = None
         try:
-            response_bytes = len(canonical_json(provider_result.response_payload))
+            response_bytes = len(canonical_json(safe_provider_payload))
         except (TypeError, ValueError):
             invalid_response_code = "provider_response_not_json"
             invalid_response_message = "Provider response was not canonical JSON"
@@ -722,8 +819,11 @@ class AIPlanningService:
             if response_bytes > provider.capabilities.max_output_bytes:
                 invalid_response_code = "provider_output_budget_exceeded"
                 invalid_response_message = "Provider response exceeded its output budget"
+            elif provider_redactions:
+                invalid_response_code = "provider_response_sensitive_content"
+                invalid_response_message = "Provider response contained sensitive-looking content"
         try:
-            plan = AIPlanContract.model_validate(provider_result.response_payload)
+            plan = AIPlanContract.model_validate(safe_provider_payload)
         except ValidationError:
             invalid_response_code = invalid_response_code or "provider_schema_invalid"
             invalid_response_message = (
@@ -767,30 +867,64 @@ class AIPlanningService:
                 policy_denial_reason_code=locked.error_code,
             )
             return
-        usage = provider_result.usage
         response_payload = plan.model_dump(mode="json")
+        if real_result is not None:
+            usage_status = (
+                InvocationUsageStatus.REPORTED_INVALID
+                if real_result.usage.reported_invalid
+                else reported_usage_status(
+                    real_result.usage.input_tokens,
+                    real_result.usage.output_tokens,
+                    real_result.usage.total_tokens,
+                )
+            )
+            effective_model_status = (
+                ReportedValueStatus.REPORTED
+                if real_result.model_id is not None
+                else ReportedValueStatus.UNAVAILABLE
+            )
+            upstream_status = (
+                ReportedValueStatus.REPORTED
+                if real_result.provider_request_id is not None
+                else ReportedValueStatus.UNAVAILABLE
+            )
+            input_tokens = real_result.usage.input_tokens
+            output_tokens = real_result.usage.output_tokens
+            total_tokens = real_result.usage.total_tokens
+            effective_model_id = real_result.model_id
+            upstream_request_id = real_result.provider_request_id
+        else:
+            assert fixture_result is not None
+            usage_status = InvocationUsageStatus.SYNTHETIC_COMPLETE
+            effective_model_status = ReportedValueStatus.REPORTED
+            upstream_status = ReportedValueStatus.UNAVAILABLE
+            input_tokens = fixture_result.usage.input_tokens
+            output_tokens = fixture_result.usage.output_tokens
+            total_tokens = fixture_result.usage.total_tokens
+            effective_model_id = provider.capabilities.model_label
+            upstream_request_id = None
         response_digest = normalized_response_digest(
             plan_payload=response_payload,
-            effective_model_status=ReportedValueStatus.REPORTED,
-            effective_model_id=provider.capabilities.model_label,
-            upstream_request_id_status=ReportedValueStatus.UNAVAILABLE,
-            upstream_request_id=None,
-            usage_status=InvocationUsageStatus.SYNTHETIC_COMPLETE,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            total_tokens=usage.total_tokens,
+            effective_model_status=effective_model_status,
+            effective_model_id=effective_model_id,
+            upstream_request_id_status=upstream_status,
+            upstream_request_id=upstream_request_id,
+            usage_status=usage_status,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
         )
         lifecycle.succeed(
             timing,
             response_digest=response_digest,
-            effective_model_status=ReportedValueStatus.REPORTED,
-            effective_model_id=provider.capabilities.model_label,
-            upstream_request_id_status=ReportedValueStatus.UNAVAILABLE,
-            upstream_request_id=None,
-            usage_status=InvocationUsageStatus.SYNTHETIC_COMPLETE,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            total_tokens=usage.total_tokens,
+            effective_model_status=effective_model_status,
+            effective_model_id=effective_model_id,
+            upstream_request_id_status=upstream_status,
+            upstream_request_id=upstream_request_id,
+            usage_status=usage_status,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
         )
         locked = self._repository.get_request(ai_request.id, lock=True)
         locked_run = self._runs.get(ai_request.run_id, lock=True)
@@ -1142,12 +1276,20 @@ class AIPlanningService:
                 )
             return self._provider_override
 
+        if self._real_provider_adapter is not None:
+            if self._real_provider_adapter.provider_id != provider_id:
+                raise AIPlanningServiceError(
+                    "provider_not_configured",
+                    "The selected Provider has no credential in this session",
+                    category="policy",
+                )
+            return _RealProviderPlanningBridge(self._real_provider_adapter)
+
         status = self._provider_registry.get(provider_id)
         if not status.configured:
             raise AIPlanningServiceError(
                 "provider_not_configured",
-                "The selected Provider is unavailable; configure your own credential when "
-                "product BYOK is available",
+                "The selected Provider is unavailable; connect your own session credential",
                 category="policy",
             )
         if not status.enabled:

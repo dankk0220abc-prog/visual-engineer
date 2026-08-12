@@ -11,6 +11,14 @@ import { StatusPill } from "./status-pill";
 export function TaskCard({ task }: { task: Task }) {
   const locale = useLocale();
   const t = useTranslations("taskCard");
+  const classificationLabels: Record<Task["classification"], string> = {
+    user: t("classification.user"),
+    demo: t("classification.demo"),
+    system_validation: t("classification.system_validation"),
+    security_test: t("classification.security_test"),
+    fixture: t("classification.fixture"),
+    live_canary: t("classification.live_canary"),
+  };
   return (
     <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-slate-300">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
@@ -26,6 +34,9 @@ export function TaskCard({ task }: { task: Task }) {
           <StatusPill tone="neutral">{task.status}</StatusPill>
         </div>
       </div>
+      <p className="mt-3 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+        {classificationLabels[task.classification]}
+      </p>
       <p className="mt-4 text-sm leading-6 [overflow-wrap:anywhere] text-slate-600">
         {task.objective}
       </p>

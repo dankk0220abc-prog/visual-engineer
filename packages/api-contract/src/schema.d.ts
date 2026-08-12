@@ -72,6 +72,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/ai-provider-sessions/{provider_id}/credential": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Connect one process-local user Provider credential */
+    post: operations["connect_ai_provider_credential_api_v1_ai_provider_sessions__provider_id__credential_post"];
+    /** Destroy one process-local user Provider credential */
+    delete: operations["disconnect_ai_provider_credential_api_v1_ai_provider_sessions__provider_id__credential_delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/ai-providers": {
     parameters: {
       query?: never;
@@ -255,6 +273,40 @@ export interface paths {
     put?: never;
     /** Revoke a pending or approved Execution Grant */
     post: operations["revoke_execution_grant_api_v1_execution_grants__grant_id__revoke_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/live-provider-evidence": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List bounded successful Live Provider Evidence projections */
+    get: operations["list_live_provider_evidence_api_v1_live_provider_evidence_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/live-provider-evidence/{correlation}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get one bounded successful Live Provider Evidence projection */
+    get: operations["get_live_provider_evidence_api_v1_live_provider_evidence__correlation__get"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1586,6 +1638,28 @@ export interface components {
       | "failed"
       | "cancelled"
       | "stale";
+    /** AIProviderCredentialCreate */
+    AIProviderCredentialCreate: {
+      /**
+       * Api Key
+       * Format: password
+       */
+      api_key: string;
+    };
+    /** AIProviderCredentialStatus */
+    AIProviderCredentialStatus: {
+      /** Connected */
+      connected: boolean;
+      /** Expires At */
+      expires_at: string | null;
+      /**
+       * Persistence
+       * @default process_memory_only
+       * @constant
+       */
+      persistence: "process_memory_only";
+      provider_id: components["schemas"]["ProviderId"];
+    };
     /** AIProviderInvocationResponse */
     AIProviderInvocationResponse: {
       /** Adapter Version */
@@ -2984,6 +3058,11 @@ export interface components {
       | "validation_artifact_limit_exceeded"
       | "validation_cleanup_failed"
       | "validation_process_remained";
+    /** HTTPValidationError */
+    HTTPValidationError: {
+      /** Detail */
+      detail?: components["schemas"]["ValidationError"][];
+    };
     /** HealthResponse */
     HealthResponse: {
       /** Status */
@@ -3150,6 +3229,171 @@ export interface components {
       /** Leased Until */
       leased_until: string | null;
       state: components["schemas"]["JobState"];
+    };
+    /** LiveProviderEvidenceDetail */
+    LiveProviderEvidenceDetail: {
+      billing_status: components["schemas"]["InvocationBillingStatus"];
+      /**
+       * Classification
+       * @constant
+       */
+      classification: "live";
+      /** Client Total Elapsed Ms */
+      client_total_elapsed_ms: number | null;
+      /**
+       * Completed At
+       * Format: date-time
+       */
+      completed_at: string;
+      /** Correlation */
+      correlation: string;
+      /** Cost Amount */
+      cost_amount: string | null;
+      /** Cost Currency */
+      cost_currency: string | null;
+      /** Effective Model Id */
+      effective_model_id: string | null;
+      effective_model_status: components["schemas"]["ReportedValueStatus"];
+      /** Evaluations */
+      evaluations: components["schemas"]["LiveProviderEvidenceEvaluation"][];
+      governance: components["schemas"]["LiveProviderGovernanceBoundary"];
+      /** Input Tokens */
+      input_tokens: number | null;
+      /**
+       * Lifecycle
+       * @constant
+       */
+      lifecycle: "succeeded";
+      /** Operations */
+      operations: components["schemas"]["LiveProviderEvidenceOperation"][];
+      /** Output Tokens */
+      output_tokens: number | null;
+      /** Plan Summary */
+      plan_summary: string;
+      /** Provider Elapsed Ms */
+      provider_elapsed_ms: number | null;
+      provider_id: components["schemas"]["ProviderId"];
+      /** Public Task Context */
+      public_task_context: string;
+      /** Request Digest */
+      request_digest: string;
+      /** Requested Model Id */
+      requested_model_id: string;
+      /** Response Digest */
+      response_digest: string;
+      /**
+       * Task Classification
+       * @constant
+       */
+      task_classification: "live_canary";
+      /** Total Tokens */
+      total_tokens: number | null;
+      /** Upstream Request Fingerprint */
+      upstream_request_fingerprint: string | null;
+      upstream_request_id_status: components["schemas"]["ReportedValueStatus"];
+      usage_status: components["schemas"]["InvocationUsageStatus"];
+    };
+    /** LiveProviderEvidenceEvaluation */
+    LiveProviderEvidenceEvaluation: {
+      /** Eval Id */
+      eval_id: string;
+      /** Passed */
+      passed: boolean;
+      /** Summary */
+      summary: string;
+    };
+    /** LiveProviderEvidenceListResponse */
+    LiveProviderEvidenceListResponse: {
+      /** Items */
+      items: components["schemas"]["LiveProviderEvidenceSummary"][];
+      /** Total */
+      total: number;
+    };
+    /** LiveProviderEvidenceOperation */
+    LiveProviderEvidenceOperation: {
+      /** Kind */
+      kind: string;
+      /** Target */
+      target?: string | null;
+    };
+    /** LiveProviderEvidenceSummary */
+    LiveProviderEvidenceSummary: {
+      billing_status: components["schemas"]["InvocationBillingStatus"];
+      /**
+       * Classification
+       * @constant
+       */
+      classification: "live";
+      /** Client Total Elapsed Ms */
+      client_total_elapsed_ms: number | null;
+      /**
+       * Completed At
+       * Format: date-time
+       */
+      completed_at: string;
+      /** Correlation */
+      correlation: string;
+      /** Cost Amount */
+      cost_amount: string | null;
+      /** Cost Currency */
+      cost_currency: string | null;
+      /** Effective Model Id */
+      effective_model_id: string | null;
+      effective_model_status: components["schemas"]["ReportedValueStatus"];
+      /** Input Tokens */
+      input_tokens: number | null;
+      /**
+       * Lifecycle
+       * @constant
+       */
+      lifecycle: "succeeded";
+      /** Output Tokens */
+      output_tokens: number | null;
+      /** Provider Elapsed Ms */
+      provider_elapsed_ms: number | null;
+      provider_id: components["schemas"]["ProviderId"];
+      /** Request Digest */
+      request_digest: string;
+      /** Requested Model Id */
+      requested_model_id: string;
+      /** Response Digest */
+      response_digest: string;
+      /** Total Tokens */
+      total_tokens: number | null;
+      /** Upstream Request Fingerprint */
+      upstream_request_fingerprint: string | null;
+      upstream_request_id_status: components["schemas"]["ReportedValueStatus"];
+      usage_status: components["schemas"]["InvocationUsageStatus"];
+    };
+    /** LiveProviderGovernanceBoundary */
+    LiveProviderGovernanceBoundary: {
+      /** Ai Plan Status */
+      ai_plan_status: string;
+      /**
+       * Approval Status
+       * @enum {string}
+       */
+      approval_status: "not_decided" | "approved" | "rejected";
+      /**
+       * Delivery Status
+       * @enum {string}
+       */
+      delivery_status: "not_created" | "present";
+      /**
+       * Execution Grant Status
+       * @enum {string}
+       */
+      execution_grant_status: "not_issued" | "present";
+      /**
+       * Review Status
+       * @enum {string}
+       */
+      review_status: "not_created" | "present";
+      /**
+       * Runner Authority
+       * @enum {string}
+       */
+      runner_authority: "not_granted" | "present";
     };
     /** LocalDeliveryManifest */
     LocalDeliveryManifest: {
@@ -3649,6 +3893,11 @@ export interface components {
       /** Version */
       version: string;
     };
+    /**
+     * ProviderAdapterStatus
+     * @enum {string}
+     */
+    ProviderAdapterStatus: "supported";
     /** ProviderCapabilityDeclaration */
     ProviderCapabilityDeclaration: {
       configurable_timeout: components["schemas"]["CapabilitySupport"];
@@ -3694,6 +3943,7 @@ export interface components {
     };
     /** ProviderConfigurationStatus */
     ProviderConfigurationStatus: {
+      adapter_status: components["schemas"]["ProviderAdapterStatus"];
       capabilities: components["schemas"]["ProviderCapabilityDeclaration"];
       /** Configured */
       configured: boolean;
@@ -3710,6 +3960,7 @@ export interface components {
       model_id: string;
       provider_id: components["schemas"]["ProviderId"];
       reason_disabled: components["schemas"]["ProviderStatusReason"] | null;
+      session_credential_status: components["schemas"]["ProviderSessionCredentialStatus"];
       /** Status Description */
       status_description: string;
       status_reason: components["schemas"]["ProviderStatusReason"];
@@ -3729,13 +3980,24 @@ export interface components {
      * ProviderLiveValidationStatus
      * @enum {string}
      */
-    ProviderLiveValidationStatus: "fixture_validated" | "not_performed";
+    ProviderLiveValidationStatus:
+      "fixture_validated" | "live_verified" | "not_performed";
+    /**
+     * ProviderSessionCredentialStatus
+     * @enum {string}
+     */
+    ProviderSessionCredentialStatus:
+      "not_required" | "not_connected" | "connected";
     /**
      * ProviderStatusReason
      * @enum {string}
      */
     ProviderStatusReason:
-      "available" | "missing_local_api_key" | "live_validation_not_performed";
+      | "available"
+      | "missing_session_credential"
+      | "missing_session_credential"
+      | "connected_with_user_credential"
+      | "live_validation_not_performed";
     /** RegisterRequest */
     RegisterRequest: {
       /** Capabilities */
@@ -4608,6 +4870,14 @@ export interface components {
             | components["schemas"]["WorkspaceGitCommitResult"]
           )
         | null;
+      /** Result Projection Error Code */
+      result_projection_error_code: string | null;
+      /**
+       * Result Projection Status
+       * @enum {string}
+       */
+      result_projection_status:
+        "not_available" | "available" | "incompatible_legacy";
       /** Source Revision */
       source_revision: string | null;
       state: components["schemas"]["JobState"];
@@ -4890,8 +5160,25 @@ export interface components {
        */
       kind: "system_diagnostic_v1";
     };
+    /**
+     * TaskClassification
+     * @enum {string}
+     */
+    TaskClassification:
+      | "user"
+      | "demo"
+      | "system_validation"
+      | "security_test"
+      | "fixture"
+      | "live_canary";
     /** TaskCreate */
     TaskCreate: {
+      /**
+       * Classification
+       * @default user
+       * @enum {string}
+       */
+      classification: "user" | "demo";
       /** Objective */
       objective: string;
       /** Repository Display Name */
@@ -4915,6 +5202,9 @@ export interface components {
     };
     /** TaskResponse */
     TaskResponse: {
+      classification: components["schemas"]["TaskClassification"];
+      /** Content Redacted */
+      content_redacted: boolean;
       /**
        * Created At
        * Format: date-time
@@ -4962,6 +5252,19 @@ export interface components {
       sha256: string;
       /** Size Bytes */
       size_bytes: number;
+    };
+    /** ValidationError */
+    ValidationError: {
+      /** Context */
+      ctx?: Record<string, never>;
+      /** Input */
+      input?: unknown;
+      /** Location */
+      loc: (string | number)[];
+      /** Message */
+      msg: string;
+      /** Error Type */
+      type: string;
     };
     /** ValidationEvidenceResponse */
     ValidationEvidenceResponse: {
@@ -6961,6 +7264,72 @@ export interface operations {
       };
     };
   };
+  connect_ai_provider_credential_api_v1_ai_provider_sessions__provider_id__credential_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        provider_id: components["schemas"]["ProviderId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AIProviderCredentialCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIProviderCredentialStatus"];
+        };
+      };
+      /** @description Invalid BYOK credential */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  disconnect_ai_provider_credential_api_v1_ai_provider_sessions__provider_id__credential_delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        provider_id: components["schemas"]["ProviderId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AIProviderCredentialStatus"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   list_ai_providers_api_v1_ai_providers_get: {
     parameters: {
       query?: never;
@@ -7629,6 +7998,75 @@ export interface operations {
         };
       };
       /** @description Execution policy denied the action */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  list_live_provider_evidence_api_v1_live_provider_evidence_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LiveProviderEvidenceListResponse"];
+        };
+      };
+    };
+  };
+  get_live_provider_evidence_api_v1_live_provider_evidence__correlation__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        correlation: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LiveProviderEvidenceDetail"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description State or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation or policy denial */
       422: {
         headers: {
           [name: string]: unknown;

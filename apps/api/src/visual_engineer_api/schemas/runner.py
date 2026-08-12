@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -95,6 +95,8 @@ class RunnerJobResponse(BaseModel):
     attempt_count: int
     max_attempts: int
     result: ResultPayload | None
+    result_projection_status: Literal["not_available", "available", "incompatible_legacy"]
+    result_projection_error_code: str | None
     error_code: str | None
     error_message: str | None
     version: int

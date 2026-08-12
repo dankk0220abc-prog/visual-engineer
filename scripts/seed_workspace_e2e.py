@@ -94,6 +94,7 @@ def seed(repository: dict[str, Any]) -> Plan:
                 repository_kind="local_path",
                 repository_display_name=str(repository["display_name"]),
                 repository_locator=f"runner://{OPAQUE_HANDLE}",
+                classification="fixture",
                 status="draft",
                 version=1,
                 idempotency_key=SEED_KEY,

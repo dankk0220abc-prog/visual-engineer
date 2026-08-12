@@ -7,15 +7,17 @@ import { StatusPill } from "./status-pill";
 
 describe("StatusPill semantic selector", () => {
   it.each([
-    ["en-US", "Ready"],
-    ["zh-CN", "就绪"],
+    ["en-US", "online", "Online"],
+    ["zh-CN", "online", "在线"],
+    ["en-US", "ready", "Ready"],
+    ["zh-CN", "ready", "就绪"],
   ] as const)(
     "keeps raw status metadata while rendering %s",
-    (locale, label) => {
+    (locale, status, label) => {
       setTestLocale(locale);
-      render(<StatusPill>ready</StatusPill>);
+      render(<StatusPill>{status}</StatusPill>);
 
-      expect(screen.getByText(label)).toHaveAttribute("data-status", "ready");
+      expect(screen.getByText(label)).toHaveAttribute("data-status", status);
     },
   );
 });

@@ -41,6 +41,7 @@ export const localizedStatusKeys = [
   "plan_ready",
   "preparing",
   "prepared",
+  "process_memory_only",
   "queued",
   "ready",
   "blocked",
@@ -50,6 +51,7 @@ export const localizedStatusKeys = [
   "reported_complete",
   "reported_invalid",
   "reported_partial",
+  "supported",
   "requested",
   "rejected",
   "revoke_requested",
@@ -74,6 +76,10 @@ export const localizedStatusKeys = [
   "unknown",
   "not_ready",
   "not_performed",
+  "live_verified",
+  "not_required",
+  "not_connected",
+  "connected",
 ] as const;
 
 export type LocalizedStatusKey = (typeof localizedStatusKeys)[number];
