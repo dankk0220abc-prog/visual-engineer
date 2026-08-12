@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>VisualEngineer - Interview Portfolio</title>
+    <title>VisualEngineer - 面试作品集</title>
     <style>
       @page { size: 13.333in 7.5in; margin: 0; }
       :root {
@@ -22,7 +22,7 @@
         --white: #ffffff;
       }
       * { box-sizing: border-box; }
-      html, body { margin: 0; background: #dfe7f4; color: var(--ink); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      html, body { margin: 0; background: #dfe7f4; color: var(--ink); font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
       .slide { position: relative; width: 13.333in; height: 7.5in; overflow: hidden; page-break-after: always; background: var(--white); padding: .52in .64in .42in; }
       .slide:last-child { page-break-after: auto; }
       .dark { background: var(--navy); color: var(--white); }
@@ -151,11 +151,11 @@
     <article class="slide dark">
       <div class="cover-grid">
         <div>
-          <div class="cover-mark"><span class="dot"></span> Interview portfolio</div>
+          <div class="cover-mark"><span class="dot"></span> 面试作品集</div>
           <div class="eyebrow" style="margin-top:30px">VisualEngineer</div>
-          <h1 style="margin-top:10px">Governed AI design-engineering and delivery.</h1>
-          <p class="lede">A local, single-user system that keeps AI planning, authorization, execution and evidence as distinct, reviewable decisions.</p>
-          <div class="cover-meta">Engineering case study<br /><a href="https://github.com/dankk0220abc-prog/visual-engineer">github.com/dankk0220abc-prog/visual-engineer</a></div>
+          <h1 style="margin-top:10px">受治理的 AI 设计工程与交付。</h1>
+          <p class="lede">一个本地单用户系统，将 AI 规划、授权、执行与证据保持为彼此独立、可审查的决策。</p>
+          <div class="cover-meta">工程案例研究<br /><a href="https://github.com/dankk0220abc-prog/visual-engineer">github.com/dankk0220abc-prog/visual-engineer</a></div>
         </div>
         <div class="cover-screenshot"><img src="assets/06-clean-dashboard-demo.png" alt="VisualEngineer governed frontend delivery task console" /></div>
       </div>
@@ -163,212 +163,212 @@
     </article>
 
     <article class="slide dark">
-      <div class="eyebrow">The problem</div>
-      <h2>AI can propose implementation work. It should not automatically gain authority to change a repository.</h2>
+      <div class="eyebrow">问题</div>
+      <h2>AI 可以提出实施建议，但不应自动获得修改代码仓库的权限。</h2>
       <div class="problem-grid">
-        <div class="statement">A useful plan is <strong>not</strong> permission to mutate a workspace, run a command, approve a review or ship a delivery.</div>
+        <div class="statement">有价值的计划<strong>不是</strong>修改工作区、运行命令、批准评审或交付结果的权限。</div>
         <div class="principles">
-          <div class="card dark-card"><div class="number">01 / SEPARATE</div><h3 style="margin-top:12px">Planning from authority</h3><p>Provider output is typed data. It enters a controlled lifecycle rather than becoming a tool call.</p></div>
-          <div class="card dark-card"><div class="number">02 / BOUND</div><h3 style="margin-top:12px">Execution to a grant</h3><p>A distinct scoped grant is required before eligible Runner work in a fixture workspace.</p></div>
-          <div class="card dark-card"><div class="number">03 / PRESERVE</div><h3 style="margin-top:12px">Uncertainty honestly</h3><p>Ambiguous external outcomes remain <code>outcome_unknown</code>; they are not auto-retried.</p></div>
-          <div class="card dark-card"><div class="number">04 / PROJECT</div><h3 style="margin-top:12px">Evidence safely</h3><p>Reviewable facts are projected without keys, raw traffic, full upstream IDs or billing material.</p></div>
+          <div class="card dark-card"><div class="number">01 / 分离</div><h3 style="margin-top:12px">规划与权限分离</h3><p>Provider 输出是类型化数据，进入受控生命周期，而不是直接成为工具调用。</p></div>
+          <div class="card dark-card"><div class="number">02 / 限定</div><h3 style="margin-top:12px">执行受 Grant 约束</h3><p>只有获得独立范围授权，Runner 才可在 fixture 工作区中执行合格任务。</p></div>
+          <div class="card dark-card"><div class="number">03 / 保留</div><h3 style="margin-top:12px">如实保留不确定性</h3><p>模糊的外部结果保持为 <code>outcome_unknown</code>，不会自动重试。</p></div>
+          <div class="card dark-card"><div class="number">04 / 投影</div><h3 style="margin-top:12px">安全地呈现证据</h3><p>可审查事实不包含密钥、原始流量、完整上游 ID 或账单材料。</p></div>
         </div>
       </div>
-      <div class="footer"><span>WHY VISUALENGINEER</span><span>02 / 14</span></div>
+      <div class="footer"><span>为何构建 VISUALENGINEER</span><span>02 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">System architecture</div>
-      <h2>A control plane around a bounded AI proposal.</h2>
+      <div class="eyebrow">系统架构</div>
+      <h2>围绕受限 AI 提案构建的控制平面。</h2>
       <div class="architecture">
         <div class="diagram">
-          <div class="flow-row"><div class="flow-node">Web Console</div><div class="arrow">&rarr;</div><div class="flow-node primary">Control Plane API</div><div class="arrow">&rarr;</div><div class="flow-node">PostgreSQL</div></div>
+          <div class="flow-row"><div class="flow-node">Web 控制台</div><div class="arrow">&rarr;</div><div class="flow-node primary">控制平面 API</div><div class="arrow">&rarr;</div><div class="flow-node">PostgreSQL</div></div>
           <div class="flow-line"></div>
-          <div class="flow-row"><div class="flow-node">Repository<br />Intelligence</div><div class="arrow">&rarr;</div><div class="flow-node safe">Typed Plan +<br />Policy Evaluation</div><div class="arrow">&rarr;</div><div class="flow-node">Approval</div></div>
+          <div class="flow-row"><div class="flow-node">仓库<br />智能</div><div class="arrow">&rarr;</div><div class="flow-node safe">类型化计划 +<br />策略评估</div><div class="arrow">&rarr;</div><div class="flow-node">批准</div></div>
           <div class="flow-line"></div>
-          <div class="flow-row"><div class="flow-node">Execution Grant</div><div class="arrow">&rarr;</div><div class="flow-node primary">Outbound Runner</div><div class="arrow">&rarr;</div><div class="flow-node">Isolated Workspace</div></div>
+          <div class="flow-row"><div class="flow-node">执行 Grant</div><div class="arrow">&rarr;</div><div class="flow-node primary">出站 Runner</div><div class="arrow">&rarr;</div><div class="flow-node">隔离工作区</div></div>
           <div class="flow-line"></div>
-          <div class="flow-row"><div class="flow-node">Validation</div><div class="arrow">&rarr;</div><div class="flow-node">Review + Delivery</div><div class="arrow">&rarr;</div><div class="flow-node safe">Evidence / Audit</div></div>
+          <div class="flow-row"><div class="flow-node">验证</div><div class="arrow">&rarr;</div><div class="flow-node">评审 + 交付</div><div class="arrow">&rarr;</div><div class="flow-node safe">证据 / 审计</div></div>
         </div>
         <div class="arch-side">
-          <div class="card"><h3>Critical boundary</h3><p>The Provider Layer may return a typed planning artifact through the Control Plane. It receives no direct Runner or workspace authority.</p></div>
-          <div class="card"><h3>Responsibilities at a glance</h3><div class="stack-list">
-            <div class="stack-item"><div class="stack-icon">W</div><div><h3>Web Console</h3><p>Browser-first presentation, workflow and evidence surface.</p></div></div>
-            <div class="stack-item"><div class="stack-icon">A</div><div><h3>Control Plane</h3><p>Lifecycle, policy, authority transitions and safe projection.</p></div></div>
-            <div class="stack-item"><div class="stack-icon">R</div><div><h3>Local Runner</h3><p>Outbound consumer of closed typed jobs and grants.</p></div></div>
-            <div class="stack-item"><div class="stack-icon">E</div><div><h3>Evidence</h3><p>Audit facts suitable for review, without a secret archive.</p></div></div>
+          <div class="card"><h3>关键边界</h3><p>Provider Layer 可通过控制平面返回类型化规划产物，但不拥有任何直接的 Runner 或工作区权限。</p></div>
+          <div class="card"><h3>职责概览</h3><div class="stack-list">
+            <div class="stack-item"><div class="stack-icon">W</div><div><h3>Web 控制台</h3><p>浏览器优先的呈现、工作流和证据界面。</p></div></div>
+            <div class="stack-item"><div class="stack-icon">A</div><div><h3>控制平面</h3><p>生命周期、策略、权限转换和安全投影。</p></div></div>
+            <div class="stack-item"><div class="stack-icon">R</div><div><h3>本地 Runner</h3><p>封闭类型化任务与 Grant 的出站消费者。</p></div></div>
+            <div class="stack-item"><div class="stack-icon">E</div><div><h3>证据</h3><p>适合评审的审计事实，而非秘密归档。</p></div></div>
           </div></div>
         </div>
       </div>
-      <div class="footer"><span>VERIFIED COMPONENTS ONLY</span><span>03 / 14</span></div>
+      <div class="footer"><span>仅呈现已验证组件</span><span>03 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">Governed workflow</div>
-      <h2>Plan Approval does not equal an Execution Grant.</h2>
+      <div class="eyebrow">受治理的工作流</div>
+      <h2>计划批准不等于执行 Grant。</h2>
       <div class="workflow">
-        <div class="workflow-block"><strong>Provider proposal</strong><p>A typed Plan is created through the governed path and evaluated by system policy.</p><div class="chips" style="margin-top:15px"><span class="chip blue">Plan generated</span></div></div>
-        <div class="boundary"><div class="equals">!=</div><h3>Authority boundary</h3><p style="margin-top:7px">A successful proposal does not decide approval, issue a grant, grant Runner authority, create a review or authorize delivery.</p><div class="chips" style="margin-top:15px"><span class="chip amber">Human decision required</span><span class="chip amber">Separate scope required</span></div></div>
-        <div class="workflow-block"><strong>Runner work</strong><p>Only an eligible, separately granted typed job can reach a Runner-owned fixture workspace.</p><div class="chips" style="margin-top:15px"><span class="chip">Grant required</span></div></div>
+        <div class="workflow-block"><strong>Provider 提案</strong><p>类型化 Plan 经受治理路径生成，并由系统策略进行评估。</p><div class="chips" style="margin-top:15px"><span class="chip blue">Plan 已生成</span></div></div>
+        <div class="boundary"><div class="equals">!=</div><h3>权限边界</h3><p style="margin-top:7px">成功的提案不会决定批准、签发 Grant、授予 Runner 权限、创建评审或授权交付。</p><div class="chips" style="margin-top:15px"><span class="chip amber">需要人工决策</span><span class="chip amber">需要独立范围</span></div></div>
+        <div class="workflow-block"><strong>Runner 工作</strong><p>只有获得独立 Grant 的合格类型化任务，才可到达 Runner 持有的 fixture 工作区。</p><div class="chips" style="margin-top:15px"><span class="chip">需要 Grant</span></div></div>
       </div>
       <div class="two-col" style="margin-top:.28in">
-        <div class="card"><h3>What a Provider cannot do</h3><p>Issue a grant, run shell commands, mutate a workspace, approve review, authorize delivery, merge or deploy.</p></div>
-        <div class="media-frame" style="height:2.05in"><img class="evidence-img" src="assets/04-zhipu-live-governance-boundary.png" alt="Governance boundary showing generated plan and absent downstream authority" /></div>
+        <div class="card"><h3>Provider 无法执行的操作</h3><p>签发 Grant、运行 shell 命令、修改工作区、批准评审、授权交付、合并或部署。</p></div>
+        <div class="media-frame" style="height:2.05in"><img class="evidence-img" src="assets/04-zhipu-live-governance-boundary.png" alt="显示已生成计划与未产生下游权限的治理边界" /></div>
       </div>
-      <div class="footer"><span>AUTHORITY IS EXPLICIT, NOT INFERRED</span><span>04 / 14</span></div>
+      <div class="footer"><span>权限显式存在，而非由结果推断</span><span>04 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">Provider layer and BYOK</div>
-      <h2>Support, connection and live validation are separate facts.</h2>
+      <div class="eyebrow">Provider 层与 BYOK</div>
+      <h2>支持、连接和 Live 验证是彼此独立的事实。</h2>
       <div class="providers">
         <div>
-          <div class="card"><h3>Deterministic Fixture is the default</h3><p>Offline, non-network and non-billable. It is the safest reproducible mode for the product demo.</p><div class="chips" style="margin-top:15px"><span class="chip green">No credential required</span><span class="chip green">Fixture validated</span></div></div>
+          <div class="card"><h3>Deterministic Fixture 是默认选项</h3><p>离线、无网络、不可计费。它是产品演示中最安全、可复现的模式。</p><div class="chips" style="margin-top:15px"><span class="chip green">无需凭据</span><span class="chip green">Fixture 已验证</span></div></div>
           <div class="provider-facts">
-            <div class="mini-fact"><div class="label">One live-validated provider</div><div class="value">Zhipu / GLM-5.2</div></div>
-            <div class="mini-fact"><div class="label">Other displayed adapters</div><div class="value">Supported does not mean live validated</div></div>
-            <div class="mini-fact"><div class="label">BYOK handling</div><div class="value">Current-session volatile server memory</div></div>
-            <div class="mini-fact"><div class="label">Quota boundary</div><div class="value">No ordinary-user fallback to maintainer credentials</div></div>
+            <div class="mini-fact"><div class="label">唯一 Live 已验证 Provider</div><div class="value">Zhipu / GLM-5.2</div></div>
+            <div class="mini-fact"><div class="label">其他显示的适配器</div><div class="value">已支持不等于已完成 Live 验证</div></div>
+            <div class="mini-fact"><div class="label">BYOK 处理方式</div><div class="value">当前会话的易失性服务器内存</div></div>
+            <div class="mini-fact"><div class="label">配额边界</div><div class="value">普通用户不会回退使用维护者凭据</div></div>
           </div>
-          <div class="quote">The credential is never returned or persisted and is cleared on disconnect, expiry or restart. This is not represented as a commercial multi-tenant secret vault.</div>
+          <div class="quote">凭据不会被返回或持久化，并会在断开、到期或重启时清除。这不被表述为商业级多租户密钥库。</div>
         </div>
-        <div class="media-frame"><img class="evidence-img" style="object-position:top" src="assets/01-zhipu-live-provider-status.png" alt="Provider status distinguishing fixture default and Zhipu live validation" /></div>
+        <div class="media-frame"><img class="evidence-img" style="object-position:top" src="assets/01-zhipu-live-provider-status.png" alt="区分 Fixture 默认项与 Zhipu Live 验证的 Provider 状态" /></div>
       </div>
-      <div class="footer"><span>FIXTURE-FIRST, LIVE CLAIMS KEPT NARROW</span><span>05 / 14</span></div>
+      <div class="footer"><span>FIXTURE 优先，严格限定 LIVE 声明</span><span>05 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">Sealed live validation</div>
-      <h2>One governed Zhipu / GLM-5.2 invocation succeeded.</h2>
+      <div class="eyebrow">已封存的 Live 验证</div>
+      <h2>一次受治理的 Zhipu / GLM-5.2 调用成功完成。</h2>
       <div class="live-grid">
         <div>
-          <div class="metric"><div class="label">Correlation</div><div class="value">3a9c354f7a58</div><div class="detail">Safe evidence correlation</div></div>
-          <div class="metric"><div class="label">Reported usage</div><div class="value">2,016 tokens</div><div class="detail">1,362 input + 654 output</div></div>
-          <div class="metric"><div class="label">Measured latency</div><div class="value">11.55 s</div><div class="detail">11,543 ms provider; 11,553 ms client total</div></div>
-          <div class="metric"><div class="label">Billing</div><div class="value" style="font-size:19px">live_billing_unknown</div><div class="detail">No amount or billing certainty claimed</div></div>
-          <div class="chips" style="margin-top:14px"><span class="chip green">Lifecycle: succeeded</span><span class="chip blue">Typed Plan: 3 operations</span><span class="chip green">8 policy checks passed</span></div>
+          <div class="metric"><div class="label">关联标识</div><div class="value">3a9c354f7a58</div><div class="detail">安全证据关联标识</div></div>
+          <div class="metric"><div class="label">报告用量</div><div class="value">2,016 tokens</div><div class="detail">1,362 input + 654 output</div></div>
+          <div class="metric"><div class="label">测得延迟</div><div class="value">11.55 s</div><div class="detail">Provider 11,543 ms；客户端总计 11,553 ms</div></div>
+          <div class="metric"><div class="label">账单</div><div class="value" style="font-size:19px">live_billing_unknown</div><div class="detail">不主张金额或账单确定性</div></div>
+          <div class="chips" style="margin-top:14px"><span class="chip green">生命周期：succeeded</span><span class="chip blue">类型化 Plan：3 项操作</span><span class="chip green">8 项策略检查通过</span></div>
         </div>
-        <div class="media-frame"><img class="evidence-img" src="assets/03-zhipu-live-invocation-audit.png" alt="Safe provider invocation audit with usage, latency and billing unknown" /></div>
+        <div class="media-frame"><img class="evidence-img" src="assets/03-zhipu-live-invocation-audit.png" alt="包含用量、延迟和账单未知状态的安全 Provider 调用审计" /></div>
       </div>
-      <div class="footer"><span>SAFE AUDIT PROJECTION - NOT PRIVATE PROVIDER MATERIAL</span><span>06 / 14</span></div>
+      <div class="footer"><span>安全审计投影 - 非私有 PROVIDER 材料</span><span>06 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">Failure engineering story</div>
-      <h2>Unknown after dispatch is a fact, not a failure label to smooth over.</h2>
+      <div class="eyebrow">失败工程故事</div>
+      <h2>派发后的未知状态是事实，不应被粉饰为简单的失败标签。</h2>
       <div class="timeline">
-        <div class="step unknown"><div class="step-n">ATTEMPTS 01-02</div><h3>Transport ambiguity</h3><p>After dispatch, the system could not honestly determine the Provider outcome.</p><div class="chips" style="margin-top:15px"><span class="chip amber">outcome_unknown</span></div></div>
-        <div class="step unknown"><div class="step-n">ATTEMPT 03</div><h3>Response-path diagnosis</h3><p>A decoding issue was classified truthfully while the earlier immutable history stayed intact.</p><div class="chips" style="margin-top:15px"><span class="chip amber">no auto-retry</span></div></div>
-        <div class="step"><div class="step-n">NARROW REMEDIATION</div><h3>Compatibility, not authority expansion</h3><p>Safe transport observability plus identity content-encoding negotiation and decoded-response normalization.</p><div class="chips" style="margin-top:15px"><span class="chip blue">bounded change</span></div></div>
-        <div class="step success"><div class="step-n">ATTEMPT 04</div><h3>Separate successful event</h3><p>The fourth governed invocation succeeded. It still did not create downstream execution authority.</p><div class="chips" style="margin-top:15px"><span class="chip green">succeeded</span></div></div>
+        <div class="step unknown"><div class="step-n">第 01-02 次</div><h3>传输不确定性</h3><p>派发后，系统无法如实判定 Provider 的实际结果。</p><div class="chips" style="margin-top:15px"><span class="chip amber">outcome_unknown</span></div></div>
+        <div class="step unknown"><div class="step-n">第 03 次</div><h3>响应路径诊断</h3><p>如实分类解码问题，同时保留早期不可变历史。</p><div class="chips" style="margin-top:15px"><span class="chip amber">不自动重试</span></div></div>
+        <div class="step"><div class="step-n">窄范围修复</div><h3>修复兼容性，而非扩大权限</h3><p>增加安全传输可观测性、身份内容编码协商和解码响应归一化。</p><div class="chips" style="margin-top:15px"><span class="chip blue">受限变更</span></div></div>
+        <div class="step success"><div class="step-n">第 04 次</div><h3>独立的成功事件</h3><p>第四次受治理调用成功，但仍未产生下游执行权限。</p><div class="chips" style="margin-top:15px"><span class="chip green">succeeded</span></div></div>
       </div>
-      <div class="quote">Why no automatic retry? An ambiguous request may already have reached a billable or side-effecting external system. A later attempt must be a new, controlled event.</div>
-      <div class="footer"><span>IMMUTABLE HISTORY, HONEST UNCERTAINTY</span><span>07 / 14</span></div>
+      <div class="quote">为何不自动重试？模糊请求可能已到达可计费或有副作用的外部系统。后续尝试必须作为新的、受控事件。</div>
+      <div class="footer"><span>不可变历史，如实保留不确定性</span><span>07 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">Runner and workspace isolation</div>
-      <h2>The model never receives unrestricted shell authority.</h2>
+      <div class="eyebrow">RUNNER 与工作区隔离</div>
+      <h2>模型绝不获得不受限制的 shell 权限。</h2>
       <div class="runner-layout">
         <div class="diagram">
-          <div class="runner-map"><div class="rnode"><h3>Control Plane</h3><p>Derives durable closed job envelopes and lifecycle transitions.</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Outbound Runner</h3><p>Polls and validates its typed envelope. No inbound browser control.</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Fixture Workspace</h3><p>Runner-owned, exact-revision isolated boundary for allowed work.</p></div></div>
+          <div class="runner-map"><div class="rnode"><h3>控制平面</h3><p>派生持久化的封闭任务信封和生命周期转换。</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>出站 Runner</h3><p>轮询并验证类型化信封，不接受浏览器入站控制。</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Fixture 工作区</h3><p>Runner 持有、精确修订、隔离的获准工作边界。</p></div></div>
           <div class="flow-line" style="margin-top:26px"></div>
-          <div class="runner-map"><div class="rnode"><h3>Execution Grant</h3><p>Separate scope and eligibility check before a mutating path.</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Lease and fencing</h3><p>Locked claims and attempt identity prevent competing settlement.</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Validation and review</h3><p>Fixed profiles and later decisions create evidence.</p></div></div>
+          <div class="runner-map"><div class="rnode"><h3>执行 Grant</h3><p>进入变更路径前的独立范围和合格性检查。</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>Lease 与 fencing</h3><p>锁定的认领和尝试身份避免竞争性结算。</p></div><div class="rarr">&rarr;</div><div class="rnode"><h3>验证与评审</h3><p>固定 Profile 与后续决策生成证据。</p></div></div>
         </div>
-        <div class="card"><h3>Controls retained at the boundary</h3><div class="runner-checks"><div class="check">Closed typed operations rather than arbitrary commands</div><div class="check">Exact-revision, runner-owned fixture workspace</div><div class="check">Independent Runner identity and outbound protocol</div><div class="check">Lease / fencing around job settlement</div><div class="check">Fixed validation profile and bounded evidence</div><div class="check">No direct Provider-to-Runner authority path</div></div><div class="rule"></div><p>Source repository, remote Git, merge, release and deployment authority are deliberately outside this demo path.</p></div>
+        <div class="card"><h3>在边界上保留的控制</h3><div class="runner-checks"><div class="check">封闭类型化操作，而非任意命令</div><div class="check">精确修订、Runner 持有的 fixture 工作区</div><div class="check">独立 Runner 身份和出站协议</div><div class="check">任务结算周围的 Lease / fencing</div><div class="check">固定验证 Profile 和受限证据</div><div class="check">不存在 Provider 直达 Runner 的权限路径</div></div><div class="rule"></div><p>源仓库、远程 Git、合并、发布和部署权限均被明确排除在本演示路径之外。</p></div>
       </div>
-      <div class="footer"><span>TYPE, SCOPE AND IDENTITY LIMIT EXECUTION</span><span>08 / 14</span></div>
+      <div class="footer"><span>类型、范围与身份共同限制执行</span><span>08 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">PostgreSQL concurrency failure</div>
-      <h2>Fix the atomicity boundary; do not hide a half-write behind retries.</h2>
+      <div class="eyebrow">POSTGRESQL 并发故障</div>
+      <h2>修复原子性边界，而不是用重试掩盖半写入。</h2>
       <div class="deadlock">
-        <div class="card"><h3>Observed red baseline</h3><p>Nested Runner creation committed before the child Validation Run binding was complete. A second transaction could see the partial state and compete for the child row.</p>
-          <div class="cycle"><div class="cycle-grid"><div class="cycle-node">Transaction A<br /><span style="font-weight:400">partial child and job become visible</span></div><div class="cycle-node">Transaction B<br /><span style="font-weight:400">replay reaches child-row competition</span></div><div class="cycle-node">PostgreSQL<br /><span style="font-weight:400">transactionid wait cycle</span></div><div class="cycle-node">Result<br /><span style="font-weight:400">DeadlockDetected / SQLSTATE 40P01</span></div></div><div class="cycle-arrow">&harr;</div></div>
-          <div class="chips"><span class="chip amber">10 / 10 deterministic real deadlocks</span></div>
+        <div class="card"><h3>观察到的 Red 基线</h3><p>嵌套的 Runner 创建在子 Validation Run 绑定完成前提交。第二个事务可以看到局部状态，并与子行竞争。</p>
+          <div class="cycle"><div class="cycle-grid"><div class="cycle-node">事务 A<br /><span style="font-weight:400">部分子记录和任务变为可见</span></div><div class="cycle-node">事务 B<br /><span style="font-weight:400">重放到达子行竞争点</span></div><div class="cycle-node">PostgreSQL<br /><span style="font-weight:400">transactionid 等待环</span></div><div class="cycle-node">结果<br /><span style="font-weight:400">DeadlockDetected / SQLSTATE 40P01</span></div></div><div class="cycle-arrow">&harr;</div></div>
+          <div class="chips"><span class="chip amber">10 / 10 次确定性的真实死锁</span></div>
         </div>
-        <div class="card"><h3>Controlled remediation</h3><p>Keep Runner creation inside the outer Validation transaction. A competing transaction waits before it can enter the partially bound-child window.</p>
-          <div class="cycle" style="border-color:#b9e4d3;background:#f4fcf8"><div class="cycle-grid"><div class="cycle-node good">Outer transaction<br /><span style="font-weight:400">child and job remain invisible until bound</span></div><div class="cycle-node good">Concurrent caller<br /><span style="font-weight:400">waits at the atomic boundary</span></div><div class="cycle-node good">Recovery<br /><span style="font-weight:400">one suite, one child, one job</span></div><div class="cycle-node good">Result<br /><span style="font-weight:400">no database exception</span></div></div><div class="cycle-arrow" style="color:#16785b">&rarr;</div></div>
-          <div class="deadlock-result">10 / 10 controlled passes - zero unbound children - no blind retry.</div>
+        <div class="card"><h3>受控修复</h3><p>将 Runner 创建保持在外层 Validation 事务中。竞争事务会在进入部分绑定子记录窗口前等待。</p>
+          <div class="cycle" style="border-color:#b9e4d3;background:#f4fcf8"><div class="cycle-grid"><div class="cycle-node good">外层事务<br /><span style="font-weight:400">绑定前子记录和任务均不可见</span></div><div class="cycle-node good">并发调用方<br /><span style="font-weight:400">在原子性边界等待</span></div><div class="cycle-node good">恢复结果<br /><span style="font-weight:400">一个 suite、一个子记录、一个任务</span></div><div class="cycle-node good">结果<br /><span style="font-weight:400">无数据库异常</span></div></div><div class="cycle-arrow" style="color:#16785b">&rarr;</div></div>
+          <div class="deadlock-result">10 / 10 次受控通过 - 零未绑定子记录 - 不盲目重试。</div>
         </div>
       </div>
-      <div class="footer"><span>DATABASE INVARIANTS ARE THE FINAL SHARED GUARD</span><span>09 / 14</span></div>
+      <div class="footer"><span>数据库不变量是最终共享防线</span><span>09 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">Evidence-first engineering</div>
-      <h2>Completion claims are backed by a ledger, not a green sentence.</h2>
+      <div class="eyebrow">证据优先的工程实践</div>
+      <h2>完成声明由证据账本支撑，而不是一句绿色状态。</h2>
       <div class="evidence-layout">
-        <div class="card"><h3>Claims-to-evidence discipline</h3><p style="margin-top:8px">A claim is accepted only when its source is known and safe to project. Unknowns remain unknown.</p><div class="ledger">
-          <div class="card"><h3>Source identity</h3><p>Git SHA and tree establish the sealed repository state.</p></div>
-          <div class="card"><h3>Verification</h3><p>CI, tests, browser evidence and database proof answer different questions.</p></div>
-          <div class="card"><h3>Provider lifecycle</h3><p>Prepared, dispatching and terminal classification preserve external uncertainty.</p></div>
-          <div class="card"><h3>Secret-negative evidence</h3><p>Public-safe material excludes keys, private payloads and account or billing records.</p></div>
-          <div class="card"><h3>Failure history</h3><p>Earlier ambiguous attempts remain durable facts, not retroactive success.</p></div>
-          <div class="card"><h3>Scope limits</h3><p>Local demo proof is not restated as production deployment or customer use.</p></div>
+        <div class="card"><h3>声明与证据纪律</h3><p style="margin-top:8px">只有来源已知且可安全投影的声明才会被接受。未知仍保持未知。</p><div class="ledger">
+          <div class="card"><h3>源身份</h3><p>Git SHA 与 tree 确立已封存的仓库状态。</p></div>
+          <div class="card"><h3>验证</h3><p>CI、测试、浏览器证据和数据库证明回答不同问题。</p></div>
+          <div class="card"><h3>Provider 生命周期</h3><p>prepared、dispatching 与终态分类保留外部不确定性。</p></div>
+          <div class="card"><h3>无秘密证据</h3><p>公开安全材料排除密钥、私有载荷、账户和账单记录。</p></div>
+          <div class="card"><h3>失败历史</h3><p>早期模糊尝试是持久事实，不会被追溯性改写为成功。</p></div>
+          <div class="card"><h3>范围限制</h3><p>本地演示证明不被重新表述为生产部署或客户使用。</p></div>
         </div></div>
-        <div class="media-frame"><img class="evidence-img" src="assets/03-zhipu-live-invocation-audit.png" alt="Safe audit projection" /></div>
+        <div class="media-frame"><img class="evidence-img" src="assets/03-zhipu-live-invocation-audit.png" alt="安全审计投影" /></div>
       </div>
-      <div class="footer"><span>FACT / INFERENCE / NOT VERIFIED ARE KEPT DISTINCT</span><span>10 / 14</span></div>
+      <div class="footer"><span>事实 / 推断 / 未验证 严格区分</span><span>10 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">Product experience</div>
-      <h2>A browser-first console that makes governance visible.</h2>
+      <div class="eyebrow">产品体验</div>
+      <h2>让治理边界可见的浏览器优先控制台。</h2>
       <div class="product">
-        <div class="media-frame"><img class="evidence-img" style="object-position:top" src="assets/06-clean-dashboard-demo.png" alt="VisualEngineer task console dashboard" /></div>
+        <div class="media-frame"><img class="evidence-img" style="object-position:top" src="assets/06-clean-dashboard-demo.png" alt="VisualEngineer 任务控制台仪表盘" /></div>
         <div class="product-side">
-          <div class="media-frame"><img class="evidence-img" src="assets/02-zhipu-live-typed-plan.png" alt="Typed Plan and passed policy evaluations" /></div>
-          <div class="media-frame"><img class="evidence-img" src="assets/07-byok-provider-connect.png" alt="Empty BYOK provider connection dialog" /></div>
+          <div class="media-frame"><img class="evidence-img" src="assets/02-zhipu-live-typed-plan.png" alt="类型化计划和通过的策略评估" /></div>
+          <div class="media-frame"><img class="evidence-img" src="assets/07-byok-provider-connect.png" alt="空的 BYOK Provider 连接对话框" /></div>
         </div>
       </div>
-      <div class="chips" style="margin-top:14px"><span class="chip blue">zh-CN / en-US</span><span class="chip blue">responsive behavior</span><span class="chip blue">typed Plan Evidence</span><span class="chip blue">Governance Evidence</span><span class="chip blue">Provider status</span><span class="chip blue">Fixture / Live distinction</span><span class="chip blue">BYOK entry</span></div>
-      <div class="footer"><span>PRODUCT UI USES ONLY PUBLIC-SAFE SCREENSHOTS</span><span>11 / 14</span></div>
+      <div class="chips" style="margin-top:14px"><span class="chip blue">zh-CN / en-US</span><span class="chip blue">响应式体验</span><span class="chip blue">类型化 Plan Evidence</span><span class="chip blue">Governance Evidence</span><span class="chip blue">Provider 状态</span><span class="chip blue">Fixture / Live 区分</span><span class="chip blue">BYOK 入口</span></div>
+      <div class="footer"><span>产品 UI 仅使用公开安全截图</span><span>11 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">Engineering stack</div>
-      <h2>Typed boundaries from browser UI to persistence and proof.</h2>
+      <div class="eyebrow">工程技术栈</div>
+      <h2>从浏览器 UI 到持久化与证明的类型化边界。</h2>
       <div class="stack">
-        <div class="stack-band"><h3>Web console</h3><p>Next.js App Router<br />React<br />TypeScript strict<br />Tailwind CSS<br />next-intl</p></div>
-        <div class="stack-band"><h3>Control plane</h3><p>Python<br />FastAPI<br />Pydantic<br />SQLAlchemy<br />Alembic</p></div>
-        <div class="stack-band"><h3>State and execution</h3><p>PostgreSQL<br />Independent Local Runner<br />Closed typed job protocol<br />Isolated fixture workspaces</p></div>
-        <div class="stack-band"><h3>Quality and evidence</h3><p>Vitest<br />Playwright<br />axe<br />Ruff and mypy<br />Git and CI evidence</p></div>
+        <div class="stack-band"><h3>Web 控制台</h3><p>Next.js App Router<br />React<br />TypeScript strict<br />Tailwind CSS<br />next-intl</p></div>
+        <div class="stack-band"><h3>控制平面</h3><p>Python<br />FastAPI<br />Pydantic<br />SQLAlchemy<br />Alembic</p></div>
+        <div class="stack-band"><h3>状态与执行</h3><p>PostgreSQL<br />独立本地 Runner<br />封闭类型化任务协议<br />隔离 fixture 工作区</p></div>
+        <div class="stack-band"><h3>质量与证据</h3><p>Vitest<br />Playwright<br />axe<br />Ruff 与 mypy<br />Git 与 CI 证据</p></div>
       </div>
-      <div class="quote">The stack matters because every boundary is represented in a concrete contract: TypeScript at the client, OpenAPI at the API edge, typed Python services and PostgreSQL constraints for durable state.</div>
-      <div class="footer"><span>ONLY TECHNOLOGIES VERIFIED IN THE SEALED REPOSITORY</span><span>12 / 14</span></div>
+      <div class="quote">技术栈的重要性在于，每一条边界都由具体契约表示：客户端的 TypeScript、API 边缘的 OpenAPI、类型化 Python 服务，以及保障持久状态的 PostgreSQL 约束。</div>
+      <div class="footer"><span>仅列出已在封存仓库中验证的技术</span><span>12 / 14</span></div>
     </article>
 
     <article class="slide">
-      <div class="eyebrow">My role and AI-assisted engineering</div>
-      <h2>Accountability for the system boundaries stayed human-owned.</h2>
+      <div class="eyebrow">我的职责与 AI 辅助工程</div>
+      <h2>系统边界的责任始终由人承担。</h2>
       <div class="role">
-        <div class="card"><h3>What I owned</h3><div class="role-list">
-          <div class="role-line"><strong>Product</strong><span>Problem definition, workflow, interface priorities and acceptance criteria.</span></div>
-          <div class="role-line"><strong>Architecture</strong><span>Authority boundaries, lifecycle rules, typed contracts and risk decisions.</span></div>
-          <div class="role-line"><strong>Validation</strong><span>Evidence strategy, test expectations, failure interpretation and final acceptance.</span></div>
-          <div class="role-line"><strong>Explanation</strong><span>Ability to discuss the architecture, state machines, failures, tradeoffs and scope limits.</span></div>
+        <div class="card"><h3>我负责的内容</h3><div class="role-list">
+          <div class="role-line"><strong>产品</strong><span>问题定义、工作流、界面优先级与验收标准。</span></div>
+          <div class="role-line"><strong>架构</strong><span>权限边界、生命周期规则、类型化契约与风险决策。</span></div>
+          <div class="role-line"><strong>验证</strong><span>证据策略、测试预期、失败解读与最终验收。</span></div>
+          <div class="role-line"><strong>说明</strong><span>能够讨论架构、状态机、故障、权衡与范围限制。</span></div>
         </div></div>
-        <div class="card"><h3>How ChatGPT + Codex accelerated the work</h3><p style="margin-top:9px">Repository investigation, implementation, tests, documentation and Git / CI work were accelerated with AI assistance under explicit constraints and review.</p><div class="rule"></div><h3>What this portfolio does not claim</h3><p style="margin-top:9px">It does not claim that every line was manually written. It does not transfer accountability for product choices, safety boundaries, validation or final acceptance to a model.</p><div class="quote" style="margin-top:18px">The strongest interview discussion is not "an AI wrote it." It is why the system makes authority, uncertainty and evidence legible.</div></div>
+        <div class="card"><h3>ChatGPT + Codex 如何加速工作</h3><p style="margin-top:9px">在明确约束与审查下，AI 协助加速仓库调研、实现、测试、文档及 Git / CI 工作。</p><div class="rule"></div><h3>本作品集不作的声明</h3><p style="margin-top:9px">它不声称每一行代码都由人工编写，也不会将产品选择、安全边界、验证或最终验收的责任转移给模型。</p><div class="quote" style="margin-top:18px">最有价值的面试讨论不是“AI 写了它”，而是系统为何让权限、不确定性和证据清晰可见。</div></div>
       </div>
-      <div class="footer"><span>AI ACCELERATED DELIVERY; GOVERNANCE AND ACCEPTANCE REMAINED OWNED</span><span>13 / 14</span></div>
+      <div class="footer"><span>AI 加速交付；治理与验收责任仍由人承担</span><span>13 / 14</span></div>
     </article>
 
     <article class="slide dark">
       <div class="close-grid">
         <div>
-          <div class="eyebrow">Scope and next step</div>
-          <div class="close-statement" style="margin-top:12px">A clear boundary is a better demo than an overstated claim.</div>
+          <div class="eyebrow">范围与下一步</div>
+          <div class="close-statement" style="margin-top:12px">清晰的边界，比夸大的声明更适合作为演示。</div>
           <div class="repo-link"><a href="https://github.com/dankk0220abc-prog/visual-engineer">github.com/dankk0220abc-prog/visual-engineer</a></div>
         </div>
         <div>
-          <div class="scope-list"><div>Main development is complete; final sealed evidence includes one successful Zhipu / GLM-5.2 live validation.</div><div>Other adapters must not be represented as live validated.</div><div>Fixture remains the safest reproducible demo mode.</div><div>Local, single-user proof only: no production deployment, customer, revenue, user-volume or performance-improvement claim.</div><div>BYOK is session-scoped volatile handling, not a commercial multi-tenant secret vault.</div></div>
+          <div class="scope-list"><div>主要开发已完成；最终封存证据包含一次成功的 Zhipu / GLM-5.2 Live 验证。</div><div>其他适配器不得被表述为已完成 Live 验证。</div><div>Fixture 仍是最安全、可复现的演示模式。</div><div>仅为本地单用户证明：不主张生产部署、客户、收入、用户规模或性能提升。</div><div>BYOK 是会话范围的易失性处理，而非商业级多租户密钥库。</div></div>
           <div class="rule" style="background:#3b4b6a;margin-top:22px"></div>
-          <p style="color:#c3cde2;font-size:13px">Interview focus: the Provider lifecycle, PostgreSQL invariants, Runner boundary, or evidence strategy.</p>
+          <p style="color:#c3cde2;font-size:13px">面试讨论重点：Provider 生命周期、PostgreSQL 不变量、Runner 边界或证据策略。</p>
         </div>
       </div>
-      <div class="footer"><span>VISUALENGINEER - INTERVIEW PORTFOLIO</span><span>14 / 14</span></div>
+      <div class="footer"><span>VISUALENGINEER - 面试作品集</span><span>14 / 14</span></div>
     </article>
   </body>
 </html>
