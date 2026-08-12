@@ -1,287 +1,162 @@
 # VisualEngineer
 
-[简体中文](README.zh-CN.md) ·
-[Architecture](docs/architecture/overview.md) ·
-[Quick Start](#quick-start) ·
-[Security](SECURITY.md) ·
-[Contributing](CONTRIBUTING.md)
+[简体中文说明](README.zh-CN.md) · [Architecture](docs/architecture/overview.md) · [Portfolio evidence assets](docs/portfolio/evidence-assets.md) · [Security](SECURITY.md)
 
-VisualEngineer is a governed design-engineering and delivery system for
-enterprise frontend teams. It turns a bounded frontend objective into
-reviewable repository facts, a human-decided plan, fixture-only isolated work,
-deterministic validation evidence, final review, and an explicitly authorized
-local delivery proof.
+VisualEngineer is a local, single-user governed AI design-engineering and delivery system. It turns a bounded frontend objective into a typed plan and keeps planning separate from approval, execution, review, delivery, and evidence.
 
-It is not a general-purpose autonomous coding agent. The implemented system is
-local and single-user, uses synthetic fixtures for every write or validation
-path, has no real model connection, and cannot push, open a pull request, tag,
-merge, deploy, or modify a source repository.
+AI can propose a plan. It cannot obtain execution authority by proposing one.
 
-## The problem it addresses
+## Why VisualEngineer
 
-Enterprise frontend delivery often mixes intent, repository access,
-implementation authority, test evidence, review, and release permission. That
-makes it difficult to prove what a tool observed, what a person approved, and
-which side effect was actually authorized.
+An LLM-plus-tools workflow can blur provider access, execution permission, and proof of what happened. That makes ambiguous provider outcomes hard to handle and expands the risk of a request or credential becoming an unreviewed side effect.
 
-VisualEngineer keeps those facts separate. Repository content is untrusted
-input. A plan approval is only a decision record. Workspace mutation, final
-review, local delivery, and each side effect require distinct, narrowly bound
-authority.
+VisualEngineer keeps the boundaries explicit:
 
-## Implemented capabilities
+- governed planning and policy evaluation;
+- human Plan Approval and a separate Execution Grant;
+- an outbound, isolated Runner with typed operations;
+- database-backed lifecycle and immutable evidence; and
+- session-scoped user BYOK with no fallback to an owner credential.
 
-- Bounded Task and Run lifecycle with immutable committed-`HEAD` snapshots.
-- Fixed, no-shell repository intelligence with sensitive-path, secret,
-  symlink, submodule, LFS, binary, count, byte, and timeout controls.
-- Deterministic policy planning and a model-neutral governed AI planning
-  protocol backed only by `DeterministicFixtureProvider`.
-- Versioned prompts, bounded redacted context, typed plan output, replayable
-  traces, synthetic non-billable usage, and system-owned deterministic evals.
-- Human plan approval that creates no execution, review, delivery, Git, or
-  deployment authority.
-- An outbound Local Runner with an opaque repository handle, typed jobs,
-  leases, cancellation, retry, and fenced attempts.
-- Fixture-only isolated UTF-8 workspace tools rooted in a Runner-owned copy.
-- Fixed fixture validation profiles and an immutable multi-step suite in a
-  disposable Linux sandbox with filesystem and network restrictions.
-- Immutable final review packages, freshness invalidation, human review
-  decisions, and deterministic readiness verdicts.
-- A separately approved, digest-confirmed, fixture-only local branch and
-  commit lifecycle. Remote Git remains unavailable.
-- Responsive `en-US` and `zh-CN` web-console experiences with explicit raw
-  protocol diagnostics where translation would hide operational facts.
+The result is a reviewable delivery path, not a general-purpose autonomous coding agent.
 
-See [Product Contract](docs/product/product-contract.md) and
-[V1 Boundaries](docs/product/v1-boundaries.md) for the precise implemented and
-reserved scope.
+## Demo preview
 
-## End-to-end governance workflow
+<p align="center">
+  <img src="docs/portfolio/assets/06-clean-dashboard-demo.png" alt="VisualEngineer governed frontend delivery task console" width="49%" />
+  <img src="docs/portfolio/assets/01-zhipu-live-provider-status.png" alt="Provider registry showing the deterministic fixture and Zhipu live verification" width="49%" />
+</p>
 
-1. A user creates a bounded frontend Task and starts a read-only Run.
-2. The Control Plane records an immutable snapshot from allowlisted committed
-   Git objects; dirty and untracked content is not read.
-3. Deterministic policy or the deterministic fake Provider proposes a plan.
-4. A human approves or rejects that exact plan version. Approval grants no
-   execution authority.
-5. A separate Execution Grant can authorize fixture-only workspace operations.
-6. Separate validation authority can run only fixed system-owned profiles.
-7. A Review Package binds the exact evidence and receives a separate human
-   decision and readiness verdict.
-8. A separate Delivery Authorization plus exact manifest confirmation can
-   authorize one local fixture commit.
-9. Remote push, pull request, tag, merge, release, and deployment remain
-   unavailable.
+The screenshots are sealed, portfolio-safe captures from the merged-main Web Console. They do not represent a new request or a deployment. See [evidence asset provenance](docs/portfolio/evidence-assets.md).
 
-The authority distinctions are summarized in
-[Architecture Overview](docs/architecture/overview.md#authority-is-not-transitive).
-
-## Architecture
+## Core workflow
 
 ```mermaid
 flowchart LR
-    H["Local human"] --> W["Next.js Web Console"]
-    W --> A["FastAPI Control Plane"]
-    A --> D[("PostgreSQL")]
-    A --> S["Bounded read-only scanner"]
-    A --> Q["Typed job queue and policy"]
-    R["Outbound Local Runner"] --> Q
-    R --> X["Closed typed executors"]
-    R --> F["Read-only synthetic fixture"]
-    X --> V["Runner-owned workspace and validation roots"]
-    A -. "OpenAPI" .-> C["Generated TypeScript contracts"]
-    C -. "typed client" .-> W
-    V -. "not implemented" .-> G["Remote Git or deployment"]
+    T["Bounded Task"] --> P["AI Planning"]
+    P --> E["Policy / Evaluation"]
+    E --> A["Human Plan Approval"]
+    A --> G["Separate Execution Grant"]
+    G --> R["Outbound Runner"]
+    R --> W["Isolated Workspace"]
+    W --> V["Fixed Validation"]
+    V --> H["Review and Delivery Evidence"]
 ```
 
-The Web never accesses PostgreSQL, Git, Docker, a workspace, or credentials.
-The API owns governance state but executes no Runner job. The Runner polls
-outbound, receives closed job schemas, and knows fixture paths that the API and
-Web do not. PostgreSQL and service checks independently enforce important
-state and authority invariants.
+`AI Plan != Execution Authority`. A provider result does not create approval, an Execution Grant, Runner authority, review, delivery, Git, or deployment authority.
 
-Detailed diagrams and boundary descriptions are in
-[docs/architecture/overview.md](docs/architecture/overview.md) and
-[docs/architecture/system-overview.md](docs/architecture/system-overview.md).
+## Architecture
 
-## Technology stack
+VisualEngineer is a process-oriented monorepo, not a microservice fleet.
 
-- Web: Next.js 16, React 19, strict TypeScript, Tailwind CSS, next-intl,
-  Vitest, Testing Library, Playwright, and axe.
-- API: Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, psycopg,
-  pytest, Ruff, mypy, and coverage.
-- Runner protocol: versioned Pydantic models shared without API or executor
-  dependencies.
-- Persistence: PostgreSQL 17 with additive Alembic migrations.
-- Tooling: Node.js `24.18.0`, pnpm `11.14.0`, Python `3.12.13`, uv, Make,
-  Docker, and Docker Compose.
-- Contracts: FastAPI OpenAPI is authoritative; TypeScript output is generated.
+```mermaid
+flowchart LR
+    B["Browser Web Console"] --> API["FastAPI Control Plane"]
+    API --> DB[("PostgreSQL")]
+    API --> PL["Provider layer"]
+    API --> GOV["Governance state machine"]
+    RUN["Outbound Local Runner"] --> API
+    RUN --> WS["Runner-owned fixture Workspace"]
+    API --> EV["Typed Plan / Audit / Evidence"]
+```
 
-## Quick Start
+The Web Console does not access PostgreSQL, a workspace, Git, Docker, or credentials directly. The API owns the durable governance state; the Runner polls outward for closed job schemas and is isolated from the browser and database. A provider proposes typed output through the API; it cannot call the Runner or issue an Execution Grant.
 
-### Prerequisites
+For boundary detail, see [Architecture Overview](docs/architecture/overview.md) and [Security Boundaries](docs/security/security-boundaries.md).
 
-- Git and Make.
-- Docker Desktop or another Docker Engine with Compose v2.
-- Node.js `24.18.0` and Corepack/pnpm `11.14.0`.
-- Python `3.12.13` and uv.
+## Governed AI provider layer
 
-The pinned versions are recorded in `.python-version`, `package.json`,
-`pnpm-lock.yaml`, `uv.lock`, and the Dockerfiles. Local verification has been
-performed on Apple Silicon macOS with Docker Desktop. The workflows target
-GitHub-hosted Linux, but no remote GitHub Actions run is claimed by this
-repository state.
+| Provider state               | What it means                                                                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deterministic Fixture        | Default deterministic, non-network demo path. No credential or billable provider usage.                                                                                           |
+| Zhipu / GLM-5.2              | Adapter supported and live validated by one sealed governed invocation. A new user session still requires its own credential.                                                     |
+| Qwen, DeepSeek, Doubao, Kimi | Adapters are shown in the Console; live validation was not performed. Do not interpret adapter availability as live validation.                                                   |
+| BYOK                         | A user credential is held only in volatile server memory for the current browser session, is not returned or persisted, and is cleared on disconnect, expiry, or process restart. |
 
-### Bootstrap and start
+Fixture or mock evidence is not live provider evidence. The Console also makes this distinction visible.
+
+## Real live validation
+
+The sealed main baseline contains one successful governed Zhipu / GLM-5.2 invocation:
+
+- correlation: `3a9c354f7a58`
+- lifecycle: `succeeded`
+- usage: 1,362 input + 654 output = 2,016 total tokens
+- provider latency: 11,543 ms; client total: 11,553 ms (about 11.55 s)
+- billing: `live_billing_unknown`
+
+This generated a typed Plan with three fixed proposal operations and eight passed policy evaluations. It did not create an approval, Execution Grant, Runner authority, review, or delivery record.
+
+<p align="center">
+  <img src="docs/portfolio/assets/02-zhipu-live-typed-plan.png" alt="Typed plan and passed policy evaluations from the sealed Zhipu live validation" width="49%" />
+  <img src="docs/portfolio/assets/03-zhipu-live-invocation-audit.png" alt="Safe invocation audit showing reported usage and 11.55 second client elapsed time" width="49%" />
+</p>
+
+## Failure engineering story
+
+The live-validation history is intentionally not rewritten into a simple success narrative:
+
+1. Attempts 1 and 2 ended as `outcome_unknown` after transport ambiguity.
+2. Attempt 3 ended as `outcome_unknown` with `provider_response_decoding_failed`.
+3. The transport path gained safe observability, identity content-encoding negotiation, and decoded-response normalization.
+4. Attempt 4, correlation `3a9c354f7a58`, succeeded.
+
+There was no automatic retry, no false success, and no mutation of the three earlier immutable records. Ambiguous post-dispatch outcomes remain `outcome_unknown` because the system cannot truthfully infer whether the external provider acted.
+
+## Security and governance
+
+- Plan Approval is separate from an Execution Grant.
+- A provider cannot directly invoke Runner authority.
+- Ordinary user paths cannot consume an owner canary credential; BYOK does not fall back to an owner quota.
+- Provider invocations use a durable `prepared → dispatching → terminal` lifecycle, with immutable terminal records.
+- There is no automatic retry after ambiguous dispatch.
+- Evidence is a safe projection: no raw key, full upstream request ID, raw provider request/response, or database credential is placed in portfolio material.
+- The Runner works against a private, fixture-only workspace boundary; source repositories remain outside the normal Web/API path.
+
+<p align="center">
+  <img src="docs/portfolio/assets/04-zhipu-live-governance-boundary.png" alt="Governance boundary showing a generated plan without approval or execution authority" width="49%" />
+  <img src="docs/portfolio/assets/07-byok-provider-connect.png" alt="Empty BYOK connection dialog explaining volatile current-session credential handling" width="49%" />
+</p>
+
+## Engineering validation
+
+Final sealed main baseline: commit `9615bde962c7dfeb73f9644573066d74d2d837ec`, tree `8f4b95fd1257a830e0aec3792063110d2690e730`, Alembic head `20260810_0017`.
+
+| Gate                    | Run           | Result             |
+| ----------------------- | ------------- | ------------------ |
+| CI / Fast               | `31581978015` | attempt 1, success |
+| CI / Heavy Verification | `31581978289` | attempt 1, success |
+
+The repository includes migration, API, Web, contract, formatting, type, Playwright, workspace-chaos, security, and deterministic-evaluation gates. The final CI result is the validation claim here; this documentation change does not reinterpret older evidence as a fresh run.
+
+## Local demo
+
+Prerequisites and exact version pins are in the repository (`Node.js 24.18.0`, pnpm 11.14.0, Python 3.12.13, Docker Compose v2).
 
 ```sh
 make bootstrap
 make platform-up
 ```
 
-`make bootstrap` installs only lockfile-resolved project dependencies.
-`make platform-up` creates the synthetic fixture, generates an ignored local
-Runner bootstrap token without printing it, builds the local services, applies
-the current migration, waits for health checks, and seeds the fixture-only
-workspace path.
+Open the Web Console at `http://127.0.0.1:3000`. This starts the fixture demo path; it creates local synthetic fixtures and a local Runner bootstrap token. It is not a read-only inspection command.
 
-No real Provider key is required or accepted by the ordinary planning path.
-The separate local Zhipu live-canary CLI remains disabled behind independent
-review, exact preflight, and one-process authorization; do not create or enter
-a real credential for normal setup.
+For the smallest deterministic planning walkthrough, follow [Fixture AI Planning Demo](docs/runbooks/fixture-ai-planning-demo.md). No real provider key is needed for Fixture.
 
-Open:
+Real-provider BYOK is deliberately separate. It requires a user-provided, current-session credential and is not part of the default demo. Do not run `make zhipu-live-canary-run` without a separately authorized external request.
 
-- Web Console: `http://127.0.0.1:3000`
-- API docs: `http://127.0.0.1:8000/docs`
-- Liveness: `http://127.0.0.1:8000/health/live`
-- Readiness: `http://127.0.0.1:8000/health/ready`
+## Repository structure
 
-The interface-language selector switches between English and Simplified
-Chinese. Raw IDs, digests, states, and error codes remain visible for
-operational diagnosis.
+- `apps/web` — Next.js Web Console.
+- `apps/api` — FastAPI Control Plane, governance, providers, and migrations.
+- `packages/runner-protocol` — versioned typed job contracts.
+- `apps/runner` — outbound Local Runner and closed executors.
+- `docs/architecture`, `docs/security`, `docs/evidence` — architecture, boundaries, and retained verification records.
+- `fixtures` — deterministic, synthetic demo inputs.
 
-For an isolated, deterministic AI planning walkthrough, follow
-[Fixture AI Planning Demo](docs/runbooks/fixture-ai-planning-demo.md). It uses
-only generated local fixtures, performs no network model call, and stops before
-any approval unless the human operator explicitly decides the plan.
+## Current scope and limitations
 
-The pre-live canary contract can be inspected without reading a Provider
-credential:
+VisualEngineer is a local, single-user development system. It is not a production deployment and makes no customer, adoption, QPS, revenue, or performance-improvement claim. Fixture-only paths cover mutation, validation, and local delivery proof. The one live validation is Zhipu / GLM-5.2 only; other adapters are not live validated. BYOK is volatile, session-scoped handling, not a multi-tenant commercial secret vault. Remote Git, pull requests, merge, release, deployment, public hosting, authentication, tenancy, and production SRE controls are out of scope.
 
-```sh
-make zhipu-live-canary-preflight
-```
+## Contributing and license
 
-Do not run `make zhipu-live-canary-run` until the candidate has passed an
-independent security review and a later task explicitly authorizes one local
-external request. Zhipu and every other real Provider remain disabled in the
-normal product registry.
-
-### Migration-only development path
-
-```sh
-make db-up
-make migrate
-```
-
-### Diagnose and stop
-
-```sh
-make platform-logs
-make platform-down
-```
-
-`make platform-down` removes project containers and the network while
-preserving named development data. If ports `3000`, `8000`, `5432`, or `55433`
-are already occupied, set the corresponding published-port variables and keep
-`WEB_ORIGIN` and `NEXT_PUBLIC_API_BASE_URL` consistent; do not terminate an
-unrelated process.
-
-`.env.example` documents safe local configuration. A real `.env`, generated
-`.env.runner.local`, logs, databases, traces, browser artifacts, caches, and
-build outputs must remain untracked.
-
-## Tests and quality gates
-
-The repository provides narrow gates and one aggregate gate:
-
-```sh
-make contracts-check
-make format-check
-make lint
-make typecheck
-make test
-make build
-make migration-check
-make source-invariance-check
-make security-check
-make eval
-make e2e
-make workspace-chaos-check
-make verify
-```
-
-`make verify` is intentionally expensive. It combines contracts, formatting,
-lint, types, unit/integration tests, production Web build, Compose validation,
-migration checks, source invariance, workspace and security checks, real-stack
-Playwright, chaos, deterministic evals, and final whitespace validation.
-
-Historical local evidence is retained under `docs/evidence/`. A workflow file
-or old evidence is not proof that a new revision passed remotely or locally;
-only a command run against that revision with exit code `0` is a current pass.
-
-## Security model
-
-The core rules are deny by default, exact immutable bindings, least authority,
-human decisions at distinct boundaries, no shell, no unreviewed network, no
-source write, and no secret logging. See [SECURITY.md](SECURITY.md),
-[Security Boundaries](docs/security/security-boundaries.md), and the Runner and
-Workspace threat models.
-
-Do not report vulnerabilities, credentials, customer data, or exploit details
-in a public issue. The private reporting route is intentionally marked as a
-pre-publication owner decision because no public security address exists.
-
-## Current limitations
-
-- Local, single-user development posture; no authentication, tenancy, CSRF
-  design, public hardening, backup operations, or production SRE model.
-- No enabled real Provider product path or completed live validation. The
-  reviewed Zhipu canary entrypoint is pre-live, local-only, and not activation.
-- All mutation, validation, and local delivery capabilities are synthetic
-  fixture-only.
-- No arbitrary shell, target repository commands, package installation, or
-  real customer workspace.
-- No remote clone/fetch/push, pull request, merge, tag, release, GitHub Pages,
-  public hosting, or deployment.
-- No production-customer, performance, time-saving, or adoption claims.
-
-## Roadmap
-
-Future work requires separate design, authorization, and independent security
-review for:
-
-- authenticated users, organizations, roles, and production operations;
-- isolated real-Provider credentials, egress policy, observability, and
-  Provider-specific evals;
-- non-fixture repository workspaces and closed target validation commands;
-- controlled browser and visual evidence;
-- remote Git and pull-request authority distinct from review readiness; and
-- backup, recovery, rate/resource limits, incident response, and deployment.
-
-These are roadmap items, not available capabilities.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Public contribution intake is not open
-until the repository owner chooses a license, security contact, and public
-collaboration policy. A Code of Conduct is therefore not added yet.
-
-## License
-
-No open-source license has been granted. The repository owner must make an
-explicit decision before converting the repository to Public. The decision
-record compares Apache-2.0, MIT, and retaining all rights in
-[License Decision](docs/publication/license-decision.md). Apache-2.0 is the
-current recommendation, not an adopted license.
+See [CONTRIBUTING.md](CONTRIBUTING.md). No open-source license has been granted; see [License Decision](docs/publication/license-decision.md).
