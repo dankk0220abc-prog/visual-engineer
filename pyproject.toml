@@ -5,7 +5,7 @@ description = "Foundation API for VisualEngineer"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "alembic>=1.16.4,<2",
-  "fastapi>=0.116.1,<1",
+  "fastapi>=0.141.1,<1",
   "httpx>=0.28.1,<1",
   "psycopg[binary]>=3.2.9,<4",
   "pydantic>=2.11.7,<3",
